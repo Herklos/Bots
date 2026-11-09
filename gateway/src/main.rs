@@ -17,6 +17,7 @@ mod mcp;
 mod projects;
 mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-origin check.
 mod provisioner;
+mod release; // T6b: self-update and rollback.
 mod remote_access; // T4: the scrypt password in access.json.
 mod routines; // T5: T3 scheduled tasks.
 mod store;
@@ -56,6 +57,7 @@ pub struct AppState {
     pub tunnels: exposure::Tunnels,
     pub threads: thread_meta::ThreadMeta,
     pub routine_history: routines::RoutineHistory,
+    pub system: release::System,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
 }
@@ -108,6 +110,28 @@ async fn main() -> anyhow::Result<()> {
                 .map(|p| p.display().to_string())
                 .unwrap_or_else(|_| "hbots".into());
             println!("{}", cli::systemd_unit(&bin));
+            return Ok(());
+        }
+        Ok(cli::Command::Up) => {
+            release::System::command_up().map_err(|e| anyhow::anyhow!(e))?;
+            return Ok(());
+        }
+        Ok(cli::Command::Rollback) => {
+            release::System::command_rollback(&cli::home_dir()).map_err(|e| anyhow::anyhow!(e))?;
+            return Ok(());
+        }
+        Ok(cli::Command::Restart) => {
+            release::System::command_restart().map_err(|e| anyhow::anyhow!(e))?;
+            return Ok(());
+        }
+        Ok(cli::Command::Update {
+            yes,
+            preview,
+            version,
+        }) => {
+            release::System::command_update(&cli::home_dir(), version.as_deref(), preview, yes)
+                .await
+                .map_err(|e| anyhow::anyhow!(e))?;
             return Ok(());
         }
         Ok(cli::Command::Launchd) => {
@@ -164,6 +188,7 @@ async fn main() -> anyhow::Result<()> {
         tunnels: exposure::Tunnels::new(),
         threads: thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
         routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
+        system: release::System::new(cfg.data_root.clone(), app_dir.clone()),
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
         cfg,
@@ -180,6 +205,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     provisioner::start(state.clone());
+    release::start(state.clone()).await;
 
     let addr: SocketAddr = format!("{}:{}", state.cfg.host, state.cfg.port).parse()?;
     tracing::info!(
@@ -270,6 +296,7 @@ fn build(state: Arc<AppState>, tailscale: bool) -> Router {
         .route("/api/routines/enabled", post(routines_enabled))
         .route("/api/routines/delete", post(routines_delete))
         .route("/api/routines/run", post(routines_run))
+        .merge(release::routes())
         .route("/t3/{*rest}", any(t3_route))
         .layer(middleware::from_fn_with_state(state.clone(), require_login));
     let routed = Router::new()

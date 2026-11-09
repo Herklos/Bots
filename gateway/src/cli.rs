@@ -12,6 +12,14 @@ pub enum Command {
     Status,
     Systemd,
     Launchd,
+    Restart,
+    Up,
+    Rollback,
+    Update {
+        yes: bool,
+        preview: bool,
+        version: Option<String>,
+    },
 }
 
 pub fn parse(args: &[String]) -> Result<Command, String> {
@@ -26,11 +34,34 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
         Some("help" | "--help" | "-h") => Ok(Command::Help),
         Some("version" | "--version" | "-V") => Ok(Command::Version),
         Some("status") => Ok(Command::Status),
+        Some("up") => Ok(Command::Up),
+        Some("rollback") => Ok(Command::Rollback),
+        Some("update") => {
+            let mut yes = false;
+            let mut preview = false;
+            let mut version = None;
+            for arg in rest {
+                match arg {
+                    "--yes" => yes = true,
+                    "--preview" => preview = true,
+                    other if other.starts_with('-') => {
+                        return Err(format!("unknown flag {other}\n\n{}", help_text()));
+                    }
+                    other => version = Some(other.to_string()),
+                }
+            }
+            Ok(Command::Update {
+                yes,
+                preview,
+                version,
+            })
+        }
         Some("service") => match rest.next() {
             Some("systemd") => Ok(Command::Systemd),
             Some("launchd") => Ok(Command::Launchd),
+            Some("restart") => Ok(Command::Restart),
             _ => Err(format!(
-                "usage: hbots service systemd|launchd\n\n{}",
+                "usage: hbots service systemd|launchd|restart\n\n{}",
                 help_text()
             )),
         },
@@ -43,9 +74,14 @@ pub fn help_text() -> &'static str {
 hbots — the gateway for the Exact client
 
   hbots serve       start the gateway (also the default)
+  hbots up          start the gateway in the background
   hbots status      show the installed runtime links
-  hbots service systemd|launchd
-                    print a user service that runs `hbots serve`
+  hbots update [--yes] [--preview] [version]
+                    install a release; --yes switches current and rolls back
+                    if the new one does not answer /api/health
+  hbots rollback    point current back at the previous version
+  hbots service systemd|launchd|restart
+                    print a user service that runs `hbots serve`, or restart it
   hbots version     print the version
   hbots help        print this text
 
@@ -125,6 +161,7 @@ Description=hbots gateway
 [Service]
 ExecStart={bin} serve
 Restart=on-failure
+Environment=HBOTS_SERVICE=1
 
 [Install]
 WantedBy=default.target
@@ -147,6 +184,11 @@ pub fn launchd_plist(bin: &str) -> String {
   </array>
   <key>RunAtLoad</key>
   <true/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HBOTS_SERVICE</key>
+    <string>1</string>
+  </dict>
 </dict>
 </plist>
 "
@@ -175,6 +217,23 @@ mod tests {
         assert!(matches!(
             parse(&[arg("service"), arg("systemd")]).unwrap(),
             Command::Systemd
+        ));
+        assert!(matches!(
+            parse(&[arg("service"), arg("restart")]).unwrap(),
+            Command::Restart
+        ));
+        assert!(matches!(parse(&[arg("up")]).unwrap(), Command::Up));
+        assert!(matches!(
+            parse(&[arg("rollback")]).unwrap(),
+            Command::Rollback
+        ));
+        assert!(matches!(
+            parse(&[arg("update"), arg("--yes"), arg("1.2.3")]).unwrap(),
+            Command::Update {
+                yes: true,
+                preview: false,
+                version: Some(_)
+            }
         ));
         assert!(parse(&[arg("service")]).is_err());
         assert!(parse(&[arg("nope")]).is_err());
