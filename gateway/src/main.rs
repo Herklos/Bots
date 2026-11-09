@@ -15,6 +15,7 @@ mod provisioner;
 mod store;
 mod t3;
 mod vault;
+mod vault_tools; // T1 hook: the Vault tools of POST /mcp/bot
 
 use axum::{
     body::Bytes,
