@@ -34,15 +34,14 @@ optional `painter` (only `"ink"`); unset, the GPU painter is used when available
 
 ## Phone access (design, not built)
 
-- Tailscale: the phone joins the tailnet and reaches the gateway's Tailscale listener (T4 `exposure.rs`).
-- A tunnel (for example `cloudflared`, T4 `remote_access.rs`) for access without Tailscale.
+- Tailscale: the phone joins the tailnet and reaches the gateway's Tailscale listener (planned in T4, `exposure.rs`, not merged yet).
+- A tunnel (for example `cloudflared`; planned in T4, `remote_access.rs`, not merged yet) for access without Tailscale.
 - App Transport Security: an `http:` gateway beyond the local network is refused by iOS unless `host.ios` sets
   `allowsArbitraryLoads` (`docs/reference.md`, around line 959). Prefer https through Tailscale or a tunnel.
-- Session storage: the session cookie should live in `secret.keep` (grant `secret.keep`; `docs/recipes/files-and-grants.md`,
-  line 10), not in `store`.
+- Session storage: the app keeps the session token with `store.set` under the `secret.keep session` grant (Keychain on Apple,
+  a 0600 file on Linux, `localStorage` on the web; Exact `docs/reference.md`, "Store"). Native apps send it as a bearer token.
 
 ## Not done
 
 - No Linux or Bots native host crate under `app/linux/`.
 - No desktop shell code. Design only.
-- No commit verified in this task; see the final report.
