@@ -5,19 +5,40 @@
 // function per source, given its arguments as an array (then store, storage, native) and
 // answering its shape, or a Promise of it.
 //   createBot: (args: [string, string]) => Reply
+//   deleteBot: (args: [string]) => Reply
+//   deleteLogin: (args: [string]) => Reply
+//   deleteProject: (args: [string]) => Reply
+//   hideBot: (args: [string, boolean]) => Reply
 //   loadBots: (args: []) => Bot[]
 //   loadChat: (args: [string]) => Chat
+//   loadPrefs: (args: []) => Prefs
+//   loadProjects: (args: []) => Project[]
 //   loadSession: (args: []) => Session
+//   loadVault: (args: []) => Login[]
+//   makeMainBot: (args: [string]) => Reply
+//   recolourBot: (args: [string, string]) => Reply
+//   renameBot: (args: [string, string]) => Reply
+//   revealPassword: (args: [string]) => Revealed
+//   saveLogin: (args: [string, string, string, string, string, string]) => Reply
+//   saveProject: (args: [string, string, string, string, string, string]) => Reply
 //   sendMessage: (args: [string, string]) => Reply
+//   setPassword: (args: [string]) => Reply
+//   setProjects: (args: [boolean]) => Reply
+//   setTheme: (args: [string]) => Reply
+//   setUserName: (args: [string]) => Reply
 //   signIn: (args: [string]) => Reply
 //   signOut: (args: []) => Reply
 //   stopRun: (args: [string]) => Reply
 // The shapes. None is exported: name one by its source, `type Reply = Result<'createBot'>`.
 //   Reply = { ok: boolean; error: string }
 //   Session = { authenticated: boolean; passwordRequired: boolean }
-//   Bot = { slug: string; name: string; label: string; initials: string; color: string; main: boolean; ready: boolean }
+//   Bot = { slug: string; name: string; label: string; initials: string; color: string; main: boolean; hidden: boolean; ready: boolean }
 //   Row = { id: string; kind: string; mine: boolean; text: string }
 //   Chat = { slug: string; rows: Row[]; working: boolean }
+//   Prefs = { userName: string; theme: string; projects: boolean }
+//   Login = { id: string; title: string; website: string; username: string; hasPassword: boolean; hints: string }
+//   Revealed = { ok: boolean; id: string; password: string; error: string }
+//   Project = { id: string; kind: string; title: string; status: string; area: string; body: string }
 
 /** Storage capabilities supplied by the host. Import these types; there are
  * no ambient fs/sqlite globals and importing a type conveys no authority. */
@@ -248,31 +269,55 @@ type T0 = boolean;
 type T1 = string;
 type T2 = { "ok": T0; "error": T1; };
 type T3 = { "authenticated": T0; "passwordRequired": T0; };
-type T4 = { "slug": T1; "name": T1; "label": T1; "initials": T1; "color": T1; "main": T0; "ready": T0; };
+type T4 = { "slug": T1; "name": T1; "label": T1; "initials": T1; "color": T1; "main": T0; "hidden": T0; "ready": T0; };
 type T5 = { "id": T1; "kind": T1; "mine": T0; "text": T1; };
 type T6 = T5[];
 type T7 = { "slug": T1; "rows": T6; "working": T0; };
-type T8 = { "accessibilityTextSize": T0; };
-type T9 = { "prefersContrast": T1; };
-type T10 = number;
-type T11 = { "slug": T1; };
-type T12 = { "id": T10; "name": T1; "url": T1; "tab": T1; "params": T11; "fragment": T1; };
-type T13 = T12[];
-type T14 = { "name": T1; "stack": T13; };
-type T15 = T14[];
-type T16 = { "tab": T1; "tabs": T15; "next": T10; };
-type T17 = T4[];
-type T18 = T2 | null;
+type T8 = { "userName": T1; "theme": T1; "projects": T0; };
+type T9 = { "id": T1; "title": T1; "website": T1; "username": T1; "hasPassword": T0; "hints": T1; };
+type T10 = { "ok": T0; "id": T1; "password": T1; "error": T1; };
+type T11 = { "id": T1; "kind": T1; "title": T1; "status": T1; "area": T1; "body": T1; };
+type T12 = { "accessibilityTextSize": T0; };
+type T13 = { "prefersContrast": T1; };
+type T14 = number;
+type T15 = { "slug": T1; "id": T1; };
+type T16 = { "id": T14; "name": T1; "url": T1; "tab": T1; "params": T15; "fragment": T1; };
+type T17 = T16[];
+type T18 = { "name": T1; "stack": T17; };
+type T19 = T18[];
+type T20 = { "tab": T1; "tabs": T19; "next": T14; };
+type T21 = T4[];
+type T22 = T9[];
+type T23 = T11[];
+type T24 = T2 | null;
+type T25 = T10 | null;
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "createBot" | "sendMessage" | "signIn" | "signOut" | "stopRun";
+export type MutationSource = "createBot" | "deleteBot" | "deleteLogin" | "deleteProject" | "hideBot" | "makeMainBot" | "recolourBot" | "renameBot" | "revealPassword" | "saveLogin" | "saveProject" | "sendMessage" | "setPassword" | "setProjects" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun";
 
 export interface SourceMap {
   "createBot": { args: [T1, T1]; result: T2 };
-  "loadBots": { args: []; result: T17 };
+  "deleteBot": { args: [T1]; result: T2 };
+  "deleteLogin": { args: [T1]; result: T2 };
+  "deleteProject": { args: [T1]; result: T2 };
+  "hideBot": { args: [T1, T0]; result: T2 };
+  "loadBots": { args: []; result: T21 };
   "loadChat": { args: [T1]; result: T7 };
+  "loadPrefs": { args: []; result: T8 };
+  "loadProjects": { args: []; result: T23 };
   "loadSession": { args: []; result: T3 };
+  "loadVault": { args: []; result: T22 };
+  "makeMainBot": { args: [T1]; result: T2 };
+  "recolourBot": { args: [T1, T1]; result: T2 };
+  "renameBot": { args: [T1, T1]; result: T2 };
+  "revealPassword": { args: [T1]; result: T10 };
+  "saveLogin": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
+  "saveProject": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "sendMessage": { args: [T1, T1]; result: T2 };
+  "setPassword": { args: [T1]; result: T2 };
+  "setProjects": { args: [T0]; result: T2 };
+  "setTheme": { args: [T1]; result: T2 };
+  "setUserName": { args: [T1]; result: T2 };
   "signIn": { args: [T1]; result: T2 };
   "signOut": { args: []; result: T2 };
   "stopRun": { args: [T1]; result: T2 };

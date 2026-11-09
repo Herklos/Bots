@@ -58,11 +58,57 @@ const sources: Sources = {
   signOut: async (_args, store) => { store.set('session', ''); return { ok: true, error: '' }; },
   loadBots: async (_args, store): Promise<Result<'loadBots'>> => {
     const body = await read(store, '/api/bots');
-    return (body.bots as any[]).filter((b) => !b.hidden).map((b) => ({
+    return (body.bots as any[]).map((b) => ({
       slug: String(b.slug), name: String(b.name), label: String(b.label ?? ''), initials: initials(String(b.name)),
-      color: fill(b.color), main: b.primary === true, ready: typeof b.mainThreadId === 'string',
+      color: fill(b.color), main: b.primary === true, hidden: b.hidden === true, ready: typeof b.mainThreadId === 'string',
     }));
   },
+  renameBot: async ([slug, name], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ name }) })),
+  recolourBot: async ([slug, color], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ color }) })),
+  hideBot: async ([slug, hidden], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ hidden }) })),
+  makeMainBot: async ([slug], store) => reply(await call(store, '/api/main-bot', { method: 'PUT', body: JSON.stringify({ slug }) })),
+  deleteBot: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'DELETE' })),
+  loadPrefs: async (_args, store): Promise<Result<'loadPrefs'>> => {
+    const body = await read(store, '/api/settings');
+    return { userName: String(body.userName ?? ''), theme: String(body.theme ?? 'system'), projects: body.beta?.projects === true };
+  },
+  setUserName: async ([userName], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ userName }) })),
+  setTheme: async ([theme], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ theme }) })),
+  setProjects: async ([on], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ beta: { projects: on } }) })),
+  setPassword: async ([password], store) => reply(await call(store, '/api/access/password', { method: 'PUT', body: JSON.stringify({ password }) })),
+  loadVault: async (_args, store): Promise<Result<'loadVault'>> => {
+    const body = await read(store, '/api/vault');
+    return (body.items as any[]).filter((i) => i.type === 'login').map((i) => ({
+      id: String(i.id), title: String(i.title ?? ''), website: String(i.website ?? ''), username: String(i.username ?? ''),
+      hasPassword: i.hasPassword === true, hints: String(i.hints ?? ''),
+    }));
+  },
+  revealPassword: async ([id], store): Promise<Result<'revealPassword'>> => {
+    const r = await call(store, `/api/vault/${encodeURIComponent(id)}?reveal=1`);
+    if (!r.ok) return { ok: false, id, password: '', error: r.error };
+    return { ok: true, id, password: String(r.body.password ?? ''), error: '' };
+  },
+  saveLogin: async ([id, title, website, username, password, hints], store) => {
+    // A blank password keeps the saved one; the gateway drops an empty password on update.
+    const fields = { type: 'login', title, website, username, hints, ...(password !== '' ? { password } : {}) };
+    const r = id === ''
+      ? await call(store, '/api/vault', { method: 'POST', body: JSON.stringify(fields) })
+      : await call(store, `/api/vault/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(fields) });
+    return reply(r);
+  },
+  deleteLogin: async ([id], store) => reply(await call(store, `/api/vault/${encodeURIComponent(id)}`, { method: 'DELETE' })),
+  loadProjects: async (_args, store): Promise<Result<'loadProjects'>> => {
+    const body = await read(store, '/api/projects');
+    return (body.items as any[]).map((p) => ({
+      id: String(p.id), kind: String(p.kind), title: String(p.title ?? ''), status: String(p.status ?? ''),
+      area: String(p.area ?? ''), body: String(p.body ?? ''),
+    }));
+  },
+  saveProject: async ([id, kind, title, status, area, body], store) => {
+    const item = { ...(id !== '' ? { id } : { kind }), title, status, area, body };
+    return reply(await call(store, '/api/projects/items', { method: 'POST', body: JSON.stringify({ items: [item] }) }));
+  },
+  deleteProject: async ([id], store) => reply(await call(store, '/api/projects/delete', { method: 'POST', body: JSON.stringify({ ids: [id] }) })),
   createBot: async ([name, color], store) => reply(await call(store, '/api/bots', { method: 'POST', body: JSON.stringify({ name, color }) })),
   loadChat: async ([slug], store): Promise<Result<'loadChat'>> => {
     if (slug === '') return { slug, rows: [], working: false }; // no chat is open: nothing to read
