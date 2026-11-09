@@ -58,8 +58,8 @@ index 0000000..5b0e648
 +  "mainThreadId": "thread-linus"
 +}
 diff --git a/tests/compat/run.sh b/tests/compat/run.sh
-new file mode 100644
-index 0000000..e27c729
+new file mode 100755
+index 0000000..6bbf338
 --- /dev/null
 +++ b/tests/compat/run.sh
 @@ -0,0 +1,240 @@
@@ -105,8 +105,8 @@ index 0000000..e27c729
 +# code METHOD PATH JAR BODY: HTTP status; the response body is left in $WORK/last.body.
 +code() {
 +  local args=(-s -o "$WORK/last.body" -w '%{http_code}' -X "$1" "http://127.0.0.1:$PORT$2")
-+  [ -n "$3" ] && args+=(-H "Cookie: $(cat "$3")")
-+  [ -n "$4" ] && args+=(-H 'content-type: application/json' --data-binary "$4")
++  [ -n "${3:-}" ] && args+=(-H "Cookie: $(cat "$3")")
++  [ -n "${4:-}" ] && args+=(-H 'content-type: application/json' --data-binary "$4")
 +  curl "${args[@]}" 2>/dev/null || echo 000
 +}
 +# login JAR: signs in with the shared password and keeps the bot_session cookie in JAR.

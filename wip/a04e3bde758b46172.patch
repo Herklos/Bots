@@ -1,5 +1,5 @@
 diff --git a/gateway/src/main.rs b/gateway/src/main.rs
-index 4002d91..85dcd9a 100644
+index 4002d91..32dde91 100644
 --- a/gateway/src/main.rs
 +++ b/gateway/src/main.rs
 @@ -11,6 +11,7 @@ mod config;
@@ -20,6 +20,17 @@ index 4002d91..85dcd9a 100644
 +    }
      require_json(&h)?;
      let items = parse(&body)?["items"]
+         .as_array()
+@@ -568,6 +573,10 @@ async fn projects_save(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json
+ 
+ async fn projects_delete(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
+     projects_on(&s).await?;
++    // PROJECTS-HOOK (T3): writes must come from the app's own page.
++    if !projects_tools::same_origin(&h) {
++        return Err(ApiError::new(403, "This change didn't come from the app."));
++    }
+     require_json(&h)?;
+     let ids: Vec<String> = parse(&body)?["ids"]
          .as_array()
 diff --git a/gateway/src/mcp.rs b/gateway/src/mcp.rs
 index 37fadc0..b42fa13 100644
@@ -103,10 +114,10 @@ index 37fadc0..b42fa13 100644
      }
  }
 diff --git a/gateway/src/projects.rs b/gateway/src/projects.rs
-index 62ab90b..4ed28e2 100644
+index 62ab90b..cd9ed5f 100644
 --- a/gateway/src/projects.rs
 +++ b/gateway/src/projects.rs
-@@ -1,55 +1,847 @@
+@@ -1,55 +1,919 @@
  //! The Projects board, reading and writing Threebot's `bots/.botapp/projects.json`
 -//! (`{version, seq, items: {id: Item}, activity: []}`). A save is all or nothing, every change
 -//! is stamped with who made it and broadcast to open pages (Server-Sent Events).
@@ -134,29 +145,34 @@ index 62ab90b..4ed28e2 100644
  use tokio::sync::{broadcast, Mutex};
  
 -const KINDS: &[&str] = &[
--    "project", "task", "machine", "service", "repo", "note", "link",
-+pub const KINDS: &[&str] = &["project", "task", "machine", "service", "repo", "note", "link"];
++pub const KINDS: &[&str] = &[
+     "project", "task", "machine", "service", "repo", "note", "link",
+ ];
+-const MAX_BATCH: usize = 100;
 +pub const LINK_TYPES: &[&str] = &["thread", "bot", "item", "url", "t3project"];
 +pub const PRIORITIES: &[&str] = &["high", "normal", "low"];
 +pub const FIELD_NAMES: &[&str] = &[
 +    "url", "path", "host", "port", "branch", "due", "priority", "owner", "tags",
- ];
--const MAX_BATCH: usize = 100;
++];
 +pub const MAX_BATCH: usize = 100;
 +const MAX_ITEMS: usize = 5000;
  const MAX_ACTIVITY: usize = 300;
 -const TEXT_FIELDS: &[&str] = &[
--    "title",
--    "status",
--    "area",
--    "body",
--    "parentId",
--    "machineId",
--    "doneAt",
 +const BOARD_TAIL: usize = 60;
 +const TRACKED: &[&str] = &[
-+    "kind", "title", "status", "area", "body", "parentId", "machineId", "fields", "links",
-+    "pinned", "order", "archived",
++    "kind",
+     "title",
+     "status",
+     "area",
+     "body",
+     "parentId",
+     "machineId",
+-    "doneAt",
++    "fields",
++    "links",
++    "pinned",
++    "order",
++    "archived",
  ];
 +const ID_ALPHABET: &[u8] = b"abcdefghijkmnpqrstuvwxyz23456789";
  
@@ -225,7 +241,10 @@ index 62ab90b..4ed28e2 100644
 +}
 +
 +fn quoted(v: &Value) -> String {
-+    format!("\"{}\"", v.as_str().map_or_else(|| v.to_string(), String::from))
++    format!(
++        "\"{}\"",
++        v.as_str().map_or_else(|| v.to_string(), String::from)
++    )
 +}
 +
 +fn truthy(v: &Value) -> bool {
@@ -274,10 +293,15 @@ index 62ab90b..4ed28e2 100644
 +    let Some(s) = oneline(v, field, 2000)? else {
 +        return Ok(None);
 +    };
-+    let url = url::Url::parse(&s)
-+        .map_err(|_| invalid(format!("{field} must be a full address, like https://example.com.")))?;
++    let url = url::Url::parse(&s).map_err(|_| {
++        invalid(format!(
++            "{field} must be a full address, like https://example.com."
++        ))
++    })?;
 +    if !matches!(url.scheme(), "http" | "https") {
-+        return Err(invalid(format!("{field} must start with http:// or https://.")));
++        return Err(invalid(format!(
++            "{field} must start with http:// or https://."
++        )));
 +    }
 +    Ok(Some(url.to_string()))
 +}
@@ -294,8 +318,11 @@ index 62ab90b..4ed28e2 100644
 +    if !shape_ok {
 +        return false;
 +    }
-+    let (Ok(y), Ok(m), Ok(d)) = (s[0..4].parse::<u32>(), s[5..7].parse::<u32>(), s[8..10].parse::<u32>())
-+    else {
++    let (Ok(y), Ok(m), Ok(d)) = (
++        s[0..4].parse::<u32>(),
++        s[5..7].parse::<u32>(),
++        s[8..10].parse::<u32>(),
++    ) else {
 +        return false;
 +    };
 +    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
@@ -323,7 +350,9 @@ index 62ab90b..4ed28e2 100644
 +    if v.is_null() {
 +        return Ok(None);
 +    }
-+    let list = v.as_array().ok_or_else(|| invalid("tags must be a list of words."))?;
++    let list = v
++        .as_array()
++        .ok_or_else(|| invalid("tags must be a list of words."))?;
 +    let mut tags: Vec<String> = Vec::new();
 +    for raw in list {
 +        if raw.is_null() {
@@ -458,8 +487,8 @@ index 62ab90b..4ed28e2 100644
 +            out.insert("slug".into(), json!(slug));
 +        }
 +        "item" => {
-+            let id = oneline(get("id"), "id", 40)?
-+                .ok_or_else(|| invalid("An item link needs id."))?;
++            let id =
++                oneline(get("id"), "id", 40)?.ok_or_else(|| invalid("An item link needs id."))?;
 +            out.insert("type".into(), json!("item"));
 +            out.insert("id".into(), json!(id));
 +        }
@@ -508,7 +537,9 @@ index 62ab90b..4ed28e2 100644
 +
 +/// Cleans a list of links. A repeated link collapses into one (the later one wins).
 +fn clean_links(list: &Value) -> ApiResult<Vec<Value>> {
-+    let arr = list.as_array().ok_or_else(|| invalid("links must be a list."))?;
++    let arr = list
++        .as_array()
++        .ok_or_else(|| invalid("links must be a list."))?;
 +    let mut out: Vec<(String, Value)> = Vec::new();
 +    for item in arr {
 +        let link = clean_link(item)?;
@@ -525,7 +556,10 @@ index 62ab90b..4ed28e2 100644
 +}
 +
 +fn current_links(item: &Map<String, Value>) -> Vec<Value> {
-+    item.get("links").and_then(Value::as_array).cloned().unwrap_or_default()
++    item.get("links")
++        .and_then(Value::as_array)
++        .cloned()
++        .unwrap_or_default()
 +}
 +
 +fn same_value(a: Option<&Value>, b: Option<&Value>) -> bool {
@@ -535,7 +569,8 @@ index 62ab90b..4ed28e2 100644
 +fn valid_ref_name(s: &str) -> bool {
 +    !s.is_empty()
 +        && s.len() <= 40
-+        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
++        && s.chars()
++            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
 +}
 +
 +/// An item id, or `ref:<name>` for an item created earlier in the same batch. Null means "none".
@@ -555,9 +590,11 @@ index 62ab90b..4ed28e2 100644
 +        Some(name) if valid_ref_name(name) => refs.get(name).cloned(),
 +        _ => Some(value.to_string()),
 +    };
-+    let id = id
-+        .filter(|i| !i.is_empty())
-+        .ok_or_else(|| invalid(format!("{field} \"{value}\" doesn't name an item in this batch.")))?;
++    let id = id.filter(|i| !i.is_empty()).ok_or_else(|| {
++        invalid(format!(
++            "{field} \"{value}\" doesn't name an item in this batch."
++        ))
++    })?;
 +    if !items.contains_key(&id) {
 +        return Err(invalid(format!("{field} \"{value}\" isn't on the board.")));
 +    }
@@ -609,7 +646,9 @@ index 62ab90b..4ed28e2 100644
 +        return Err(invalid("Give at least one item."));
 +    }
 +    if inputs.len() > MAX_BATCH {
-+        return Err(invalid(format!("Save at most {MAX_BATCH} items at a time.")));
++        return Err(invalid(format!(
++            "Save at most {MAX_BATCH} items at a time."
++        )));
 +    }
 +    let before: Map<String, Value> = items_mut(next)?.clone();
 +    let mut seq = next["seq"].as_u64().unwrap_or(0);
@@ -636,10 +675,9 @@ index 62ab90b..4ed28e2 100644
 +            let id = new_id(&taken);
 +            taken.insert(id.clone());
 +            if let Some(raw) = obj.get("ref") {
-+                let name = raw
-+                    .as_str()
-+                    .filter(|r| valid_ref_name(r))
-+                    .ok_or_else(|| invalid("ref must be a short name of letters, digits, - or _."))?;
++                let name = raw.as_str().filter(|r| valid_ref_name(r)).ok_or_else(|| {
++                    invalid("ref must be a short name of letters, digits, - or _.")
++                })?;
 +                if refs.contains_key(name) {
 +                    return Err(invalid(format!("ref \"{name}\" is used twice.")));
 +                }
@@ -682,7 +720,12 @@ index 62ab90b..4ed28e2 100644
 +            .cloned()
 +            .ok_or_else(|| ApiError::new(500, "The Projects board is damaged."))?;
 +
-+        if created && !obj.get("kind").and_then(Value::as_str).is_some_and(|k| KINDS.contains(&k)) {
++        if created
++            && !obj
++                .get("kind")
++                .and_then(Value::as_str)
++                .is_some_and(|k| KINDS.contains(&k))
++        {
 +            return Err(kind_error());
 +        }
 +        if !created {
@@ -726,7 +769,11 @@ index 62ab90b..4ed28e2 100644
 +            m.remove("status");
 +        }
 +        if !m.contains_key("status") && !list.is_empty() {
-+            let idx = if kind == "machine" || kind == "service" { list.len() - 1 } else { 0 };
++            let idx = if kind == "machine" || kind == "service" {
++                list.len() - 1
++            } else {
++                0
++            };
 +            m.insert("status".into(), json!(list[idx]));
 +        }
 +
@@ -755,7 +802,11 @@ index 62ab90b..4ed28e2 100644
 +            let Some(raw) = obj.get(key) else { continue };
 +            let target = resolve_ref(raw, &refs, items, key)?;
 +            if target.as_deref() == Some(id.as_str()) {
-+                let what = if key == "parentId" { "parent" } else { "machine" };
++                let what = if key == "parentId" {
++                    "parent"
++                } else {
++                    "machine"
++                };
 +                return Err(invalid(format!("An item can't be its own {what}.")));
 +            }
 +            match &target {
@@ -777,11 +828,19 @@ index 62ab90b..4ed28e2 100644
 +        }
 +
 +        if let Some(raw) = obj.get("fields") {
-+            let previous = m.get("fields").and_then(Value::as_object).cloned().unwrap_or_default();
++            let previous = m
++                .get("fields")
++                .and_then(Value::as_object)
++                .cloned()
++                .unwrap_or_default();
 +            m.insert("fields".into(), Value::Object(clean_fields(raw, previous)?));
 +        }
 +        if let Some(raw) = obj.get("links") {
-+            let links = if raw.is_null() { Vec::new() } else { clean_links(raw)? };
++            let links = if raw.is_null() {
++                Vec::new()
++            } else {
++                clean_links(raw)?
++            };
 +            m.insert("links".into(), json!(links));
 +        }
 +        if let Some(raw) = obj.get("addLinks") {
@@ -835,7 +894,11 @@ index 62ab90b..4ed28e2 100644
 +            continue;
 +        }
 +
-+        let status = m.get("status").and_then(Value::as_str).unwrap_or("").to_string();
++        let status = m
++            .get("status")
++            .and_then(Value::as_str)
++            .unwrap_or("")
++            .to_string();
 +        let was_done = prev.and_then(|p| p["status"].as_str()) == Some("done");
 +        if kind == "task" && status == "done" && (created || !was_done) {
 +            m.insert("doneAt".into(), json!(stamp));
@@ -849,7 +912,11 @@ index 62ab90b..4ed28e2 100644
 +        let action = if created {
 +            "created"
 +        } else if keys.contains(&"archived") {
-+            if m["archived"] == true { "archived" } else { "restored" }
++            if m["archived"] == true {
++                "archived"
++            } else {
++                "restored"
++            }
 +        } else if kind == "task" && keys.contains(&"status") && status == "done" {
 +            "completed"
 +        } else {
@@ -873,7 +940,10 @@ index 62ab90b..4ed28e2 100644
 +}
 +
 +fn parent_of(items: &Map<String, Value>, id: &str) -> Option<String> {
-+    items.get(id).and_then(|i| i["parentId"].as_str()).map(String::from)
++    items
++        .get(id)
++        .and_then(|i| i["parentId"].as_str())
++        .map(String::from)
 +}
 +
 +/// Deletes items inside `next`. Children move up to the nearest surviving ancestor.
@@ -925,14 +995,20 @@ index 62ab90b..4ed28e2 100644
 +                changed = true;
 +            }
 +        }
-+        if item["machineId"].as_str().is_some_and(|m| gone_set.contains(m)) {
++        if item["machineId"]
++            .as_str()
++            .is_some_and(|m| gone_set.contains(m))
++        {
 +            item.as_object_mut().map(|m| m.remove("machineId"));
 +            changed = true;
 +        }
 +        if let Some(links) = item["links"].as_array() {
 +            let kept: Vec<Value> = links
 +                .iter()
-+                .filter(|l| !(l["type"] == "item" && l["id"].as_str().is_some_and(|id| gone_set.contains(id))))
++                .filter(|l| {
++                    !(l["type"] == "item"
++                        && l["id"].as_str().is_some_and(|id| gone_set.contains(id)))
++                })
 +                .cloned()
 +                .collect();
 +            if kept.len() != links.len() {
@@ -980,7 +1056,7 @@ index 62ab90b..4ed28e2 100644
  impl Projects {
      pub fn new(file: PathBuf) -> Self {
          Self {
-@@ -59,11 +851,15 @@ impl Projects {
+@@ -59,11 +923,15 @@ impl Projects {
          }
      }
  
@@ -1000,7 +1076,7 @@ index 62ab90b..4ed28e2 100644
              *g = Some(json!({
                  "version": raw["version"].as_u64().unwrap_or(0),
                  "seq": raw["seq"].as_u64().unwrap_or(0),
-@@ -71,261 +867,701 @@ impl Projects {
+@@ -71,261 +939,902 @@ impl Projects {
                  "activity": if raw["activity"].is_array() { raw["activity"].clone() } else { json!([]) },
              }));
          }
@@ -1043,7 +1119,10 @@ index 62ab90b..4ed28e2 100644
 +    pub async fn items(&self) -> ApiResult<Vec<Value>> {
 +        let mut g = self.state.lock().await;
 +        let s = self.load(&mut g).await?;
-+        Ok(s["items"].as_object().map(|m| m.values().cloned().collect()).unwrap_or_default())
++        Ok(s["items"]
++            .as_object()
++            .map(|m| m.values().cloned().collect())
++            .unwrap_or_default())
 +    }
 +
 +    /// The whole activity log, oldest first.
@@ -1321,7 +1400,11 @@ index 62ab90b..4ed28e2 100644
 +            .and_then(|i| i["title"].as_str())
 +            .map(String::from)
 +    };
-+    let mut projects: Vec<&Value> = live.iter().copied().filter(|i| i["kind"] == "project").collect();
++    let mut projects: Vec<&Value> = live
++        .iter()
++        .copied()
++        .filter(|i| i["kind"] == "project")
++        .collect();
 +    projects.sort_by(|a, b| by_order(a, b));
 +    let projects: Vec<Value> = projects
 +        .into_iter()
@@ -1338,7 +1421,10 @@ index 62ab90b..4ed28e2 100644
 +
 +    let priority_rank = |i: &Value| {
 +        let p = i["fields"]["priority"].as_str().unwrap_or("normal");
-+        PRIORITIES.iter().position(|x| *x == p).map_or(-1, |x| x as i64)
++        PRIORITIES
++            .iter()
++            .position(|x| *x == p)
++            .map_or(-1, |x| x as i64)
 +    };
 +    let mut tasks: Vec<&Value> = live.iter().copied().filter(|i| is_open_task(i)).collect();
 +    tasks.sort_by(|a, b| {
@@ -1369,7 +1455,11 @@ index 62ab90b..4ed28e2 100644
 +        })
 +        .collect();
 +
-+    let mut machines: Vec<&Value> = live.iter().copied().filter(|i| i["kind"] == "machine").collect();
++    let mut machines: Vec<&Value> = live
++        .iter()
++        .copied()
++        .filter(|i| i["kind"] == "machine")
++        .collect();
 +    machines.sort_by(|a, b| by_order(a, b));
 +    let machines: Vec<Value> = machines
 +        .into_iter()
@@ -1394,7 +1484,12 @@ index 62ab90b..4ed28e2 100644
 +        .collect();
 +    let counts: Map<String, Value> = KINDS
 +        .iter()
-+        .map(|k| (k.to_string(), json!(live.iter().filter(|i| i["kind"] == *k).count())))
++        .map(|k| {
++            (
++                k.to_string(),
++                json!(live.iter().filter(|i| i["kind"] == *k).count()),
++            )
++        })
 +        .collect();
 +    let recent: Vec<Value> = activity
 +        .iter()
@@ -1424,7 +1519,12 @@ index 62ab90b..4ed28e2 100644
 +
 +/// Search with filters. Words must all appear in a title, note, area, tag, address or path.
 +pub fn find(items: &[Value], query: &Value, app_url: &str) -> Value {
-+    let text_of = |k: &str| query.get(k).and_then(Value::as_str).filter(|s| !s.is_empty());
++    let text_of = |k: &str| {
++        query
++            .get(k)
++            .and_then(Value::as_str)
++            .filter(|s| !s.is_empty())
++    };
 +    let search = text_of("search").unwrap_or("").trim().to_lowercase();
 +    let words: Vec<&str> = search.split_whitespace().collect();
 +    let kind = text_of("kind");
@@ -1451,7 +1551,10 @@ index 62ab90b..4ed28e2 100644
 +            if open_only && item["kind"] == "task" && item["status"] == "done" {
 +                return false;
 +            }
-+            if area.as_deref().is_some_and(|a| item["area"].as_str() != Some(a)) {
++            if area
++                .as_deref()
++                .is_some_and(|a| item["area"].as_str() != Some(a))
++            {
 +                return false;
 +            }
 +            if parent.is_some_and(|p| item["parentId"] != p) {
@@ -1461,9 +1564,10 @@ index 62ab90b..4ed28e2 100644
 +                return false;
 +            }
 +            if thread.is_some_and(|t| {
-+                !item["links"]
-+                    .as_array()
-+                    .is_some_and(|ls| ls.iter().any(|l| l["type"] == "thread" && l["threadId"] == t))
++                !item["links"].as_array().is_some_and(|ls| {
++                    ls.iter()
++                        .any(|l| l["type"] == "thread" && l["threadId"] == t)
++                })
 +            }) {
 +                return false;
 +            }
@@ -1511,7 +1615,11 @@ index 62ab90b..4ed28e2 100644
 +    };
 +    let limit = limit.clamp(1.0, 200.0) as usize;
 +    let total = matches.len();
-+    let items: Vec<Value> = matches.into_iter().take(limit).map(|i| brief(i, app_url)).collect();
++    let items: Vec<Value> = matches
++        .into_iter()
++        .take(limit)
++        .map(|i| brief(i, app_url))
++        .collect();
 +    json!({ "total": total, "items": items })
 +}
 +
@@ -1525,10 +1633,17 @@ index 62ab90b..4ed28e2 100644
 +    children.sort_by(|a, b| by_order(a, b));
 +    let mut out = item.clone();
 +    out["link"] = json!(item_link(id, app_url));
-+    if let Some(parent) = item["parentId"].as_str().and_then(|p| items.iter().find(|i| i["id"] == p)) {
-+        out["parent"] = json!({ "id": parent["id"], "title": parent["title"], "kind": parent["kind"] });
-+    }
-+    out["children"] = json!(children.iter().map(|c| brief(c, app_url)).collect::<Vec<_>>());
++    if let Some(parent) = item["parentId"]
++        .as_str()
++        .and_then(|p| items.iter().find(|i| i["id"] == p))
++    {
++        out["parent"] =
++            json!({ "id": parent["id"], "title": parent["title"], "kind": parent["kind"] });
+     }
++    out["children"] = json!(children
++        .iter()
++        .map(|c| brief(c, app_url))
++        .collect::<Vec<_>>());
 +    if item["kind"] == "machine" {
 +        let on: Vec<Value> = items
 +            .iter()
@@ -1536,7 +1651,7 @@ index 62ab90b..4ed28e2 100644
 +            .map(|i| brief(i, app_url))
 +            .collect();
 +        out["onThisMachine"] = json!(on);
-     }
++    }
 +    let linked: Vec<Value> = items
 +        .iter()
 +        .filter(|c| {
@@ -1575,7 +1690,11 @@ index 62ab90b..4ed28e2 100644
 +    async fn refuses(p: &Projects, items: Vec<Value>, needle: &str) {
 +        let err = p.save(&items, bot()).await.unwrap_err();
 +        assert_eq!(err.status, 400, "{}", err.message);
-+        assert!(err.message.contains(needle), "{:?} lacks {needle:?}", err.message);
++        assert!(
++            err.message.contains(needle),
++            "{:?} lacks {needle:?}",
++            err.message
++        );
 +    }
 +
 +    #[tokio::test]
@@ -1600,6 +1719,7 @@ index 62ab90b..4ed28e2 100644
 -        let id = saved["items"][0]["id"].as_str().unwrap().to_string();
 -        assert_eq!(id.len(), 8);
 -        assert_eq!(rx.recv().await.unwrap()["version"], 1);
+-        let child = p
 +        let items = saved["items"].as_array().unwrap();
 +        let (nas, tb, task, svc) = (&items[0], &items[1], &items[2], &items[3]);
 +        assert_eq!(nas["status"], "unknown");
@@ -1609,7 +1729,11 @@ index 62ab90b..4ed28e2 100644
 +        assert_eq!(task["parentId"], tb["id"]);
 +        assert_eq!(svc["machineId"], nas["id"]);
 +        assert_eq!(svc["fields"]["port"], 3780);
-+        assert_eq!(svc["links"].as_array().unwrap().len(), 1, "duplicate links collapse");
++        assert_eq!(
++            svc["links"].as_array().unwrap().len(),
++            1,
++            "duplicate links collapse"
++        );
 +        assert_eq!(task["createdBy"], bot());
 +        assert_eq!(nas["id"].as_str().unwrap().len(), 8);
 +        let event = rx.recv().await.unwrap();
@@ -1625,7 +1749,11 @@ index 62ab90b..4ed28e2 100644
 +    async fn patches_change_only_what_they_name_null_clears_and_done_todos_record_when() {
 +        let (_d, _f, p) = board();
 +        let task = p
-+            .save(
+             .save(
+-                &[json!({ "kind": "task", "title": "Write tests", "parentId": id })],
+-                actor(Some(
+-                    &json!({ "type": "bot", "name": "Ada", "slug": "ada" }),
+-                )),
 +                &[json!({ "kind": "task", "title": "Renew domain", "body": "Before the 9th", "fields": { "tags": ["Admin", "admin", "web"] } })],
 +                json!({ "type": "user" }),
 +            )
@@ -1648,15 +1776,22 @@ index 62ab90b..4ed28e2 100644
 +        let activity = p.activity().await.unwrap();
 +        assert_eq!(activity.last().unwrap()["action"], "completed");
 +        let reopened = p
-+            .save(&[json!({ "id": id, "status": "todo" })], json!({ "type": "user" }))
++            .save(
++                &[json!({ "id": id, "status": "todo" })],
++                json!({ "type": "user" }),
++            )
 +            .await
 +            .unwrap()["items"][0]
 +            .clone();
 +        assert!(reopened.get("doneAt").is_none());
 +        let unchanged = p
-+            .save(&[json!({ "id": id, "status": "todo" })], json!({ "type": "user" }))
-+            .await
-+            .unwrap();
++            .save(
++                &[json!({ "id": id, "status": "todo" })],
++                json!({ "type": "user" }),
+             )
+             .await
+             .unwrap();
+-        assert_eq!(child["items"][0]["createdBy"]["type"], "bot");
 +        assert_eq!(unchanged["unchanged"], true);
 +    }
 +
@@ -1664,42 +1799,121 @@ index 62ab90b..4ed28e2 100644
 +    async fn bad_input_is_refused_with_a_plain_reason_and_the_board_is_unchanged() {
 +        let (_d, _f, p) = board();
 +        let project = p
-+            .save(&[json!({ "kind": "project", "title": "Home" })], json!({ "type": "user" }))
++            .save(
++                &[json!({ "kind": "project", "title": "Home" })],
++                json!({ "type": "user" }),
++            )
 +            .await
 +            .unwrap()["items"][0]
 +            .clone();
 +        let pid = project["id"].as_str().unwrap().to_string();
 +        refuses(&p, vec![json!({ "kind": "task" })], "needs a title").await;
-+        refuses(&p, vec![json!({ "kind": "spaceship", "title": "x" })], "kind must be").await;
-+        refuses(&p, vec![json!({ "kind": "task", "title": "x", "status": "active" })], "status is one of todo").await;
-+        refuses(&p, vec![json!({ "kind": "task", "title": "x", "fields": { "colour": "red" } })], "Unknown field \"colour\"").await;
-+        refuses(&p, vec![json!({ "kind": "task", "title": "x", "fields": { "url": "javascript:alert(1)" } })], "http").await;
-+        refuses(&p, vec![json!({ "kind": "task", "title": "x", "fields": { "due": "tomorrow" } })], "date like").await;
-+        refuses(&p, vec![json!({ "kind": "task", "title": "x", "parentId": "ref:nope" })], "doesn't name an item").await;
-+        refuses(&p, vec![json!({ "kind": "service", "title": "x", "machineId": pid })], "must point at a machine").await;
-+        refuses(&p, vec![json!({ "id": "missing1", "title": "x" })], "no item \"missing1\"").await;
-+        refuses(&p, vec![json!({ "kind": "task", "title": "ok" }), json!({ "kind": "task" })], "needs a title").await;
-+        refuses(&p, vec![json!({ "id": pid, "parentId": pid })], "its own parent").await;
-         let child = p
-+            .save(&[json!({ "kind": "project", "title": "Garden", "parentId": pid })], json!({ "type": "user" }))
++        refuses(
++            &p,
++            vec![json!({ "kind": "spaceship", "title": "x" })],
++            "kind must be",
++        )
++        .await;
++        refuses(
++            &p,
++            vec![json!({ "kind": "task", "title": "x", "status": "active" })],
++            "status is one of todo",
++        )
++        .await;
++        refuses(
++            &p,
++            vec![json!({ "kind": "task", "title": "x", "fields": { "colour": "red" } })],
++            "Unknown field \"colour\"",
++        )
++        .await;
++        refuses(
++            &p,
++            vec![
++                json!({ "kind": "task", "title": "x", "fields": { "url": "javascript:alert(1)" } }),
++            ],
++            "http",
++        )
++        .await;
++        refuses(
++            &p,
++            vec![json!({ "kind": "task", "title": "x", "fields": { "due": "tomorrow" } })],
++            "date like",
++        )
++        .await;
++        refuses(
++            &p,
++            vec![json!({ "kind": "task", "title": "x", "parentId": "ref:nope" })],
++            "doesn't name an item",
++        )
++        .await;
++        refuses(
++            &p,
++            vec![json!({ "kind": "service", "title": "x", "machineId": pid })],
++            "must point at a machine",
++        )
++        .await;
++        refuses(
++            &p,
++            vec![json!({ "id": "missing1", "title": "x" })],
++            "no item \"missing1\"",
++        )
++        .await;
++        refuses(
++            &p,
++            vec![
++                json!({ "kind": "task", "title": "ok" }),
++                json!({ "kind": "task" }),
++            ],
++            "needs a title",
++        )
++        .await;
++        refuses(
++            &p,
++            vec![json!({ "id": pid, "parentId": pid })],
++            "its own parent",
++        )
++        .await;
++        let child = p
++            .save(
++                &[json!({ "kind": "project", "title": "Garden", "parentId": pid })],
++                json!({ "type": "user" }),
++            )
 +            .await
 +            .unwrap()["items"][0]
 +            .clone();
 +        let cid = child["id"].as_str().unwrap().to_string();
-+        refuses(&p, vec![json!({ "id": pid, "parentId": cid })], "inside itself").await;
-+        assert_eq!(p.items().await.unwrap().len(), 2, "the half-valid batch saved nothing");
-+        assert!(p.items().await.unwrap().iter().find(|i| i["id"] == pid).unwrap().get("parentId").is_none());
++        refuses(
++            &p,
++            vec![json!({ "id": pid, "parentId": cid })],
++            "inside itself",
++        )
++        .await;
++        assert_eq!(
++            p.items().await.unwrap().len(),
++            2,
++            "the half-valid batch saved nothing"
++        );
+         assert!(p
+-            .save(&[json!({ "kind": "nope", "title": "x" })], actor(None))
++            .items()
+             .await
+-            .is_err());
+-        let unchanged = p.save(&[json!({ "id": id })], actor(None)).await.unwrap();
+-        assert_eq!(unchanged["unchanged"], true);
+-        p.delete(std::slice::from_ref(&id), actor(None))
++            .unwrap()
++            .iter()
++            .find(|i| i["id"] == pid)
++            .unwrap()
++            .get("parentId")
++            .is_none());
 +    }
 +
 +    #[tokio::test]
 +    async fn deleting_moves_children_up_and_drops_links_to_the_deleted_item() {
 +        let (_d, _f, p) = board();
 +        let saved = p
-             .save(
--                &[json!({ "kind": "task", "title": "Write tests", "parentId": id })],
--                actor(Some(
--                    &json!({ "type": "bot", "name": "Ada", "slug": "ada" }),
--                )),
++            .save(
 +                &[
 +                    json!({ "ref": "a", "kind": "project", "title": "Work" }),
 +                    json!({ "ref": "b", "kind": "project", "title": "Launch", "parentId": "ref:a" }),
@@ -1708,22 +1922,33 @@ index 62ab90b..4ed28e2 100644
 +                    json!({ "kind": "repo", "title": "threebot", "machineId": "ref:m" }),
 +                ],
 +                json!({ "type": "user" }),
-             )
++            )
              .await
              .unwrap();
--        assert_eq!(child["items"][0]["createdBy"]["type"], "bot");
--        assert!(p
--            .save(&[json!({ "kind": "nope", "title": "x" })], actor(None))
+-        let reloaded = Projects::new(dir.path().join("projects.json"))
+-            .board()
+-            .await;
+-        assert_eq!(reloaded["version"], 3);
+-        assert!(
+-            reloaded["items"][0].get("parentId").is_none(),
+-            "the child moved up a level"
 +        let items = saved["items"].as_array().unwrap().clone();
 +        let mut rx = p.events.subscribe();
 +        let launch = items[1]["id"].as_str().unwrap().to_string();
 +        let air = items[2]["id"].as_str().unwrap().to_string();
-+        p.delete(&[launch.clone(), air.clone()], bot()).await.unwrap();
++        p.delete(&[launch.clone(), air.clone()], bot())
++            .await
++            .unwrap();
 +        let left = p.items().await.unwrap();
 +        let task = left.iter().find(|i| i["title"] == "Write post").unwrap();
 +        assert_eq!(task["parentId"], items[0]["id"]);
 +        assert_eq!(task["links"], json!([]));
-+        assert!(left.iter().find(|i| i["title"] == "threebot").unwrap().get("machineId").is_none());
++        assert!(left
++            .iter()
++            .find(|i| i["title"] == "threebot")
++            .unwrap()
++            .get("machineId")
++            .is_none());
 +        let _ = rx.try_recv();
 +    }
 +
@@ -1735,9 +1960,12 @@ index 62ab90b..4ed28e2 100644
 +            .map(|i| {
 +                let p = p.clone();
 +                tokio::spawn(async move {
-+                    p.save(&[json!({ "kind": "task", "title": format!("Task {i}") })], json!({ "type": "user" }))
-+                        .await
-+                        .unwrap();
++                    p.save(
++                        &[json!({ "kind": "task", "title": format!("Task {i}") })],
++                        json!({ "type": "user" }),
++                    )
++                    .await
++                    .unwrap();
 +                })
 +            })
 +            .collect();
@@ -1751,15 +1979,17 @@ index 62ab90b..4ed28e2 100644
 +    #[tokio::test]
 +    async fn a_fresh_store_reads_what_an_earlier_one_wrote() {
 +        let (_d, file, p) = board();
-+        p.save(&[json!({ "kind": "note", "title": "Wifi is on the fridge" })], json!({ "type": "user" }))
-             .await
--            .is_err());
--        let unchanged = p.save(&[json!({ "id": id })], actor(None)).await.unwrap();
--        assert_eq!(unchanged["unchanged"], true);
--        p.delete(std::slice::from_ref(&id), actor(None))
-+            .unwrap();
++        p.save(
++            &[json!({ "kind": "note", "title": "Wifi is on the fridge" })],
++            json!({ "type": "user" }),
++        )
++        .await
++        .unwrap();
 +        let again = Projects::new(file);
-+        assert_eq!(again.items().await.unwrap()[0]["title"], "Wifi is on the fridge");
++        assert_eq!(
++            again.items().await.unwrap()[0]["title"],
++            "Wifi is on the fridge"
++        );
 +    }
 +
 +    #[tokio::test]
@@ -1767,7 +1997,10 @@ index 62ab90b..4ed28e2 100644
 +        let (_d, file, p) = board();
 +        std::fs::write(&file, "{ not json").unwrap();
 +        let err = p
-+            .save(&[json!({ "kind": "note", "title": "x" })], json!({ "type": "user" }))
++            .save(
++                &[json!({ "kind": "note", "title": "x" })],
++                json!({ "type": "user" }),
++            )
 +            .await
 +            .unwrap_err();
 +        assert_eq!(msg(err), "The Projects board file can't be read.");
@@ -1790,40 +2023,53 @@ index 62ab90b..4ed28e2 100644
 +                ],
 +                bot(),
 +            )
-             .await
-             .unwrap();
--        let reloaded = Projects::new(dir.path().join("projects.json"))
--            .board()
--            .await;
--        assert_eq!(reloaded["version"], 3);
--        assert!(
--            reloaded["items"][0].get("parentId").is_none(),
--            "the child moved up a level"
--        );
++            .await
++            .unwrap();
 +        let items = saved["items"].as_array().unwrap().clone();
 +        let all = p.items().await.unwrap();
 +        let activity = p.activity().await.unwrap();
 +        let app = "https://bot.example";
 +        let view = overview(&all, &activity, app);
 +        assert_eq!(view["projects"][0]["openTasks"], 2);
-+        let titles: Vec<&str> = view["openTasks"].as_array().unwrap().iter().map(|t| t["title"].as_str().unwrap()).collect();
++        let titles: Vec<&str> = view["openTasks"]
++            .as_array()
++            .unwrap()
++            .iter()
++            .map(|t| t["title"].as_str().unwrap())
++            .collect();
 +        assert_eq!(titles, ["Urgent thing", "Low thing"]);
 +        assert_eq!(view["openTasks"][0]["project"], "Threebot");
 +        assert_eq!(view["machines"][0]["services"][0]["title"], "bot-gateway");
 +        assert_eq!(view["machines"][0]["repos"][0]["title"], "threebot-source");
 +        assert_eq!(view["page"], "https://bot.example/?page=projects");
 +        assert_eq!(view["recent"][0]["who"], "Ops");
-+        assert!(view["openTasks"][0]["link"].as_str().unwrap().starts_with("https://bot.example/?item="));
++        assert!(view["openTasks"][0]["link"]
++            .as_str()
++            .unwrap()
++            .starts_with("https://bot.example/?item="));
 +        let found = |q: Value| -> Vec<String> {
-+            find(&all, &q, app)["items"].as_array().unwrap().iter().map(|i| i["title"].as_str().unwrap().to_string()).collect()
++            find(&all, &q, app)["items"]
++                .as_array()
++                .unwrap()
++                .iter()
++                .map(|i| i["title"].as_str().unwrap().to_string())
++                .collect()
 +        };
-+        assert_eq!(found(json!({ "search": "source mnt" })), ["threebot-source"]);
++        assert_eq!(
++            found(json!({ "search": "source mnt" })),
++            ["threebot-source"]
++        );
 +        let mut open = found(json!({ "kind": "task", "open": true }));
 +        open.sort();
 +        assert_eq!(open, ["Low thing", "Urgent thing"]);
 +        assert_eq!(found(json!({ "threadId": "thread-9" })), ["bot-gateway"]);
 +        let machine = detail(&all, items[1]["id"].as_str().unwrap(), app).unwrap();
-+        let mut on: Vec<String> = machine["onThisMachine"].as_array().unwrap().iter().map(|i| i["title"].as_str().unwrap().to_string()).collect();
++        let mut on: Vec<String> = machine["onThisMachine"]
++            .as_array()
++            .unwrap()
++            .iter()
++            .map(|i| i["title"].as_str().unwrap().to_string())
++            .collect();
 +        on.sort();
 +        assert_eq!(on, ["bot-gateway", "threebot-source"]);
 +        let project = detail(&all, items[0]["id"].as_str().unwrap(), app).unwrap();
@@ -1832,9 +2078,17 @@ index 62ab90b..4ed28e2 100644
 +
 +    #[test]
 +    fn cleaners_refuse_bad_values_and_fold_good_ones() {
-+        assert_eq!(clean_tags(&json!(["Web", " web ", "", "API"])).unwrap(), Some(json!(["web", "api"])));
++        assert_eq!(
++            clean_tags(&json!(["Web", " web ", "", "API"])).unwrap(),
++            Some(json!(["web", "api"]))
++        );
 +        assert!(clean_tags(&json!((0..13).map(|i| format!("t{i}")).collect::<Vec<_>>())).is_err());
-+        assert_eq!(clean_url(&json!(" https://example.com/a "), "url").unwrap().as_deref(), Some("https://example.com/a"));
++        assert_eq!(
++            clean_url(&json!(" https://example.com/a "), "url")
++                .unwrap()
++                .as_deref(),
++            Some("https://example.com/a")
++        );
 +        assert!(clean_url(&json!("example.com"), "url").is_err());
 +        assert!(clean_url(&json!("ftp://example.com"), "url").is_err());
 +        assert!(valid_date("2028-02-29"));
@@ -1850,8 +2104,16 @@ index 62ab90b..4ed28e2 100644
 +
 +    #[test]
 +    fn text_and_one_line_fold_crlf_and_collapse_space() {
-+        assert_eq!(oneline(&json!("  a \r\n  b\tc  "), "t", 50).unwrap().as_deref(), Some("a b c"));
-+        assert_eq!(text(&json!("a\r\nb"), "t", 50).unwrap().as_deref(), Some("a\nb"));
++        assert_eq!(
++            oneline(&json!("  a \r\n  b\tc  "), "t", 50)
++                .unwrap()
++                .as_deref(),
++            Some("a b c")
++        );
++        assert_eq!(
++            text(&json!("a\r\nb"), "t", 50).unwrap().as_deref(),
++            Some("a\nb")
++        );
 +        assert!(text(&json!("abc"), "t", 2).is_err());
 +        assert_eq!(text(&json!("   "), "t", 2).unwrap(), None);
 +        assert!(text(&json!(3), "t", 2).is_err());
@@ -1861,7 +2123,8 @@ index 62ab90b..4ed28e2 100644
 +    fn link_keys_ignore_labels_and_keep_environments_apart() {
 +        let a = clean_link(&json!({ "type": "thread", "threadId": "t", "label": "one" })).unwrap();
 +        let b = clean_link(&json!({ "type": "thread", "threadId": "t", "label": "two" })).unwrap();
-+        let c = clean_link(&json!({ "type": "thread", "threadId": "t", "environmentId": "e1" })).unwrap();
++        let c = clean_link(&json!({ "type": "thread", "threadId": "t", "environmentId": "e1" }))
++            .unwrap();
 +        assert_eq!(link_key(&a), link_key(&b));
 +        assert_ne!(link_key(&a), link_key(&c));
 +        assert!(clean_link(&json!({ "type": "bot", "slug": "Bad Slug" })).is_err());
@@ -1879,7 +2142,10 @@ index 62ab90b..4ed28e2 100644
 +        let p = Projects::new(file.clone());
 +        let board = p.try_board().await.unwrap();
 +        assert_eq!(board["version"], node["version"]);
-+        assert_eq!(board["items"].as_array().unwrap().len(), node["items"].as_object().unwrap().len());
++        assert_eq!(
++            board["items"].as_array().unwrap().len(),
++            node["items"].as_object().unwrap().len()
++        );
 +        let task_id = node["items"]
 +            .as_object()
 +            .unwrap()
@@ -1887,12 +2153,19 @@ index 62ab90b..4ed28e2 100644
 +            .find(|(_, i)| i["title"] == "Ship the projects page")
 +            .map(|(id, _)| id.clone())
 +            .unwrap();
-+        p.save(&[json!({ "id": task_id, "title": "Changed from Rust" })], bot())
-+            .await
-+            .unwrap();
-+        let resaved: Value = serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
++        p.save(
++            &[json!({ "id": task_id, "title": "Changed from Rust" })],
++            bot(),
++        )
++        .await
++        .unwrap();
++        let resaved: Value =
++            serde_json::from_str(&std::fs::read_to_string(&file).unwrap()).unwrap();
 +        assert_eq!(resaved["version"], node["version"].as_u64().unwrap() + 1);
-+        assert_eq!(resaved["seq"].as_u64(), Some(node["seq"].as_u64().unwrap() + 1));
++        assert_eq!(
++            resaved["seq"].as_u64(),
++            Some(node["seq"].as_u64().unwrap() + 1)
++        );
 +        assert_eq!(resaved["items"][&task_id]["title"], "Changed from Rust");
 +        for (id, item) in node["items"].as_object().unwrap() {
 +            if *id == task_id {
@@ -1900,15 +2173,18 @@ index 62ab90b..4ed28e2 100644
 +            }
 +            assert_eq!(&resaved["items"][id], item, "item {id} changed on re-save");
 +        }
-+        assert_eq!(resaved["activity"].as_array().unwrap().len(), node["activity"].as_array().unwrap().len() + 1);
++        assert_eq!(
++            resaved["activity"].as_array().unwrap().len(),
++            node["activity"].as_array().unwrap().len() + 1
+         );
      }
  }
 diff --git a/gateway/src/projects_tools.rs b/gateway/src/projects_tools.rs
 new file mode 100644
-index 0000000..d0291a6
+index 0000000..b413239
 --- /dev/null
 +++ b/gateway/src/projects_tools.rs
-@@ -0,0 +1,302 @@
+@@ -0,0 +1,333 @@
 +//! The Projects board as tools on the Bots' own MCP server (`bot`), as in Threebot's
 +//! `server/projects-mcp.mts`. Every change a Bot makes here shows on the user's open Projects
 +//! page straight away, labelled with the Bot's name. Also the same-origin check the page's
@@ -2129,7 +2405,11 @@ index 0000000..d0291a6
 +            let who = bot_actor(state, args).await?;
 +            let ids: Vec<String> = args["ids"]
 +                .as_array()
-+                .map(|l| l.iter().filter_map(|v| v.as_str().map(String::from)).collect())
++                .map(|l| {
++                    l.iter()
++                        .filter_map(|v| v.as_str().map(String::from))
++                        .collect()
++                })
 +                .unwrap_or_default();
 +            let result = board.delete(&ids, who).await.map_err(msg)?;
 +            Ok(json!({ "deleted": result["removed"] }))
@@ -2184,9 +2464,18 @@ index 0000000..d0291a6
 +            assert_eq!(tool["inputSchema"]["type"], "object", "{}", tool["name"]);
 +        }
 +        let save = list.iter().find(|t| t["name"] == "projects_save").unwrap();
-+        assert_eq!(save["inputSchema"]["required"], json!(["items", "threadId"]));
-+        assert_eq!(save["inputSchema"]["properties"]["items"]["items"]["properties"]["kind"]["enum"], json!(KINDS));
-+        let status = save["inputSchema"]["properties"]["items"]["items"]["properties"]["status"]["description"].as_str().unwrap();
++        assert_eq!(
++            save["inputSchema"]["required"],
++            json!(["items", "threadId"])
++        );
++        assert_eq!(
++            save["inputSchema"]["properties"]["items"]["items"]["properties"]["kind"]["enum"],
++            json!(KINDS)
++        );
++        let status = save["inputSchema"]["properties"]["items"]["items"]["properties"]["status"]
++            ["description"]
++            .as_str()
++            .unwrap();
 +        assert!(status.contains("task: todo|doing|waiting|done"), "{status}");
 +    }
 +
@@ -2198,17 +2487,35 @@ index 0000000..d0291a6
 +
 +    #[test]
 +    fn same_origin_accepts_the_app_and_refuses_other_sites() {
-+        assert!(same_origin(&headers(&[("host", "bot.example"), ("origin", "https://bot.example")])));
++        assert!(same_origin(&headers(&[
++            ("host", "bot.example"),
++            ("origin", "https://bot.example")
++        ])));
 +        assert!(same_origin(&headers(&[
 +            ("host", "127.0.0.1:3781"),
 +            ("x-forwarded-host", "nas.tailnet.ts.net:8443"),
 +            ("origin", "https://nas.tailnet.ts.net:8443"),
 +        ])));
-+        assert!(!same_origin(&headers(&[("host", "bot.example"), ("origin", "https://bot.example.evil.test")])));
-+        assert!(!same_origin(&headers(&[("host", "bot.example"), ("origin", "null")])));
-+        assert!(!same_origin(&headers(&[("host", "bot.example"), ("sec-fetch-site", "cross-site")])));
-+        assert!(same_origin(&headers(&[("host", "bot.example"), ("sec-fetch-site", "same-origin")])));
-+        assert!(same_origin(&headers(&[("host", "bot.example")])), "no origin header: a non-browser caller");
++        assert!(!same_origin(&headers(&[
++            ("host", "bot.example"),
++            ("origin", "https://bot.example.evil.test")
++        ])));
++        assert!(!same_origin(&headers(&[
++            ("host", "bot.example"),
++            ("origin", "null")
++        ])));
++        assert!(!same_origin(&headers(&[
++            ("host", "bot.example"),
++            ("sec-fetch-site", "cross-site")
++        ])));
++        assert!(same_origin(&headers(&[
++            ("host", "bot.example"),
++            ("sec-fetch-site", "same-origin")
++        ])));
++        assert!(
++            same_origin(&headers(&[("host", "bot.example")])),
++            "no origin header: a non-browser caller"
++        );
 +    }
 +}
 diff --git a/gateway/tests/fixtures/make-node-projects.mts b/gateway/tests/fixtures/make-node-projects.mts
