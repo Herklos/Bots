@@ -1,0 +1,60 @@
+// The Bot's face: Threebot's ball with two eyes, in four "weather" states. Ported from
+// threebot/server/character.mts (POSES, eyes) and avatar-config.json (palette). Geometry is
+// scaled from Threebot's 229-unit canvas to this 100-unit viewBox (factor 0.4025 for lengths).
+// Eyes are cut-outs: they take the page's background colour, so they read in both themes.
+
+keyframes faceBreathe
+  50% scale=1.025
+
+keyframes faceRock
+  25% rotate="-3deg"
+  75% rotate="3deg"
+
+keyframes faceShake
+  25% translate="-1.5px 0px"
+  75% translate="1.5px 0px"
+
+// Per-axis scale is not built, so a blink dims the eye for a moment rather than closing it.
+keyframes faceBlink
+  93% opacity=1
+  95% opacity=0.12
+  98% opacity=1
+
+fn faceHex(color: string): string = color.startsWith("#") ? color : color == "black" ? "light-dark(#000000, #FFFFFF)" : color == "white" ? "#f2f2f0" : color == "brown" ? "#936439" : color == "red" ? "#FF263C" : color == "orange" ? "#FF6700" : color == "amber" ? "#FFAF38" : color == "yellow" ? "#FF9800" : color == "green" ? "#00C972" : color == "cyan" ? "#00BCA6" : color == "blue" ? "#1084FE" : color == "purple" ? "#A97EFE" : color == "violet" ? "#9159FE" : color == "pink" ? "#FF5EB1" : color == "magenta" ? "#FF309B" : color == "gray" ? "#777777" : "#1CC3B0"
+
+// A fill that would vanish into the page gets an outline (Threebot's contrast rule). Only white
+// does: it sits close to the light canvas, so it takes a grey edge there. Black is white in dark mode.
+fn faceEdge(color: string): string = color == "white" ? "light-dark(#8f8da0, #f2f2f0)" : "none"
+
+fn eyeGap(state: string): number = state == "working" ? 12.9 : state == "storm" || state == "asleep" ? 13.7 : 12.1
+fn eyeWidth(state: string): number = state == "asleep" ? 18.5 : state == "working" ? 8.1 : state == "storm" ? 8.9 : 9
+fn eyeLength(state: string): number = state == "asleep" ? 2.8 : state == "working" ? 21.7 : state == "storm" ? 25 : 24.2
+fn eyeY(state: string): number = state == "asleep" ? 57.2 : state == "working" ? 49.2 : state == "storm" ? 53.2 : 46.8
+// Threebot leans each eye by side * lean: left and right tilt apart (working) or together (storm).
+fn eyeTilt(state: string, side: number): number = state == "working" ? -side * 18 : state == "storm" ? side * 28 : 0
+
+// The first component is the file's root, so it takes no props: a gallery of every state.
+component FaceGallery
+  view
+    column padding=16 gap=20
+      for state in ["idle", "working", "storm", "asleep"] key=state
+        row gap=16 align-items="center"
+          Face(shape="ball", color="teal", state=state, size=96, still=false)
+          Face(shape="ball", color="violet", state=state, size=48, still=false)
+          Face(shape="ball", color="white", state=state, size=48, still=false)
+          Face(shape="ball", color="black", state=state, size=48, still=false)
+          text state font="-exact-footnote"
+
+component Face
+  props
+    shape: string
+    color: string
+    state: string
+    size: number
+    still: bool
+  view
+    svg width=size height=size viewBox="0 0 100 100" aria-hidden="true"
+      g transform-box="fill-box" transform-origin="center" animation=(still ? "none" : state == "working" ? "faceRock 2.4s ease-in-out infinite" : state == "storm" ? "faceShake 0.3s linear infinite" : state == "asleep" ? "faceBreathe 4s ease-in-out infinite" : "faceBreathe 3s ease-in-out infinite")
+        circle cx=50 cy=50 r=46 fill=faceHex(color) stroke=faceEdge(color) stroke-width=1.25
+        for side in [-1, 1] key=side
+          rect x=(50 + side * eyeGap(state) - eyeWidth(state) / 2) y=(eyeY(state) - eyeLength(state) / 2) width=eyeWidth(state) height=eyeLength(state) rx=4.5 fill="light-dark(#f9f8fd, #16141f)" transform=`rotate(${eyeTilt(state, side)} ${50 + side * eyeGap(state)} ${eyeY(state)})` animation=(still || state == "asleep" ? "none" : `faceBlink 4.2s ease-in-out infinite`)
