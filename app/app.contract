@@ -1,0 +1,209 @@
+// Bots: Threebot's messaging app for T3 Code, written once in Contract. The Rust gateway
+// (`bots`, in ../gateway) keeps the Bots, the Vault and the Projects board and talks to T3 Code;
+// this app is the same screen on the web, macOS, iOS and Linux.
+use EmptyState from "exact:content"
+
+routes nav
+  inbox "/"
+    chat "/bot/:slug"
+    create "/new"
+
+shape Reply
+  ok: bool
+  error: string
+
+shape Session
+  authenticated: bool
+  passwordRequired: bool
+
+shape Bot
+  slug: string
+  name: string
+  label: string
+  initials: string
+  color: string
+  main: bool
+  ready: bool
+
+// One row of the transcript: a message, a card the Bot is waiting on, or the working line.
+shape Row
+  id: string
+  kind: string
+  mine: bool
+  text: string
+
+shape Chat
+  slug: string
+  rows: Row[]
+  working: bool
+
+fn nameOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.name, case none => "" }
+fn colorOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.color, case none => "#1cc3b0" }
+
+component Bots
+  state password = ""
+  state draft = ""
+  state newName = ""
+  state newColor = "#1cc3b0"
+  resource session = loadSession() as shape Session else empty()
+  resource bots = loadBots() as shape Bot[] else empty()
+  resource chat = loadChat(slug) as shape Chat else empty()
+  mutation signedIn as shape Reply refreshes session, bots
+  mutation signedOut as shape Reply refreshes session, bots
+  mutation created as shape Reply refreshes bots then afterCreate
+  mutation sent as shape Reply refreshes chat then toEnd
+  mutation stopped as shape Reply refreshes chat
+  derive slug = match stack(nav).filter(e => e.name == "chat").at(-1) { case some(e) => e.params.slug, case none => "" }
+  derive signInError = match signedIn { case some(r) => r.error, case none => "" }
+  derive createError = match created { case some(r) => r.error, case none => "" }
+  derive sendError = match sent { case some(r) => r.error, case none => "" }
+  derive lastId = match chat.rows.at(-1) { case some(m) => m.id, case none => "" }
+  derive locked = session.passwordRequired and not session.authenticated
+
+  // Chats are read while they are open; the inbox while it is.
+  task poll mount
+    every(1500, pull)
+
+  action pull
+    refresh bots
+    refresh chat
+  action editPassword(v: string)
+    password = v
+  action login
+    if password != "" and not pending(signedIn)
+      send signedIn = signIn(password)
+      password = ""
+  action logout
+    send signedOut = signOut()
+  action open(url: string)
+    nav = go(nav, url)
+  action back
+    nav = back(nav)
+  action openNew
+    newName = ""
+    newColor = "#1cc3b0"
+    nav = push(nav, "/new")
+  action editName(v: string)
+    newName = v
+  action pick(c: string)
+    newColor = c
+  action create
+    if newName.trim() != "" and not pending(created)
+      send created = createBot(newName.trim(), newColor)
+  action afterCreate
+    if createError == "" and top(nav).name == "create"
+      nav = back(nav)
+  action edit(v: string)
+    draft = v
+  action post
+    if draft.trim() != "" and not pending(sent)
+      send sent = sendMessage(slug, draft.trim())
+      draft = ""
+    focus("composer")
+  action stop
+    send stopped = stopRun(slug)
+  action toEnd
+    scrollIntoView("transcript", lastId, block="end")
+
+  view
+    main navigationKey=`${top(nav).id}` navigationBack="back" navigate=open interactive-widget="resizes-content" width="100%" height="100%" testId="app"
+      if locked
+        column flex=1 justify-content="center" align-items="center" gap=12 padding=24 testId="sign-in"
+          Avatar(initials="B", color="#1cc3b0", size=72)
+          text "Bots" role="heading" aria-level=1
+          text "Enter the password you set in Settings → Remote access." color="-exact-secondary-label" text-align="center"
+          input type="password" value=password input=editPassword submit=login placeholder="Password" aria-label="Password" testId="password" width="100%" max-width="20rem"
+          if signInError != "" and not pending(signedIn)
+            text signInError color="-exact-system-red" testId="sign-in-error"
+          button press=login disabled=(password == "" or pending(signedIn)) buttonStyle="filled" testId="sign-in-button"
+            text "Sign In"
+      else
+        for e in stack(nav) key=e.id
+          if e.name == "inbox"
+            column navigationKey=`${e.id}` navigationScroll="bots-list" position="absolute" inset=0
+              header display="flex" align-items="center" padding="8px 16px"
+                text "Bots" role="heading" aria-level=1 flex=1
+                button press=openNew aria-label="New Bot" testId="new-bot"
+                  image "symbol:add"
+              if failed(bots) and bots.length == 0
+                EmptyState(symbol="symbol:alert", title="Can’t Reach the Gateway", message="Start the `bots` gateway on this machine or on your server, then try again.")
+                  button press=pull testId="retry"
+                    text "Try Again"
+              else if bots.length == 0 and not pending(bots)
+                EmptyState(symbol="symbol:person", title="No Bots Yet", message="A Bot is a long-lived T3 Code thread with a face and a memory.")
+                  button press=openNew testId="empty-new"
+                    text "Create Your First Bot"
+              else
+                list id="bots-list" appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+                  section
+                    for b in bots key=b.slug
+                      link href=path("chat", b.slug) testId=`bot-${b.slug}`
+                        row gap=12 align-items="center"
+                          Avatar(initials=b.initials, color=b.color, size=44)
+                          column flex=1 min-width=0
+                            text b.name font-weight=600
+                            text (b.ready ? (b.label != "" ? b.label : "Ready") : "Getting set up…") color="-exact-secondary-label" font="-exact-footnote"
+                  if session.passwordRequired
+                    section
+                      button press=logout testId="sign-out"
+                        text "Sign Out"
+          else if e.name == "chat"
+            column navigationKey=`${e.id}` navigationScroll="transcript" position="absolute" inset=0
+              header display="flex" align-items="center" gap=8 padding="8px 16px"
+                Avatar(initials=nameOf(bots, e.params.slug).slice(0, 1), color=colorOf(bots, e.params.slug), size=28)
+                text nameOf(bots, e.params.slug) role="heading" aria-level=1 flex=1
+              list id="transcript" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true flex=1 min-height=0
+                for m in chat.rows key=m.id
+                  column
+                    if m.kind == "message"
+                      row justify-content=(m.mine ? "flex-end" : "flex-start") padding="3px 12px"
+                        text m.text padding="8px 12px" border-radius=18 max-width="78%" overflow-wrap="break-word"
+                          background-color=(m.mine ? "AccentColor" : "-exact-fill") color=(m.mine ? "AccentColorText" : "-exact-label")
+                          testId=`message-${m.id}`
+                    else if m.kind == "request"
+                      row padding="6px 12px"
+                        column gap=4 padding=12 border-radius=14 background-color="-exact-secondary-background" flex=1 testId=`request-${m.id}`
+                          text m.text font-weight=600
+                          text "Answer this in T3 Code for now. It will show up here once the Bot can take your answer." color="-exact-secondary-label" font="-exact-footnote"
+                    else
+                      row padding="6px 16px" gap=8 align-items="center" testId="working"
+                        progress aria-label="Working"
+                        text "Working…" color="-exact-secondary-label"
+              if sendError != "" and not pending(sent)
+                text sendError color="-exact-system-red" padding="0 16px" testId="send-error"
+              row align-items="flex-end" margin="6px 12px" padding="0 4px 0 12px" border-radius=20 border="1px solid -exact-separator"
+                textarea id="composer" value=draft input=edit rows=1 field-sizing="content" max-height=140 placeholder="Message" aria-label="Message" testId="composer" flex=1 min-width=0 padding="12px 0" border="none" background-color="transparent"
+                if chat.working and draft.trim() == ""
+                  button press=stop buttonStyle="filled" margin="4px 0" aria-label="Stop" testId="stop"
+                    image "symbol:stop"
+                else
+                  button press=post disabled=(draft.trim() == "" or pending(sent)) buttonStyle="filled" margin="4px 0" retainFocus=true aria-label="Send" testId="send"
+                    image "symbol:send"
+          else
+            column navigationKey=`${e.id}` navigationScroll="new-form" position="absolute" inset=0
+              header display="flex" align-items="center" padding="8px 16px"
+                text "New Bot" role="heading" aria-level=1 flex=1
+              list id="new-form" appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+                section
+                  input value=newName input=editName submit=create placeholder="Name" aria-label="Name" testId="new-name"
+                section
+                  header
+                    text "Colour"
+                  row gap=12
+                    for c in ["#1cc3b0", "#1084fe", "#9159fe", "#ff5eb1", "#ff6700", "#00c972"] key=c
+                      button press=pick(c) appearance="none" aria-label=`Colour ${c}` aria-pressed=(newColor == c) testId=`colour-${c}`
+                        column width=42 height=42 border-radius=21 background-color=c border=(newColor == c ? "3px solid -exact-label" : "3px solid transparent")
+                section
+                  if createError != "" and not pending(created)
+                    text createError color="-exact-system-red" testId="create-error"
+                  button press=create disabled=(newName.trim() == "" or pending(created)) testId="create"
+                    text "Create Bot"
+
+component Avatar
+  props
+    initials: string
+    color: string
+    size: number
+  view
+    column width=size height=size border-radius=(size / 2) background-color=color align-items="center" justify-content="center" flex-shrink=0
+      text initials font-size=(size * 0.4) font-weight=600 color="#ffffff"

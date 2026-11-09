@@ -1,0 +1,39 @@
+[package]
+name = "bots-gateway"
+description = "Threebot's gateway as one Rust binary: auth, T3 Code proxy, Bot folders, Vault, Projects board and the Bots' MCP tool server."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "bots"
+path = "src/main.rs"
+
+[dependencies]
+aes-gcm = "0.10"
+anyhow = "1"
+axum = { version = "0.8", features = ["ws", "macros"] }
+base64 = "0.22"
+dotenvy = "0.15"
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+hex = "0.4"
+hmac = "0.12"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+subtle = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-tungstenite = { version = "0.26", features = ["rustls-tls-webpki-roots"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["fs"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+unicode-normalization = "0.1"
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3"

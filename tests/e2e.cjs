@@ -1,0 +1,31 @@
+const { chromium } = require('playwright');
+(async () => {
+  const S = process.argv[2] || '.';
+  const base = process.env.BOTS_E2E_URL || 'http://127.0.0.1:3780';
+  const b = await chromium.launch();
+  const p = await b.newPage({ viewport: { width: 400, height: 800 }, deviceScaleFactor: 2 });
+  p.on('console', m => { if (m.type() === 'error') console.log('console error:', m.text()); });
+  await p.goto(base + '/');
+  await p.waitForSelector('[data-testid="empty-new"]', { timeout: 20000 }); // a clean home has no Bots
+  await p.screenshot({ path: S + '/1-empty.png' });
+  await p.click('[data-testid="new-bot"]');
+  await p.waitForSelector('[data-testid="new-name"]');
+  await p.fill('[data-testid="new-name"]', 'Ada');
+  await p.click('[data-testid="colour-#9159fe"]');
+  await p.mouse.move(5, 700); await p.waitForTimeout(400);
+  await p.screenshot({ path: S + '/2-new.png' });
+  await p.click('[data-testid="create"]');
+  await p.waitForSelector('[data-testid="bot-ada"]', { timeout: 20000 });
+  await p.waitForTimeout(500);
+  await p.screenshot({ path: S + '/3-inbox.png' });
+  await p.click('[data-testid="bot-ada"]');
+  await p.waitForSelector('[data-testid="composer"]');
+  await p.fill('[data-testid="composer"]', 'Hello Ada');
+  await p.click('[data-testid="send"]');
+  await p.waitForSelector('[data-testid="working"]', { timeout: 10000 });
+  await p.screenshot({ path: S + '/4-working.png' });
+  await p.waitForFunction(() => document.body.innerText.includes('You said: Hello Ada') && !document.body.innerText.includes('Working'), null, { timeout: 15000 });
+  await p.screenshot({ path: S + '/5-reply.png' });
+  console.log('E2E OK');
+  await b.close();
+})().catch(e => { console.error('E2E FAIL', e.message.split('\n')[0]); process.exit(1); });
