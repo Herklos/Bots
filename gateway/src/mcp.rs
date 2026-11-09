@@ -14,23 +14,15 @@ fn tools(projects_on: bool) -> Value {
         "description": "List the Vault's saved logins and contact info. Passwords are never included.",
         "inputSchema": { "type": "object", "properties": { "threadId": thread }, "required": ["threadId"] },
     })];
+    // PROJECTS-HOOK (T3): the Projects tools are defined in projects_tools.rs.
     if projects_on {
-        list.extend([
-            json!({ "name": "projects_overview", "description": "The Projects board: every item and recent activity.",
-                "inputSchema": { "type": "object", "properties": { "threadId": thread } } }),
-            json!({ "name": "projects_get", "description": "One board item by id.",
-                "inputSchema": { "type": "object", "properties": { "id": { "type": "string" } }, "required": ["id"] } }),
-            json!({ "name": "projects_save", "description": "Create items (no id) or change them (id; null clears a field). Up to 100 at once.",
-                "inputSchema": { "type": "object", "properties": { "threadId": thread, "items": { "type": "array", "items": { "type": "object" } } }, "required": ["threadId", "items"] } }),
-            json!({ "name": "projects_delete", "description": "Delete board items; their children move up a level.",
-                "inputSchema": { "type": "object", "properties": { "threadId": thread, "ids": { "type": "array", "items": { "type": "string" } } }, "required": ["threadId", "ids"] } }),
-        ]);
+        list.extend(crate::projects_tools::tools());
     }
     json!(list)
 }
 
 /// The Bot whose main thread is `threadId`, as a board actor.
-async fn bot_actor(state: &AppState, args: &Value) -> Result<Value, String> {
+pub(crate) async fn bot_actor(state: &AppState, args: &Value) -> Result<Value, String> {
     let thread = args["threadId"].as_str().ok_or("threadId is required")?;
     let bots = state.bots.list().await.map_err(|e| e.message)?;
     let bot = bots
@@ -45,44 +37,14 @@ async fn call_tool(state: &AppState, name: &str, args: &Value) -> Result<Value, 
     if name.starts_with("projects_") && !projects_on {
         return Err(format!("Unknown tool {name}"));
     }
+    // PROJECTS-HOOK (T3): projects_* calls are answered by projects_tools.rs.
+    if let Some(result) = crate::projects_tools::call(state, name, args).await {
+        return result;
+    }
     match name {
         "vault_list" => {
             bot_actor(state, args).await?;
             Ok(json!({ "items": state.vault.list().await.map_err(|e| e.message)? }))
-        }
-        "projects_overview" => Ok(state.projects.board().await),
-        "projects_get" => {
-            let id = args["id"].as_str().ok_or("id is required")?;
-            let board = state.projects.board().await;
-            board["items"]
-                .as_array()
-                .and_then(|l| l.iter().find(|i| i["id"] == id).cloned())
-                .ok_or_else(|| format!("No item {id}."))
-        }
-        "projects_save" => {
-            let who = bot_actor(state, args).await?;
-            let items = args["items"].as_array().cloned().unwrap_or_default();
-            state
-                .projects
-                .save(&items, who)
-                .await
-                .map_err(|e| e.message)
-        }
-        "projects_delete" => {
-            let who = bot_actor(state, args).await?;
-            let ids: Vec<String> = args["ids"]
-                .as_array()
-                .map(|l| {
-                    l.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default();
-            state
-                .projects
-                .delete(&ids, who)
-                .await
-                .map_err(|e| e.message)
         }
         _ => Err(format!("Unknown tool {name}")),
     }
