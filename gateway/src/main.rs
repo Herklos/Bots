@@ -15,6 +15,7 @@ mod provisioner;
 mod store;
 mod t3;
 mod vault;
+mod vault_csv; // T2: CSV import and export (hook)
 
 use axum::{
     body::Bytes,
@@ -159,6 +160,16 @@ pub fn app(state: Arc<AppState>) -> Router {
             "/api/vault/{id}",
             get(vault_get).put(vault_update).delete(vault_delete),
         )
+        // T2 hook: CSV import and export (vault_csv.rs). Import bodies are up to 8 MB, as in Threebot.
+        .route(
+            "/api/vault/import",
+            post(vault_csv::import).layer(axum::extract::DefaultBodyLimit::max(8 << 20)),
+        )
+        .route(
+            "/api/vault/import-csv",
+            post(vault_csv::import_csv).layer(axum::extract::DefaultBodyLimit::max(8 << 20)),
+        )
+        .route("/api/vault/export.csv", get(vault_csv::export))
         .route("/api/projects", get(projects_board))
         .route("/api/projects/items", post(projects_save))
         .route("/api/projects/delete", post(projects_delete))
