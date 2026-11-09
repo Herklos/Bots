@@ -12,6 +12,7 @@ mod config;
 mod error;
 mod mcp;
 mod projects;
+mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-origin check.
 mod provisioner;
 mod store;
 mod t3;
@@ -600,6 +601,10 @@ async fn projects_board(State(s): S) -> ApiResult<Json<Value>> {
 
 async fn projects_save(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
     projects_on(&s).await?;
+    // PROJECTS-HOOK (T3): writes must come from the app's own page.
+    if !projects_tools::same_origin(&h) {
+        return Err(ApiError::new(403, "This change didn't come from the app."));
+    }
     require_json(&h)?;
     let items = parse(&body)?["items"]
         .as_array()
@@ -610,6 +615,9 @@ async fn projects_save(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json
 
 async fn projects_delete(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
     projects_on(&s).await?;
+    if !projects_tools::same_origin(&h) {
+        return Err(ApiError::new(403, "This change didn't come from the app."));
+    }
     require_json(&h)?;
     let ids: Vec<String> = parse(&body)?["ids"]
         .as_array()
