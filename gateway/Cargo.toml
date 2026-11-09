@@ -20,6 +20,8 @@ hex = "0.4"
 hmac = "0.12"
 rand = "0.8"
 regex = "1" # The preview cleaning and emoji check of thread-meta.mts use JS regexes with Unicode properties.
+scrypt = { version = "0.11", default-features = false }
+rsa = { version = "0.9", default-features = false, features = ["std"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
