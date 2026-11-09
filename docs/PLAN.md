@@ -20,8 +20,8 @@ clearly marked hook there and keeps the rest of its code in its own module. The 
 - Match hbots behaviour and file formats exactly where you port. Port its tests (`hbots/server/*.test.mts`) as Rust tests.
 - Rust: `cargo fmt --all`, `cargo clippy --all-targets` (no warnings) and `cargo test` pass before you commit.
   Add unit tests for every function with logic; use `tempfile` for disk. Do not add a dependency without a reason you can state in one line.
-- Exact app (`app/`): the compiler is `/tmp/claude-0/-home-user-Bots/0044585a-cb11-55a6-921c-f38153a8540a/scratchpad/src/exact/target/release/contract`.
-  `contract build app.contract` must exit 0 with no new warnings; read `exact/docs/start-here.md` first. Full web build:
+- Exact app (`app/`): the compiler was `/tmp/claude-0/-home-user-Bots/0044585a-cb11-55a6-921c-f38153a8540a/scratchpad/src/exact/target/release/contract`.
+  On 2026-11-09 that binary is not on this machine, and `exact` / `contract` are not on `PATH`, so a native or web Exact build cannot be run here. Do not stop the later tasks for that. When the compiler is present, `contract build app.contract` must exit 0 with no new warnings; read `exact/docs/start-here.md` first. Full web build:
   `cd <exact> && EXACT_APP_DIR=<your worktree>/app bun host/web/build.mjs hbots-web`, then `tests/e2e.sh` (needs `NODE_PATH=$(npm root -g)`).
 - A claim in your report must have been run. Say what you ran and what it printed. If you could not verify something, say "not verified" and why.
   Never mark something done because the code looks right. If part of the task turns out impossible, stop that part and report it.
@@ -82,6 +82,8 @@ Add, in the hbots style (read `hbots/web/src/components/{Sidebar,Details,Setting
 Bot details (rename, colour, hide, make main, delete with confirmation); Settings (name, theme, Beta: Projects, password, sign out); Vault list/add/edit/delete (never show a stored password unless "Reveal" is pressed);
 Projects board (list by kind, add, edit, delete, live via polling `/api/projects`). Use routes, sheets and lists as `exact/docs/start-here.md` says. Add an `app.test.contract` and run it (`bun exact.mjs test web`) if the setup allows; otherwise extend `tests/e2e.cjs`.
 Done when: `contract build` exits 0, the web build passes, `tests/e2e.sh` passes with your new screens covered, and you looked at a screenshot of each new screen.
+
+Not built (2026-11-09). The Exact compiler is not available here: the path above is absent, and neither `exact` nor `contract` is on `PATH`. `app/app.contract`, `app/app.ts` and `app/face.contract` are unchanged. This is a skip, not a stop; T10 still runs.
 
 ### T8: Exact app: the Bot's face
 Files: `app/face.contract` (new), a screenshot script under `tests/`.
