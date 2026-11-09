@@ -1,17 +1,17 @@
 import type { Answer, Result, Sources } from './app.contract.d.ts';
 
-// Where the Bots gateway (the `bots` binary) listens. A data module can't read the page's address
+// Where the hbots gateway (the `hbots` binary) listens. A data module can't read the page's address
 // (no `location`, and `fetch` refuses a relative URL), so the web build is made with this placeholder
 // and the gateway, which serves it, swaps in the address the page was loaded from. One build then works
-// on localhost, Tailscale or a tunnel. Native apps have no page: build them with BOTS_URL set to the
-// gateway, e.g. `BOTS_URL=https://bots.example.ts.net bun exact.mjs mac`.
-const BOTS_URL = import.meta.env.BOTS_URL ?? 'http://bots-origin.invalid';
-const API: string = BOTS_URL.replace(/\/$/, '');
+// on localhost, Tailscale or a tunnel. Native apps have no page: build them with HBOTS_URL set to the
+// gateway, e.g. `HBOTS_URL=https://hbots.example.ts.net bun exact.mjs mac`.
+const HBOTS_URL = import.meta.env.HBOTS_URL ?? 'http://hbots-origin.invalid';
+const API: string = HBOTS_URL.replace(/\/$/, '');
 // Any gateway the person runs: their machine, a Tailscale address or a tunnel. Plain `http:` to a host
 // name on Apple also needs `appTransportSecurity.allowsArbitraryLoads` in app.json.
 export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session';
 
-// Threebot's avatar palette (server/avatar-config.json), so a Bot looks the same in both apps.
+// hbots avatar palette (server/avatar-config.json), so a Bot looks the same in both apps.
 const COLORS: Record<string, string> = {
   black: '#000000', white: '#f2f2f0', brown: '#936439', red: '#ff263c', orange: '#ff6700', amber: '#ffaf38',
   yellow: '#ff9800', green: '#00c972', teal: '#1cc3b0', cyan: '#00bca6', blue: '#1084fe', purple: '#a97efe',
@@ -33,7 +33,7 @@ async function call(store: any, path: string, init: RequestInit = {}): Promise<A
   } catch (e) {
     if ((e as { code?: string }).code === 'bake') throw e; // there is no gateway at build time
     console.log(`gateway request failed: ${path}: ${String((e as { code?: string }).code ?? '')} ${String(e)}`);
-    return { ok: false, error: 'Can’t reach the gateway. Check that `bots` is running, then try again.' };
+    return { ok: false, error: 'Can’t reach the gateway. Check that `hbots` is running, then try again.' };
   }
 }
 // A read that fails fails its resource, so Exact keeps the last answer while it retries.

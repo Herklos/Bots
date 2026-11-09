@@ -1,4 +1,4 @@
-//! Vault CSV import and export, ported from Threebot: the parser from `web/src/lib/vaultCsv.ts`
+//! Vault CSV import and export, ported from hbots: the parser from `web/src/lib/vaultCsv.ts`
 //! (the browser parses there; the gateway accepts raw CSV too, so a thin client needn't),
 //! `toCsv` / `exportCsv` / `importItems` from `server/vault.mts`, and the routes from
 //! `server/gateway.mts` (`vaultRoutes`).

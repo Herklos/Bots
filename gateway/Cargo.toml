@@ -1,12 +1,12 @@
 [package]
-name = "bots-gateway"
-description = "Threebot's gateway as one Rust binary: auth, T3 Code proxy, Bot folders, Vault, Projects board and the Bots' MCP tool server."
+name = "hbots"
+description = "hbots gateway: auth, T3 Code proxy, Bot folders, Vault, Projects board and the MCP tool server."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "bots"
+name = "hbots"
 path = "src/main.rs"
 
 [dependencies]

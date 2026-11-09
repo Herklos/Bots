@@ -1,4 +1,4 @@
-//! The Projects board, reading and writing Threebot's `bots/.botapp/projects.json`
+//! The Projects board, reading and writing hbots `bots/.botapp/projects.json`
 //! (`{version, seq, items: {id: Item}, activity: []}`). A save is all or nothing, every change
 //! is stamped with who made it and broadcast to open pages (Server-Sent Events).
 //! A deliberately smaller port of `server/projects.mts`: fields are kept as sent (bounded),

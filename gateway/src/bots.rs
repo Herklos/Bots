@@ -1,4 +1,4 @@
-//! Bots on disk, as Threebot keeps them: `bots/<slug>/.bot/bot.json` per Bot, the main-Bot
+//! Bots on disk, as hbots keeps them: `bots/<slug>/.bot/bot.json` per Bot, the main-Bot
 //! choice in `bots/.botapp/main-bot.json`, deleted Bots under `bots/.botapp/trash`.
 //! Port of `server/main-bot.mts` plus `createBot`/`writeMcpConfig`/`writeAgentsMd` from the gateway.
 use crate::{
@@ -22,7 +22,7 @@ pub fn valid_slug(slug: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
 }
 
-/// "Ada Lovelace" → "ada-lovelace", as Threebot's slugify.
+/// "Ada Lovelace" → "ada-lovelace", as hbots slugify.
 pub fn slugify(name: &str) -> String {
     use unicode_normalization::UnicodeNormalization;
     let lowered: String = name

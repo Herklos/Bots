@@ -1,5 +1,5 @@
-//! Small JSON files on disk, written the way Threebot writes them (temp file, then rename),
-//! so the Node gateway and this binary can take turns on the same `THREEBOT_HOME`.
+//! Small JSON files on disk, written the way hbots writes them (temp file, then rename),
+//! so the Node gateway and this binary can take turns on the same `HBOTS_HOME`.
 use serde_json::Value;
 use std::path::Path;
 

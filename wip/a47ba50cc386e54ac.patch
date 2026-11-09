@@ -16,9 +16,9 @@ index 0000000..6018cbd
 --- /dev/null
 +++ b/gateway/src/thread_meta.rs
 @@ -0,0 +1,572 @@
-+//! Thread metadata Threebot keeps beside T3's conversations (port of `server/thread-meta.mts`):
++//! Thread metadata hbots keeps beside T3's conversations (port of `server/thread-meta.mts`):
 +//! reactions on messages, the voice-call log, and the roster previews, which T3's wire projection
-+//! doesn't carry. Stored as `thread-meta.json` in the app directory, in Threebot's format.
++//! doesn't carry. Stored as `thread-meta.json` in the app directory, in hbots format.
 +use crate::{
 +    error::{ApiError, ApiResult},
 +    store,
@@ -33,7 +33,7 @@ index 0000000..6018cbd
 +    LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_:%.\-]{1,300}$").unwrap());
 +static ITEM_ID: LazyLock<Regex> =
 +    LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_:%.\-]{1,600}$").unwrap());
-+// Threebot's EMOJI: 1 to 16 emoji code points, with at least one pictographic or regional
++// hbots EMOJI: 1 to 16 emoji code points, with at least one pictographic or regional
 +// indicator (so "1", "#" and "*" alone are refused).
 +static EMOJI: LazyLock<Regex> = LazyLock::new(|| {
 +    Regex::new(r"^[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Component}\x{200D}\x{FE0F}]{1,16}$").unwrap()
@@ -178,7 +178,7 @@ index 0000000..6018cbd
 +    None
 +}
 +
-+/// The state file, read once. A missing file starts empty; an unreadable one is an error, as in Threebot.
++/// The state file, read once. A missing file starts empty; an unreadable one is an error, as in hbots.
 +async fn read_state(file: &Path) -> ApiResult<Map<String, Value>> {
 +    match tokio::fs::read_to_string(file).await {
 +        Ok(text) => match serde_json::from_str::<Value>(&text) {
@@ -208,7 +208,7 @@ index 0000000..6018cbd
 +}
 +
 +/// What the client sees for one thread: its reactions and its voice calls of at least ten seconds.
-+/// Short failed calls are hidden on read and kept in the file, as Threebot does.
++/// Short failed calls are hidden on read and kept in the file, as hbots does.
 +fn view(state: &Map<String, Value>, thread: &str) -> Value {
 +    let entry = state.get(thread).and_then(Value::as_object);
 +    let reactions = entry

@@ -1,5 +1,5 @@
-// Bots: Threebot's messaging app for T3 Code, written once in Contract. The Rust gateway
-// (`bots`, in ../gateway) keeps the Bots, the Vault and the Projects board and talks to T3 Code;
+// Bots: hbots messaging app for T3 Code, written once in Contract. The Rust gateway
+// (`hbots`, in ../gateway) keeps the Bots, the Vault and the Projects board and talks to T3 Code;
 // this app is the same screen on the web, macOS, iOS and Linux.
 use EmptyState from "exact:content"
 
@@ -126,7 +126,7 @@ component Bots
                 button press=openNew aria-label="New Bot" testId="new-bot"
                   image "symbol:add"
               if failed(bots) and bots.length == 0
-                EmptyState(symbol="symbol:alert", title="Can’t Reach the Gateway", message="Start the `bots` gateway on this machine or on your server, then try again.")
+                EmptyState(symbol="symbol:alert", title="Can’t Reach the Gateway", message="Start the `hbots` gateway on this machine or on your server, then try again.")
                   button press=pull testId="retry"
                     text "Try Again"
               else if bots.length == 0 and not pending(bots)

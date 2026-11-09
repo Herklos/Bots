@@ -60,7 +60,7 @@ pub fn transcript(projection: &Value) -> Value {
     json!({ "messages": messages, "requests": requests, "working": working || active.is_some(), "activeRunId": active })
 }
 
-/// The command a phone send dispatches; same fields as Threebot's `sendMessage`.
+/// The command a phone send dispatches; same fields as hbots `sendMessage`.
 pub fn send_command(thread: &str, text: &str) -> Value {
     let id = uuid::Uuid::new_v4().to_string();
     json!({

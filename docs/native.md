@@ -27,8 +27,8 @@ optional `painter` (only `"ink"`); unset, the GPU painter is used when available
 
 ## Desktop shell (design, not built)
 
-- A desktop shell starts `bots serve` as a child process and points the Exact app at it.
-- The app reads its gateway URL from the `BOTS_URL` build-time environment variable (`env` in `app/app.json`).
+- A desktop shell starts `hbots serve` as a child process and points the Exact app at it.
+- The app reads its gateway URL from the `HBOTS_URL` build-time environment variable (`env` in `app/app.json`).
   Build-time, not run-time: a per-launch URL needs a different mechanism, which this design does not cover.
 - The shell owns the child: start it, wait for `/api/health`, stop it on quit.
 

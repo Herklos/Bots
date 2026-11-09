@@ -1,9 +1,7 @@
-Bots is a Rust port of Threebot (https://github.com/RokaSwK/threebot, MIT): the gateway's
-behaviour, on-disk formats (bot.json, vault.enc, projects.json) and Bot instructions follow it.
+hbots is the gateway and the Exact client for T3 Code threads.
 
-It runs on T3 Code (https://github.com/pingdotgg/t3code) and talks to it over the same protocol.
+It runs on T3 Code (https://github.com/pingdotgg/t3code) and talks to it over that protocol.
 The app is written in Contract and built with Exact (https://github.com/expo/exact, MIT, Expo).
 Akeru Bot (https://github.com/opencoredev/akeru-bot) was read for context only; no code is used.
 
-Bots is an independent project, not affiliated with or endorsed by T3 Tools Inc., Expo or the
-Threebot authors.
+hbots is an independent project, not affiliated with or endorsed by T3 Tools Inc. or Expo.

@@ -1,7 +1,7 @@
-//! T3 Code, the backend Threebot runs on (https://github.com/pingdotgg/t3code).
+//! T3 Code, the backend hbots runs on (https://github.com/pingdotgg/t3code).
 //!
 //! - [`T3Client`]: a minimal client for T3's Effect RPC over WebSocket (orchestration protocol 2,
-//!   JSON, one message per frame), ported from Threebot's `server/t3rpc.mts`.
+//!   JSON, one message per frame), ported from hbots `server/t3rpc.mts`.
 //! - [`proxy_http`] and [`proxy_ws`]: the `/t3/*` passthrough the browser uses, which adds the
 //!   bearer so T3's token never reaches a client.
 use anyhow::{anyhow, Context};
@@ -337,7 +337,7 @@ mod tests {
     }
 
     #[test]
-    fn causes_read_like_threebot() {
+    fn causes_read_like_hbots() {
         assert_eq!(
             describe_cause(&json!([{ "_tag": "Interrupt" }])),
             "interrupted"

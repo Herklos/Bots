@@ -1,5 +1,5 @@
 //! The Bots' own tool server, `POST /mcp/bot` (MCP Streamable HTTP with JSON responses), as in
-//! Threebot's `server/vault-mcp.mts` and `server/projects-mcp.mts`. Only local callers with the
+//! hbots `server/vault-mcp.mts` and `server/projects-mcp.mts`. Only local callers with the
 //! bearer from `.bot-mcp-token` get in; requests that came through a tunnel are refused.
 use crate::AppState;
 use serde_json::{json, Value};

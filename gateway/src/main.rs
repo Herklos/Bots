@@ -1,8 +1,8 @@
-//! `bots`: Threebot's gateway as one Rust binary.
+//! `hbots`: the gateway as one Rust binary.
 //!
 //! It sits between the Bots app (the Exact app in `app/`, on the web, macOS, iOS and Linux) and
 //! T3 Code, and keeps what T3 doesn't: Bot folders, settings, the Vault, the Projects board and
-//! the Bots' own MCP tool server. Its on-disk layout is Threebot's (`~/.threebot`), so either
+//! the Bots' own MCP tool server. Its on-disk layout is hbots (`~/.hbots`), so either
 //! gateway can run against the same home.
 mod auth;
 mod bots;
@@ -52,7 +52,7 @@ impl AppState {
         self.cfg.app_dir().join("settings.json")
     }
 
-    /// `settings.json` with Threebot's defaults filled in.
+    /// `settings.json` with hbots defaults filled in.
     pub async fn settings(&self) -> Value {
         let saved = store::read_json(&self.settings_path())
             .await
@@ -78,19 +78,19 @@ async fn main() -> anyhow::Result<()> {
         .init();
     let args: Vec<String> = std::env::args().collect();
     if args.iter().any(|a| a == "--version" || a == "-V") {
-        println!("bots {}", env!("CARGO_PKG_VERSION"));
+        println!("hbots {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
     let cfg = config::Config::from_env()?;
     let app_dir = cfg.app_dir();
     std::fs::create_dir_all(&app_dir)?;
-    // The Bots' tool-server bearer: BOT_MCP_TOKEN, or a random one next to the vault key (as Threebot).
+    // The Bots' tool-server bearer: HBOTS_MCP_TOKEN, or a random one next to the vault key (as hbots).
     let token_path = cfg
         .vault_key_file
         .parent()
         .unwrap_or(&cfg.data_root)
         .join(".bot-mcp-token");
-    let mcp_token = match std::env::var("BOT_MCP_TOKEN")
+    let mcp_token = match std::env::var("HBOTS_MCP_TOKEN")
         .ok()
         .filter(|t| !t.is_empty())
         .or_else(|| std::fs::read_to_string(&token_path).ok())
@@ -131,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
 
     let addr: SocketAddr = format!("{}:{}", state.cfg.host, state.cfg.port).parse()?;
     tracing::info!(
-        "bots gateway on http://{addr} → T3 {}, bots in {}",
+        "hbots gateway on http://{addr} → T3 {}, bots in {}",
         state.cfg.t3_url,
         state.cfg.bots_root.display()
     );
@@ -161,7 +161,7 @@ pub fn app(state: Arc<AppState>) -> Router {
             "/api/vault/{id}",
             get(vault_get).put(vault_update).delete(vault_delete),
         )
-        // T2 hook: CSV import and export (vault_csv.rs). Import bodies are up to 8 MB, as in Threebot.
+        // T2 hook: CSV import and export (vault_csv.rs). Import bodies are up to 8 MB, as in hbots.
         .route(
             "/api/vault/import",
             post(vault_csv::import).layer(axum::extract::DefaultBodyLimit::max(8 << 20)),
@@ -745,7 +745,7 @@ async fn static_files(State(s): S, uri: Uri, req: Request) -> Response {
 }
 
 /// What the built web app uses for the gateway's address until it is served (see `app/app.ts`).
-const ORIGIN_PLACEHOLDER: &str = "http://bots-origin.invalid";
+const ORIGIN_PLACEHOLDER: &str = "http://hbots-origin.invalid";
 
 /// The address a request was made to, `scheme://host[:port]`, as the browser sees it behind a proxy.
 fn request_origin(h: &HeaderMap) -> String {

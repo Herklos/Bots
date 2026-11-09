@@ -105,7 +105,7 @@ impl Auth {
 
     pub fn authed(&self, headers: &HeaderMap) -> bool {
         if !self.password_required() {
-            // Same as Threebot without a password or Cloudflare Access: an open, local-only setup.
+            // Same as hbots without a password or Cloudflare Access: an open, local-only setup.
             return true;
         }
         cookie(headers, COOKIE).is_some_and(|c| self.valid_session(&c))

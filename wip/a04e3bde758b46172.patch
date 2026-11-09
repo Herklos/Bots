@@ -107,7 +107,7 @@ index 62ab90b..4ed28e2 100644
 --- a/gateway/src/projects.rs
 +++ b/gateway/src/projects.rs
 @@ -1,55 +1,847 @@
- //! The Projects board, reading and writing Threebot's `bots/.botapp/projects.json`
+ //! The Projects board, reading and writing hbots `bots/.botapp/projects.json`
 -//! (`{version, seq, items: {id: Item}, activity: []}`). A save is all or nothing, every change
 -//! is stamped with who made it and broadcast to open pages (Server-Sent Events).
 -//! A deliberately smaller port of `server/projects.mts`: fields are kept as sent (bounded),
@@ -1588,7 +1588,7 @@ index 62ab90b..4ed28e2 100644
 -                actor(None),
 +                &[
 +                    json!({ "ref": "nas", "kind": "machine", "title": "NAS" }),
-+                    json!({ "ref": "tb", "kind": "project", "title": "Threebot", "area": "Personal" }),
++                    json!({ "ref": "tb", "kind": "project", "title": "hbots", "area": "Personal" }),
 +                    json!({ "kind": "task", "title": "Ship the projects page", "parentId": "ref:tb", "fields": { "priority": "high", "due": "2026-11-05" } }),
 +                    json!({ "kind": "service", "title": "bot-gateway", "machineId": "ref:nas", "parentId": "ref:tb", "fields": { "port": "3780" },
 +                            "addLinks": [{ "type": "thread", "threadId": "t-1" }, { "type": "thread", "threadId": "t-1" }] }),
@@ -1705,7 +1705,7 @@ index 62ab90b..4ed28e2 100644
 +                    json!({ "ref": "b", "kind": "project", "title": "Launch", "parentId": "ref:a" }),
 +                    json!({ "ref": "m", "kind": "machine", "title": "Air" }),
 +                    json!({ "kind": "task", "title": "Write post", "parentId": "ref:b", "addLinks": [{ "type": "item", "id": "ref:m" }] }),
-+                    json!({ "kind": "repo", "title": "threebot", "machineId": "ref:m" }),
++                    json!({ "kind": "repo", "title": "hbots", "machineId": "ref:m" }),
 +                ],
 +                json!({ "type": "user" }),
              )
@@ -1723,7 +1723,7 @@ index 62ab90b..4ed28e2 100644
 +        let task = left.iter().find(|i| i["title"] == "Write post").unwrap();
 +        assert_eq!(task["parentId"], items[0]["id"]);
 +        assert_eq!(task["links"], json!([]));
-+        assert!(left.iter().find(|i| i["title"] == "threebot").unwrap().get("machineId").is_none());
++        assert!(left.iter().find(|i| i["title"] == "hbots").unwrap().get("machineId").is_none());
 +        let _ = rx.try_recv();
 +    }
 +
@@ -1780,13 +1780,13 @@ index 62ab90b..4ed28e2 100644
 +        let saved = p
 +            .save(
 +                &[
-+                    json!({ "ref": "p", "kind": "project", "title": "Threebot", "area": "personal" }),
++                    json!({ "ref": "p", "kind": "project", "title": "hbots", "area": "personal" }),
 +                    json!({ "ref": "m", "kind": "machine", "title": "NAS", "status": "online" }),
 +                    json!({ "kind": "task", "title": "Low thing", "parentId": "ref:p", "fields": { "priority": "low" } }),
 +                    json!({ "kind": "task", "title": "Urgent thing", "parentId": "ref:p", "fields": { "priority": "high" } }),
 +                    json!({ "kind": "task", "title": "Finished", "parentId": "ref:p", "status": "done" }),
 +                    json!({ "kind": "service", "title": "bot-gateway", "machineId": "ref:m", "addLinks": [{ "type": "thread", "threadId": "thread-9" }] }),
-+                    json!({ "kind": "repo", "title": "threebot-source", "machineId": "ref:m", "fields": { "path": "/mnt/apps/t3/projects/threebot-source" } }),
++                    json!({ "kind": "repo", "title": "hbots-source", "machineId": "ref:m", "fields": { "path": "/mnt/apps/t3/projects/hbots-source" } }),
 +                ],
 +                bot(),
 +            )
@@ -1808,16 +1808,16 @@ index 62ab90b..4ed28e2 100644
 +        assert_eq!(view["projects"][0]["openTasks"], 2);
 +        let titles: Vec<&str> = view["openTasks"].as_array().unwrap().iter().map(|t| t["title"].as_str().unwrap()).collect();
 +        assert_eq!(titles, ["Urgent thing", "Low thing"]);
-+        assert_eq!(view["openTasks"][0]["project"], "Threebot");
++        assert_eq!(view["openTasks"][0]["project"], "hbots");
 +        assert_eq!(view["machines"][0]["services"][0]["title"], "bot-gateway");
-+        assert_eq!(view["machines"][0]["repos"][0]["title"], "threebot-source");
++        assert_eq!(view["machines"][0]["repos"][0]["title"], "hbots-source");
 +        assert_eq!(view["page"], "https://bot.example/?page=projects");
 +        assert_eq!(view["recent"][0]["who"], "Ops");
 +        assert!(view["openTasks"][0]["link"].as_str().unwrap().starts_with("https://bot.example/?item="));
 +        let found = |q: Value| -> Vec<String> {
 +            find(&all, &q, app)["items"].as_array().unwrap().iter().map(|i| i["title"].as_str().unwrap().to_string()).collect()
 +        };
-+        assert_eq!(found(json!({ "search": "source mnt" })), ["threebot-source"]);
++        assert_eq!(found(json!({ "search": "source mnt" })), ["hbots-source"]);
 +        let mut open = found(json!({ "kind": "task", "open": true }));
 +        open.sort();
 +        assert_eq!(open, ["Low thing", "Urgent thing"]);
@@ -1825,7 +1825,7 @@ index 62ab90b..4ed28e2 100644
 +        let machine = detail(&all, items[1]["id"].as_str().unwrap(), app).unwrap();
 +        let mut on: Vec<String> = machine["onThisMachine"].as_array().unwrap().iter().map(|i| i["title"].as_str().unwrap().to_string()).collect();
 +        on.sort();
-+        assert_eq!(on, ["bot-gateway", "threebot-source"]);
++        assert_eq!(on, ["bot-gateway", "hbots-source"]);
 +        let project = detail(&all, items[0]["id"].as_str().unwrap(), app).unwrap();
 +        assert_eq!(project["children"].as_array().unwrap().len(), 3);
 +    }
@@ -1868,9 +1868,9 @@ index 62ab90b..4ed28e2 100644
 +        assert!(clean_link(&json!({ "type": "nope" })).is_err());
 +    }
 +
-+    /// A projects.json written by Threebot's Node code (see tests/fixtures/make-node-projects.mts).
++    /// A projects.json written by hbots Node code (see tests/fixtures/make-node-projects.mts).
 +    #[tokio::test]
-+    async fn a_board_written_by_threebot_loads_and_resaves_without_losing_fields() {
++    async fn a_board_written_by_hbots_loads_and_resaves_without_losing_fields() {
 +        let fixture = include_str!("../tests/fixtures/node-projects.json");
 +        let node: Value = serde_json::from_str(fixture).unwrap();
 +        let dir = tempfile::tempdir().unwrap();
@@ -1909,7 +1909,7 @@ index 0000000..d0291a6
 --- /dev/null
 +++ b/gateway/src/projects_tools.rs
 @@ -0,0 +1,302 @@
-+//! The Projects board as tools on the Bots' own MCP server (`bot`), as in Threebot's
++//! The Projects board as tools on the Bots' own MCP server (`bot`), as in hbots
 +//! `server/projects-mcp.mts`. Every change a Bot makes here shows on the user's open Projects
 +//! page straight away, labelled with the Bot's name. Also the same-origin check the page's
 +//! writes need (`server/projects-routes.mts`).
@@ -1980,7 +1980,7 @@ index 0000000..d0291a6
 +            "id": { "type": "string", "description": "Leave out to create an item. Give an existing id to change only the properties you pass." },
 +            "ref": { "type": "string", "description": "A short name for a new item, so other items in this same call can say parentId or machineId \"ref:<name>\"." },
 +            "kind": { "type": "string", "enum": KINDS, "description": "project, task (a to-do), machine, service (something running somewhere), repo, note or link." },
-+            "title": { "type": "string", "description": "Short and specific, e.g. \"Ship Threebot projects page\"." },
++            "title": { "type": "string", "description": "Short and specific, e.g. \"Ship hbots projects page\"." },
 +            "status": { "type": "string", "description": format!("Depends on kind. {}. Note and link have none.", status_help()) },
 +            "area": { "type": "string", "description": "Which part of life it belongs to, e.g. work or personal. Reuse the areas already on the board." },
 +            "parentId": { "type": ["string", "null"], "description": "The project (or other item) this belongs to. null takes it out." },
@@ -2217,8 +2217,8 @@ index 0000000..175bcb4
 --- /dev/null
 +++ b/gateway/tests/fixtures/make-node-projects.mts
 @@ -0,0 +1,22 @@
-+// Writes a projects.json with Threebot's own Node code, for gateway/src/projects.rs to load.
-+// Run: node make-node-projects.mts <path-to-threebot>/server <out.json>
++// Writes a projects.json with hbots own Node code, for gateway/src/projects.rs to load.
++// Run: node make-node-projects.mts <path-to-hbots>/server <out.json>
 +import path from "node:path";
 +const [serverDir, out] = process.argv.slice(2);
 +const { createProjects } = await import(path.resolve(serverDir, "projects.mts"));
@@ -2229,7 +2229,7 @@ index 0000000..175bcb4
 +});
 +const bot = { type: "bot", name: "Ops", slug: "ops" };
 +const saved = await store.save([
-+  { ref: "p", kind: "project", title: "Threebot", area: "Personal", body: "Parity work.\nSecond line.", fields: { url: "https://example.com/threebot", tags: ["rust", "parity"] }, pinned: true, order: 2 },
++  { ref: "p", kind: "project", title: "hbots", area: "Personal", body: "Parity work.\nSecond line.", fields: { url: "https://example.com/hbots", tags: ["rust", "parity"] }, pinned: true, order: 2 },
 +  { ref: "m", kind: "machine", title: "NAS", status: "online", fields: { host: "nas.local", owner: "ops" } },
 +  { kind: "task", title: "Ship the projects page", parentId: "ref:p", fields: { priority: "high", due: "2026-11-05", branch: "main" }, addLinks: [{ type: "thread", threadId: "t-1", label: "chat" }, { type: "bot", slug: "ops" }] },
 +  { kind: "task", title: "Finished thing", parentId: "ref:p", status: "done" },
@@ -2245,5 +2245,5 @@ index 0000000..0164bb9
 --- /dev/null
 +++ b/gateway/tests/fixtures/node-projects.json
 @@ -0,0 +1 @@
-+{"version":1,"seq":8,"items":{"cavrvayw":{"id":"cavrvayw","kind":"project","title":"Threebot","fields":{"url":"https://example.com/threebot","tags":["rust","parity"]},"links":[],"pinned":true,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"status":"active","area":"personal","body":"Parity work.\nSecond line.","order":2},"qwucde6v":{"id":"qwucde6v","kind":"machine","title":"NAS","fields":{"host":"nas.local","owner":"ops"},"links":[],"pinned":false,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"status":"online"},"dh8jjsrc":{"id":"dh8jjsrc","kind":"task","title":"Ship the projects page","fields":{"priority":"high","due":"2026-11-05","branch":"main"},"links":[{"type":"thread","threadId":"t-1","label":"chat"},{"type":"bot","slug":"ops"}],"pinned":false,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"status":"todo","parentId":"cavrvayw"},"atkwfi28":{"id":"atkwfi28","kind":"task","title":"Finished thing","fields":{},"links":[],"pinned":false,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"status":"done","parentId":"cavrvayw","doneAt":"2026-11-03T09:00:00.000Z"},"7mpitb4h":{"id":"7mpitb4h","kind":"service","title":"bot-gateway","fields":{"port":3780,"path":"/srv/bots"},"links":[{"type":"url","url":"https://example.com/status"}],"pinned":false,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"status":"unknown","machineId":"qwucde6v"},"338g6s6r":{"id":"338g6s6r","kind":"repo","title":"bots","fields":{"path":"/home/ops/Bots"},"links":[],"pinned":false,"archived":true,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"status":"archived","machineId":"qwucde6v"},"kdq6cabk":{"id":"kdq6cabk","kind":"note","title":"Wifi is on the fridge","fields":{},"links":[],"pinned":false,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"body":"Ask before sharing it."},"zhuddpe8":{"id":"zhuddpe8","kind":"link","title":"Docs","fields":{},"links":[{"type":"t3project","projectId":"proj-1","environmentId":"env-1"}],"pinned":false,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"}}},"activity":[{"seq":1,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"cavrvayw","kind":"project","title":"Threebot","action":"created","changed":[]},{"seq":2,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"qwucde6v","kind":"machine","title":"NAS","action":"created","changed":[]},{"seq":3,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"dh8jjsrc","kind":"task","title":"Ship the projects page","action":"created","changed":[]},{"seq":4,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"atkwfi28","kind":"task","title":"Finished thing","action":"created","changed":[]},{"seq":5,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"7mpitb4h","kind":"service","title":"bot-gateway","action":"created","changed":[]},{"seq":6,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"338g6s6r","kind":"repo","title":"bots","action":"created","changed":[]},{"seq":7,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"kdq6cabk","kind":"note","title":"Wifi is on the fridge","action":"created","changed":[]},{"seq":8,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"zhuddpe8","kind":"link","title":"Docs","action":"created","changed":[]}]}
++{"version":1,"seq":8,"items":{"cavrvayw":{"id":"cavrvayw","kind":"project","title":"hbots","fields":{"url":"https://example.com/hbots","tags":["rust","parity"]},"links":[],"pinned":true,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"status":"active","area":"personal","body":"Parity work.\nSecond line.","order":2},"qwucde6v":{"id":"qwucde6v","kind":"machine","title":"NAS","fields":{"host":"nas.local","owner":"ops"},"links":[],"pinned":false,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"status":"online"},"dh8jjsrc":{"id":"dh8jjsrc","kind":"task","title":"Ship the projects page","fields":{"priority":"high","due":"2026-11-05","branch":"main"},"links":[{"type":"thread","threadId":"t-1","label":"chat"},{"type":"bot","slug":"ops"}],"pinned":false,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"status":"todo","parentId":"cavrvayw"},"atkwfi28":{"id":"atkwfi28","kind":"task","title":"Finished thing","fields":{},"links":[],"pinned":false,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"status":"done","parentId":"cavrvayw","doneAt":"2026-11-03T09:00:00.000Z"},"7mpitb4h":{"id":"7mpitb4h","kind":"service","title":"bot-gateway","fields":{"port":3780,"path":"/srv/bots"},"links":[{"type":"url","url":"https://example.com/status"}],"pinned":false,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"status":"unknown","machineId":"qwucde6v"},"338g6s6r":{"id":"338g6s6r","kind":"repo","title":"bots","fields":{"path":"/home/ops/Bots"},"links":[],"pinned":false,"archived":true,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"status":"archived","machineId":"qwucde6v"},"kdq6cabk":{"id":"kdq6cabk","kind":"note","title":"Wifi is on the fridge","fields":{},"links":[],"pinned":false,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"},"body":"Ask before sharing it."},"zhuddpe8":{"id":"zhuddpe8","kind":"link","title":"Docs","fields":{},"links":[{"type":"t3project","projectId":"proj-1","environmentId":"env-1"}],"pinned":false,"archived":false,"createdAt":"2026-11-03T09:00:00.000Z","updatedAt":"2026-11-03T09:00:00.000Z","createdBy":{"type":"bot","name":"Ops","slug":"ops"},"updatedBy":{"type":"bot","name":"Ops","slug":"ops"}}},"activity":[{"seq":1,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"cavrvayw","kind":"project","title":"hbots","action":"created","changed":[]},{"seq":2,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"qwucde6v","kind":"machine","title":"NAS","action":"created","changed":[]},{"seq":3,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"dh8jjsrc","kind":"task","title":"Ship the projects page","action":"created","changed":[]},{"seq":4,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"atkwfi28","kind":"task","title":"Finished thing","action":"created","changed":[]},{"seq":5,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"7mpitb4h","kind":"service","title":"bot-gateway","action":"created","changed":[]},{"seq":6,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"338g6s6r","kind":"repo","title":"bots","action":"created","changed":[]},{"seq":7,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"kdq6cabk","kind":"note","title":"Wifi is on the fridge","action":"created","changed":[]},{"seq":8,"at":"2026-11-03T09:00:00.000Z","actor":{"type":"bot","name":"Ops","slug":"ops"},"itemId":"zhuddpe8","kind":"link","title":"Docs","action":"created","changed":[]}]}
 \ No newline at end of file
