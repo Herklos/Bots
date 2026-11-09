@@ -1,0 +1,14 @@
+{
+  "name": "Ada",
+  "label": "Assistant",
+  "shape": "sphere",
+  "color": "teal",
+  "section": null,
+  "pinned": false,
+  "hidden": false,
+  "primary": true,
+  "notifications": true,
+  "projectId": null,
+  "mainThreadId": "thread-ada",
+  "createdAt": "2026-01-01T00:00:00.000Z"
+}

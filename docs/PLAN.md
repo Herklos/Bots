@@ -106,5 +106,7 @@ Files: `tests/compat/` (new; a script and fixtures).
 We claim the Rust gateway can run against a `~/.hbots` that hbots Node gateway used, and the reverse. Prove or disprove it. Install hbots server deps in a scratch copy (`npm ci` in `hbots/server`), run both gateways in turn against one home, and check: `bot.json` read/write, `main-bot.json` selection, `projects.json`, `vault.enc` + `.vault-key`, `settings.json`, and that a `bot_session` cookie issued by one is accepted by the other when they share `session-secret`.
 Done when: a runnable `tests/compat/run.sh` prints a pass/fail line per check, and the report lists every difference you found (even harmless ones) with the file and line on each side.
 
+Run on 2026-11-09: `tests/compat/run.sh` exits 0 (30 passed, 0 failed) on one `HBOTS_HOME`. The Node gateway checkout is not on this machine, so that side was not run. Both `bot_session` sides are hbots processes sharing `bots/.botapp/session-secret`. The script's INFO lines are the differences.
+
 ## Later (not scheduled)
 Executor (connected apps), usage telemetry, site icons, voice, attachments, the avatar drawing flow, a desktop shell.

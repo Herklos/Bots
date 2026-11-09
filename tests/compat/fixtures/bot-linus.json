@@ -1,0 +1,13 @@
+{
+  "name": "Linus",
+  "label": "",
+  "shape": "sphere",
+  "color": "teal",
+  "section": null,
+  "pinned": false,
+  "hidden": false,
+  "primary": false,
+  "notifications": true,
+  "projectId": null,
+  "mainThreadId": null
+}
