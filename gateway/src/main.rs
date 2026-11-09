@@ -8,13 +8,16 @@ mod approvals; // T5
 mod auth;
 mod bots;
 mod chat;
+mod cli;
 mod config;
 mod error;
 mod mcp;
 mod projects;
 mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-origin check.
 mod provisioner;
+mod release;
 mod routines; // T5
+mod service;
 mod store;
 mod t3;
 mod thread_meta; // T5
@@ -50,6 +53,7 @@ pub struct AppState {
     pub thread_meta: thread_meta::ThreadMeta, // T5
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
+    pub system: release::System,
 }
 
 impl AppState {
@@ -76,16 +80,16 @@ type S = State<Arc<AppState>>;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Subcommands (`bots up`, `status`, `update`, ...) run here and exit; `serve` or no command falls through.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(code) = cli::run(&args).await {
+        std::process::exit(code);
+    }
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
-    let args: Vec<String> = std::env::args().collect();
-    if args.iter().any(|a| a == "--version" || a == "-V") {
-        println!("bots {}", env!("CARGO_PKG_VERSION"));
-        return Ok(());
-    }
     let cfg = config::Config::from_env()?;
     let app_dir = cfg.app_dir();
     std::fs::create_dir_all(&app_dir)?;
@@ -120,6 +124,7 @@ async fn main() -> anyhow::Result<()> {
         thread_meta: thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")), // T5
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
+        system: release::System::new(cfg.data_root.clone(), cfg.app_dir()),
         cfg,
     });
     // Instructions may have changed with this version.
@@ -134,6 +139,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     provisioner::start(state.clone());
+    release::start(state.clone()).await;
 
     let addr: SocketAddr = format!("{}:{}", state.cfg.host, state.cfg.port).parse()?;
     tracing::info!(
@@ -190,6 +196,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/projects/delete", post(projects_delete))
         .route("/api/projects/events", get(projects_events))
         .route("/t3/{*rest}", any(t3_route))
+        .merge(release::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_login));
     Router::new()
         .route(
