@@ -1,0 +1,6 @@
+// A test app for Face (app/face.contract): every weather state in several fills.
+use FaceGallery from "./face.contract"
+
+component App
+  view
+    FaceGallery()
