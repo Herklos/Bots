@@ -7,6 +7,7 @@
 mod auth;
 mod bots;
 mod chat;
+mod cli;
 mod config;
 mod error;
 mod mcp;
@@ -76,10 +77,39 @@ async fn main() -> anyhow::Result<()> {
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .init();
-    let args: Vec<String> = std::env::args().collect();
-    if args.iter().any(|a| a == "--version" || a == "-V") {
-        println!("hbots {}", env!("CARGO_PKG_VERSION"));
-        return Ok(());
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    match cli::parse(&args) {
+        Ok(cli::Command::Help) => {
+            println!("{}", cli::help_text());
+            return Ok(());
+        }
+        Ok(cli::Command::Version) => {
+            println!("hbots {}", env!("CARGO_PKG_VERSION"));
+            return Ok(());
+        }
+        Ok(cli::Command::Status) => {
+            println!("{}", cli::status_text(&cli::home_dir()));
+            return Ok(());
+        }
+        Ok(cli::Command::Systemd) => {
+            let bin = std::env::current_exe()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|_| "hbots".into());
+            println!("{}", cli::systemd_unit(&bin));
+            return Ok(());
+        }
+        Ok(cli::Command::Launchd) => {
+            let bin = std::env::current_exe()
+                .map(|p| p.display().to_string())
+                .unwrap_or_else(|_| "hbots".into());
+            println!("{}", cli::launchd_plist(&bin));
+            return Ok(());
+        }
+        Ok(cli::Command::Serve) => {}
+        Err(message) => {
+            eprintln!("{message}");
+            std::process::exit(2);
+        }
     }
     let cfg = config::Config::from_env()?;
     let app_dir = cfg.app_dir();
