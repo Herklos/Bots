@@ -1,0 +1,18 @@
+{
+  "password": {
+    "salt": "BwcHBwcHBwcHBwcHBwcHBw==",
+    "hash": "5TRHB2ApnfGdNDl3bNPaEguAozb+v0jyBBXcGVyselY=",
+    "setAt": "2026-11-09T10:00:00.000Z"
+  },
+  "tailscale": {
+    "enabled": true,
+    "port": 3781,
+    "httpsPort": 443,
+    "users": [
+      "me@example.com"
+    ]
+  },
+  "tunnel": {
+    "enabled": false
+  }
+}
