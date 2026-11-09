@@ -91,11 +91,15 @@ Port the look of hbots avatars as a Contract component `Face(shape, color, state
 Use SVG and CSS keyframes (`exact/docs/recipes/motion.md`). Reduced motion must be respected. Do not edit `app.contract`; T7 will `use` your component.
 Done when: it builds into a small test app, every state has a screenshot you looked at, and light and dark both read.
 
+Not built (2026-11-09). `contract` is not on `PATH`, so `app/face.contract` was not compiled and no state was screenshotted. Same skip as T7; T10 still runs.
+
 ### T9: Desktop and mobile builds
 Files: `docs/native.md`, `app/app.json` (host section only), `app/linux/` or whatever `exact new` generates, `scripts/` helpers.
 Find out, by running it, what it takes to ship the app natively. Linux can be tried here: follow `exact/README.md` (`cargo build --profile host-dev -p …-linux`, headless) and drive the app with `scripts/agent.mjs linux`. For macOS and iOS you cannot build here: write exact commands, requirements and the app.json keys from the docs, and mark each "not run".
 Design (don't build) a desktop shell that starts `hbots serve` as a child process and points the app at it (`HBOTS_URL`), and how a phone reaches the gateway (Tailscale, tunnel). Note App Transport Security for `http:` and the native `secret.keep` session storage.
 Done when: `docs/native.md` states for web, Linux, macOS and iOS what was run and its result, and what remains.
+
+Not run (2026-11-09). `contract` is not on `PATH`, so the Exact web host and the Linux native host were not built or driven. `docs/native.md` already records the desktop and phone shapes that do not need that compiler. macOS and iOS were not run. T10 still runs.
 
 ### T10: Home-directory compatibility harness
 Files: `tests/compat/` (new; a script and fixtures).
