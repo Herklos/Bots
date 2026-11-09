@@ -3,3 +3,4 @@
 /app/.exact
 node_modules
 .env
+/.claude/worktrees
