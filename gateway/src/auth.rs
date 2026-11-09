@@ -7,7 +7,7 @@ use sha2::Sha256;
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use subtle::ConstantTimeEq;
@@ -22,6 +22,8 @@ pub struct Auth {
     password: String,
     attempts: Mutex<HashMap<String, (u32, Instant)>>,
     allowed_origins: Vec<String>,
+    /// Fired by [`Auth::rotate`] so open sockets can close.
+    pub close_sockets: Arc<tokio::sync::Notify>,
 }
 
 pub fn safe_equal(a: &str, b: &str) -> bool {
@@ -57,7 +59,14 @@ impl Auth {
             password,
             attempts: Mutex::default(),
             allowed_origins,
+            close_sockets: Arc::new(tokio::sync::Notify::new()),
         })
+    }
+
+    /// A cookie or bearer that this secret still signs. Unlike [`Auth::authed`], this stays
+    /// false when no password is set.
+    pub fn has_session(&self, headers: &HeaderMap) -> bool {
+        cookie(headers, COOKIE).is_some_and(|c| self.valid_session(&c))
     }
 
     pub fn password_required(&self) -> bool {
@@ -100,6 +109,7 @@ impl Auth {
         let s = hex::encode(rand::random::<[u8; 32]>());
         write_private(&self.secret_path, &s)?;
         *self.secret.lock().unwrap() = s;
+        self.close_sockets.notify_waiters();
         Ok(())
     }
 
@@ -214,6 +224,19 @@ mod tests {
         assert!(!a.valid_session(&(s.clone() + "0")));
         a.rotate().unwrap();
         assert!(!a.valid_session(&s));
+    }
+
+    #[tokio::test]
+    async fn rotate_wakes_a_socket_waiting_to_close() {
+        let a = auth("");
+        let close = a.close_sockets.clone();
+        let waiting = tokio::spawn(async move { close.notified().await });
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        a.rotate().unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(1), waiting)
+            .await
+            .unwrap()
+            .unwrap();
     }
 
     #[test]

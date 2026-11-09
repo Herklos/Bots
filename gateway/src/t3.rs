@@ -278,7 +278,12 @@ pub async fn proxy_http(
 }
 
 /// Pipes a client WebSocket to T3 (`/ws` for RPC, `/api/preview-stream/ws` for a Bot's screen).
-pub async fn proxy_ws(client: WebSocket, upstream_url: String, token: String) {
+pub async fn proxy_ws(
+    client: WebSocket,
+    upstream_url: String,
+    token: String,
+    close_sockets: std::sync::Arc<tokio::sync::Notify>,
+) {
     let upstream = match bearer_request(&upstream_url, &token) {
         Ok(req) => tokio_tungstenite::connect_async(req).await,
         Err(e) => {
@@ -323,7 +328,12 @@ pub async fn proxy_ws(client: WebSocket, upstream_url: String, token: String) {
         }
         let _ = cl_tx.close().await;
     };
-    tokio::select! { _ = to_upstream => {}, _ = to_client => {} }
+    tokio::select! {
+        _ = to_upstream => {},
+        _ = to_client => {},
+        // A new remote password signs everyone out, including sockets already open.
+        _ = close_sockets.notified() => {},
+    }
 }
 
 #[cfg(test)]

@@ -1,0 +1,14 @@
+{
+  "format": "hbots-access",
+  "version": 1,
+  "exposure": "off",
+  "password": {
+    "kdf": "scrypt",
+    "salt": "aGJvdHMtYWNjZXNzLXNhbHQtMDE=",
+    "n": 16384,
+    "r": 8,
+    "p": 1,
+    "keyLen": 32,
+    "hash": "LshFhS1bbSvgV3nKI//IKg79f8YIFLamre9/l86AL0M="
+  }
+}

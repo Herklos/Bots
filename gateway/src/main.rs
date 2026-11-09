@@ -4,16 +4,19 @@
 //! T3 Code, and keeps what T3 doesn't: Bot folders, settings, the Vault, the Projects board and
 //! the Bots' own MCP tool server. Its on-disk layout is hbots (`~/.hbots`), so either
 //! gateway can run against the same home.
+mod access; // T4: Cloudflare Access JWTs.
 mod auth;
 mod bots;
 mod chat;
 mod cli;
 mod config;
 mod error;
+mod exposure; // T4: Tailscale listener and the publish commands.
 mod mcp;
 mod projects;
 mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-origin check.
 mod provisioner;
+mod remote_access; // T4: the scrypt password in access.json.
 mod store;
 mod t3;
 mod vault;
@@ -45,6 +48,9 @@ pub struct AppState {
     pub bots: bots::Bots,
     pub vault: vault::Vault,
     pub projects: projects::Projects,
+    pub access: remote_access::RemoteAccess,
+    pub jwks: access::JwksCache,
+    pub tunnels: exposure::Tunnels,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
 }
@@ -133,6 +139,11 @@ async fn main() -> anyhow::Result<()> {
             t
         }
     };
+    let jwks_url = if cfg.access_team.is_empty() || cfg.access_aud.is_empty() {
+        String::new()
+    } else {
+        access::jwks_url(&access::issuer_for(&cfg.access_team))
+    };
     let state = Arc::new(AppState {
         auth: auth::Auth::load(&app_dir, cfg.password.clone(), cfg.allowed_origins.clone())?,
         t3: t3::T3::new(cfg.t3_url.clone(), cfg.t3_token.clone()),
@@ -143,6 +154,9 @@ async fn main() -> anyhow::Result<()> {
         ),
         vault: vault::Vault::new(cfg.vault_file.clone(), cfg.vault_key_file.clone()),
         projects: projects::Projects::new(app_dir.join("projects.json")),
+        access: remote_access::RemoteAccess::load(cfg.data_root.join("access.json")),
+        jwks: access::JwksCache::new(jwks_url, std::time::Duration::from_secs(3600)),
+        tunnels: exposure::Tunnels::new(),
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
         cfg,
@@ -167,6 +181,26 @@ async fn main() -> anyhow::Result<()> {
         state.cfg.bots_root.display()
     );
     let listener = tokio::net::TcpListener::bind(addr).await?;
+    if state.access.mode() != exposure::Exposure::Off {
+        let extra = SocketAddr::new(addr.ip(), exposure::tailscale_port(addr.port()));
+        match tokio::net::TcpListener::bind(extra).await {
+            Ok(tailscale) => {
+                tracing::info!("tailscale listener on http://{extra}");
+                let tail = state.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = axum::serve(
+                        tailscale,
+                        tailscale_app(tail).into_make_service_with_connect_info::<SocketAddr>(),
+                    )
+                    .await
+                    {
+                        tracing::error!("tailscale listener stopped: {e}");
+                    }
+                });
+            }
+            Err(e) => tracing::warn!("tailscale listener on {extra} did not start: {e}"),
+        }
+    }
     axum::serve(
         listener,
         app(state).into_make_service_with_connect_info::<SocketAddr>(),
@@ -176,6 +210,14 @@ async fn main() -> anyhow::Result<()> {
 }
 
 pub fn app(state: Arc<AppState>) -> Router {
+    build(state, false)
+}
+
+fn tailscale_app(state: Arc<AppState>) -> Router {
+    build(state, true)
+}
+
+fn build(state: Arc<AppState>, tailscale: bool) -> Router {
     let api = Router::new()
         .route("/api/config", get(config_route))
         .route("/api/settings", get(get_settings).put(put_settings))
@@ -206,9 +248,13 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/projects/items", post(projects_save))
         .route("/api/projects/delete", post(projects_delete))
         .route("/api/projects/events", get(projects_events))
+        .route("/api/access", get(get_access))
+        .route("/api/access/password", put(put_access_password))
+        .route("/api/access/tailscale", post(post_access_tailscale))
+        .route("/api/access/tunnel", post(post_access_tunnel))
         .route("/t3/{*rest}", any(t3_route))
         .layer(middleware::from_fn_with_state(state.clone(), require_login));
-    Router::new()
+    let routed = Router::new()
         .route(
             "/api/health",
             get(|| async {
@@ -224,7 +270,16 @@ pub fn app(state: Arc<AppState>) -> Router {
             "/api/{*rest}",
             any(|| async { ApiError::not_found("not found") }),
         )
-        .fallback(static_files)
+        .fallback(static_files);
+    let routed = if tailscale {
+        routed.layer(middleware::from_fn_with_state(
+            state.clone(),
+            mark_tailscale,
+        ))
+    } else {
+        routed
+    };
+    routed
         .layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
 }
@@ -239,7 +294,11 @@ fn loopback_origin(origin: &str) -> bool {
 
 /// Same-origin check for changes, and CORS for the Exact dev loop (`exact.mjs web` on another
 /// loopback port). Native Exact hosts send no Origin and authenticate with a bearer.
-async fn guard(State(s): S, req: Request, next: Next) -> Response {
+async fn guard(State(s): S, mut req: Request, next: Next) -> Response {
+    // The Tailscale listener is the only place allowed to set this. A client on the public
+    // port cannot carry it through.
+    req.headers_mut()
+        .remove(axum::http::HeaderName::from_static(exposure::MARK));
     let origin = req
         .headers()
         .get(header::ORIGIN)
@@ -293,13 +352,78 @@ fn bearer(h: &HeaderMap) -> Option<&str> {
         .strip_prefix("Bearer ")
 }
 
-fn authed(s: &AppState, h: &HeaderMap) -> bool {
-    s.auth.authed(h) || bearer(h).is_some_and(|b| s.auth.valid_session(b))
+fn password_required(s: &AppState) -> bool {
+    s.auth.password_required() || s.access.password_set()
+}
+
+fn password_ok(s: &AppState, given: &str) -> bool {
+    let env = s.auth.password_required();
+    let remote = s.access.password_set();
+    if !env && !remote {
+        return true;
+    }
+    (env && s.auth.password_matches(given)) || (remote && s.access.verify(given))
+}
+
+fn session_ok(s: &AppState, h: &HeaderMap) -> bool {
+    s.auth.has_session(h) || bearer(h).is_some_and(|b| s.auth.valid_session(b))
+}
+
+fn via_tailscale(h: &HeaderMap) -> bool {
+    h.get(exposure::MARK).and_then(|v| v.to_str().ok()) == Some("1")
+}
+
+async fn cloudflare_email(s: &AppState, h: &HeaderMap) -> Option<String> {
+    if s.cfg.access_aud.is_empty() || s.cfg.access_team.is_empty() {
+        return None;
+    }
+    let token = h.get("cf-access-jwt-assertion")?.to_str().ok()?;
+    let jwks = s.jwks.get().await.ok()?;
+    let issuer = access::issuer_for(&s.cfg.access_team);
+    access::verify_token(
+        token,
+        &jwks,
+        &access::Policy {
+            audience: &s.cfg.access_aud,
+            issuer: &issuer,
+            emails: &s.cfg.access_emails,
+        },
+    )
+    .ok()
+}
+
+async fn is_authed(s: &AppState, h: &HeaderMap) -> bool {
+    if via_tailscale(h) || session_ok(s, h) {
+        return true;
+    }
+    if cloudflare_email(s, h).await.is_some() {
+        return true;
+    }
+    !password_required(s)
 }
 
 async fn require_login(State(s): S, req: Request, next: Next) -> Response {
-    if !authed(&s, req.headers()) {
+    if !is_authed(&s, req.headers()).await {
         return ApiError::new(401, "login required").into_response();
+    }
+    next.run(req).await
+}
+
+async fn mark_tailscale(State(s): S, mut req: Request, next: Next) -> Response {
+    req.headers_mut()
+        .remove(axum::http::HeaderName::from_static(exposure::MARK));
+    let login = req
+        .headers()
+        .get(exposure::TAILSCALE_USER)
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_string);
+    if exposure::grants(s.access.mode(), req.uri().path(), login.as_deref()) {
+        req.headers_mut().insert(
+            axum::http::HeaderName::from_static(exposure::MARK),
+            HeaderValue::from_static("1"),
+        );
     }
     next.run(req).await
 }
@@ -327,9 +451,13 @@ fn parse(body: &Bytes) -> ApiResult<Value> {
 // ---------- sign-in ----------
 
 async fn session(State(s): S, h: HeaderMap) -> Json<Value> {
-    Json(
-        json!({ "authenticated": authed(&s, &h), "passwordRequired": s.auth.password_required(), "accessLogin": false }),
-    )
+    let access_login =
+        !session_ok(&s, &h) && !via_tailscale(&h) && cloudflare_email(&s, &h).await.is_some();
+    Json(json!({
+        "authenticated": is_authed(&s, &h).await,
+        "passwordRequired": password_required(&s),
+        "accessLogin": access_login,
+    }))
 }
 
 async fn login(
@@ -355,7 +483,7 @@ async fn login(
         return Err(ApiError::new(413, "body too large"));
     }
     let password = parse(&body)?["password"].as_str().unwrap_or("").to_string();
-    if !s.auth.password_matches(&password) {
+    if !password_ok(&s, &password) {
         s.auth.login_failed(&ip);
         tracing::warn!("failed login from {ip}");
         return Err(ApiError::new(401, "wrong password"));
@@ -369,6 +497,50 @@ async fn login(
         Json(json!({ "ok": true, "token": token })),
     )
         .into_response())
+}
+
+async fn get_access(State(s): S) -> Json<Value> {
+    Json(remote_access::public_view(&s.access, s.cfg.port))
+}
+
+async fn put_access_password(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let password = parse(&body)?["password"].as_str().unwrap_or("").to_string();
+    s.access
+        .set_password(&password)
+        .map_err(ApiError::bad_request)?;
+    // A new password signs everyone out and closes sockets that are already open.
+    s.auth
+        .rotate()
+        .map_err(|_| ApiError::new(500, "The session secret could not be rotated."))?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn post_access_tailscale(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let mode = exposure::Exposure::parse(parse(&body)?["mode"].as_str().unwrap_or("off"));
+    s.access
+        .set_mode(mode)
+        .map_err(ApiError::bad_request)?;
+    let command = exposure::tailscale_serve(s.cfg.port);
+    let started = s.tunnels.start(&command).ok();
+    Ok(Json(json!({
+        "ok": true,
+        "mode": mode.as_str(),
+        "port": exposure::tailscale_port(s.cfg.port),
+        "command": command,
+        "started": started.is_some(),
+    })))
+}
+
+async fn post_access_tunnel(State(s): S) -> ApiResult<Json<Value>> {
+    let command = exposure::cloudflared_tunnel(s.cfg.port);
+    let started = s.tunnels.start(&command).map(|_| true).unwrap_or(false);
+    Ok(Json(json!({
+        "ok": started,
+        "command": command,
+        "url": format!("http://127.0.0.1:{}", s.cfg.port),
+    })))
 }
 
 async fn logout() -> Response {
@@ -673,7 +845,8 @@ async fn t3_route(
             _ => return ApiError::not_found("not found").into_response(),
         };
         let token = s.t3.token.clone();
-        return ws.on_upgrade(move |socket| t3::proxy_ws(socket, target, token));
+        let close_sockets = s.auth.close_sockets.clone();
+        return ws.on_upgrade(move |socket| t3::proxy_ws(socket, target, token, close_sockets));
     }
     if !rest.starts_with("/api/") {
         return ApiError::not_found("not found").into_response();

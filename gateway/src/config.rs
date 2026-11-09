@@ -19,6 +19,11 @@ pub struct Config {
     pub bot_mcp_url: String,
     pub allowed_origins: Vec<String>,
     pub app_url: String,
+    /// Cloudflare Access team name (or host) and the application's audience tag.
+    pub access_team: String,
+    pub access_aud: String,
+    /// Empty allows any email on a token that already passed the other checks.
+    pub access_emails: Vec<String>,
 }
 
 fn env(name: &str) -> Option<String> {
@@ -91,6 +96,16 @@ impl Config {
                 .unwrap_or_default()
                 .trim_end_matches('/')
                 .to_string(),
+            access_team: env("HBOTS_ACCESS_TEAM").unwrap_or_default(),
+            access_aud: env("HBOTS_ACCESS_AUD").unwrap_or_default(),
+            access_emails: env("HBOTS_ACCESS_EMAILS")
+                .map(|s| {
+                    s.split(',')
+                        .map(|e| e.trim().to_ascii_lowercase())
+                        .filter(|e| !e.is_empty())
+                        .collect()
+                })
+                .unwrap_or_default(),
             data_root,
             bots_root,
         })
