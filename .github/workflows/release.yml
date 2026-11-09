@@ -1,0 +1,41 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  package:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: build hbots
+        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: pack
+        env:
+          HBOTS_BIN: target/${{ matrix.target }}/release/hbots
+          HBOTS_TARGET: ${{ matrix.target }}
+          HBOTS_VERSION: ${{ github.ref_name }}
+        run: scripts/pack-release.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hbots-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/SHA256SUMS
