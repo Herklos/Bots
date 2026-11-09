@@ -83,8 +83,7 @@ pub fn site_domain(website: &str) -> String {
 }
 
 /// Whether a page URL is the login's site or one of its subdomains; lookalikes don't match.
-/// Kept (and tested) for the `vault_fill_*` Bot tools, which aren't ported yet.
-#[allow(dead_code)]
+/// Used by the `vault_fill_*` Bot tools (`vault_tools.rs`) before a password is typed.
 pub fn matches_site(page_url: &str, website: &str) -> bool {
     let domain = site_domain(website);
     let Ok(page) = url::Url::parse(page_url) else {

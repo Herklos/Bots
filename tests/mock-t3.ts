@@ -10,6 +10,24 @@ const item = (threadId: string, type: string, text: string, status = 'completed'
 const ok = (ws: any, id: string, value: unknown) => ws.send(JSON.stringify({ _tag: 'Exit', requestId: id, exit: { _tag: 'Success', value } }));
 const fail = (ws: any, id: string, error: string) => ws.send(JSON.stringify({ _tag: 'Exit', requestId: id, exit: { _tag: 'Failure', cause: [{ _tag: 'Fail', error }] } }));
 
+// Browser tabs of the Bots (preview.list) and what has been typed into each (the preview stream).
+// 'busy' is controlled by another viewer; 't-app' is a browser of the app, not a server tab.
+const tabs = [
+  { tabId: 't-github', runtime: 'server', navStatus: { url: 'https://github.com/login', title: 'Sign in' } },
+  { tabId: 't-evil', runtime: 'server', navStatus: { url: 'https://github.com.evil.io/login', title: 'Sign in' } },
+  { tabId: 'busy', runtime: 'server', navStatus: { url: 'https://github.com/busy', title: 'Busy' } },
+  { tabId: 't-app', runtime: 'browser', navStatus: { url: 'https://github.com/app', title: 'App' } },
+];
+const typed = new Map<string, string>();
+const previewMessage = (ws: any, raw: unknown) => {
+  const tabId: string = ws.data.tabId;
+  const msg = JSON.parse(String(raw));
+  if (msg.type === 'takeControl') return ws.send(JSON.stringify({ type: 'control', controller: tabId === 'busy' ? 'another-viewer' : 'you', canOperate: true }));
+  if (msg.type === 'text') return typed.set(tabId, (typed.get(tabId) ?? '') + String(msg.text));
+  if (msg.type === 'probe') return ws.send(JSON.stringify({ type: 'probe', x: msg.x, y: msg.y }));
+  if (msg.type === 'releaseControl') return ws.send(JSON.stringify({ type: 'control', controller: 'none', canOperate: true }));
+};
+
 Bun.serve({
   port,
   fetch(req, server) {
@@ -19,15 +37,23 @@ Bun.serve({
       if (url.searchParams.get('orchestrationProtocol') !== '2') return new Response('upgrade required', { status: 426 });
       return server.upgrade(req) ? undefined : new Response('no upgrade', { status: 400 });
     }
+    if (url.pathname === '/api/preview-stream/ws') {
+      const tabId = url.searchParams.get('tabId') ?? '';
+      if (!tabs.some((t) => t.tabId === tabId && t.runtime === 'server')) return new Response('no such tab', { status: 404 });
+      return server.upgrade(req, { data: { tabId } }) ? undefined : new Response('no upgrade', { status: 400 });
+    }
+    if (url.pathname === '/mock/typed') return Response.json({ text: typed.get(url.searchParams.get('tabId') ?? '') ?? '' });
     if (url.pathname === '/api/projects') return Response.json({ projects });
     return new Response('not found', { status: 404 });
   },
   websocket: {
     message(ws, raw) {
+      if ((ws.data as any)?.tabId !== undefined) return previewMessage(ws, raw);
       const msg = JSON.parse(String(raw));
       if (msg._tag === 'Ping') return ws.send('{"_tag":"Pong"}');
       if (msg._tag !== 'Request') return;
       const { id, tag, payload } = msg;
+      if (tag === 'preview.list') return ok(ws, id, { sessions: tabs });
       if (tag === 'projects.mutate' && payload.type === 'project.create') {
         projects.push({ id: payload.projectId, title: payload.title, workspaceRoot: payload.workspaceRoot });
         return ok(ws, id, {});

@@ -14,6 +14,7 @@ fn tools(projects_on: bool) -> Value {
         "description": "List the Vault's saved logins and contact info. Passwords are never included.",
         "inputSchema": { "type": "object", "properties": { "threadId": thread }, "required": ["threadId"] },
     })];
+    list.extend(crate::vault_tools::tool_defs()); // T1 hook: vault_fill_*, vault_save_*, vault_secret_file
     if projects_on {
         list.extend([
             json!({ "name": "projects_overview", "description": "The Projects board: every item and recent activity.",
@@ -41,6 +42,10 @@ async fn bot_actor(state: &AppState, args: &Value) -> Result<Value, String> {
 }
 
 async fn call_tool(state: &AppState, name: &str, args: &Value) -> Result<Value, String> {
+    // T1 hook: the Vault tools that need the browser, the secret files or the contact store.
+    if crate::vault_tools::is_vault_tool(name) {
+        return crate::vault_tools::call(state, name, args).await;
+    }
     let projects_on = state.settings().await["beta"]["projects"] == true;
     if name.starts_with("projects_") && !projects_on {
         return Err(format!("Unknown tool {name}"));
