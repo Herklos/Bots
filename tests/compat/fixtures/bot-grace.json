@@ -1,0 +1,14 @@
+{
+  "name": "Grace",
+  "label": "Researcher",
+  "shape": "sphere",
+  "color": "teal",
+  "section": null,
+  "pinned": false,
+  "hidden": false,
+  "primary": false,
+  "notifications": true,
+  "projectId": null,
+  "mainThreadId": "thread-grace",
+  "createdAt": "2026-01-02T00:00:00.000Z"
+}
