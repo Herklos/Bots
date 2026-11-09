@@ -20,6 +20,7 @@ hex = "0.4"
 hmac = "0.12"
 jsonwebtoken = "9" # Verify Cloudflare Access RS256 JWTs.
 rand = "0.8"
+regex = "1" # Preview cleaning and the emoji check use Unicode-property regexes.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 scrypt = "0.11" # Store the remote password the way access.json does.
 serde = { version = "1", features = ["derive"] }

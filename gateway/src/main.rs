@@ -5,6 +5,7 @@
 //! the Bots' own MCP tool server. Its on-disk layout is hbots (`~/.hbots`), so either
 //! gateway can run against the same home.
 mod access; // T4: Cloudflare Access JWTs.
+mod approvals; // T5: answering a pending request.
 mod auth;
 mod bots;
 mod chat;
@@ -17,8 +18,10 @@ mod projects;
 mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-origin check.
 mod provisioner;
 mod remote_access; // T4: the scrypt password in access.json.
+mod routines; // T5: T3 scheduled tasks.
 mod store;
 mod t3;
+mod thread_meta; // T5: reactions, voice calls, roster previews.
 mod vault;
 mod vault_csv; // T2: CSV import and export (hook)
 mod vault_tools; // T1 hook: the Vault tools of POST /mcp/bot
@@ -51,6 +54,8 @@ pub struct AppState {
     pub access: remote_access::RemoteAccess,
     pub jwks: access::JwksCache,
     pub tunnels: exposure::Tunnels,
+    pub threads: thread_meta::ThreadMeta,
+    pub routine_history: routines::RoutineHistory,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
 }
@@ -157,6 +162,8 @@ async fn main() -> anyhow::Result<()> {
         access: remote_access::RemoteAccess::load(cfg.data_root.join("access.json")),
         jwks: access::JwksCache::new(jwks_url, std::time::Duration::from_secs(3600)),
         tunnels: exposure::Tunnels::new(),
+        threads: thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
+        routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
         cfg,
@@ -228,6 +235,10 @@ fn build(state: Arc<AppState>, tailscale: bool) -> Router {
         )
         .route("/api/bots/{slug}/chat", get(read_chat).post(send_chat))
         .route("/api/bots/{slug}/stop", post(stop_chat))
+        .route(
+            "/api/bots/{slug}/requests/{id}/respond",
+            post(respond_request),
+        )
         .route("/api/main-bot", put(main_bot))
         .route("/api/vault", get(vault_list).post(vault_create))
         .route(
@@ -252,6 +263,13 @@ fn build(state: Arc<AppState>, tailscale: bool) -> Router {
         .route("/api/access/password", put(put_access_password))
         .route("/api/access/tailscale", post(post_access_tailscale))
         .route("/api/access/tunnel", post(post_access_tunnel))
+        .route("/api/threads/{thread}/meta", get(thread_meta_get))
+        .route("/api/threads/{thread}/reactions", post(thread_reaction))
+        .route("/api/threads/{thread}/voice", post(thread_voice))
+        .route("/api/routines", get(routines_list).put(routines_upsert))
+        .route("/api/routines/enabled", post(routines_enabled))
+        .route("/api/routines/delete", post(routines_delete))
+        .route("/api/routines/run", post(routines_run))
         .route("/t3/{*rest}", any(t3_route))
         .layer(middleware::from_fn_with_state(state.clone(), require_login));
     let routed = Router::new()
@@ -519,9 +537,7 @@ async fn put_access_password(State(s): S, h: HeaderMap, body: Bytes) -> ApiResul
 async fn post_access_tailscale(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
     require_json(&h)?;
     let mode = exposure::Exposure::parse(parse(&body)?["mode"].as_str().unwrap_or("off"));
-    s.access
-        .set_mode(mode)
-        .map_err(ApiError::bad_request)?;
+    s.access.set_mode(mode).map_err(ApiError::bad_request)?;
     let command = exposure::tailscale_serve(s.cfg.port);
     let started = s.tunnels.start(&command).ok();
     Ok(Json(json!({
@@ -541,6 +557,131 @@ async fn post_access_tunnel(State(s): S) -> ApiResult<Json<Value>> {
         "command": command,
         "url": format!("http://127.0.0.1:{}", s.cfg.port),
     })))
+}
+
+async fn thread_meta_get(State(s): S, Path(thread): Path<String>) -> ApiResult<Json<Value>> {
+    Ok(Json(s.threads.get(Some(&thread)).await?))
+}
+
+async fn thread_reaction(
+    State(s): S,
+    Path(thread): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    Ok(Json(
+        s.threads
+            .toggle_reaction(Some(&thread), body["item"].as_str(), body["emoji"].as_str())
+            .await?,
+    ))
+}
+
+async fn thread_voice(
+    State(s): S,
+    Path(thread): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    let at = body["at"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(routines::stamped);
+    Ok(Json(
+        s.threads
+            .add_voice_call(Some(&thread), body.get("seconds"), &at)
+            .await?,
+    ))
+}
+
+async fn routines_list(State(s): S) -> ApiResult<Json<Value>> {
+    let mut listed = routines::list(&s.t3).await?;
+    if let Some(obj) = listed.as_object_mut() {
+        obj.insert("history".into(), s.routine_history.recent().await);
+    }
+    Ok(Json(listed))
+}
+
+async fn routines_upsert(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    Ok(Json(
+        routines::change(
+            &s.t3,
+            &s.routine_history,
+            "upsert",
+            routines::UPSERT,
+            parse(&body)?,
+        )
+        .await?,
+    ))
+}
+
+async fn routines_enabled(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    Ok(Json(
+        routines::change(
+            &s.t3,
+            &s.routine_history,
+            "enabled",
+            routines::SET_ENABLED,
+            parse(&body)?,
+        )
+        .await?,
+    ))
+}
+
+async fn routines_delete(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    Ok(Json(
+        routines::change(
+            &s.t3,
+            &s.routine_history,
+            "delete",
+            routines::DELETE,
+            parse(&body)?,
+        )
+        .await?,
+    ))
+}
+
+async fn routines_run(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    Ok(Json(
+        routines::change(
+            &s.t3,
+            &s.routine_history,
+            "run",
+            routines::RUN_NOW,
+            parse(&body)?,
+        )
+        .await?,
+    ))
+}
+
+async fn respond_request(
+    State(s): S,
+    Path((slug, id)): Path<(String, String)>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    let bot = s
+        .bots
+        .get(&slug)
+        .await?
+        .ok_or_else(|| ApiError::not_found("no such bot"))?;
+    let thread = bot["mainThreadId"]
+        .as_str()
+        .filter(|t| !t.is_empty())
+        .ok_or_else(|| ApiError::bad_request("This Bot has no conversation yet."))?;
+    let kind = body["kind"].as_str().unwrap_or("");
+    let outbound = approvals::outbound(kind, thread, &id, &body).map_err(ApiError::bad_request)?;
+    Ok(Json(approvals::send(&s.t3, outbound).await?))
 }
 
 async fn logout() -> Response {

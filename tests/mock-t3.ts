@@ -4,6 +4,8 @@
 const TOKEN = process.env.T3_TOKEN ?? 'test-token';
 const port = Number(process.argv[2] ?? 3773);
 const projects: any[] = [];
+const tasks: any[] = [];
+const answered: any[] = [];
 const threads = new Map<string, any[]>();
 let seq = 0;
 const item = (threadId: string, type: string, text: string, status = 'completed') => ({ id: `i${++seq}`, threadId, type, text, status, ordinal: seq, startedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
@@ -44,6 +46,7 @@ Bun.serve({
     }
     if (url.pathname === '/mock/typed') return Response.json({ text: typed.get(url.searchParams.get('tabId') ?? '') ?? '' });
     if (url.pathname === '/api/projects') return Response.json({ projects });
+    if (url.pathname === '/mock/answers') return Response.json({ answered });
     return new Response('not found', { status: 404 });
   },
   websocket: {
@@ -75,6 +78,36 @@ Bun.serve({
           setTimeout(() => Object.assign(reply, { text: `You said: ${payload.text}`, status: 'completed' }), 1200);
         }
         if (payload.type === 'run.interrupt') for (const items of threads.values()) for (const i of items) if (i.status === 'running') Object.assign(i, { status: 'interrupted', text: 'Stopped.' });
+        if (payload.type === 'runtime-request.respond') {
+          answered.push({ tag: payload.type, requestId: payload.requestId, decision: payload.decision ?? null, answers: payload.answers ?? null });
+          return ok(ws, id, { storedEvents: [] });
+        }
+        return ok(ws, id, {});
+      }
+      if (tag === 'scheduledTasks.subscribe') {
+        ws.send(JSON.stringify({ _tag: 'Chunk', requestId: id, values: [{ tasks }] }));
+        return ok(ws, id, { tasks });
+      }
+      if (tag === 'scheduledTasks.upsert') {
+        const task = { id: payload.id ?? `task${++seq}`, title: payload.title, prompt: payload.prompt, enabled: payload.enabled !== false, runCount: 0, lastRunStatus: 'never' };
+        const at = tasks.findIndex((t) => t.id === task.id);
+        if (at >= 0) tasks[at] = { ...tasks[at], ...task, runCount: tasks[at].runCount };
+        else tasks.push(task);
+        return ok(ws, id, { task: tasks.find((t) => t.id === task.id) });
+      }
+      if (tag === 'scheduledTasks.setEnabled' || tag === 'scheduledTasks.runNow' || tag === 'scheduledTasks.delete') {
+        const at = tasks.findIndex((t) => t.id === payload.id);
+        if (at < 0) return fail(ws, id, 'no such task');
+        if (tag === 'scheduledTasks.delete') {
+          const [gone] = tasks.splice(at, 1);
+          return ok(ws, id, { id: gone.id });
+        }
+        if (tag === 'scheduledTasks.setEnabled') tasks[at].enabled = payload.enabled === true;
+        if (tag === 'scheduledTasks.runNow') { tasks[at].runCount += 1; tasks[at].lastRunStatus = 'succeeded'; }
+        return ok(ws, id, { task: tasks[at] });
+      }
+      if (tag === 'secrets.answerRequest') {
+        answered.push({ tag, turnItemId: payload.turnItemId, answerType: payload.answer?.type ?? null });
         return ok(ws, id, {});
       }
       fail(ws, id, `unknown rpc ${tag}`);

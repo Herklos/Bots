@@ -130,6 +130,17 @@ impl T3Client {
                             let _ = acks.send(WsMsg::text(
                                 json!({ "_tag": "Ack", "requestId": id }).to_string(),
                             ));
+                            // A stream's first item answers a one-shot read (scheduledTasks.subscribe).
+                            let value = msg.get("value").cloned().or_else(|| {
+                                msg.get("values")
+                                    .and_then(Value::as_array)
+                                    .and_then(|items| items.first().cloned())
+                            });
+                            if let Some(value) = value {
+                                if let Some(tx) = p.lock().await.remove(&id) {
+                                    let _ = tx.send(Ok(value));
+                                }
+                            }
                         }
                         Some("Exit") => {
                             if let Some(tx) = p.lock().await.remove(&id) {
