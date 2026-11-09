@@ -4,6 +4,7 @@
 //! T3 Code, and keeps what T3 doesn't: Bot folders, settings, the Vault, the Projects board and
 //! the Bots' own MCP tool server. Its on-disk layout is Threebot's (`~/.threebot`), so either
 //! gateway can run against the same home.
+mod approvals; // T5
 mod auth;
 mod bots;
 mod chat;
@@ -12,8 +13,10 @@ mod error;
 mod mcp;
 mod projects;
 mod provisioner;
+mod routines; // T5
 mod store;
 mod t3;
+mod thread_meta; // T5
 mod vault;
 
 use axum::{
@@ -41,6 +44,7 @@ pub struct AppState {
     pub bots: bots::Bots,
     pub vault: vault::Vault,
     pub projects: projects::Projects,
+    pub thread_meta: thread_meta::ThreadMeta, // T5
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
 }
@@ -110,6 +114,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         vault: vault::Vault::new(cfg.vault_file.clone(), cfg.vault_key_file.clone()),
         projects: projects::Projects::new(app_dir.join("projects.json")),
+        thread_meta: thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")), // T5
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
         cfg,
@@ -153,6 +158,14 @@ pub fn app(state: Arc<AppState>) -> Router {
         )
         .route("/api/bots/{slug}/chat", get(read_chat).post(send_chat))
         .route("/api/bots/{slug}/stop", post(stop_chat))
+        .route(
+            "/api/bots/{slug}/requests/{id}/respond",
+            post(respond_request),
+        ) // T5
+        .route("/api/thread-meta", get(thread_meta_get)) // T5
+        .route("/api/thread-meta/reactions", post(thread_meta_reaction)) // T5
+        .route("/api/thread-meta/voice-calls", post(thread_meta_voice)) // T5
+        .route("/api/thread-previews", post(thread_previews)) // T5
         .route("/api/main-bot", put(main_bot))
         .route("/api/vault", get(vault_list).post(vault_create))
         .route(
@@ -505,6 +518,101 @@ async fn stop_chat(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Valu
         .await
         .map_err(|e| ApiError::new(502, e.to_string()))?;
     Ok(Json(json!({ "ok": true, "stopped": true })))
+}
+
+// T5: answers to a Bot's requests, thread metadata and roster previews (see approvals.rs, thread_meta.rs).
+async fn respond_request(
+    State(s): S,
+    Path((slug, id)): Path<(String, String)>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    if !approvals::valid_request_id(&id) {
+        return Err(ApiError::bad_request("Invalid request ID"));
+    }
+    let answer = approvals::parse_answer(&parse(&body)?)?;
+    let thread = main_thread(&s, &slug).await?;
+    let rpc =
+        s.t3.rpc()
+            .await
+            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
+    approvals::send(&rpc, &thread, &id, &answer)
+        .await
+        .map_err(|e| ApiError::new(502, e.to_string()))?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn thread_meta_get(
+    State(s): S,
+    Query(q): Query<HashMap<String, String>>,
+) -> ApiResult<Response> {
+    let meta = s
+        .thread_meta
+        .get(q.get("thread").map(String::as_str))
+        .await?;
+    Ok(([(header::CACHE_CONTROL, "no-store")], Json(meta)).into_response())
+}
+
+async fn thread_meta_reaction(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let b = parse(&body)?;
+    Ok(Json(
+        s.thread_meta
+            .toggle_reaction(
+                b["threadId"].as_str(),
+                b["itemId"].as_str(),
+                b["emoji"].as_str(),
+            )
+            .await?,
+    ))
+}
+
+async fn thread_meta_voice(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let b = parse(&body)?;
+    Ok(Json(
+        s.thread_meta
+            .add_voice_call(b["threadId"].as_str(), b.get("seconds"), &vault::now_iso())
+            .await?,
+    ))
+}
+
+async fn thread_previews(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Response> {
+    require_json(&h)?;
+    let b = parse(&body)?;
+    let names: HashMap<String, String> = s
+        .bots
+        .list()
+        .await?
+        .iter()
+        .filter_map(|bot| {
+            Some((
+                bot["mainThreadId"].as_str()?.to_string(),
+                bot["name"].as_str()?.to_string(),
+            ))
+        })
+        .collect();
+    let rpc = s.t3.rpc().await.ok();
+    let previews = s
+        .thread_meta
+        .previews(b.get("stamps"), &names, |thread| {
+            let rpc = rpc.clone();
+            async move {
+                let rpc = rpc.ok_or_else(|| anyhow::anyhow!("T3 unavailable"))?;
+                rpc.call(
+                    "orchestration.getThreadProjection",
+                    json!({ "threadId": thread }),
+                )
+                .await
+            }
+        })
+        .await?;
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(json!({ "previews": previews })),
+    )
+        .into_response())
 }
 
 async fn vault_list(State(s): S) -> ApiResult<Json<Value>> {

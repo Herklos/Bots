@@ -5,6 +5,10 @@ const TOKEN = process.env.T3_TOKEN ?? 'test-token';
 const port = Number(process.argv[2] ?? 3773);
 const projects: any[] = [];
 const threads = new Map<string, any[]>();
+// Scheduled tasks (routines), as T3's wire shapes in packages/contracts/src/rpc.ts and Threebot's web/src/lib/routines.ts.
+const tasks = new Map<string, any>();
+const subscribers = new Map<any, string>(); // socket -> the requestId of its scheduledTasks.subscribe stream
+const publishTasks = () => { for (const [ws, id] of subscribers) ws.send(JSON.stringify({ _tag: 'Chunk', requestId: id, values: [{ tasks: [...tasks.values()] }] })); };
 let seq = 0;
 const item = (threadId: string, type: string, text: string, status = 'completed') => ({ id: `i${++seq}`, threadId, type, text, status, ordinal: seq, startedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
 const ok = (ws: any, id: string, value: unknown) => ws.send(JSON.stringify({ _tag: 'Exit', requestId: id, exit: { _tag: 'Success', value } }));
@@ -33,6 +37,26 @@ Bun.serve({
         return ok(ws, id, {});
       }
       if (tag === 'orchestration.launchThread') { threads.set(payload.threadId, []); return ok(ws, id, {}); }
+      if (tag === 'scheduledTasks.subscribe') { subscribers.set(ws, id); ws.send(JSON.stringify({ _tag: 'Chunk', requestId: id, values: [{ tasks: [...tasks.values()] }] })); return; }
+      if (tag === 'scheduledTasks.upsert') {
+        const task = { id: payload.id ?? `task${++seq}`, enabled: true, lastRunAt: null, lastRunStatus: null, runCount: 0, ...payload.task, ...payload };
+        tasks.set(task.id, task); publishTasks(); return ok(ws, id, { task });
+      }
+      if (tag === 'scheduledTasks.setEnabled') {
+        const task = tasks.get(payload.id); if (!task) return fail(ws, id, 'no such routine');
+        Object.assign(task, { enabled: payload.enabled }); publishTasks(); return ok(ws, id, { task });
+      }
+      if (tag === 'scheduledTasks.runNow') {
+        const task = tasks.get(payload.id); if (!task) return fail(ws, id, 'no such routine');
+        Object.assign(task, { runCount: task.runCount + 1, lastRunAt: new Date().toISOString(), lastRunStatus: 'succeeded' }); publishTasks(); return ok(ws, id, { task });
+      }
+      if (tag === 'scheduledTasks.delete') { tasks.delete(payload.id); publishTasks(); return ok(ws, id, { id: payload.id }); }
+      if (tag === 'secrets.answerRequest') {
+        // The secret value is accepted and dropped; it is never stored or echoed.
+        const found = [...threads.values()].flat().find((i) => i.id === payload.turnItemId);
+        if (!found) return fail(ws, id, 'no such request');
+        Object.assign(found, { secretStatus: payload.answer?.type === 'save' ? 'saved' : 'declined' }); return ok(ws, id, {});
+      }
       if (tag === 'orchestration.getThreadProjection') {
         const items = threads.get(payload.threadId);
         if (!items) return fail(ws, id, 'no such thread');
@@ -44,15 +68,23 @@ Bun.serve({
           const items = threads.get(payload.threadId);
           if (!items) return fail(ws, id, 'no such thread');
           items.push(item(payload.threadId, 'user_message', payload.text));
+          if (payload.text === 'ask approval') items.push({ ...item(payload.threadId, 'approval_request', '', 'waiting'), id: `req${++seq}`, title: 'Run rm?' });
           const reply = item(payload.threadId, 'assistant_message', 'Thinking…', 'running');
           items.push(reply);
           setTimeout(() => Object.assign(reply, { text: `You said: ${payload.text}`, status: 'completed' }), 1200);
+        }
+        if (payload.type === 'runtime-request.respond') {
+          const found = [...threads.values()].flat().find((i) => i.id === payload.requestId);
+          if (!found) return fail(ws, id, 'no such request');
+          const declined = payload.decision === 'decline' || payload.decision === 'cancel';
+          Object.assign(found, { status: declined ? 'declined' : 'completed', decision: payload.decision ?? null, answers: payload.answers ?? null });
         }
         if (payload.type === 'run.interrupt') for (const items of threads.values()) for (const i of items) if (i.status === 'running') Object.assign(i, { status: 'interrupted', text: 'Stopped.' });
         return ok(ws, id, {});
       }
       fail(ws, id, `unknown rpc ${tag}`);
     },
+    close(ws) { subscribers.delete(ws); },
   },
 });
 console.log(`mock T3 on :${port}`);
