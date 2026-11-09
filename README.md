@@ -1,1 +1,67 @@
 # Bots
+
+Threebot, as one Rust binary and an Exact app. Your Bot is a T3 Code thread; this is the messaging
+app and the small server that sits between that app and T3 Code.
+
+| Piece | What it is |
+|---|---|
+| `gateway/` → the `bots` binary | Rust (axum). Sign-in, the T3 Code proxy, Bot folders, the encrypted Vault, the Projects board, the Bots' MCP tool server, and the web app's static files. |
+| `app/` | The client, written once in [Exact](https://github.com/expo/exact)'s Contract: web today; macOS, iOS and Linux are the same source (not built yet, see below). |
+| `tests/` | A mock T3 Code and an end-to-end browser test. |
+
+On-disk layout is Threebot's (`~/.threebot`: `bots/<slug>/.bot/bot.json`, `vault.enc` + `.vault-key`,
+`bots/.botapp/projects.json`), so either gateway can run against the same home. A vault written by
+Threebot's Node code decrypts in Rust (checked by `gateway/tests/fixtures/node-vault.json`).
+
+## Does it still need a server?
+
+**Yes, but only one small process, on the machine that runs T3 Code. Not a separate web backend.**
+The client can't do these jobs by itself:
+
+1. **T3 Code is the real backend** (the agent runtime, your provider logins). It runs on a machine, not in a phone or browser.
+2. **T3's token must stay off the client.** T3 authenticates with a bearer token that grants full control of your agents. Browsers can't set `Authorization` on a WebSocket, so T3 offers a ticket flow, but the long-lived token still has to be somewhere. In Threebot it lives only in the gateway; a client that held it would hand every device (and every XSS) a 30-day key. The gateway holds it and gives clients a password-gated session instead.
+3. **Bots live on the machine's disk.** A Bot is a folder (`AGENTS.md`, `memory/`, `.mcp.json`) that the agent process reads. A client can't write there.
+4. **The Bots' tools are an HTTP server.** Agents call `POST /mcp/bot` (Vault, Projects) from that machine. Something must listen.
+5. **Work that happens with no client open:** giving a new Bot its T3 project and thread, delivering its brief.
+
+What the client does alone: everything on screen, drafts, theme, and notifications. What got simpler: no Node, no
+separate static server, one binary that also serves the web app. A desktop build could start the gateway as a
+child process so it feels like one app (not built yet).
+
+## Run it
+
+```sh
+t3 auth session issue --ttl 30d --label bots --token-only      # paste into T3_TOKEN
+T3_TOKEN=… cargo run --release                                  # http://127.0.0.1:3780
+```
+
+Settings are Threebot's: `T3_URL`, `T3_TOKEN`, `HOST`, `PORT`, `BOT_PASSWORD`, `THREEBOT_HOME`,
+`ALLOWED_ORIGINS`, `STATIC_DIR` (where the built web app is). Without a password it listens on localhost only
+and signs nobody in, like Threebot; set `BOT_PASSWORD` before exposing it.
+
+Build the web app (Exact checkout needed, see its README for `bun scripts/exact.mjs setup`):
+
+```sh
+EXACT_APP_DIR=$PWD/app bun <exact>/host/web/build.mjs bots-web      # → app/target/web-dist
+STATIC_DIR=$PWD/app/target/web-dist cargo run --release
+```
+
+Native apps have no page address, so build them with `BOTS_URL=https://your-gateway`. The web build is made with a
+placeholder address and the gateway rewrites it to the address each page was loaded from, because a Contract
+data module can't read `location`.
+
+## Tests
+
+```sh
+cargo test                  # 15 unit tests (auth, Vault, Bots, Projects, T3 client, MCP)
+tests/e2e.sh                # mock T3 + gateway + Chromium: create a Bot, chat, see the reply
+```
+
+## Status
+
+Ported and tested: sign-in and lockout, same-origin checks, Bot folders and the main-Bot rule, AGENTS.md and
+MCP config for Claude and Codex, the Vault (encrypted file, list/create/update/delete), the Projects board (API,
+live stream, MCP tools), a T3 RPC client, the `/t3/*` proxy, provisioning, chat read/send/stop, and an Exact app
+with the inbox, chat, New Bot and sign-in. **Not ported yet** is listed with owners in [docs/PLAN.md](docs/PLAN.md):
+the Vault's browser-fill tools, remote access (Tailscale, Cloudflare), Settings, routines, answering approvals,
+the avatar system, installer and updater, native builds.

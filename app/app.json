@@ -1,0 +1,16 @@
+{
+  "name": "Bots",
+  "short_name": "Bots",
+  "id": "software.drakkar.bots",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#1cc3b0",
+  "background_color": "#ffffff",
+  "app": { "id": "software.drakkar.bots", "name": "Bots" },
+  "env": ["BOTS_URL"],
+  "host": {
+    "ios": { "minimumOS": "17.0", "deviceFamily": ["iphone", "ipad"] },
+    "macos": { "minimumOS": "14.0", "window": { "width": 420, "height": 820, "minWidth": 340, "minHeight": 520 } },
+    "web": {}
+  }
+}
