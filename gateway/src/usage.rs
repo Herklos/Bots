@@ -198,4 +198,14 @@ mod tests {
         assert!(usage.note_at(Event::Message, 0).await.is_err());
         assert_eq!(tokio::fs::read_to_string(&path).await.unwrap(), "{");
     }
+
+    #[tokio::test]
+    async fn a_missing_file_does_not_invent_counts() {
+        let dir = tempfile::tempdir().unwrap();
+        let usage = Usage::new(dir.path().join("missing.json"));
+        let snap = usage.snapshot().await.unwrap();
+        assert_eq!(snap["days"], json!({}));
+        assert!(snap["totals"].as_object().unwrap().is_empty());
+        assert!(snap["totals"].get("messages").is_none());
+    }
 }

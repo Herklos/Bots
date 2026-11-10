@@ -376,6 +376,11 @@ mod tests {
             ),
             icons: crate::icons::Icons::new(dir.join("icons")),
             usage: crate::usage::Usage::new(app_dir.join("usage.json")),
+            library: crate::library::Library::new(
+                Arc::new(crate::workspace::LocalDisk::new(cfg.bots_root.clone())),
+                cfg.bot_mcp_url.clone(),
+                "fixture-only".into(),
+            ),
             system: crate::release::System::new(cfg.data_root.clone(), cfg.app_dir()),
             mcp_token: "fixture-only".into(),
             provision_now: tokio::sync::Notify::new(),

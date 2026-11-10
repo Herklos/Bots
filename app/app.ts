@@ -61,6 +61,27 @@ async function read(store: any, path: string): Promise<any> {
 }
 const reply = (r: Answered) => (r.ok ? { ok: true, error: '' } : { ok: false, error: r.error });
 
+function libraryEntry(slug: string, e: any) {
+  const id = String(e.id ?? '');
+  const prefix = `file:${slug}/`;
+  const path = id.startsWith(prefix) ? id.slice(prefix.length) : '';
+  const detail = String(e.detail ?? '');
+  const open = path !== ''
+    ? `${API}/api/bots/${encodeURIComponent(slug)}/library/file?path=${encodeURIComponent(path)}`
+    : (detail.startsWith('http://') || detail.startsWith('https://') ? detail : '');
+  return {
+    id,
+    kind: String(e.kind ?? ''),
+    title: String(e.title ?? ''),
+    detail,
+    group: String(e.group ?? ''),
+    status: String(e.status ?? ''),
+    body: String(e.body ?? ''),
+    path,
+    open,
+  };
+}
+
 const sources: Sources = {
   loadSession: async (_args, store): Promise<Result<'loadSession'>> => {
     const r = await call(store, '/api/session');
@@ -137,13 +158,22 @@ const sources: Sources = {
       const names = list.map((a: any) => String(a?.name ?? a?.fileName ?? '').trim()).filter(Boolean);
       return names.length === 0 ? '' : names.join(', ');
     };
-    const rows = [
+    const raw = [
       ...(body.messages as any[]).map((m) => ({
         id: String(m.id), kind: 'message', mine: m.role === 'user', text: String(m.text ?? ''), files: fileLabel(m),
       })),
       ...(body.requests as any[]).map((r) => ({ id: String(r.id), kind: 'request', mine: false, text: String(r.title), files: '' })),
       ...(body.working === true ? [{ id: 'working', kind: 'working', mine: false, text: '', files: '' }] : []),
     ];
+    // A run of same-sender messages shares one bubble group: `head` is its first
+    // row, `tail` its last, so the view can set the tail corner and the spacing.
+    const rows = raw.map((r, i) => {
+      const prev = raw[i - 1];
+      const next = raw[i + 1];
+      const samePrev = !!prev && prev.kind === 'message' && prev.kind === r.kind && prev.mine === r.mine;
+      const sameNext = !!next && next.kind === 'message' && next.kind === r.kind && next.mine === r.mine;
+      return { ...r, head: !samePrev, tail: !sameNext };
+    });
     return { slug, rows, working: body.working === true };
   },
   sendMessage: async ([slug, text, pending], store) => {
@@ -184,5 +214,127 @@ const sources: Sources = {
     }
   },
   stopRun: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/stop`, { method: 'POST', body: '{}' })),
+  loadUsage: async ([gate], store): Promise<Result<'loadUsage'>> => {
+    if (gate !== '1') return { ok: false, messages: 0, attachments: 0, vaultWrites: 0, iconFetches: 0 };
+    const body = await read(store, '/api/usage');
+    const totals = body.totals ?? {};
+    const n = (key: string): number => (typeof totals[key] === 'number' ? totals[key] : 0);
+    return { ok: true, messages: n('messages'), attachments: n('attachments'), vaultWrites: n('vaultWrites'), iconFetches: n('iconFetches') };
+  },
+  loadModels: async ([slug, gate], store): Promise<Result<'loadModels'>> => {
+    if (slug === '' || gate !== '1') return { ok: true, current: '', instanceId: '', choices: [] };
+    const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/model`);
+    const choices = Array.isArray(body.choices) ? body.choices : [];
+    return {
+      ok: true,
+      current: String(body.current ?? ''),
+      instanceId: String(body.instanceId ?? ''),
+      choices: choices.map((c: any) => ({
+        instanceId: String(c.instanceId ?? ''),
+        model: String(c.model ?? ''),
+        label: String(c.label ?? c.model ?? ''),
+      })),
+    };
+  },
+  setModel: async ([slug, instanceId, model], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/model`, {
+    method: 'PUT', body: JSON.stringify({ instanceId, model }),
+  })),
+  loadRoutines: async ([slug, gate], store): Promise<Result<'loadRoutines'>> => {
+    if (slug === '' || gate !== '1') return { ok: true, tasks: [], error: '' };
+    const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/routines`);
+    const tasks = Array.isArray(body.tasks) ? body.tasks : [];
+    return {
+      ok: true,
+      error: String(body.error ?? ''),
+      tasks: tasks.map((t: any) => ({
+        id: String(t.id ?? ''),
+        title: String(t.title ?? ''),
+        enabled: t.enabled === true,
+        schedule: String(t.schedule ?? ''),
+      })),
+    };
+  },
+  saveRoutine: async ([slug, title, kind], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/routines`, {
+    method: 'POST', body: JSON.stringify({ title, kind }),
+  })),
+  setRoutineEnabled: async ([slug, id, enabled], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/routines/enabled`, {
+    method: 'POST', body: JSON.stringify({ id, enabled }),
+  })),
+  deleteRoutine: async ([slug, id], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/routines/delete`, {
+    method: 'POST', body: JSON.stringify({ id }),
+  })),
+  runRoutine: async ([slug, id], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/routines/run`, {
+    method: 'POST', body: JSON.stringify({ id }),
+  })),
+  loadLineage: async ([slug, gate], store): Promise<Result<'loadLineage'>> => {
+    if (slug === '' || gate !== '1') return { ok: true, rows: [], error: '' };
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/lineage`);
+    if (!r.ok) {
+      if (r.error.includes('no conversation') || r.error.includes('getting set up')) {
+        return { ok: true, rows: [], error: 'This Bot is still getting set up.' };
+      }
+      throw new Error(r.error);
+    }
+    const rows = Array.isArray(r.body.rows) ? r.body.rows : [];
+    return {
+      ok: true,
+      error: '',
+      rows: rows.map((row: any) => ({
+        id: String(row.id ?? ''),
+        title: String(row.title ?? ''),
+        status: String(row.status ?? ''),
+        remote: row.remote === true,
+        threadId: String(row.threadId ?? ''),
+      })),
+    };
+  },
+  loadLibrary: async ([slug, gate], store): Promise<Result<'loadLibrary'>> => {
+    if (slug === '' || gate !== '1') return { ok: true, entries: [], connectors: [] };
+    const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/library`);
+    const entries = Array.isArray(body.entries) ? body.entries : [];
+    const connectors = Array.isArray(body.connectors) ? body.connectors : [];
+    return {
+      ok: body.ok !== false,
+      entries: entries.map((e: any) => libraryEntry(slug, e)),
+      connectors: connectors.map((c: any) => ({
+        name: String(c.name ?? ''),
+        url: String(c.url ?? ''),
+        enabled: c.enabled === true,
+        locked: c.locked === true,
+        hasSecret: c.hasSecret === true,
+      })),
+    };
+  },
+  saveLibraryItem: async ([slug, id, kind, title, status, body], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/library`, {
+    method: 'POST',
+    body: JSON.stringify({ ...(id !== '' ? { id } : {}), kind, title, status, body }),
+  })),
+  deleteLibraryItem: async ([slug, id], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/library/items/${encodeURIComponent(id)}`, { method: 'DELETE' })),
+  saveConnector: async ([slug, name, url, enabled, secret], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/connectors`, {
+    method: 'POST', body: JSON.stringify({ name, url, enabled, ...(secret !== '' ? { secret } : {}) }),
+  })),
+  deleteConnector: async ([slug, name], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/connectors`, {
+    method: 'DELETE', body: JSON.stringify({ name }),
+  })),
+  loadComputer: async ([slug, gate], store): Promise<Result<'loadComputer'>> => {
+    if (slug === '' || gate !== '1') return { ok: true, tabs: [], image: '', error: '' };
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/computer`);
+    if (!r.ok) {
+      if (r.error.includes('no conversation') || r.error.includes('getting set up')) {
+        return { ok: true, tabs: [], image: '', error: 'This Bot is still getting set up.' };
+      }
+      throw new Error(r.error);
+    }
+    const tabs = Array.isArray(r.body.tabs) ? r.body.tabs : [];
+    return {
+      ok: true,
+      image: String(r.body.image ?? ''),
+      error: String(r.body.error ?? ''),
+      tabs: tabs.map((t: any) => ({ id: String(t.id ?? ''), title: String(t.title ?? ''), url: String(t.url ?? '') })),
+    };
+  },
+  computerControl: async ([slug, tabId, action], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/control`, {
+    method: 'POST', body: JSON.stringify({ tabId, action }),
+  })),
 };
 export const answer: Answer = (source, args, store, storage, native) => sources[source](args, store, storage, native);

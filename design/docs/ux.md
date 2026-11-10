@@ -13,47 +13,75 @@ How hbots feels and how a person moves through it. The screens are in `app/app.c
 ## Navigation
 
 ```
-Inbox ──┬── Bot chat ──── Bot details
+Inbox ──┬── Bot chat ──┬── Library
+        │              └── Computer
         ├── New Bot
-        └── Settings ──── Vault ──┬── Add login
-                                 └── Edit login
+        └── Settings ──┬── This machine
+                       └── Vault ──┬── Add login
+                                   └── Edit login
 ```
 
 - The inbox is the root. On a phone it is a list; on a wide window it is a sidebar beside the chat.
-- Back is always the platform's back. Settings is reached from the inbox footer; Vault is reached only from Settings. Projects is deferred and has no entry point.
+- The inbox bar carries a search field that filters the Bots as you type and shows an empty state when nothing matches. The open Bot's row is highlighted in the list; the main Bot carries a small star.
+- The inbox footer is the person's own chip (initials or a person glyph, their name from Settings, and the Bot count) and opens Settings. Vault is reached only from Settings, whose bar also carries a search field. The old Projects board is deferred and has no entry point. A Bot's own projects, notes, tasks, and plans live in that Bot's Library.
+- On a wide window (1200 points and up) the open Bot's editor sits in a 320-point panel beside the chat and opens on its own. On a narrower screen, tapping the Bot's name in the chat header opens the same editor over the conversation, and tapping it again closes it. A hidden Bot opens into that editor. Library and Computer are their own screens, reached from the editor.
+- Back is always the platform's back.
 - A Bot in the Hidden section stays reachable from the inbox's Hidden row.
 
 ## User flows
 
 ### 1. First run
 
-1. The person opens the web app or the installed app. If a password is set, the sign-in screen appears first: the Face, the wordmark, "Your Bots, at home.", then the password.
+1. The person opens the web app or the installed app. If a password is set, the sign-in screen appears first: the Face, the wordmark, "Your own Bots, in one place.", then the password.
 2. Sign in with the password from Settings → Remote access. Five wrong tries lock sign-in for 15 minutes.
 3. The inbox shows **No Bots Yet** with "A Bot is a long-lived T3 Code thread with a face and a memory." and **Create Your First Bot**.
 
 ### 2. Create a Bot
 
-1. **New Bot**: the Face of the colour you picked sits above the name. The colour defaults to Tide; the picker offers six.
+1. **New Bot**: the Face of the colour you picked sits above the name. The colour defaults to Tide; the picker offers six, the chosen one ringed in the accent.
 2. **Create Bot** is disabled until the name has text.
-3. The new Bot shows **Getting set up…** until its main conversation exists (the provisioner creates it), then **Ready**.
+3. The new Bot shows **Getting set up…** until its main conversation exists (the provisioner creates it), then **Ready**. In the inbox its row carries a star while it is the main Bot.
 
 ### 3. Talk to a Bot
 
-1. Open the Bot. Its conversation is loaded. An empty one shows the Face and "One conversation. Say the first thing." The composer reads **Message**.
-2. Send. The reply appears as **Working…** while the Bot runs, then as a message.
-3. If the Bot asks for something the app can't answer yet, the request is shown as a card: "Answer this in T3 Code for now. It will show up here once the Bot can take your answer."
-4. **Stop** interrupts the running reply.
+1. Open the Bot. The header shows its Face, name and what it is doing (its label, or **Working…**). An empty conversation shows the Face, the name and three starter pills; the composer reads **Write a message…**.
+2. Messages sit in bubbles: yours are Tide-filled with Night ink and a small tail corner on the last of a run; the Bot's are cards. Attached files show as a chip under the message.
+3. Send. The reply appears as a **Working…** bubble with the Face while the Bot runs, then as a message. **Stop** (a red circle in the composer) interrupts the running reply.
+4. If the Bot asks for something the app can't answer yet, the request is a card with an info glyph: "Answer this in T3 Code for now. It will show up here once the Bot can take your answer."
+
+### 3b. Bot details
+
+1. The chat header's Bot name is the toggle (no detail button, no details sheet). On a narrow screen, tapping the name opens the editor over the conversation below the header, and tapping the name again closes it. On a wide window (1200 points and up) the same editor sits beside the chat and opens on its own; tapping the name closes it and the chat widens. A hidden Bot opens its chat with the editor open, from the Hidden row.
+2. The editor shows the large Face, the name, and a status chip (a dot and a word: Ready to chat, Working, Hidden from your inbox). Sections are labelled (**Identity**, **Inbox**, **With this Bot**, **Model**, **Routines**, **Working on**) and sit in grouped cards with icon tiles. Name and colour swatches are in Identity. Main Bot and Hide from inbox are rows in Inbox. Library and Computer are rows under With this Bot. Delete Bot is in its own card, disabled for the main Bot.
+3. **Model** is a segmented choice. Haiku is the default for a new Bot. The list is Haiku, plus this Bot's current choice and the default from Settings when those differ.
+4. **Routines** start off. The person names one and picks Hourly, Daily at 09:00, or Once. Run, the switch, and Delete sit on the row. A Bot that has no conversation yet says "This Bot is still getting set up."
+5. **Working on** lists the other threads this Bot has started (a subagent, or work handed to another machine). A remote thread is labelled "On another machine". An empty list says "No other threads yet." Opening one of those threads is later.
+6. Tapping the name again closes the editor. The conversation is still there.
+
+### 3c. Library
+
+1. From Bot details, **Library** opens that Bot's shelf. The Face sits beside one sentence: how many things are here, or "Files and pages shared with {name} appear here."
+2. Filters are pills: All, Pages, Media, Links, Files, Projects, Notes, Tasks, Plans, and More (repos, machines, services). Rows group into Today, This week, and Older.
+3. **Keep something** adds a note, task, plan, project, link, repo, machine, or service. Delete asks first: "It is removed from this Bot’s library. This can’t be undone."
+4. A file opens through the gateway. A link from the conversation opens in a new tab. The app does not fetch that page itself.
+5. **Connectors** are http(s) MCP servers for this Bot. The vault connector stays On and cannot be removed. A token is saved and is not shown again. The note under the list says "Applies when this Bot starts its next session."
+
+### 3d. Computer
+
+1. From Bot details, **Computer** watches one page this Bot has open. The Face sits beside the page title. An empty watch says "This Bot has not opened a page."
+2. **Take Control** is a second step. Watching does not take the page. **Release** gives it back, and leaving the screen releases it too, so the Bot can use the page.
+3. Mouse moves and typed text are not on this screen yet.
 
 ### 4. Save and use a login
 
 1. **Settings** → **Vault** → **Add a Login**. A login needs a website or a title; **Save** is disabled until one is filled.
-2. The list shows the title and username. The password shows as ••••••••.
+2. The Vault bar has a search field that filters the logins. Each row shows a lock tile, the title and the username. The password shows as ••••••••.
 3. **Reveal** shows the password for that login only; it is not kept on screen after the person leaves.
 4. A Bot can fill a login into a browser tab without reading the password.
 
 ### 5. Projects (deferred)
 
-Projects has no navigation entry or beta toggle while the feature is deferred.
+The old Projects board has no navigation entry or beta toggle. Per-Bot projects, notes, tasks, and plans are in that Bot's Library.
 
 ### 6. Remote access
 
@@ -63,7 +91,8 @@ Projects has no navigation entry or beta toggle while the feature is deferred.
 
 ### 7. Settings
 
-- Name, Appearance (System, Light, Dark), Vault, Remote access. Connected apps is postponed.
+- Name, Appearance (System, Light, Dark), This machine, Vault, Remote access. Connected apps is postponed.
+- **This machine** is one sentence: the counts since the file started, or "Nothing counted yet." The footer says "Counted on this machine. Nothing is sent anywhere." A failed load says so. It does not show zeros.
 - Changing Appearance applies at once, with no Save.
 
 ## Empty and failure states
@@ -76,6 +105,13 @@ Each has a title, a message that says what to do, and a symbol.
 | Vault, no logins | No Logins Yet | Save a login here. Its password stays in the Vault and shows only when you press Reveal. |
 | Vault, gateway down | Can’t Open the Vault | Check that `hbots` is running, then try again. |
 | Any screen, gateway down | Can’t Reach the Gateway | Start the `hbots` gateway on this machine or on your server, then try again. |
+| This machine, nothing counted | (no title) | Nothing counted yet. |
+| This machine, gateway down | (no title) | Can’t load usage. Check that hbots is running, then try again. |
+| Library, empty | (the Bot's name) | Files and pages shared with {name} appear here. |
+| Library, gateway down | (the Face) | Can’t open this library. Check that hbots is running, then try again. |
+| Computer, no page | (the Bot's name) | This Bot has not opened a page. |
+| Computer, gateway down | (the Face) | Can’t open this Bot’s browser. Check that hbots is running, then try again. |
+| Working on, no other threads | (no title) | No other threads yet. |
 
 Errors are words in red next to the field or action that failed (`-exact-system-red`), never a modal, unless the person must confirm something.
 
@@ -85,7 +121,8 @@ Destructive actions name the thing and say whether it can be undone:
 
 - **Delete Bot**: "Its folder moves to the trash. This can’t be undone from here."
 - **Delete Login**: "It is removed from the Vault. This can’t be undone."
-- **Delete** (project): "It is removed from the board. This can’t be undone."
+- **Delete** (project on the old board): "It is removed from the board. This can’t be undone."
+- **Delete** (library item): "It is removed from this Bot’s library. This can’t be undone."
 
 ## Voice
 

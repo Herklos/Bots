@@ -53,6 +53,107 @@ impl RoutineHistory {
     }
 }
 
+/// Keep tasks bound to one Bot's main thread. Other tasks stay out of that Bot's sheet.
+pub fn tasks_for_thread(doc: &Value, thread_id: &str) -> Vec<Value> {
+    doc["tasks"]
+        .as_array()
+        .or_else(|| doc.as_array())
+        .into_iter()
+        .flatten()
+        .filter(|t| t["threadId"].as_str() == Some(thread_id))
+        .cloned()
+        .collect()
+}
+
+pub fn schedule_label(task: &Value) -> String {
+    let schedule = &task["schedule"];
+    match schedule["type"].as_str() {
+        Some("interval") => {
+            let ms = schedule["everyMs"].as_u64().unwrap_or(0);
+            if ms == 0 {
+                "On a timer".into()
+            } else if ms % 3_600_000 == 0 {
+                let hours = ms / 3_600_000;
+                if hours == 1 {
+                    "Every hour".into()
+                } else {
+                    format!("Every {hours} hours")
+                }
+            } else {
+                format!("Every {} minutes", (ms / 60_000).max(1))
+            }
+        }
+        Some("fixed_time") => {
+            let time = schedule["timeOfDay"].as_str().unwrap_or("");
+            if time.is_empty() {
+                "Every day".into()
+            } else {
+                format!("Every day at {time}")
+            }
+        }
+        Some("once") => "Once".into(),
+        _ => "Scheduled".into(),
+    }
+}
+
+/// A routine bound to this Bot. It starts off. Webhook schedules are not built here.
+pub fn new_routine(bot: &Value, title: &str, kind: &str, now: u64) -> Result<Value, &'static str> {
+    let title = title.trim();
+    if title.is_empty() {
+        return Err("Give the routine a name.");
+    }
+    let project = bot["projectId"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .ok_or("This Bot is still getting set up.")?;
+    let thread = bot["mainThreadId"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .ok_or("This Bot is still getting set up.")?;
+    let model = if bot["model"].is_object() {
+        bot["model"].clone()
+    } else {
+        crate::provisioner::default_model()
+    };
+    let schedule = match kind {
+        "hour" => json!({ "type": "interval", "everyMs": 3_600_000u64 }),
+        "day" => json!({ "type": "fixed_time", "timeOfDay": "09:00" }),
+        "once" => json!({ "type": "once", "runAt": format_unix(now.saturating_add(86_400)) }),
+        "interval" => {
+            let ms = bot["everyMs"].as_u64().unwrap_or(3_600_000);
+            if ms < 60_000 {
+                return Err("A routine repeats no faster than once a minute.");
+            }
+            json!({ "type": "interval", "everyMs": ms })
+        }
+        _ => return Err("Pick hourly, daily, or once."),
+    };
+    Ok(json!({
+        "title": title,
+        "prompt": title,
+        "enabled": false,
+        "schedule": schedule,
+        "projectId": project,
+        "threadId": thread,
+        "threadMode": "continue",
+        "workspaceStrategy": { "type": "root" },
+        "modelSelection": model,
+        "runtimeMode": "approval-required",
+        "interactionMode": "default",
+        "createdBy": "user",
+        "creationSource": "web",
+    }))
+}
+
+pub fn task_row(task: &Value) -> Value {
+    json!({
+        "id": task["id"].as_str().unwrap_or(""),
+        "title": task["title"].as_str().unwrap_or("Routine"),
+        "enabled": task["enabled"] == true,
+        "schedule": schedule_label(task),
+    })
+}
+
 pub async fn list(t3: &T3) -> ApiResult<Value> {
     let value = t3
         .rpc()
@@ -134,8 +235,70 @@ mod tests {
     }
 
     #[test]
+    fn a_bot_only_sees_its_own_routines() {
+        let doc = json!({ "tasks": [
+            { "id": "a", "title": "Morning", "threadId": "t1", "enabled": false, "schedule": { "type": "interval", "everyMs": 3_600_000 } },
+            { "id": "b", "title": "Other", "threadId": "t2", "enabled": true, "schedule": { "type": "once", "runAt": "2026-01-01T00:00:00Z" } }
+        ]});
+        let mine = tasks_for_thread(&doc, "t1");
+        assert_eq!(mine.len(), 1);
+        assert_eq!(task_row(&mine[0])["schedule"], "Every hour");
+        assert_eq!(schedule_label(&doc["tasks"][1]), "Once");
+        assert_eq!(
+            schedule_label(&json!({ "schedule": { "type": "fixed_time", "timeOfDay": "09:00" } })),
+            "Every day at 09:00"
+        );
+    }
+
+    #[test]
+    fn a_new_routine_is_off_and_bound_to_the_bot() {
+        let bot = json!({
+            "projectId": "p1",
+            "mainThreadId": "t1",
+            "model": { "instanceId": "claudeAgent", "model": "claude-haiku-5-5" }
+        });
+        let task = new_routine(&bot, "Digest", "day", 1_700_000_000).unwrap();
+        assert_eq!(task["enabled"], false);
+        assert_eq!(task["threadId"], "t1");
+        assert_eq!(task["projectId"], "p1");
+        assert_eq!(task["threadMode"], "continue");
+        assert_eq!(task["runtimeMode"], "approval-required");
+        assert_eq!(task["schedule"]["timeOfDay"], "09:00");
+        let once = new_routine(&bot, "Later", "once", 0).unwrap();
+        assert_eq!(once["schedule"]["type"], "once");
+        assert!(once["schedule"]["runAt"].as_str().unwrap().ends_with('Z'));
+        assert!(new_routine(&json!({}), "Digest", "hour", 0).is_err());
+        assert!(new_routine(&bot, "  ", "hour", 0).is_err());
+        let mut fast = bot.clone();
+        fast["everyMs"] = json!(1000);
+        assert!(new_routine(&fast, "Digest", "interval", 0).is_err());
+    }
+
+    #[test]
     fn a_known_unix_second_formats() {
         assert_eq!(format_unix(0), "1970-01-01T00:00:00Z");
         assert_eq!(format_unix(1_700_000_000), "2023-11-14T22:13:20Z");
+    }
+
+    #[test]
+    fn hourly_interval_and_a_missing_model_stay_inside_the_rules() {
+        let bot = json!({ "projectId": "p1", "mainThreadId": "t1" });
+        let hour = new_routine(&bot, "Digest", "hour", 0).unwrap();
+        assert_eq!(hour["schedule"]["everyMs"], 3_600_000u64);
+        assert_eq!(hour["modelSelection"]["model"], "claude-haiku-5-5");
+        assert_eq!(hour["enabled"], false);
+        assert_eq!(hour["workspaceStrategy"]["type"], "root");
+        let mut slow = bot.clone();
+        slow["everyMs"] = json!(60_000);
+        let interval = new_routine(&slow, "Pulse", "interval", 0).unwrap();
+        assert_eq!(interval["schedule"]["everyMs"], 60_000u64);
+        assert_eq!(
+            new_routine(&bot, "Nope", "weekly", 0).unwrap_err(),
+            "Pick hourly, daily, or once."
+        );
+        assert_eq!(
+            new_routine(&json!({ "projectId": "p1" }), "Digest", "hour", 0).unwrap_err(),
+            "This Bot is still getting set up."
+        );
     }
 }

@@ -120,17 +120,22 @@ Run on 2026-11-09 and again 2026-11-10 (macOS): `tests/compat/run.sh` exits 0 (3
 
 ## Later (not scheduled)
 
-Gateway parts that do not need `contract` or the Node checkout, landed on main on 2026-11-10:
+Gateway parts that do not need the Node checkout, on main:
 
 - Site icons. `GET /api/icons/{host}` fetches a public favicon and caches it under `HBOTS_HOME/icons`. Private and loopback addresses are refused.
 - Attachments. Files live in `bots/<slug>/.bot/attachments`. A chat send can name them. The bytes stay on disk; `message.dispatch` carries the file record. The T3 contracts checkout is not here, so that record is the gateway's shape, not a verified T3 schema.
-- Usage. `GET /api/usage` reads `bots/.botapp/usage.json` (messages, attachments, vault writes, icon fetches, by UTC day). Nothing is sent off the machine.
-- Connected apps. Postponed. The Settings list and `GET`/`PUT /api/apps` are removed. `HBOTS_EXECUTOR_URL` is not read.
+- Usage. `GET /api/usage` reads `bots/.botapp/usage.json` (messages, attachments, vault writes, icon fetches, by UTC day, plus totals). A missing file is an empty snapshot. Nothing is sent off the machine. Settings shows the totals under **This machine**.
+- Library. Each Bot keeps files under `bots/<slug>/library/`, records in `bots/<slug>/.bot/library.json`, and connectors in `bots/<slug>/.bot/connectors.json`. Reads and writes go through the workspace adapter (`gateway/src/workspace.rs`). Records cover project, note, task, plan, link, repo, machine, and service. This is not the old Projects board: `GET /api/projects` still returns an empty board while that beta is off.
+- Connectors. A person can switch an http(s) MCP server on for one Bot. The name is a short token, and not `bot` or `executor`. The bearer is written into the harness files and is not returned by GET. Off removes the server and lists the name in Claude's `disabledMcpjsonServers`. The vault `bot` server stays on. A running T3 session may ignore `.mcp.json` until the next one. The gateway does not probe the server on save.
+- Model and routines. Bot details can set the same model selection T3 stores. The list is Haiku, plus the Bot's current choice and Settings' `defaultModel` when those differ. A new Bot still starts on Haiku. Routines are T3 scheduled tasks bound to that Bot's main thread. They start off. The screen offers hourly, daily at 09:00, and once. The API also accepts an interval, no faster than once a minute.
+- Lineage. Bot details lists subagents and delegated child threads from the main thread's projection. A remote child stays `{threadId, environmentId}` and is never replaced with the parent. Opening a local child is later.
+- Computer. Bot details can watch one server browser tab. The gateway fetches one JPEG and does not send `takeControl` on that watch. Take control and release are a separate call. Mouse and typed text are not in this slice. Release happens when the person presses Release or leaves the screen.
 
-Skipped, because they still need `contract` or the Node server checkout (neither was searched for again; `contract` is not on `PATH`, and the Node checkout at the path in the working agreement is absent):
+Still open:
 
-- Executor protocol. How the gateway drives a connected-app process is in that Node checkout. The list and the URL are postponed with the feature.
-- Remote usage telemetry. A destination and event schema are not in this repo. The local count is what the gateway can do.
-- Voice capture and playback. The call log already shipped in T5 (`POST /api/threads/{thread}/voice`). Microphone, streaming and playback need the Exact client.
-- Avatar drawing flow. `avatarDrawingModel` is already a settings field. The prompt, the model call and the saved image are the Node server's flow.
-- Desktop shell. It is the Exact host that starts `hbots serve`. The design is in `docs/native.md`. `contract` is required to build it.
+- Connected apps and the Executor protocol. The Settings list and `GET`/`PUT /api/apps` stay removed. `HBOTS_EXECUTOR_URL` is not read.
+- Remote usage telemetry. A destination and event schema are not in this repo.
+- Voice capture and playback. The call log already shipped in T5 (`POST /api/threads/{thread}/voice`). Microphone, streaming and playback are not in the client.
+- Avatar drawing flow. `avatarDrawingModel` is already a settings field. The prompt, the model call and the saved image are not ported.
+- Desktop shell, and the macOS, iOS and Linux Exact hosts. The design is in `docs/native.md`.
+- The Projects beta board. It stays off. Per-Bot records live in the library instead.

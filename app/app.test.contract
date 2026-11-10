@@ -29,6 +29,77 @@ test "a login is reached through Settings and needs a title or website"
   expect tree has "user-name"
   expect tree has "open-vault"
 
+test "Settings counts this machine and still hides Projects"
+  tap "Settings"
+  clock data
+  expect tree has "usage-line"
+  expect text "usage-line" == "Can’t load usage. Check that hbots is running, then try again."
+  expect tree missing "open-projects"
+  expect tree missing "beta-projects"
+  expect tree has "open-vault"
+  expect tree has "user-name"
+
+test "the library says when it cannot open"
+  size 340x740
+  at "/bot/ada/library"
+  clock data
+  expect tree has "library-status"
+  expect text "library-status" == "Can’t open this library. Check that hbots is running, then try again."
+  expect tree missing "open-projects"
+  expect tree missing "filter-all"
+  expect tree missing "add-library"
+  expect tree missing "add-connector"
+  expect tree missing "library-kind"
+
+test "the computer says when it cannot open"
+  size 340x740
+  at "/bot/ada/computer"
+  clock data
+  expect tree has "computer-status"
+  expect text "computer-status" == "Can’t open this Bot’s browser. Check that hbots is running, then try again."
+  expect tree missing "take-computer"
+  expect tree missing "release-computer"
+  expect tree missing "computer-frame"
+  expect tree missing "open-projects"
+
+test "a missing Bot has no model, routine, or library row"
+  size 340x740
+  at "/bot/ada"
+  clock data
+  tap "panel-toggle"
+  clock settle
+  expect tree missing "bot-panel"
+  expect tree missing "open-library"
+  expect tree missing "open-computer"
+  expect tree missing "add-routine"
+  expect tree missing "model-error"
+  expect tree missing "lineage-error"
+  expect tree missing "open-projects"
+
+test "the header does not invent Bot details when the Bot is missing"
+  size 340x740
+  at "/bot/ada"
+  clock data
+  expect tree missing "bot-panel"
+  expect tree has "panel-toggle"
+  tap "panel-toggle"
+  clock settle
+  expect tree missing "bot-panel"
+  expect tree missing "open-library"
+  tap "panel-toggle"
+  clock settle
+  expect tree missing "bot-panel"
+
+test "a wide window does not invent a panel for a missing Bot"
+  size 1440x900
+  at "/bot/ada"
+  clock +600
+  clock data
+  expect tree missing "bot-panel"
+  expect tree missing "open-library"
+  expect tree missing "open-projects"
+  expect tree has "panel-toggle"
+
 test "creating a Bot works on a narrow screen"
   size 340x740
   tap "new-bot"

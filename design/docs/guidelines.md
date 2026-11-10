@@ -7,7 +7,7 @@ The values below live in `design/tokens.json`. Do not copy them into a screen; r
 ## Name and tagline
 
 - **Name:** hbots. Lower case in running text and the wordmark. "Bot" is a noun with a capital B.
-- **Tagline:** Your Bots, at home.
+- **Tagline:** Your own Bots, in one place.
 - **Promise:** Personal AI Bots in a messaging app, running on your own machine.
 - **Traits:** calm, plain-spoken, private, at home.
 

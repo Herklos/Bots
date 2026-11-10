@@ -11,10 +11,13 @@ mod auth;
 mod bots;
 mod chat;
 mod cli;
+mod computer; // The Bot's browser, watch first.
 mod config;
 mod error;
 mod exposure; // T4: Tailscale listener and the publish commands.
 mod icons; // Site icons cached under HBOTS_HOME/icons.
+mod library; // Files and records through the workspace adapter.
+mod lineage; // Subagents and delegated threads of one Bot.
 mod mcp;
 mod projects;
 mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-origin check.
@@ -29,7 +32,8 @@ mod thread_meta; // T5: reactions, voice calls, roster previews.
 mod usage; // Local usage counts. Nothing leaves the machine.
 mod vault;
 mod vault_csv; // T2: CSV import and export (hook)
-mod vault_tools; // T1 hook: the Vault tools of POST /mcp/bot
+mod vault_tools;
+mod workspace; // Where Bot folders live. Library and connectors use this. // T1 hook: the Vault tools of POST /mcp/bot
 
 use axum::{
     body::Bytes,
@@ -40,7 +44,7 @@ use axum::{
         sse::{Event, KeepAlive, Sse},
         IntoResponse, Response,
     },
-    routing::{any, get, post, put},
+    routing::{any, delete, get, post, put},
     Extension, Json, Router,
 };
 use error::{ApiError, ApiResult};
@@ -66,6 +70,7 @@ pub struct AppState {
     pub system: release::System,
     pub icons: icons::Icons,
     pub usage: usage::Usage,
+    pub library: library::Library,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
 }
@@ -168,6 +173,11 @@ async fn main() -> anyhow::Result<()> {
         system: release::System::new(cfg.data_root.clone(), app_dir.clone()),
         icons: icons::Icons::new(cfg.data_root.join("icons")),
         usage: usage::Usage::new(app_dir.join("usage.json")),
+        library: library::Library::new(
+            Arc::new(workspace::LocalDisk::new(cfg.bots_root.clone())),
+            cfg.bot_mcp_url.clone(),
+            mcp_token.clone(),
+        ),
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
         cfg,
@@ -283,6 +293,33 @@ pub fn app(state: Arc<AppState>) -> Router {
             "/api/bots/{slug}/requests/{id}/respond",
             post(respond_request),
         )
+        .route(
+            "/api/bots/{slug}/library",
+            get(library_get).post(library_save),
+        )
+        .route(
+            "/api/bots/{slug}/library/items/{id}",
+            delete(library_delete),
+        )
+        .route("/api/bots/{slug}/library/file", get(library_file))
+        .route(
+            "/api/bots/{slug}/connectors",
+            post(connector_save).delete(connector_delete),
+        )
+        .route("/api/bots/{slug}/model", get(model_get).put(model_put))
+        .route(
+            "/api/bots/{slug}/routines",
+            get(bot_routines).post(bot_routine_save),
+        )
+        .route(
+            "/api/bots/{slug}/routines/enabled",
+            post(bot_routine_enabled),
+        )
+        .route("/api/bots/{slug}/routines/delete", post(bot_routine_delete))
+        .route("/api/bots/{slug}/routines/run", post(bot_routine_run))
+        .route("/api/bots/{slug}/lineage", get(lineage_get))
+        .route("/api/bots/{slug}/computer", get(computer_get))
+        .route("/api/bots/{slug}/computer/control", post(computer_control))
         .route("/api/main-bot", put(main_bot))
         .route("/api/vault", get(vault_list).post(vault_create))
         .route(
@@ -822,6 +859,348 @@ async fn main_bot(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Valu
     require_json(&h)?;
     let slug = parse(&body)?["slug"].as_str().unwrap_or("").to_string();
     Ok(Json(json!({ "bots": s.bots.select(&slug).await? })))
+}
+
+fn unix_now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+async fn require_bot(s: &AppState, slug: &str) -> ApiResult<Value> {
+    s.bots
+        .get(slug)
+        .await?
+        .ok_or_else(|| ApiError::not_found("Bot not found"))
+}
+
+async fn library_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+    require_bot(&s, &slug).await?;
+    let messages = library_messages(&s, &slug).await;
+    Ok(Json(s.library.view(&slug, &messages, unix_now()).await?))
+}
+
+async fn library_messages(s: &AppState, slug: &str) -> Vec<Value> {
+    let Ok(thread) = main_thread(s, slug).await else {
+        return Vec::new();
+    };
+    let Ok(rpc) = s.t3.rpc().await else {
+        return Vec::new();
+    };
+    let Ok(projection) = rpc
+        .call(
+            "orchestration.getThreadProjection",
+            json!({ "threadId": thread }),
+        )
+        .await
+    else {
+        return Vec::new();
+    };
+    chat::transcript(&projection)["messages"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+}
+
+async fn library_save(
+    State(s): S,
+    Path(slug): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    require_bot(&s, &slug).await?;
+    Ok(Json(
+        s.library
+            .save_item(&slug, &parse(&body)?, unix_now())
+            .await?,
+    ))
+}
+
+async fn library_delete(
+    State(s): S,
+    Path((slug, id)): Path<(String, String)>,
+) -> ApiResult<Json<Value>> {
+    require_bot(&s, &slug).await?;
+    Ok(Json(s.library.delete_item(&slug, &id).await?))
+}
+
+async fn library_file(
+    State(s): S,
+    Path(slug): Path<String>,
+    Query(q): Query<HashMap<String, String>>,
+) -> ApiResult<Response> {
+    require_bot(&s, &slug).await?;
+    let path = q.get("path").map(String::as_str).unwrap_or("");
+    let bytes = s.library.file_bytes(&slug, path).await?;
+    let mime = if path.ends_with(".html") || path.ends_with(".htm") {
+        "text/html; charset=utf-8"
+    } else if path.ends_with(".png") {
+        "image/png"
+    } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
+        "image/jpeg"
+    } else {
+        "application/octet-stream"
+    };
+    Ok(([(header::CONTENT_TYPE, mime)], bytes).into_response())
+}
+
+async fn connector_save(
+    State(s): S,
+    Path(slug): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    require_bot(&s, &slug).await?;
+    Ok(Json(s.library.save_connector(&slug, &parse(&body)?).await?))
+}
+
+async fn connector_delete(
+    State(s): S,
+    Path(slug): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    require_bot(&s, &slug).await?;
+    let name = parse(&body)?["name"].as_str().unwrap_or("").to_string();
+    Ok(Json(s.library.delete_connector(&slug, &name).await?))
+}
+
+async fn model_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+    let bot = require_bot(&s, &slug).await?;
+    let settings = s.settings().await;
+    let current = [&bot["model"], &settings["defaultModel"]]
+        .into_iter()
+        .find(|m| m.is_object())
+        .cloned()
+        .unwrap_or_else(provisioner::default_model);
+    Ok(Json(json!({
+        "ok": true,
+        "current": current["model"].as_str().unwrap_or(""),
+        "instanceId": current["instanceId"].as_str().unwrap_or("claudeAgent"),
+        "choices": provisioner::model_choices(&bot["model"], &settings["defaultModel"]),
+    })))
+}
+
+async fn model_put(
+    State(s): S,
+    Path(slug): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let bot = require_bot(&s, &slug).await?;
+    let body = parse(&body)?;
+    let selection = provisioner::model_selection(
+        body["instanceId"].as_str().unwrap_or(""),
+        body["model"].as_str().unwrap_or(""),
+    )
+    .map_err(ApiError::bad_request)?;
+    s.bots
+        .save(&slug, &json!({ "model": selection }), false)
+        .await?;
+    if let Ok(rpc) = s.t3.rpc().await {
+        if let Some(project) = bot["projectId"].as_str().filter(|id| !id.is_empty()) {
+            rpc.call(
+                "projects.mutate",
+                provisioner::project_model_update(project, &selection),
+            )
+            .await
+            .map_err(|e| ApiError::new(502, format!("T3 didn't take the model: {e}")))?;
+        }
+        if let Some(thread) = bot["mainThreadId"].as_str().filter(|id| !id.is_empty()) {
+            rpc.dispatch(provisioner::thread_model_command(thread, &selection))
+                .await
+                .map_err(|e| ApiError::new(502, format!("T3 didn't take the model: {e}")))?;
+        }
+    }
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn bot_routines(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+    let bot = require_bot(&s, &slug).await?;
+    let Some(thread) = bot["mainThreadId"].as_str().filter(|t| !t.is_empty()) else {
+        return Ok(Json(json!({
+            "ok": true,
+            "tasks": [],
+            "error": "This Bot is still getting set up.",
+        })));
+    };
+    let listed = routines::list(&s.t3)
+        .await
+        .map_err(|e| ApiError::new(502, format!("T3 didn't list routines: {}", e.message)))?;
+    let tasks: Vec<Value> = routines::tasks_for_thread(&listed, thread)
+        .iter()
+        .map(routines::task_row)
+        .collect();
+    Ok(Json(json!({ "ok": true, "tasks": tasks, "error": "" })))
+}
+
+async fn bot_routine_save(
+    State(s): S,
+    Path(slug): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let bot = require_bot(&s, &slug).await?;
+    let body = parse(&body)?;
+    let task = routines::new_routine(
+        &bot,
+        body["title"].as_str().unwrap_or(""),
+        body["kind"].as_str().unwrap_or("hour"),
+        unix_now(),
+    )
+    .map_err(ApiError::bad_request)?;
+    Ok(Json(
+        routines::change(&s.t3, &s.routine_history, "upsert", routines::UPSERT, task).await?,
+    ))
+}
+
+async fn owned_routine(s: &AppState, slug: &str, id: &str) -> ApiResult<()> {
+    let bot = require_bot(s, slug).await?;
+    let thread = bot["mainThreadId"].as_str().unwrap_or("");
+    let listed = routines::list(&s.t3).await?;
+    if routines::tasks_for_thread(&listed, thread)
+        .iter()
+        .any(|t| t["id"] == id)
+    {
+        Ok(())
+    } else {
+        Err(ApiError::not_found("That routine is not on this Bot."))
+    }
+}
+
+async fn bot_routine_enabled(
+    State(s): S,
+    Path(slug): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    let id = body["id"].as_str().unwrap_or("");
+    owned_routine(&s, &slug, id).await?;
+    Ok(Json(
+        routines::change(
+            &s.t3,
+            &s.routine_history,
+            "enabled",
+            routines::SET_ENABLED,
+            json!({ "id": id, "enabled": body["enabled"] == true }),
+        )
+        .await?,
+    ))
+}
+
+async fn bot_routine_delete(
+    State(s): S,
+    Path(slug): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let id = parse(&body)?["id"].as_str().unwrap_or("").to_string();
+    owned_routine(&s, &slug, &id).await?;
+    Ok(Json(
+        routines::change(
+            &s.t3,
+            &s.routine_history,
+            "delete",
+            routines::DELETE,
+            json!({ "id": id }),
+        )
+        .await?,
+    ))
+}
+
+async fn bot_routine_run(
+    State(s): S,
+    Path(slug): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let id = parse(&body)?["id"].as_str().unwrap_or("").to_string();
+    owned_routine(&s, &slug, &id).await?;
+    Ok(Json(
+        routines::change(
+            &s.t3,
+            &s.routine_history,
+            "run",
+            routines::RUN_NOW,
+            json!({ "id": id }),
+        )
+        .await?,
+    ))
+}
+
+async fn lineage_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+    let thread = main_thread(&s, &slug).await?;
+    let rpc =
+        s.t3.rpc()
+            .await
+            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
+    let projection = rpc
+        .call(
+            "orchestration.getThreadProjection",
+            json!({ "threadId": thread }),
+        )
+        .await
+        .map_err(|e| ApiError::new(502, format!("T3 didn't return the thread: {e}")))?;
+    Ok(Json(
+        json!({ "ok": true, "rows": lineage::rows(&projection) }),
+    ))
+}
+
+async fn computer_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+    let thread = main_thread(&s, &slug).await?;
+    let rpc =
+        s.t3.rpc()
+            .await
+            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
+    let listed = rpc
+        .call("preview.list", json!({ "threadId": thread }))
+        .await
+        .map_err(|e| ApiError::new(502, format!("T3 didn't list pages: {e}")))?;
+    let tabs = computer::tabs_for_screen(&listed);
+    let mut image = String::new();
+    let mut error = String::new();
+    if let Some(tab) = tabs.first().and_then(|t| t["id"].as_str()) {
+        match computer::one_frame(&s.t3, &thread, tab).await {
+            Ok(bytes) => image = library::encode_file(&bytes),
+            Err(reason) => error = reason,
+        }
+    }
+    Ok(Json(json!({
+        "ok": true,
+        "tabs": tabs,
+        "image": image,
+        "error": error,
+    })))
+}
+
+async fn computer_control(
+    State(s): S,
+    Path(slug): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let thread = main_thread(&s, &slug).await?;
+    let body = parse(&body)?;
+    let tab = body["tabId"].as_str().unwrap_or("");
+    let action = body["action"].as_str().unwrap_or("");
+    if tab.is_empty() {
+        return Err(ApiError::bad_request("Pick a page first."));
+    }
+    computer::send_control(&s.t3, &thread, tab, action)
+        .await
+        .map_err(ApiError::bad_request)?;
+    Ok(Json(json!({ "ok": true })))
 }
 
 async fn main_thread(s: &AppState, slug: &str) -> ApiResult<String> {

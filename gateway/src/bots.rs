@@ -339,29 +339,22 @@ impl Bots {
 
     /// `.mcp.json`, `.codex/config.toml`, `.claude/settings.json` and the managed block of
     /// `AGENTS.md` (with `CLAUDE.md` linked to it), so Claude and Codex find the Bot's tools.
+    /// Enabled connectors in `.bot/connectors.json` are kept. A broken file is left unread
+    /// and these harness files are not rewritten, so a save cannot drop them.
     pub async fn write_instructions(&self, bot: &Value) -> ApiResult<()> {
         let slug = bot["slug"].as_str().unwrap_or_default();
         let dir = self.dir(slug)?;
-        let auth = format!("Bearer {}", self.mcp_token);
+        let connectors = read_connector_list(&dir.join(".bot").join("connectors.json")).await?;
         let mcp_path = dir.join(".mcp.json");
-        let mut mcp = read_json(&mcp_path).await.unwrap_or_else(|| json!({}));
-        let mut servers = obj(&mcp["mcpServers"]);
-        servers.insert(
-            "bot".into(),
-            json!({ "type": "http", "url": self.mcp_url, "headers": { "Authorization": auth } }),
-        );
-        mcp["mcpServers"] = Value::Object(servers);
+        let existing = read_json(&mcp_path).await.unwrap_or_else(|| json!({}));
+        let mcp = crate::library::merge_mcp(&existing, &connectors, &self.mcp_url, &self.mcp_token);
         crate::store::write_atomic(
             &mcp_path,
             (serde_json::to_string_pretty(&mcp).unwrap_or_default() + "\n").as_bytes(),
             Some(0o600),
         )
         .await?;
-        let toml = format!(
-            "# Written by the Bot gateway. bot = the Vault and other Bot tools.\n[mcp_servers.bot]\nurl = {}\nhttp_headers = {{ \"Authorization\" = {} }}\ntool_timeout_sec = 960\n",
-            json!(self.mcp_url),
-            json!(auth)
-        );
+        let toml = crate::library::codex_toml(&mcp);
         crate::store::write_atomic(
             &dir.join(".codex").join("config.toml"),
             toml.as_bytes(),
@@ -369,10 +362,10 @@ impl Bots {
         )
         .await?;
         let claude_settings = dir.join(".claude").join("settings.json");
-        let mut cs = read_json(&claude_settings)
+        let cs_existing = read_json(&claude_settings)
             .await
             .unwrap_or_else(|| json!({}));
-        cs["enableAllProjectMcpServers"] = json!(true);
+        let cs = crate::library::claude_settings(&cs_existing, &connectors);
         write_json(&claude_settings, &cs).await?;
 
         let agents = dir.join("AGENTS.md");
@@ -390,6 +383,21 @@ impl Bots {
             }
         }
         Ok(())
+    }
+}
+
+/// Missing is an empty list. A file that is not JSON is an error, so the caller
+/// does not rewrite `.mcp.json` and drop the connectors it could not read.
+async fn read_connector_list(path: &Path) -> ApiResult<Vec<Value>> {
+    match tokio::fs::read_to_string(path).await {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(e.into()),
+        Ok(text) if text.trim().is_empty() => Ok(Vec::new()),
+        Ok(text) => {
+            let doc: Value = serde_json::from_str(&text)
+                .map_err(|_| ApiError::new(500, "connectors.json is not valid JSON"))?;
+            Ok(doc["connectors"].as_array().cloned().unwrap_or_default())
+        }
     }
 }
 
@@ -458,6 +466,95 @@ mod tests {
             "<!-- bot:managed:start -->B<!-- bot:managed:end -->\n",
         );
         assert!(next.contains('B') && !next.contains(">A<") && next.contains("My own notes"));
+    }
+
+    #[tokio::test]
+    async fn instructions_keep_enabled_connectors() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(
+            dir.path().to_path_buf(),
+            "http://127.0.0.1:3780/mcp/bot".into(),
+            "tok".into(),
+        );
+        let ada = bots.create(&json!({ "name": "Ada" })).await.unwrap();
+        let slug = ada["slug"].as_str().unwrap();
+        let folder = dir.path().join(slug);
+        let connectors = json!({
+            "connectors": [
+                { "name": "notes", "url": "http://127.0.0.1:9/mcp", "enabled": true, "secret": "s3cret" },
+                { "name": "off", "url": "https://example.com/mcp", "enabled": false, "secret": "hidden" }
+            ]
+        });
+        tokio::fs::create_dir_all(folder.join(".bot"))
+            .await
+            .unwrap();
+        tokio::fs::write(
+            folder.join(".bot").join("connectors.json"),
+            serde_json::to_vec(&connectors).unwrap(),
+        )
+        .await
+        .unwrap();
+        bots.write_instructions(&ada).await.unwrap();
+        let mcp: Value = serde_json::from_str(
+            &tokio::fs::read_to_string(folder.join(".mcp.json"))
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(mcp["mcpServers"]["bot"]["url"]
+            .as_str()
+            .unwrap()
+            .contains("/mcp/bot"));
+        assert_eq!(mcp["mcpServers"]["notes"]["url"], "http://127.0.0.1:9/mcp");
+        assert!(mcp["mcpServers"]["notes"]["headers"]["Authorization"]
+            .as_str()
+            .unwrap()
+            .contains("s3cret"));
+        assert!(mcp["mcpServers"].get("off").is_none());
+        assert!(!mcp.to_string().contains("hidden"));
+        let toml = tokio::fs::read_to_string(folder.join(".codex").join("config.toml"))
+            .await
+            .unwrap();
+        assert!(toml.contains("[mcp_servers.bot]"));
+        assert!(toml.contains("[mcp_servers.notes]"));
+        assert!(!toml.contains("[mcp_servers.off]"));
+        assert!(!toml.contains("hidden"));
+        let cs: Value = serde_json::from_str(
+            &tokio::fs::read_to_string(folder.join(".claude").join("settings.json"))
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(cs["enableAllProjectMcpServers"], true);
+        let disabled = cs["disabledMcpjsonServers"].as_array().unwrap();
+        assert!(disabled.iter().any(|n| n == "off"));
+        assert!(!disabled.iter().any(|n| n == "notes" || n == "bot"));
+        assert!(!cs.to_string().contains("hidden"));
+    }
+
+    #[tokio::test]
+    async fn a_broken_connector_file_is_left_unread() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(
+            dir.path().to_path_buf(),
+            "http://127.0.0.1:3780/mcp/bot".into(),
+            "tok".into(),
+        );
+        let ada = bots.create(&json!({ "name": "Ada" })).await.unwrap();
+        let slug = ada["slug"].as_str().unwrap();
+        let folder = dir.path().join(slug);
+        let before = tokio::fs::read_to_string(folder.join(".mcp.json"))
+            .await
+            .unwrap();
+        tokio::fs::write(folder.join(".bot").join("connectors.json"), "{")
+            .await
+            .unwrap();
+        assert!(bots.write_instructions(&ada).await.is_err());
+        let after = tokio::fs::read_to_string(folder.join(".mcp.json"))
+            .await
+            .unwrap();
+        assert_eq!(before, after);
+        assert!(after.contains("\"bot\""));
     }
 
     #[tokio::test]

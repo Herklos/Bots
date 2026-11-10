@@ -8,6 +8,75 @@ pub fn default_model() -> Value {
     json!({ "instanceId": "claudeAgent", "model": "claude-haiku-5-5", "options": [{ "id": "effort", "value": "medium" }] })
 }
 
+/// The choice the picker writes. Effort stays medium unless the caller already set options.
+pub fn model_selection(instance_id: &str, model: &str) -> Result<Value, &'static str> {
+    if instance_id.is_empty()
+        || model.is_empty()
+        || !model
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    {
+        return Err("Pick a model from the list.");
+    }
+    Ok(json!({
+        "instanceId": instance_id,
+        "model": model,
+        "options": [{ "id": "effort", "value": "medium" }],
+    }))
+}
+
+pub fn model_label(model: &str) -> String {
+    match model {
+        "claude-haiku-5-5" => "Haiku".into(),
+        other => other.to_string(),
+    }
+}
+
+/// Haiku, plus whatever this Bot or the settings already use, so the current choice is always listed.
+pub fn model_choices(current: &Value, fallback: &Value) -> Vec<Value> {
+    let mut out = vec![choice_row(&default_model())];
+    for extra in [current, fallback] {
+        if extra.is_object() {
+            let row = choice_row(extra);
+            if row["model"].as_str().is_some_and(|m| !m.is_empty())
+                && out
+                    .iter()
+                    .all(|c| c["model"] != row["model"] || c["instanceId"] != row["instanceId"])
+            {
+                out.push(row);
+            }
+        }
+    }
+    out
+}
+
+fn choice_row(selection: &Value) -> Value {
+    let instance = selection["instanceId"].as_str().unwrap_or("claudeAgent");
+    let model = selection["model"].as_str().unwrap_or("");
+    json!({
+        "instanceId": instance,
+        "model": model,
+        "label": model_label(model),
+    })
+}
+
+pub fn project_model_update(project_id: &str, selection: &Value) -> Value {
+    json!({
+        "type": "project.update",
+        "commandId": uuid::Uuid::new_v4().to_string(),
+        "projectId": project_id,
+        "defaultModelSelection": selection,
+    })
+}
+
+pub fn thread_model_command(thread_id: &str, selection: &Value) -> Value {
+    json!({
+        "type": "thread.model-selection.set",
+        "threadId": thread_id,
+        "modelSelection": selection,
+    })
+}
+
 pub fn start(state: Arc<AppState>) {
     tokio::spawn(async move {
         loop {
@@ -84,11 +153,7 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
                 })).await?;
                 state
                     .bots
-                    .save(
-                        &slug,
-                        &json!({ "mainThreadId": thread, "model": null }),
-                        false,
-                    )
+                    .save(&slug, &json!({ "mainThreadId": thread }), false)
                     .await
                     .map_err(|e| anyhow::anyhow!(e.message))?;
                 tracing::info!("[provisioner] started main thread for {slug}");
@@ -121,4 +186,52 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_picker_keeps_haiku_and_the_current_choice() {
+        let choices = model_choices(
+            &json!({ "instanceId": "claudeAgent", "model": "claude-haiku-5-5" }),
+            &Value::Null,
+        );
+        assert_eq!(choices.len(), 1);
+        assert_eq!(choices[0]["label"], "Haiku");
+        let extra = model_choices(
+            &json!({ "instanceId": "other", "model": "local-model" }),
+            &Value::Null,
+        );
+        assert_eq!(extra.len(), 2);
+        assert_eq!(extra[1]["label"], "local-model");
+        assert!(model_selection("claudeAgent", "claude-haiku-5-5").is_ok());
+        assert!(model_selection("claudeAgent", "has space").is_err());
+        let update = project_model_update("p", &default_model());
+        assert_eq!(update["type"], "project.update");
+        assert_eq!(update["defaultModelSelection"]["model"], "claude-haiku-5-5");
+        assert_eq!(
+            thread_model_command("t", &default_model())["type"],
+            "thread.model-selection.set"
+        );
+    }
+
+    #[test]
+    fn empty_and_odd_models_are_refused_and_a_settings_default_is_listed_once() {
+        assert!(model_selection("", "claude-haiku-5-5").is_err());
+        assert!(model_selection("claudeAgent", "").is_err());
+        assert!(model_selection("claudeAgent", "claude/haiku").is_err());
+        let choices = model_choices(
+            &json!({ "instanceId": "claudeAgent", "model": "claude-haiku-5-5" }),
+            &json!({ "instanceId": "other", "model": "desk-model" }),
+        );
+        assert_eq!(choices.len(), 2);
+        assert_eq!(choices[1]["model"], "desk-model");
+        let again = model_choices(
+            &json!({ "instanceId": "other", "model": "desk-model" }),
+            &json!({ "instanceId": "other", "model": "desk-model" }),
+        );
+        assert_eq!(again.len(), 2);
+    }
 }

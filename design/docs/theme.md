@@ -62,7 +62,8 @@ On phones, the same routes push with the platform’s Back action. The colour pi
 wraps to keep every swatch available on narrow screens.
 
 Controls use the rounded line glyphs in `app/glyph.contract` at 20 points, with
-44-point targets. New Bot, Settings and Bot details use icon buttons with accessible names and hover labels. The inbox has no
+44-point targets. New Bot and Settings use icon buttons with accessible names and hover labels. The chat header has no
+detail button: the Bot's name is the toggle for the right panel. The inbox has no
 utility buttons or grouped cards; Vault lives under Settings and Projects is
 not exposed. Headers share a minimum height and the same horizontal insets.
 
@@ -71,8 +72,34 @@ above the composer, long conversations retain virtualized scrolling, and Bot
 creation is a focused sheet. hbots keeps its own Face and Tide palette. Source:
 https://github.com/RokaSwK/threebot and https://bot.swk.tools/.
 
-Bot details opens as an identity sheet over the conversation. The close icon
-stays in the header, and the name and colour fields share the creation sheet’s
-spacing. Main, Hide and Delete use the same outline glyphs; Hide is a switch
-with a 48 by 44-point control. Destructive actions retain descriptive text.
+The Bot's editor is the right panel, toggled by the Bot's name in the chat
+header; there is no detail button and no details sheet. On wide windows
+(1200 points and up) it sits in a 320-point pane beside the chat — a
+hand-built pane the compiler leaves alone beside the list — and opens by
+default; on narrower screens it overlays the conversation below the header,
+so the name stays tappable to close it. The editor is a hero (Face, name,
+status chip with a dot) over labelled sections in grouped cards with
+36-point icon tiles: Identity (name, colour swatches), Inbox (Main, Hide,
+Delete), With this Bot (Library, Computer), Model, Routines, Working on.
+Main, Hide and Delete use the same outline glyphs; Hide is a switch with a
+48 by 44-point control. Destructive actions retain descriptive text.
 Attachment chips show their filenames and a named remove control.
+
+The third pass took the messenger patterns from Threebot's demo and kept
+hbots' own voice: the Face, the Tide palette and the platform's type. The
+inbox and Vault bars carry the search field (`input type="search"`, a pill on
+the web, the bar's search controller on iOS), and a no-match search shows an
+EmptyState with a magnifier. The inbox footer is the person's chip with the
+Bot count, not a tagline; the brand tagline is "Your own Bots, in one place."
+Sent messages are the one filled thing on screen, Tide with Night ink (8.2:1),
+and the last bubble of a run carries a small tail corner (longhand radii), so
+runs read as groups. The composer is an unfilled bordered bar of controls, so
+on iOS the transcript runs under it, blurred at the edge; its send is a Tide
+circle, stop a red one. Settings' theme choice is a segmented row of pills,
+filled when chosen. New glyphs: search, person, globe, chevron-down.
+
+Library, Computer, and This machine use the same tokens and the same Face.
+The memorable line is the Face beside one count sentence (or one failure
+sentence in system red). Filters are the same segmented pills as Appearance,
+not a row of eyebrows. Groups are the same grouped cards as Bot details.
+Nothing on these screens introduces a new colour or a new typeface.

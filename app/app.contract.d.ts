@@ -4,43 +4,71 @@
 // What app.ts writes, in brief (the declarations follow): `sources: Sources` has one
 // function per source, given its arguments as an array (then store, storage, native) and
 // answering its shape, or a Promise of it.
+//   computerControl: (args: [string, string, string]) => Reply
 //   createBot: (args: [string, string]) => Reply
 //   deleteBot: (args: [string]) => Reply
+//   deleteConnector: (args: [string, string]) => Reply
+//   deleteLibraryItem: (args: [string, string]) => Reply
 //   deleteLogin: (args: [string]) => Reply
 //   deleteProject: (args: [string]) => Reply
+//   deleteRoutine: (args: [string, string]) => Reply
 //   hideBot: (args: [string, boolean]) => Reply
 //   loadBots: (args: []) => Bot[]
 //   loadChat: (args: [string]) => Chat
+//   loadComputer: (args: [string, string]) => Computer
+//   loadLibrary: (args: [string, string]) => Library
+//   loadLineage: (args: [string, string]) => Lineage
+//   loadModels: (args: [string, string]) => ModelList
 //   loadPrefs: (args: []) => Prefs
 //   loadProjects: (args: []) => Project[]
+//   loadRoutines: (args: [string, string]) => RoutineList
 //   loadSession: (args: []) => Session
+//   loadUsage: (args: [string]) => Usage
 //   loadVault: (args: []) => Login[]
 //   makeMainBot: (args: [string]) => Reply
 //   recolourBot: (args: [string, string]) => Reply
 //   renameBot: (args: [string, string]) => Reply
 //   revealPassword: (args: [string]) => Revealed
+//   runRoutine: (args: [string, string]) => Reply
+//   saveConnector: (args: [string, string, string, boolean, string]) => Reply
+//   saveLibraryItem: (args: [string, string, string, string, string, string]) => Reply
 //   saveLogin: (args: [string, string, string, string, string, string]) => Reply
 //   saveProject: (args: [string, string, string, string, string, string]) => Reply
+//   saveRoutine: (args: [string, string, string]) => Reply
 //   sendMessage: (args: [string, string, string]) => Reply
+//   setModel: (args: [string, string, string]) => Reply
 //   setPassword: (args: [string]) => Reply
 //   setProjects: (args: [boolean]) => Reply
+//   setRoutineEnabled: (args: [string, string, boolean]) => Reply
 //   setTheme: (args: [string]) => Reply
 //   setUserName: (args: [string]) => Reply
 //   signIn: (args: [string]) => Reply
 //   signOut: (args: []) => Reply
 //   stopRun: (args: [string]) => Reply
 //   uploadAttachment: (args: [string, string, string, string]) => Attached
-// The shapes. None is exported: name one by its source, `type Reply = Result<'createBot'>`.
+// The shapes. None is exported: name one by its source, `type Reply = Result<'computerControl'>`.
 //   Reply = { ok: boolean; error: string }
 //   Session = { authenticated: boolean; passwordRequired: boolean }
 //   Bot = { slug: string; name: string; label: string; initials: string; color: string; main: boolean; hidden: boolean; ready: boolean }
-//   Row = { id: string; kind: string; mine: boolean; text: string; files: string }
+//   Row = { id: string; kind: string; mine: boolean; text: string; files: string; head: boolean; tail: boolean }
 //   Chat = { slug: string; rows: Row[]; working: boolean }
 //   Prefs = { userName: string; theme: string; projects: boolean }
 //   Attached = { ok: boolean; id: string; name: string; error: string }
 //   Login = { id: string; title: string; website: string; username: string; hasPassword: boolean; hints: string }
 //   Revealed = { ok: boolean; id: string; password: string; error: string }
 //   Project = { id: string; kind: string; title: string; status: string; area: string; body: string }
+//   Usage = { ok: boolean; messages: number; attachments: number; vaultWrites: number; iconFetches: number }
+//   ModelChoice = { instanceId: string; model: string; label: string }
+//   ModelList = { ok: boolean; current: string; instanceId: string; choices: ModelChoice[] }
+//   Routine = { id: string; title: string; enabled: boolean; schedule: string }
+//   RoutineList = { ok: boolean; tasks: Routine[]; error: string }
+//   LineRow = { id: string; title: string; status: string; remote: boolean; threadId: string }
+//   Lineage = { ok: boolean; rows: LineRow[]; error: string }
+//   LibEntry = { id: string; kind: string; title: string; detail: string; group: string; status: string; body: string; path: string; open: string }
+//   Connector = { name: string; url: string; enabled: boolean; locked: boolean; hasSecret: boolean }
+//   Library = { ok: boolean; entries: LibEntry[]; connectors: Connector[] }
+//   PageTab = { id: string; title: string; url: string }
+//   Computer = { ok: boolean; tabs: PageTab[]; image: string; error: string }
 
 /** Storage capabilities supplied by the host. Import these types; there are
  * no ambient fs/sqlite globals and importing a type conveys no authority. */
@@ -272,7 +300,7 @@ type T1 = string;
 type T2 = { "ok": T0; "error": T1; };
 type T3 = { "authenticated": T0; "passwordRequired": T0; };
 type T4 = { "slug": T1; "name": T1; "label": T1; "initials": T1; "color": T1; "main": T0; "hidden": T0; "ready": T0; };
-type T5 = { "id": T1; "kind": T1; "mine": T0; "text": T1; "files": T1; };
+type T5 = { "id": T1; "kind": T1; "mine": T0; "text": T1; "files": T1; "head": T0; "tail": T0; };
 type T6 = T5[];
 type T7 = { "slug": T1; "rows": T6; "working": T0; };
 type T8 = { "userName": T1; "theme": T1; "projects": T0; };
@@ -280,50 +308,84 @@ type T9 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
 type T10 = { "id": T1; "title": T1; "website": T1; "username": T1; "hasPassword": T0; "hints": T1; };
 type T11 = { "ok": T0; "id": T1; "password": T1; "error": T1; };
 type T12 = { "id": T1; "kind": T1; "title": T1; "status": T1; "area": T1; "body": T1; };
-type T13 = { "accessibilityTextSize": T0; };
-type T14 = { "prefersContrast": T1; };
-type T15 = number;
-type T16 = { "slug": T1; "id": T1; };
-type T17 = { "id": T15; "name": T1; "url": T1; "tab": T1; "params": T16; "fragment": T1; };
-type T18 = T17[];
-type T19 = { "name": T1; "stack": T18; };
-type T20 = T19[];
-type T21 = { "tab": T1; "tabs": T20; "next": T15; };
-type T22 = T1[];
-type T23 = T4[];
-type T24 = T10[];
-type T25 = T12[];
-type T26 = T2 | null;
-type T27 = T11 | null;
-type T28 = T9 | null;
-type T29 = T15 | null;
-type T30 = { "path": T1; "name": T1; "type": T1; "size": T15; "width": T29; "height": T29; "duration": T29; };
-type T31 = T30[];
+type T13 = number;
+type T14 = { "ok": T0; "messages": T13; "attachments": T13; "vaultWrites": T13; "iconFetches": T13; };
+type T15 = { "instanceId": T1; "model": T1; "label": T1; };
+type T16 = T15[];
+type T17 = { "ok": T0; "current": T1; "instanceId": T1; "choices": T16; };
+type T18 = { "id": T1; "title": T1; "enabled": T0; "schedule": T1; };
+type T19 = T18[];
+type T20 = { "ok": T0; "tasks": T19; "error": T1; };
+type T21 = { "id": T1; "title": T1; "status": T1; "remote": T0; "threadId": T1; };
+type T22 = T21[];
+type T23 = { "ok": T0; "rows": T22; "error": T1; };
+type T24 = { "id": T1; "kind": T1; "title": T1; "detail": T1; "group": T1; "status": T1; "body": T1; "path": T1; "open": T1; };
+type T25 = { "name": T1; "url": T1; "enabled": T0; "locked": T0; "hasSecret": T0; };
+type T26 = T24[];
+type T27 = T25[];
+type T28 = { "ok": T0; "entries": T26; "connectors": T27; };
+type T29 = { "id": T1; "title": T1; "url": T1; };
+type T30 = T29[];
+type T31 = { "ok": T0; "tabs": T30; "image": T1; "error": T1; };
+type T32 = { "accessibilityTextSize": T0; };
+type T33 = { "prefersContrast": T1; };
+type T34 = { "slug": T1; "id": T1; };
+type T35 = { "id": T13; "name": T1; "url": T1; "tab": T1; "params": T34; "fragment": T1; };
+type T36 = T35[];
+type T37 = { "name": T1; "stack": T36; };
+type T38 = T37[];
+type T39 = { "tab": T1; "tabs": T38; "next": T13; };
+type T40 = T1[];
+type T41 = T4[];
+type T42 = T10[];
+type T43 = T12[];
+type T44 = T2 | null;
+type T45 = T11 | null;
+type T46 = T9 | null;
+type T47 = T13 | null;
+type T48 = { "path": T1; "name": T1; "type": T1; "size": T13; "width": T47; "height": T47; "duration": T47; };
+type T49 = T48[];
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "createBot" | "deleteBot" | "deleteLogin" | "deleteProject" | "hideBot" | "makeMainBot" | "recolourBot" | "renameBot" | "revealPassword" | "saveLogin" | "saveProject" | "sendMessage" | "setPassword" | "setProjects" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";
+export type MutationSource = "computerControl" | "createBot" | "deleteBot" | "deleteConnector" | "deleteLibraryItem" | "deleteLogin" | "deleteProject" | "deleteRoutine" | "hideBot" | "makeMainBot" | "recolourBot" | "renameBot" | "revealPassword" | "runRoutine" | "saveConnector" | "saveLibraryItem" | "saveLogin" | "saveProject" | "saveRoutine" | "sendMessage" | "setModel" | "setPassword" | "setProjects" | "setRoutineEnabled" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";
 
 export interface SourceMap {
+  "computerControl": { args: [T1, T1, T1]; result: T2 };
   "createBot": { args: [T1, T1]; result: T2 };
   "deleteBot": { args: [T1]; result: T2 };
+  "deleteConnector": { args: [T1, T1]; result: T2 };
+  "deleteLibraryItem": { args: [T1, T1]; result: T2 };
   "deleteLogin": { args: [T1]; result: T2 };
   "deleteProject": { args: [T1]; result: T2 };
+  "deleteRoutine": { args: [T1, T1]; result: T2 };
   "hideBot": { args: [T1, T0]; result: T2 };
-  "loadBots": { args: []; result: T23 };
+  "loadBots": { args: []; result: T41 };
   "loadChat": { args: [T1]; result: T7 };
+  "loadComputer": { args: [T1, T1]; result: T31 };
+  "loadLibrary": { args: [T1, T1]; result: T28 };
+  "loadLineage": { args: [T1, T1]; result: T23 };
+  "loadModels": { args: [T1, T1]; result: T17 };
   "loadPrefs": { args: []; result: T8 };
-  "loadProjects": { args: []; result: T25 };
+  "loadProjects": { args: []; result: T43 };
+  "loadRoutines": { args: [T1, T1]; result: T20 };
   "loadSession": { args: []; result: T3 };
-  "loadVault": { args: []; result: T24 };
+  "loadUsage": { args: [T1]; result: T14 };
+  "loadVault": { args: []; result: T42 };
   "makeMainBot": { args: [T1]; result: T2 };
   "recolourBot": { args: [T1, T1]; result: T2 };
   "renameBot": { args: [T1, T1]; result: T2 };
   "revealPassword": { args: [T1]; result: T11 };
+  "runRoutine": { args: [T1, T1]; result: T2 };
+  "saveConnector": { args: [T1, T1, T1, T0, T1]; result: T2 };
+  "saveLibraryItem": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "saveLogin": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "saveProject": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
+  "saveRoutine": { args: [T1, T1, T1]; result: T2 };
   "sendMessage": { args: [T1, T1, T1]; result: T2 };
+  "setModel": { args: [T1, T1, T1]; result: T2 };
   "setPassword": { args: [T1]; result: T2 };
   "setProjects": { args: [T0]; result: T2 };
+  "setRoutineEnabled": { args: [T1, T1, T0]; result: T2 };
   "setTheme": { args: [T1]; result: T2 };
   "setUserName": { args: [T1]; result: T2 };
   "signIn": { args: [T1]; result: T2 };

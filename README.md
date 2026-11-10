@@ -154,13 +154,19 @@ tests/e2e.sh        # mock T3 + gateway + Chromium: create a Bot, chat, see the 
 
 ## Status
 
-**Early.** Gateway unit tests and the shared-home compat harness pass. Verified on a Mac checkout with a real T3 Code + Exact web build + Settings/Vault UI. Still open:
+**Early.** Gateway unit tests and the shared-home compat harness pass. Verified on a Mac checkout with a real T3 Code + Exact web build + Settings/Vault UI.
+
+On a Bot: a model picker (Haiku by default), routines, a thread-family list, a library (files, pages, links, and per-Bot projects, notes, tasks, and plans), and a watch of one browser tab. Settings counts messages, attachments, vault writes, and icon fetches on this machine. Connectors are http(s) MCP servers for that Bot. The old Projects board stays off, and connected apps stay postponed.
+
+Still open:
 
 - macOS, iOS and Linux native Exact hosts (tools ready; full apple build not finished here)
 - the release workflow on GitHub Actions
 - GitHub Actions release has not run. `EXACT_REF` is pinned to `956ae33a35ffa5313d7be3cebc55ed84f9480e0a`
+- mouse and typed text while taking control of a page
+- connected apps, voice, and the full avatar system
 
-Everything else, and what comes later (connected apps, voice, the full avatar system), is tracked in [docs/PLAN.md](docs/PLAN.md).
+The rest is tracked in [docs/PLAN.md](docs/PLAN.md).
 
 ## Credits
 
