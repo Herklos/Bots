@@ -407,6 +407,12 @@ shape Suggestion
   shape: string
   first: string
 
+shape About
+  ok: bool
+  version: string
+  harness: string
+  connected: bool
+
 shape Chat
   slug: string
   rows: Row[]
@@ -641,10 +647,12 @@ component Bots
   resource bots = loadBots() as shape Bot[] else empty()
   resource chat = loadChat(slug) as shape Chat else empty()
   resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
+  resource providers = loadProviders() as shape Provider[] else empty()
+  resource about = loadAbout() as shape About else empty()
   resource prefs = loadPrefs() as shape Prefs else empty()
   resource vault = loadVault() as shape Login[] else empty()
   resource usage = loadUsage(usageGate) as shape Usage else empty()
-  resource report = loadUsageReport(slug, usagePeriod, detailGate) as shape UsageReport else empty()
+  resource report = loadUsageReport(slug, usagePeriod, reportGate) as shape UsageReport else empty()
   resource models = loadModels(slug, detailGate) as shape ModelList else empty()
   resource routines = loadRoutines(slug, detailGate) as shape RoutineList else empty()
   resource lineage = loadLineage(slug, detailGate) as shape Lineage else empty()
@@ -709,6 +717,8 @@ component Bots
   derive onLibrary = top(nav).name == "chat" and panelOpen and panelTab == "library"
   derive onComputer = top(nav).name == "chat" and panelOpen and panelTab == "computer"
   derive detailGate = (onBot and slug != "") ? "1" : "0"
+  derive reportGate = ((onBot and slug != "") or top(nav).name == "settings") ? "1" : "0"
+  derive pickedModel = providers.filter(p => p.instanceId == prefs.defaultInstance).length > 0
   derive libraryGate = (onLibrary and slug != "") ? "1" : "0"
   derive computerGate = (onComputer and slug != "") ? "1" : "0"
   derive usageGate = top(nav).name == "settings" ? "1" : "0"
@@ -775,6 +785,7 @@ component Bots
       send seen = markSeen(slug)
     if top(nav).name == "settings"
       refresh usage
+      refresh report
     if onLibrary
       refresh shelf
     if onComputer
@@ -1234,62 +1245,82 @@ component Bots
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader
+                button class=IconControl appearance="none" press=back aria-label="Back" title="Back" testId="settings-back"
+                  column rotate="180deg"
+                    Glyph(name="chevron", size=20)
                 text "Settings" role="heading" aria-level=1 class=PageTitle flex=1
-              list id="settings-form" class=FormList appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
-                section
-                  row
-                    text "Name"
-                    input appearance="none" class=Field value=(nameEditing ? nameDraft : prefs.userName) input=doEditName change=doSaveName placeholder="Your name" aria-label="Your name" text-align="end" flex=1 min-width=0 testId="user-name"
-                section
-                  header
-                    text "Appearance"
-                  row gap="space.xs" padding="space.xs" role="radiogroup" aria-label="Theme"
-                    for t in ["system", "light", "dark"] key=t
-                      button press=doPickTheme(t) role="radio" aria-checked=(prefs.theme == t) class=Segment appearance="none" flex=1 testId=`theme-${t}`
-                        background-color=(prefs.theme == t ? "AccentColor" : "transparent")
-                        color=(prefs.theme == t ? "AccentColorText" : "-exact-label")
-                        text themeLabel(t)
-                section
-                  header
-                    text "This machine"
-                  if failed(usage) or usage.error != ""
-                    text (usage.error != "" ? usage.error : "Can’t load usage. Check that hbots is running, then try again.") color="-exact-system-red" testId="usage-line"
-                    button press=retryUsage appearance="none" min-height=44 testId="retry-usage"
-                      text "Try Again" color="AccentColor"
-                  else if usage.ok and usage.messages == 0 and usage.attachments == 0 and usage.vaultWrites == 0 and usage.iconFetches == 0
-                    text "Nothing counted yet." color="ink.muted" testId="usage-line"
-                  else if usage.ok
-                    text usageLine(usage.messages, usage.attachments, usage.vaultWrites, usage.iconFetches) testId="usage-line"
-                  footer
-                    text "Counted on this machine. Nothing is sent anywhere."
-                section
-                  header
-                    text "Private data"
-                  button press=open("/vault") testId="open-vault"
-                    row gap="space.md" align-items="center"
+              scroll id="settings-form" flex=1 min-height=0
+                column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" margin="0 auto" padding="space.lg space.lg space.xl" gap="space.xl"
+                  row class=GroupCard gap="space.lg" align-items="center" padding="space.lg"
+                    column width=56 height=56 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
+                      if initialsOf(prefs.userName) != ""
+                        text initialsOf(prefs.userName) font="-exact-title3" font-weight=600
+                      else
+                        Glyph(name="person", size=24)
+                    column flex=1 gap="2px" min-width=0
+                      input appearance="none" class=Field value=(nameEditing ? nameDraft : prefs.userName) input=doEditName change=doSaveName placeholder="Your name" aria-label="Your name" font="-exact-headline" testId="user-name"
+                      text botCountLabel(bots.length) color="ink.muted" font="-exact-footnote"
+                  column gap="space.sm"
+                    text "Appearance" class=SectionLabel
+                    row gap="space.sm" role="radiogroup" aria-label="Theme"
+                      for t in ["system", "light", "dark"] key=t
+                        button press=doPickTheme(t) role="radio" aria-checked=(prefs.theme == t) appearance="none" flex=1 padding="space.sm" border-radius="radius.md" testId=`theme-${t}` border=(prefs.theme == t ? "2px solid AccentColor" : "2px solid transparent") background-color="surface.card"
+                          column gap="space.xs" align-items="center"
+                            row width="100%" height=44 border-radius="radius.sm" overflow="hidden" border="1px solid surface.line"
+                              column flex=1 background-color=(t == "dark" ? "#17171b" : "#fcfcfd")
+                              column flex=1 background-color=(t == "light" ? "#fcfcfd" : t == "dark" ? "#17171b" : "#17171b")
+                            text themeLabel(t) font="-exact-footnote" font-weight=500
+                  column gap="space.sm"
+                    text "Models" class=SectionLabel
+                    column class=GroupCard gap="space.xs"
+                      text "New Bots start with" color="ink.muted" font="-exact-footnote" padding="space.xs space.md 0"
+                      for p in providers key=p.instanceId
+                        for m in p.models key=m.slug
+                          button class=ChoiceRow appearance="none" role="radio" aria-checked=(prefs.defaultInstance == p.instanceId and prefs.defaultModel == m.slug) press=doMakeDefault(p.instanceId, m.slug, "") testId=`default-${m.slug}` background-color=(prefs.defaultInstance == p.instanceId and prefs.defaultModel == m.slug ? "surface.raised" : "transparent")
+                            column flex=1 gap="2px" min-width=0
+                              text m.name font-weight=500
+                              text p.name color="ink.muted" font="-exact-footnote"
+                            if prefs.defaultInstance == p.instanceId and prefs.defaultModel == m.slug
+                              column color="AccentColor"
+                                Glyph(name="check", size=18)
+                      if providers.length == 0
+                        text "No provider is ready in T3 Code yet." color="ink.muted" padding="space.sm space.md"
+                  column gap="space.sm"
+                    text "Usage" class=SectionLabel
+                    column class=GroupCard padding="0"
+                      UsageView(report=report, down=failed(report), period=usagePeriod, view=usageView, pickPeriod=pickPeriod, pickView=pickView, showBots=true)
+                    text "Counted on this machine. Nothing is sent anywhere." color="ink.muted" font="-exact-footnote" padding="0 space.md"
+                  column gap="space.sm"
+                    text "Private data" class=SectionLabel
+                    button class=PanelRow appearance="none" press=open("/vault") testId="open-vault"
                       column class=IconTile color="AccentColor"
                         Glyph(name="lock", size=18)
-                      column flex=1 gap="space.xs" min-width=0
+                      column flex=1 gap="2px" min-width=0
                         text "Vault" font-weight=600
                         text "Manage saved logins" color="ink.muted" font="-exact-footnote"
-                      Glyph(name="chevron", size=18)
-                section
-                  header
-                    text "Remote access"
-                  row align-items="center" gap="space.md"
-                    column class=IconTile color="ink.muted"
-                      Glyph(name="globe", size=18)
-                    input appearance="none" class=Field type="password" value=newPassword input=editNewPassword submit=doSavePassword placeholder=(session.passwordRequired ? "New password" : "Set a password") aria-label="Password" autocomplete="new-password" flex=1 min-width=0 testId="new-password"
-                  if passwordError != "" and not pending(passwordSet)
-                    text passwordError color="-exact-system-red" testId="password-error"
-                  button press=doSavePassword disabled=(newPassword == "" or pending(passwordSet)) testId="save-password"
-                    text (session.passwordRequired ? "Change Password" : "Set Password")
-                  footer
-                    text "Anyone who opens hbots from another device signs in with this password."
-                if session.passwordRequired
-                  section
-                    button press=logout testId="sign-out"
-                      text "Sign Out"
+                      column color="ink.muted"
+                        Glyph(name="chevron", size=18)
+                  column gap="space.sm"
+                    text "Remote access" class=SectionLabel
+                    column class=GroupCard gap="space.sm"
+                      text (session.passwordRequired ? "A password protects hbots when you open it from another device." : "No password is set. Anyone who can reach this machine can open hbots.") color="ink.muted" font="-exact-footnote"
+                      input appearance="none" class=Field type="password" value=newPassword input=editNewPassword submit=doSavePassword placeholder=(session.passwordRequired ? "New password" : "Set a password") aria-label="Password" autocomplete="new-password" padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" testId="new-password"
+                      if passwordError != "" and not pending(passwordSet)
+                        text passwordError color="-exact-system-red" testId="password-error"
+                      button press=doSavePassword disabled=(newPassword == "" or pending(passwordSet)) buttonStyle="filled" min-height=44 testId="save-password"
+                        text (session.passwordRequired ? "Change Password" : "Set Password")
+                  column gap="space.sm"
+                    text "About" class=SectionLabel
+                    column class=GroupCard gap="space.xs"
+                      row justify-content="space-between"
+                        text "hbots" color="ink.muted"
+                        text (about.ok ? about.version : "Unknown") testId="about-version"
+                      row justify-content="space-between"
+                        text about.harness color="ink.muted"
+                        text (about.connected ? "Connected" : "Not connected") color=(about.connected ? "-exact-label" : "-exact-system-red") testId="about-harness"
+                    if session.passwordRequired
+                      button press=logout min-height=44 testId="sign-out"
+                        text "Sign Out"
           else if e.name == "vault"
             column class=Screen navigationKey=`${e.id}` navigationScroll="vault-list" position="absolute" inset=0
               header class=PageHeader flex-wrap="wrap"

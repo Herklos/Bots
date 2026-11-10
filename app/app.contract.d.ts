@@ -9,12 +9,14 @@
 //   deleteBot: (args: [string]) => Reply
 //   deleteLogin: (args: [string]) => Reply
 //   hideBot: (args: [string, boolean]) => Reply
+//   loadAbout: (args: []) => About
 //   loadBots: (args: []) => Bot[]
 //   loadChat: (args: [string]) => Chat
 //   loadComputer: (args: [string, string]) => Computer
 //   loadLineage: (args: [string, string]) => Lineage
 //   loadModels: (args: [string, string]) => ModelList
 //   loadPrefs: (args: []) => Prefs
+//   loadProviders: (args: []) => Provider[]
 //   loadRoutines: (args: [string, string]) => RoutineList
 //   loadSession: (args: []) => Session
 //   loadShelf: (args: [string, string]) => Shelf
@@ -49,6 +51,7 @@
 //   Choice = { label: string; value: string; key: string; warn: string }
 //   Row = { id: string; kind: string; mine: boolean; text: string; title: string; time: string; head: boolean; tail: boolean; variant: string; files: FileRef[]; botSlug: string; botName: string; botColor: string; botShape: string; choices: Choice[]; placeholder: string; key: string }
 //   Suggestion = { name: string; about: string; color: string; shape: string; first: string }
+//   About = { ok: boolean; version: string; harness: string; connected: boolean }
 //   Chat = { slug: string; rows: Row[]; working: boolean }
 //   Prefs = { userName: string; theme: string; defaultInstance: string; defaultModel: string }
 //   Attached = { ok: boolean; id: string; name: string; error: string }
@@ -308,59 +311,60 @@ type T7 = T5[];
 type T8 = T6[];
 type T9 = { "id": T1; "kind": T1; "mine": T0; "text": T1; "title": T1; "time": T1; "head": T0; "tail": T0; "variant": T1; "files": T7; "botSlug": T1; "botName": T1; "botColor": T1; "botShape": T1; "choices": T8; "placeholder": T1; "key": T1; };
 type T10 = { "name": T1; "about": T1; "color": T1; "shape": T1; "first": T1; };
-type T11 = T9[];
-type T12 = { "slug": T1; "rows": T11; "working": T0; };
-type T13 = { "userName": T1; "theme": T1; "defaultInstance": T1; "defaultModel": T1; };
-type T14 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
-type T15 = { "id": T1; "title": T1; "website": T1; "username": T1; "hasPassword": T0; "hints": T1; };
-type T16 = { "ok": T0; "id": T1; "password": T1; "error": T1; };
-type T17 = number;
-type T18 = { "ok": T0; "error": T1; "messages": T17; "attachments": T17; "vaultWrites": T17; "iconFetches": T17; };
-type T19 = { "id": T1; "label": T1; };
-type T20 = T19[];
-type T21 = { "slug": T1; "name": T1; "recommended": T0; "effort": T1; "efforts": T20; };
-type T22 = T21[];
-type T23 = { "instanceId": T1; "name": T1; "account": T1; "models": T22; };
-type T24 = T23[];
-type T25 = { "ok": T0; "error": T1; "current": T1; "instanceId": T1; "effort": T1; "currentName": T1; "providerName": T1; "effortLabel": T1; "efforts": T20; "providers": T24; };
-type T26 = { "id": T1; "title": T1; "paused": T0; "schedule": T1; "next": T1; "failed": T0; };
-type T27 = T26[];
-type T28 = { "ok": T0; "tasks": T27; "error": T1; };
-type T29 = { "id": T1; "title": T1; "status": T1; "remote": T0; "threadId": T1; };
-type T30 = T29[];
-type T31 = { "ok": T0; "rows": T30; "error": T1; };
-type T32 = { "day": T1; "label": T1; "short": T1; "tokens": T1; "input": T1; "output": T1; "cached": T1; "cacheWrite": T1; "turns": T1; "messages": T1; "px": T17; "spx": T17; };
-type T33 = { "name": T1; "tokens": T1; "turns": T1; "share": T17; };
-type T34 = { "slug": T1; "name": T1; "color": T1; "shape": T1; "tokens": T1; "turns": T1; "messages": T1; "share": T17; };
-type T35 = T32[];
+type T11 = { "ok": T0; "version": T1; "harness": T1; "connected": T0; };
+type T12 = T9[];
+type T13 = { "slug": T1; "rows": T12; "working": T0; };
+type T14 = { "userName": T1; "theme": T1; "defaultInstance": T1; "defaultModel": T1; };
+type T15 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
+type T16 = { "id": T1; "title": T1; "website": T1; "username": T1; "hasPassword": T0; "hints": T1; };
+type T17 = { "ok": T0; "id": T1; "password": T1; "error": T1; };
+type T18 = number;
+type T19 = { "ok": T0; "error": T1; "messages": T18; "attachments": T18; "vaultWrites": T18; "iconFetches": T18; };
+type T20 = { "id": T1; "label": T1; };
+type T21 = T20[];
+type T22 = { "slug": T1; "name": T1; "recommended": T0; "effort": T1; "efforts": T21; };
+type T23 = T22[];
+type T24 = { "instanceId": T1; "name": T1; "account": T1; "models": T23; };
+type T25 = T24[];
+type T26 = { "ok": T0; "error": T1; "current": T1; "instanceId": T1; "effort": T1; "currentName": T1; "providerName": T1; "effortLabel": T1; "efforts": T21; "providers": T25; };
+type T27 = { "id": T1; "title": T1; "paused": T0; "schedule": T1; "next": T1; "failed": T0; };
+type T28 = T27[];
+type T29 = { "ok": T0; "tasks": T28; "error": T1; };
+type T30 = { "id": T1; "title": T1; "status": T1; "remote": T0; "threadId": T1; };
+type T31 = T30[];
+type T32 = { "ok": T0; "rows": T31; "error": T1; };
+type T33 = { "day": T1; "label": T1; "short": T1; "tokens": T1; "input": T1; "output": T1; "cached": T1; "cacheWrite": T1; "turns": T1; "messages": T1; "px": T18; "spx": T18; };
+type T34 = { "name": T1; "tokens": T1; "turns": T1; "share": T18; };
+type T35 = { "slug": T1; "name": T1; "color": T1; "shape": T1; "tokens": T1; "turns": T1; "messages": T1; "share": T18; };
 type T36 = T33[];
 type T37 = T34[];
-type T38 = { "ok": T0; "error": T1; "period": T1; "periodLabel": T1; "messages": T1; "attachments": T1; "turns": T1; "tokens": T1; "input": T1; "output": T1; "cached": T1; "cacheWrite": T1; "hit": T1; "sentence": T1; "days": T35; "rows": T35; "models": T36; "bots": T37; "empty": T0; "first": T1; "last": T1; };
-type T39 = { "id": T1; "title": T1; "detail": T1; "url": T1; };
-type T40 = T39[];
-type T41 = { "ok": T0; "total": T17; "pictures": T40; "files": T40; "links": T40; };
-type T42 = { "id": T1; "title": T1; "url": T1; };
-type T43 = T42[];
-type T44 = { "ok": T0; "tabs": T43; "image": T1; "error": T1; };
-type T45 = { "accessibilityTextSize": T0; };
-type T46 = { "prefersContrast": T1; };
-type T47 = { "slug": T1; "id": T1; };
-type T48 = { "id": T17; "name": T1; "url": T1; "tab": T1; "params": T47; "fragment": T1; };
-type T49 = T48[];
-type T50 = { "name": T1; "stack": T49; };
-type T51 = T50[];
-type T52 = { "tab": T1; "tabs": T51; "next": T17; };
-type T53 = T1[];
-type T54 = T4[];
-type T55 = T15[];
-type T56 = T10[];
-type T57 = T2 | null;
-type T58 = T16 | null;
-type T59 = T14 | null;
-type T60 = T17 | null;
-type T61 = { "path": T1; "name": T1; "type": T1; "size": T17; "width": T60; "height": T60; "duration": T60; };
-type T62 = T61[];
-type T63 = { "key": T1; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; "code": T1; "repeat": T0; "isComposing": T0; };
+type T38 = T35[];
+type T39 = { "ok": T0; "error": T1; "period": T1; "periodLabel": T1; "messages": T1; "attachments": T1; "turns": T1; "tokens": T1; "input": T1; "output": T1; "cached": T1; "cacheWrite": T1; "hit": T1; "sentence": T1; "days": T36; "rows": T36; "models": T37; "bots": T38; "empty": T0; "first": T1; "last": T1; };
+type T40 = { "id": T1; "title": T1; "detail": T1; "url": T1; };
+type T41 = T40[];
+type T42 = { "ok": T0; "total": T18; "pictures": T41; "files": T41; "links": T41; };
+type T43 = { "id": T1; "title": T1; "url": T1; };
+type T44 = T43[];
+type T45 = { "ok": T0; "tabs": T44; "image": T1; "error": T1; };
+type T46 = { "accessibilityTextSize": T0; };
+type T47 = { "prefersContrast": T1; };
+type T48 = { "slug": T1; "id": T1; };
+type T49 = { "id": T18; "name": T1; "url": T1; "tab": T1; "params": T48; "fragment": T1; };
+type T50 = T49[];
+type T51 = { "name": T1; "stack": T50; };
+type T52 = T51[];
+type T53 = { "tab": T1; "tabs": T52; "next": T18; };
+type T54 = T1[];
+type T55 = T4[];
+type T56 = T16[];
+type T57 = T10[];
+type T58 = T2 | null;
+type T59 = T17 | null;
+type T60 = T15 | null;
+type T61 = T18 | null;
+type T62 = { "path": T1; "name": T1; "type": T1; "size": T18; "width": T61; "height": T61; "duration": T61; };
+type T63 = T62[];
+type T64 = { "key": T1; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; "code": T1; "repeat": T0; "isComposing": T0; };
 
 /** Sources called by compiled mutation sends. */
 export type MutationSource = "computerControl" | "createBot" | "deleteBot" | "deleteLogin" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveLogin" | "sendMessage" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";
@@ -371,19 +375,21 @@ export interface SourceMap {
   "deleteBot": { args: [T1]; result: T2 };
   "deleteLogin": { args: [T1]; result: T2 };
   "hideBot": { args: [T1, T0]; result: T2 };
-  "loadBots": { args: []; result: T54 };
-  "loadChat": { args: [T1]; result: T12 };
-  "loadComputer": { args: [T1, T1]; result: T44 };
-  "loadLineage": { args: [T1, T1]; result: T31 };
-  "loadModels": { args: [T1, T1]; result: T25 };
-  "loadPrefs": { args: []; result: T13 };
-  "loadRoutines": { args: [T1, T1]; result: T28 };
+  "loadAbout": { args: []; result: T11 };
+  "loadBots": { args: []; result: T55 };
+  "loadChat": { args: [T1]; result: T13 };
+  "loadComputer": { args: [T1, T1]; result: T45 };
+  "loadLineage": { args: [T1, T1]; result: T32 };
+  "loadModels": { args: [T1, T1]; result: T26 };
+  "loadPrefs": { args: []; result: T14 };
+  "loadProviders": { args: []; result: T25 };
+  "loadRoutines": { args: [T1, T1]; result: T29 };
   "loadSession": { args: []; result: T3 };
-  "loadShelf": { args: [T1, T1]; result: T41 };
-  "loadSuggestions": { args: []; result: T56 };
-  "loadUsage": { args: [T1]; result: T18 };
-  "loadUsageReport": { args: [T1, T1, T1]; result: T38 };
-  "loadVault": { args: []; result: T55 };
+  "loadShelf": { args: [T1, T1]; result: T42 };
+  "loadSuggestions": { args: []; result: T57 };
+  "loadUsage": { args: [T1]; result: T19 };
+  "loadUsageReport": { args: [T1, T1, T1]; result: T39 };
+  "loadVault": { args: []; result: T56 };
   "makeMainBot": { args: [T1]; result: T2 };
   "markSeen": { args: [T1]; result: T2 };
   "pinBot": { args: [T1, T0]; result: T2 };
@@ -391,7 +397,7 @@ export interface SourceMap {
   "renameBot": { args: [T1, T1]; result: T2 };
   "reshapeBot": { args: [T1, T1]; result: T2 };
   "respondRequest": { args: [T1, T1, T1, T1, T1]; result: T2 };
-  "revealPassword": { args: [T1]; result: T16 };
+  "revealPassword": { args: [T1]; result: T17 };
   "saveLogin": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "sendMessage": { args: [T1, T1, T1]; result: T2 };
   "setDefaultModel": { args: [T1, T1, T1]; result: T2 };
@@ -402,7 +408,7 @@ export interface SourceMap {
   "signIn": { args: [T1]; result: T2 };
   "signOut": { args: []; result: T2 };
   "stopRun": { args: [T1]; result: T2 };
-  "uploadAttachment": { args: [T1, T1, T1, T1]; result: T14 };
+  "uploadAttachment": { args: [T1, T1, T1, T1]; result: T15 };
 }
 
 export type Source = keyof SourceMap;

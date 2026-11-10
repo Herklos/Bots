@@ -289,6 +289,21 @@ const sources: Sources = {
   },
   deleteLogin: async ([id], store) => reply(await call(store, `/api/vault/${encodeURIComponent(id)}`, { method: 'DELETE' })),
   createBot: async ([name, color, shape, firstMessage], store) => reply(await call(store, '/api/bots', { method: 'POST', body: JSON.stringify({ name, color, shape, ...(firstMessage !== '' ? { firstMessage } : {}) }) })),
+  loadProviders: async (_args, store): Promise<Result<'loadProviders'>> => {
+    const p = await call(store, '/api/providers');
+    return (p.ok && Array.isArray(p.body.providers) ? p.body.providers : []).map((x: any) => ({
+      instanceId: String(x.instanceId), name: String(x.displayName ?? x.instanceId), account: String(x.account ?? ''),
+      models: ((x.models ?? []) as any[]).map((o) => ({
+        slug: String(o.slug), name: String(o.name ?? o.slug), recommended: o.recommended === true, effort: String(o.effort ?? ''),
+        efforts: ((o.efforts ?? []) as any[]).map((e) => ({ id: String(e.id), label: String(e.label ?? e.id) })),
+      })),
+    }));
+  },
+  loadAbout: async (_args, store): Promise<Result<'loadAbout'>> => {
+    const r = await call(store, '/api/config');
+    if (!r.ok) return { ok: false, version: '', harness: '', connected: false };
+    return { ok: true, version: String(r.body.version ?? ''), harness: String(r.body.harness?.name ?? 'T3 Code'), connected: r.body.harness?.connected === true };
+  },
   loadSuggestions: async (_args, store): Promise<Result<'loadSuggestions'>> => {
     const r = await call(store, '/api/suggestions');
     if (!r.ok) return [];
