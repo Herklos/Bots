@@ -55,7 +55,7 @@ Inbox ──┬── Bot chat ──┬── Library
 2. The editor shows the large Face, the name, and a status chip (a dot and a word: Ready to chat, Working, Hidden from your inbox). The Details tab has labelled sections (**Identity**, **Inbox**, **Model**, **Routines**, **Working on**) and sit in grouped cards with icon tiles. Name and colour swatches are in Identity. Main Bot and Hide from inbox are rows in Inbox. Library and Computer are sibling tabs, not navigation rows. Delete Bot is in its own card, disabled for the main Bot.
 3. **Model** is a segmented choice. Haiku is the default for a new Bot. The list is Haiku, plus this Bot's current choice and the default from Settings when those differ.
 4. **Routines** start off. The person names one and picks Hourly, Daily at 09:00, or Once. Run, the switch, and Delete sit on the row. A Bot that has no conversation yet says "This Bot is still getting set up."
-5. **Working on** lists the other threads this Bot has started (a subagent, or work handed to another machine). A remote thread is labelled "On another machine". An empty list says "No other threads yet." Opening one of those threads is later.
+5. **Working on** lists one-off child threads that still need attention (Working, Waiting, Failed, or Stopped). Settled work stays out. A remote thread is labelled "One-off child thread, other machine". Opening a local child shows a strip under the header to return to the Bot’s main chat.
 6. Tapping the name again closes the editor. The conversation is still there. Tabs, scroll positions, and form drafts stay mounted when the panel closes. Static model and routine choices load on entry and refresh after edits; regular polling updates live activity without remounting the panel.
 
 ### 3c. Library

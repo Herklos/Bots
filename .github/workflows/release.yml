@@ -36,8 +36,22 @@ jobs:
           ref: ${{ vars.EXACT_REF || 'main' }}
           path: exact
       - uses: oven-sh/setup-bun@v2
-      - name: Set up Exact (toolchains and tools; the first run takes a few minutes)
+        with:
+          bun-version: 1.4.2
+      - uses: browser-actions/setup-chrome@v2
+        id: chrome
+      - name: Set up Exact
+        env:
+          CHROME: ${{ steps.chrome.outputs.chrome-path }}
         run: cd exact && bun scripts/exact.mjs setup
+      - name: Patch Exact server rendering
+        run: git -C exact apply "$GITHUB_WORKSPACE/scripts/exact-server-time.patch"
+      - name: Link Exact app packages
+        run: |
+          mkdir -p app/node_modules/@exact
+          for package in media-capture notifications recording; do
+            ln -s "$GITHUB_WORKSPACE/exact/packages/$package" "app/node_modules/@exact/$package"
+          done
       - name: Build the web app
         run: EXACT_APP_DIR="$PWD/app" bun exact/host/web/build.mjs bots-web
       - name: Check web build

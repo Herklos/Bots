@@ -1,5 +1,7 @@
 # Native builds of the Exact app (T9)
 
+For the web and gateway development loop, see [DEV.md](../DEV.md).
+
 Scope: ship `app/` (the Bots Exact client) on the web, Linux, macOS and iOS. Source of truth for commands and
 keys: the Exact clone's `README.md` (quick start, section 3 "Run it natively"), `docs/start-here.md`, and
 `scripts/app.schema.json` (`host.<platform>` keys). Those are cited by path below.

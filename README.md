@@ -59,7 +59,7 @@ Without a password the gateway listens on localhost and signs nobody in. Set `HB
 
 ## Development
 
-To build from source, install [Rust](https://rustup.rs), start T3 Code, and clone the repository:
+See [DEV.md](DEV.md) for setup, the live development loop, LAN access, testing, and troubleshooting. To build from source, install [Rust](https://rustup.rs), start T3 Code, and clone the repository:
 
 ```sh
 git clone https://github.com/Herklos/Bots && cd Bots

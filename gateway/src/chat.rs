@@ -1004,7 +1004,7 @@ mod tests {
             "subagents": [{
                 "id": "notes",
                 "title": "Notes",
-                "status": "completed",
+                "status": "running",
                 "childThreadId": "child-thread"
             }]
         })

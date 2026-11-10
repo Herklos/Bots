@@ -94,6 +94,7 @@ const FILE_TOO_BIG = 'Attach a file under 8 MB.';
 const FILE_READ = 'Can’t read that file. Try another one.';
 const LOAD_KEY: Record<string, string> = {
   computerOpen: 'error.computerOpen',
+  computerClose: 'error.computerClose',
   usage: 'error.loadUsage',
   models: 'error.loadModels',
   providers: 'error.loadProviders',
@@ -259,6 +260,9 @@ function fixtureChat(child: string) {
   const row = (r: Record<string, unknown>) => ({ ...blank, head: true, tail: true, mine: false, text: '', ...r, kind: 'message' }) as ChatRow;
   if (child === 'child-thread') {
     return { slug: 'fixture', working: false, partial: false, readOnly: false, threadId: 'child-thread', pins: [...(fixturePins['child-thread'] ?? [])], rows: [row({ id: 'c1', text: 'Notes' })] };
+  }
+  if (child === 'child-readonly') {
+    return { slug: 'fixture', working: false, partial: false, readOnly: true, threadId: 'child-readonly', pins: [], rows: [row({ id: 'c-ro', text: 'Finished work' })] };
   }
   return {
     slug: 'fixture', working: false, partial: true, readOnly: false, threadId: 'fixture-thread',
@@ -936,7 +940,8 @@ const sources: Sources = {
       return {
         ok: true, error: '',
         rows: [
-          { id: 'local-1', title: 'Notes', status: 'Done', remote: false, threadId: 'child-thread' },
+          { id: 'local-1', title: 'Notes', status: 'Working', remote: false, threadId: 'child-thread' },
+          { id: 'local-ro', title: 'Finished', status: 'Failed', remote: false, threadId: 'child-readonly' },
           { id: 'remote-1', title: 'Away', status: 'Working', remote: true, threadId: 'remote-thread' },
         ],
       };
@@ -1048,9 +1053,12 @@ const sources: Sources = {
     return { ok: true, error: '' };
   },
   closeComputer: async ([slug], store) => {
-    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/close`, {
+    if (slug === 'frame' || slug === 'page' || slug === 'tabs') return { ok: true, error: '' };
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/close`, {
       method: 'POST', body: '{}',
-    }));
+    });
+    if (!r.ok) return { ok: false, error: explain(r.error, 'computerClose') };
+    return { ok: true, error: '' };
   },
   computerControl: async ([slug, tabId, action], store) => {
     if (slug === 'frame' || slug === 'page' || slug === 'tabs') return { ok: true, error: '' };

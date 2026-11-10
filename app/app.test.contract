@@ -232,15 +232,37 @@ test "a local child opens and a remote child stays on the other machine"
   at "/bot/fixture"
   clock +600
   clock data
-  expect text "where-remote-1" == "On another machine"
+  expect text "where-remote-1" == "One-off child thread, other machine"
+  expect text "where-local-1" == "One-off child thread"
   expect tree missing "open-remote-1"
   tap "open-local-1"
   clock data
   expect tree has "child-transcript"
+  expect tree has "child-strip"
+  expect tree has "close-child"
+  expect text "child-strip-status" == "Done"
   expect tree has "composer"
   expect tree missing "child-readonly"
   type "composer" "On the child"
   expect tree has "send"
+
+test "a read-only child keeps the back strip"
+  size 1440x900
+  at "/bot/fixture"
+  clock +600
+  clock data
+  tap "open-local-ro"
+  clock data
+  expect tree has "child-transcript"
+  expect tree has "child-strip"
+  expect tree has "close-child"
+  expect text "child-strip-status" == "Done"
+  expect tree has "child-readonly"
+  expect tree missing "composer"
+  tap "close-child"
+  clock data
+  expect tree missing "child-strip"
+  expect tree has "transcript"
 
 test "a token line shows only when the turn shares an id"
   at "/bot/fixture"

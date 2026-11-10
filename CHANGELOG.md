@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.1.5
+
+- Fixed build-time rendering of the host clock.
+
+## 0.1.4
+
+- Made Exact packages available to the release web build.
+
+## 0.1.3
+
+- Corrected the Chrome path passed to release setup.
+
+## 0.1.2
+
+- Pinned Bun and installed Chrome for release builds.
+
+## 0.1.1
+
+- Fixed release packaging when Exact is checked out inside the Rust workspace.
+
 ## 0.1.0
 
 Initial version of hbots.

@@ -8,6 +8,8 @@ Default is set in `gateway/src/provisioner.rs` (`default_model`) and live settin
 
 ## Stack
 
+For setup, the watch loop, LAN access, and troubleshooting, see [DEV.md](DEV.md).
+
 | Piece | What | Default |
 |---|---|---|
 | T3 Code | Harness (desktop app) | http://127.0.0.1:3773 |
@@ -38,6 +40,11 @@ From the repo root, with T3 Code already running:
 ```sh
 bun scripts/dev.mjs
 ```
+
+For access from another device on the local network, run `bun scripts/dev.mjs --lan`.
+Set `HBOTS_DEV_HOST` to the machine's reachable address if the automatically selected IPv4
+address is wrong. LAN mode accepts browser requests from any origin in the debug gateway;
+use it only on a trusted network. Release builds do not enable this behavior.
 
 That starts both and rebuilds each when its own code changes.
 
