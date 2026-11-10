@@ -1181,6 +1181,7 @@ component Bots
       case none
   action sendHeldVoice
     if voiceId != "" and not pending(voiceSent)
+      toEnd()
       send voiceSent = sendVoice(slug, voiceSeconds, voiceId, childThread)
   action afterVoice
     match voiceSent
@@ -1289,6 +1290,8 @@ component Bots
     focus("room-composer")
   action postRoom
     if roomText.trim() != "" and not pending(roomSent) and roomId != ""
+      if lastRoomId != ""
+        scrollIntoView("room-log", lastRoomId, block="end")
       send roomSent = sendRoom(roomId, roomText.trim())
       roomText = ""
     focus("room-composer")
@@ -1328,6 +1331,8 @@ component Bots
       send voiceDropped = dropVoice(slug, id)
   action post
     if canSend and not pending(sent)
+      messageQuery = ""
+      toEnd()
       // pendingAttaches entries are `id\\tname`; the data module keeps the ids.
       lastText = draft.trim()
       failedText = ""
@@ -1353,6 +1358,7 @@ component Bots
     toEnd()
   action retry
     if failedText != "" and not pending(sent)
+      toEnd()
       let again = failedText
       lastText = again
       failedText = ""
