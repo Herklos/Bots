@@ -53,12 +53,27 @@ function when(at: unknown, now: number): string {
   if (days < 7) return DAYS[d.getDay()]!;
   return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
+// A group prompt that leaked into a Bot's own thread. It belongs in the room, not under their name.
+function isGroupLeak(text: string): boolean {
+  return text.includes('[Group "') || text.includes('Your reply is shared with the group');
+}
 // The one line under a Bot's name in the inbox.
 function lineOf(b: any): string {
   if (b.working === true) return 'Working…';
   const p = b.preview;
-  if (p && typeof p.text === 'string' && p.text !== '') return p.role === 'user' ? `You: ${p.text}` : p.text;
+  if (p && typeof p.text === 'string' && p.text !== '' && !isGroupLeak(p.text)) return p.role === 'user' ? `You: ${p.text}` : p.text;
   return typeof b.mainThreadId === 'string' ? 'Ready to chat' : 'Getting set up…';
+}
+// A group's face is its members, at most three. The list stores slugs or member objects.
+function stackFaces(members: unknown, directory: any[]): { shape: string; color: string; state: string }[] {
+  const slugs = (Array.isArray(members) ? members : [])
+    .map((m) => (typeof m === 'string' ? m : String((m as { slug?: unknown })?.slug ?? '')))
+    .filter((slug) => slug !== '')
+    .slice(0, 3);
+  return slugs.map((slug) => {
+    const bot = directory.find((b) => String(b.slug) === slug);
+    return { shape: String(bot?.shape ?? 'ball'), color: fill(bot?.color), state: 'idle' };
+  });
 }
 const initials = (name: string): string => name.trim().split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('') || '?';
 
@@ -460,6 +475,11 @@ const sources: Sources = {
   loadBots: async ([focus], store): Promise<Result<'loadBots'>> => {
     // Reserved slugs for the contract runner, which has no gateway. A real inbox still fetches.
     // `bea` is the second fixture Bot, so a draft test can open her and come back without a gateway.
+    if (focus === 'tabs') {
+      return [
+        { slug: 'tabs', name: 'Tabs', label: '', initials: 'T', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '' },
+      ];
+    }
     if (focus === 'fixture' || focus === 'bea') {
       return [
         { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '' },
@@ -530,32 +550,42 @@ const sources: Sources = {
   },
   deleteLogin: async ([id], store) => reply(await call(store, `/api/vault/${encodeURIComponent(id)}`, { method: 'DELETE' })),
   loadConvos: async ([query, focus, room], store): Promise<Result<'loadConvos'>> => {
+    if (focus === 'tabs') {
+      return [
+        { kind: 'bot', key: 'bot-tabs', id: 'tabs', name: 'Tabs', color: fill('brand.default'), shape: 'ball', faces: [], line: 'Ready to chat', time: '', at: '', unread: false, working: false, ready: true },
+      ];
+    }
     if (focus === 'fixture' || focus === 'bea' || room === 'fixture') {
       return [
         { kind: 'bot', key: 'bot-fixture', id: 'fixture', name: 'Ada', color: fill('brand.default'), shape: 'ball', faces: [], line: 'Ready to chat', time: '', at: '', unread: true, working: false, ready: true },
-        { kind: 'group', key: 'group-fixture', id: 'fixture', name: 'Design', color: 'brand.blue', shape: 'hex', faces: [], line: 'Ada: On it', time: '', at: '', unread: false, working: false, ready: true },
+        { kind: 'group', key: 'group-fixture', id: 'fixture', name: 'Design', color: 'brand.blue', shape: 'hex', faces: [{ shape: 'ball', color: fill('brand.default'), state: 'idle' }, { shape: 'ball', color: fill('brand.blue'), state: 'idle' }], line: 'Ada: On it', time: '', at: '', unread: false, working: false, ready: true },
       ];
     }
     const body = await botsBody(store);
     const now = Number(body.now);
+    const directory = body.bots as any[];
     const at = (b: any): string => (typeof b.preview?.at === 'string' ? b.preview.at : '');
     const match = (...names: string[]): boolean => query === '' || names.some((n) => n.toLowerCase().includes(query));
-    const bots = (body.bots as any[])
+    const bots = directory
       .filter((b) => b.hidden !== true && (query !== '' || !(b.primary === true || b.pinned === true)) && match(String(b.name), String(b.label ?? '')))
       .map((b) => ({
         kind: 'bot', key: `bot-${String(b.slug)}`, id: String(b.slug), name: String(b.name), color: fill(b.color), shape: String(b.shape ?? 'ball'), faces: [] as { shape: string; color: string; state: string }[],
         line: lineOf(b), time: when(b.preview?.at, now), at: at(b), unread: b.unread === true, working: b.working === true,
         ready: typeof b.mainThreadId === 'string',
       }));
-    const rooms = await read(store, '/api/rooms');
-    const groups = (Array.isArray(rooms.rooms) ? rooms.rooms : [])
+    // A rooms failure must not hide the Bots. An empty list is the honest fallback.
+    const roomsReply = await call(store, '/api/rooms');
+    const listed = roomsReply.ok && Array.isArray(roomsReply.body?.rooms) ? roomsReply.body.rooms : [];
+    const groups = listed
       .filter((g: any) => match(String(g.title ?? '')))
       .map((g: any) => {
-        const last = g.last ? `${String(g.last.name ?? '')}: ${String(g.last.text ?? '')}`.slice(0, 120) : '';
+        const raw = String(g.last?.text ?? '');
+        const show = Boolean(g.last) && !isGroupLeak(raw);
+        const last = show ? `${String(g.last.name ?? '')}: ${raw}`.slice(0, 120) : '';
         const said = typeof g.last?.at === 'string' ? g.last.at : '';
         return {
           kind: 'group', key: `group-${String(g.id)}`, id: String(g.id), name: String(g.title ?? ''), color: String(g.color ?? 'brand.default'), shape: String(g.shape ?? 'ball'),
-          faces: [] as { shape: string; color: string; state: string }[],
+          faces: stackFaces(g.members, directory),
           line: last !== '' ? last : String(g.description ?? ''), time: when(said, now), at: said, unread: false, working: false, ready: true,
         };
       });
@@ -604,6 +634,7 @@ const sources: Sources = {
     if (slug === '') return blankChat('');
     if (slug === 'fixture') return fixtureChat(child);
     if (slug === 'bea') return blankChat('bea');
+    if (slug === 'tabs') return blankChat('tabs');
     const query = child !== '' ? `?child=${encodeURIComponent(child)}` : '';
     const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat${query}`);
     const threadId = String(body.threadId ?? '');
@@ -785,15 +816,33 @@ const sources: Sources = {
     const list = (k: string) => ((body[k] ?? []) as any[]).map(item);
     return { ok: true, total: Number(body.counts?.pictures ?? 0) + Number(body.counts?.files ?? 0) + Number(body.counts?.links ?? 0), pictures: list('pictures'), files: list('files'), links: list('links') };
   },
-  loadComputer: async ([slug, gate, locale], store): Promise<Result<'loadComputer'>> => {
+  loadComputer: async ([slug, gate, locale, tab], store): Promise<Result<'loadComputer'>> => {
     noteLocale(locale);
-    if (slug === '' || gate !== '1') return { ok: true, tabs: [], image: '', error: '' };
+    const none = { ok: true, tabs: [] as { id: string; title: string; url: string }[], image: '', error: '', selected: '' };
+    if (slug === '' || gate !== '1') return none;
+    // Two server pages for the contract runner. A real Bot still asks the gateway.
+    if (slug === 'tabs') {
+      const selected = tab === 'two' ? 'two' : 'one';
+      return {
+        ok: true,
+        selected,
+        image: '',
+        error: '',
+        tabs: [
+          { id: 'one', title: 'One', url: 'https://one.example' },
+          { id: 'two', title: 'Two', url: 'https://two.example' },
+        ],
+      };
+    }
     const kept = frames[slug] ?? '';
     const [tag, image] = kept === '' ? ['', ''] : [kept.slice(0, kept.indexOf(':')), kept.slice(kept.indexOf(':') + 1)];
-    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/computer${tag !== '' ? `?since=${encodeURIComponent(tag)}` : ''}`);
+    const since = tag !== '' ? `since=${encodeURIComponent(tag)}` : '';
+    const picked = tab !== '' ? `tab=${encodeURIComponent(tab)}` : '';
+    const query = [since, picked].filter((part) => part !== '').join('&');
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/computer${query !== '' ? `?${query}` : ''}`);
     if (!r.ok) {
       if (r.error.includes('no conversation') || r.error.includes('getting set up')) {
-        return { ok: true, tabs: [], image: '', error: say('error.settingUp') };
+        return { ok: true, tabs: [], image: '', error: say('error.settingUp'), selected: '' };
       }
       throw new Error(r.error);
     }
@@ -801,11 +850,13 @@ const sources: Sources = {
     // An unchanged frame is not sent again: keep the one the app has.
     const shown = r.body.unchanged === true ? image : String(r.body.image ?? '');
     if (typeof r.body.etag === 'string' && shown !== '') frames[slug] = `${r.body.etag}:${shown}`;
+    const listed = tabs.map((t: any) => ({ id: String(t.id ?? ''), title: String(t.title ?? ''), url: String(t.url ?? '') }));
     return {
       ok: true,
       image: shown,
       error: String(r.body.error ?? ''),
-      tabs: tabs.map((t: any) => ({ id: String(t.id ?? ''), title: String(t.title ?? ''), url: String(t.url ?? '') })),
+      tabs: listed,
+      selected: String(r.body.selected ?? listed[0]?.id ?? ''),
     };
   },
   loadUsageReport: async ([slug, period, gate, locale], store): Promise<Result<'loadUsageReport'>> => {

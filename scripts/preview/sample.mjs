@@ -89,6 +89,7 @@ export function sample(method, path, params, body) {
   if (path === '/api/session') return { authenticated: true, passwordRequired: false };
   if (path === '/api/config') return { botsRoot: '/sample', version: '0.0.0', harness: { name: 'T3 Code', connected: true }, appUrl: '' };
   if (path === '/api/bots' && method === 'GET') return { bots: state.bots, now };
+  if (path === '/api/rooms' && method === 'GET') return { rooms: [] };
   if (path === '/api/settings') return { ...state.settings, defaultModel: { instanceId: 'claudeAgent', model: 'claude-haiku-5-5', options: [] } };
   if (path === '/api/suggestions') return { suggestions: [{ name: 'Night Shift', about: 'Works overnight and preps your morning digest', color: 'orange', shape: 'hex', firstMessage: 'Hi' }, { name: 'Inbox Triage', about: 'Sorts your email and drafts replies in your voice', color: 'pink', shape: 'cloud', firstMessage: 'Hi' }] };
   if (path === '/api/providers') return { ok: true, providers };

@@ -1,12 +1,14 @@
 //! A local room of Bots. This is not a T3 channel and not the Working on list.
-//! The file is `groups.json` in the app directory: an id, a title, a description, an avatar
-//! (color and shape), member slugs, and the messages stored on this machine.
+//! The file is `groups.json` in the app directory: an id, a title, a description, optional
+//! colour and shape (kept for older rooms; the app shows stacked member faces), member slugs,
+//! and the messages stored on this machine.
 //!
 //! A send is stored here, then dispatched to the members it wakes: everyone named with `@`,
 //! `@all` for everyone, a single plain name, otherwise whoever spoke last (everyone while no
 //! Bot has spoken). Each dispatch remembers the message id it created, its anchor. A sync reads
-//! each member's thread and copies the replies after that anchor into the room. A reply that
-//! mentions another member wakes that member too, up to [`MAX_HOPS`] per message from the person.
+//! each member's group thread and copies the replies after that anchor into the room. A reply
+//! that @-mentions another member can wake that member once ([`MAX_HOPS`]); a courtesy reply
+//! never wakes anyone.
 
 use crate::error::{ApiError, ApiResult};
 use serde_json::{json, Value};
@@ -14,8 +16,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::sync::Mutex;
 
-/// Bot-to-Bot wake-ups one message from the person can set off.
-pub const MAX_HOPS: u64 = 2;
+/// Bot-to-Bot wake-ups one message from the person can set off. One handoff is enough: a Bot
+/// can ask another once, and that answer lands in the room without starting a ping-pong.
+pub const MAX_HOPS: u64 = 1;
 
 #[derive(Clone, Debug)]
 pub struct Member {
@@ -263,6 +266,9 @@ impl Rooms {
                 let at = reply["at"].as_str().unwrap_or("");
                 push_message(room, &message(id, at, &member.slug, &member.title, text))?;
                 changed = true;
+                if is_courtesy(text) {
+                    continue;
+                }
                 let hops = room["hops"].as_u64().unwrap_or(0);
                 if hops >= MAX_HOPS {
                     continue;
@@ -375,6 +381,7 @@ fn targets(members: &[Member], indexes: &[usize]) -> Vec<(String, String)> {
 }
 
 /// Wraps `text` for each target so a Bot knows it is in a group and how to bring someone in.
+/// The roster lists names without `@`, so a Bot that echoes the header does not wake everyone.
 fn frame(
     title: &str,
     members: &[Member],
@@ -384,7 +391,12 @@ fn frame(
 ) -> Vec<Dispatch> {
     let names = members
         .iter()
-        .map(|m| format!("{} (@{})", m.title, m.slug))
+        .map(|m| m.title.as_str())
+        .collect::<Vec<_>>()
+        .join(", ");
+    let slugs = members
+        .iter()
+        .map(|m| m.slug.as_str())
         .collect::<Vec<_>>()
         .join(", ");
     targets
@@ -394,10 +406,28 @@ fn frame(
             thread_id,
             message_id: uuid::Uuid::new_v4().to_string(),
             text: format!(
-                "[Group \"{title}\": {names}. {from} wrote:]\n{text}\n\n[Your reply is shared with the group. Write @slug only when you need something from that member; never to thank or acknowledge.]"
+                "[Group \"{title}\": {names}. {from} wrote:]\n{text}\n\n[Your reply is shared with the group. To ask one member for something, write @ and their slug ({slugs}). Do not mention anyone to agree, thank, or acknowledge.]"
             ),
         })
         .collect()
+}
+
+/// A short thanks or acknowledgement, even with an `@`, must not start another turn.
+fn is_courtesy(text: &str) -> bool {
+    const ACK: &[&str] = &[
+        "thanks", "thank", "thx", "ty", "ok", "okay", "k", "got", "it", "on", "sure", "noted",
+        "done", "yep", "yeah", "yes", "welcome", "np", "cool", "great", "perfect", "sounds",
+        "good", "will", "do", "acknowledged", "roger", "alright", "right", "nice", "awesome",
+        "cheers", "appreciated", "you", "too", "as", "well", "no", "problem", "of", "course",
+    ];
+    let mentions = mention_words(text);
+    let words: Vec<String> = text
+        .split(|c: char| !(c.is_alphanumeric() || c == '\''))
+        .filter(|w| !w.is_empty())
+        .map(|w| w.to_lowercase())
+        .filter(|w| !mentions.iter().any(|m| m == w))
+        .collect();
+    words.is_empty() || (words.len() <= 8 && words.iter().all(|w| ACK.contains(&w.as_str())))
 }
 
 fn anchor_all(room: &mut Value, dispatches: &[Dispatch]) {
@@ -912,7 +942,8 @@ mod tests {
         assert_eq!(slugs(&woken), vec!["bea"]);
         let text = &woken[0].text;
         assert!(text.contains("Group \"Team\""));
-        assert!(text.contains("Ada (@ada)") && text.contains("Cy Park (@cy)"));
+        assert!(text.contains("Ada, Bea, Cy Park"), "the roster lists names, not @handles");
+        assert!(!text.contains("Ada (@ada)"), "echoing the header must not wake everyone");
         assert!(text.contains("You wrote:") && text.contains("draft the plan"));
         let commands = dispatch_commands(&woken);
         assert_eq!(commands[0]["messageId"], json!(woken[0].message_id));
@@ -1006,10 +1037,41 @@ mod tests {
         assert!(wake[0].text.contains("Ada wrote:"));
         assert_eq!(room["hops"], 1);
 
-        // Cy answers back to Ada through the same path.
+        // Cy's answer is kept in the room. The hop budget is spent, so Ada is not woken again.
         threads.insert("cy".into(), thread(&wake[0].message_id, &[("c1", "@ada 42 units", false)]));
-        let (_, back) = rooms.sync(&id, &trio(), &threads).await.unwrap();
-        assert_eq!(slugs(&back), vec!["ada"]);
+        let (room, back) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        assert!(back.is_empty(), "an answer does not start another turn");
+        assert!(
+            room["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|m| m["text"].as_str() == Some("@ada 42 units")),
+            "Cy's answer still lands in the room"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_courtesy_reply_does_not_wake_anyone() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = trio_room(&rooms).await;
+        let (_, woken) = rooms.send(&id, &trio(), "@ada start", "m1", "t1").await.unwrap();
+        let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
+        threads.insert(
+            "ada".into(),
+            thread(&woken[0].message_id, &[("a1", "thanks @bea, on it", false)]),
+        );
+        let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        assert!(wake.is_empty(), "a thank-you must not start another turn");
+        assert_eq!(room["hops"], 0, "courtesy does not spend the hop budget");
+        assert!(
+            room["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|m| m["text"].as_str() == Some("thanks @bea, on it"))
+        );
     }
 
     #[tokio::test]

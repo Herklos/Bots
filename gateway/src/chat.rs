@@ -156,11 +156,18 @@ pub fn without_group_turns(items: Vec<Value>) -> Vec<Value> {
         .filter(|raw| {
             let item = if raw["item"].is_object() { &raw["item"] } else { raw };
             if item["type"] == "user_message" {
-                hidden = item["text"].as_str().is_some_and(|t| t.starts_with("[Group \""));
+                hidden = item["text"].as_str().is_some_and(is_group_prompt);
             }
             !hidden
         })
         .collect()
+}
+
+fn is_group_prompt(text: &str) -> bool {
+    let t = text.trim();
+    t.starts_with("[Group \"")
+        || t.contains("\n[Group \"")
+        || t.contains("Your reply is shared with the group")
 }
 
 /// The bubbles and cards of a thread projection, oldest first.
@@ -665,6 +672,20 @@ mod tests {
         let texts: Vec<&str> = t["messages"].as_array().unwrap().iter().map(|m| m["text"].as_str().unwrap()).collect();
         assert_eq!(texts, vec!["hi", "hello", "thanks", "welcome"]);
         assert!(t["events"].as_array().unwrap().is_empty(), "the Bot's messaging inside the group is hidden too");
+
+        let padded = json!({ "turnItems": [
+            { "id": "1", "type": "user_message", "text": "  [Group \"Duo\": Ada. You wrote:]\nhi\n\n[Your reply is shared with the group.]", "status": "completed" },
+            { "id": "2", "type": "assistant_message", "text": "leak", "status": "completed" },
+            { "id": "3", "type": "user_message", "text": "back", "status": "completed" },
+        ]});
+        let kept = transcript(&padded);
+        let texts: Vec<&str> = kept["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["text"].as_str().unwrap())
+            .collect();
+        assert_eq!(texts, vec!["back"], "a padded group prompt stays out of the one-to-one chat");
     }
 
     fn family() -> Value {
