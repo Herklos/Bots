@@ -686,6 +686,8 @@ shape Computer
 // The tab on screen: the one the person picked, else the server's choice, else the first.
 fn tabId(tabs: PageTab[], picked: string, selected: string): string = match first(tabs.filter(t => t.id == (picked != "" ? picked : selected))) { case some(t) => t.id, case none => match first(tabs) { case some(t) => t.id, case none => "" } }
 fn tabTitle(tabs: PageTab[], id: string): string = match first(tabs.filter(t => t.id == id)) { case some(t) => t.title, case none => "" }
+// Arrow keys, Tab, Enter and Backspace go as keys. One character goes as text. Escape does not.
+fn pageKeyKind(k: string): string = k == "ArrowUp" or k == "ArrowDown" or k == "ArrowLeft" or k == "ArrowRight" or k == "Tab" or k == "Enter" or k == "Backspace" ? "key" : (k.length == 1 ? "text" : "")
 
 // One kept conversation: its text, the files waiting with it, and a held clip.
 shape DraftPack
@@ -869,6 +871,7 @@ component Bots
   mutation modelSaved as shape Reply refreshes models then afterModel
   mutation defaultSaved as shape Reply refreshes prefs, models
   mutation controlled as shape Reply refreshes computer then afterControl
+  mutation driven as shape Reply refreshes computer
   derive slug = match stack(nav).filter(e => e.name == "chat").at(-1) { case some(e) => e.params.slug, case none => "" }
   derive signInError = match signedIn { case some(r) => r.error, case none => "" }
   derive createError = match created { case some(r) => r.error, case none => "" }
@@ -931,6 +934,7 @@ component Bots
   derive usageGate = top(nav).name == "settings" ? "1" : "0"
   derive modelError = match modelSaved { case some(r) => r.error, case none => "" }
   derive controlError = match controlled { case some(r) => r.error, case none => "" }
+  derive driveError = match driven { case some(r) => r.error, case none => "" }
   derive holding = wantHold and controlError == "" and not pending(controlled)
 
   // Chats are read while they are open; the inbox while it is.
@@ -1495,6 +1499,10 @@ component Bots
   action afterControl
     if not wantHold
       heldTab = ""
+  // Clicks, the wheel and keys reach the page only while this take is held.
+  action doDrive(kind: string, x: number, y: number, boxW: number, boxH: number, delta: number, text: string)
+    if holding and heldTab != "" and kind != ""
+      send driven = computerInput(slug, kind, x, y, boxW, boxH, delta, text)
 
   view
     main id="app-shell" class=Screen navigationKey=`${top(nav).id}` navigationBack="back" navigate=open interactive-widget="resizes-content" width="100%" height="100%" testId="app"
@@ -1779,7 +1787,7 @@ component Bots
                       button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="send"
                         Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
+                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
           else if e.name == "group"
             column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="room-header"
@@ -2398,6 +2406,9 @@ component BotPanel
     computerDown: bool
     heldTab: string
     controlError: string
+    driveError: string
+    live: bool
+    drive: action
     take: action
     release: action
     picked: string
@@ -2602,7 +2613,7 @@ component BotPanel
             BotShelf(shelf=shelf, down=shelfDown, name=bot.name)
         column id="bot-tab-computer" role="tabpanel" aria-label=t("panel.computer") display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0
           scroll id="panel-computer-scroll" flex=1 min-height=0
-            ScreenCard(name=bot.name, computer=computer, down=computerDown, heldTab=heldTab, controlError=controlError, take=take, release=release, picked=picked, pick=pick)
+            ScreenCard(name=bot.name, computer=computer, down=computerDown, heldTab=heldTab, controlError=controlError, driveError=driveError, live=live, drive=drive, take=take, release=release, picked=picked, pick=pick)
 
 // Pick the provider, the model and how hard it thinks. Each choice applies to the Bot's next message.
 // Provider, model and effort as one picker. The Bot's panel and Settings both use it.
@@ -2824,6 +2835,9 @@ component ScreenCard
     down: bool
     heldTab: string
     controlError: string
+    driveError: string
+    live: bool
+    drive: action
     take: action
     release: action
     picked: string
@@ -2834,6 +2848,37 @@ component ScreenCard
     enlarged = true
   action hideLarge()
     enlarged = false
+  action focusPicture()
+    focus(enlarged ? "computer-large" : "computer-frame")
+  task aim when live
+    after(1, focusPicture)
+  task aimLarge when live and enlarged
+    after(1, focusPicture)
+  action pageKey(k: string, event: KeyboardEvent)
+    if live and not event.isComposing
+      let kind = pageKeyKind(k)
+      if kind != ""
+        preventDefault()
+        drive(kind, 0, 0, 0, 0, 0, k)
+  action point(id: string, e: PointerEvent)
+    if live and e.button == 0
+      let area = frame(id)
+      if not area.unavailable and not area.provisional and area.width > 0 and area.height > 0
+        drive("click", e.offsetX, e.offsetY, area.width, area.height, 0, "")
+  action roll(id: string, e: WheelEvent)
+    if live
+      preventDefault()
+      let area = frame(id)
+      if not area.unavailable and not area.provisional and area.width > 0 and area.height > 0
+        drive("wheel", e.offsetX, e.offsetY, area.width, area.height, e.deltaY, "")
+  action thumbPoint(e: PointerEvent)
+    point("computer-frame", e)
+  action largePoint(e: PointerEvent)
+    point("computer-large", e)
+  action thumbWheel(e: WheelEvent)
+    roll("computer-frame", e)
+  action largeWheel(e: WheelEvent)
+    roll("computer-large", e)
   view
     column gap="space.md" padding="0 space.lg space.xl" testId="screen"
       if down or not computer.ok
@@ -2845,7 +2890,10 @@ component ScreenCard
           text t("computer.none", name=name) color="ink.muted" text-align="center" testId="computer-status"
       else
         column border-radius="radius.md" overflow="hidden" border="1px solid surface.line" background-color="surface.card"
-          if computer.image != ""
+          if computer.image != "" and live
+            column id="computer-frame" tabindex=0 key=pageKey pointerdown=thumbPoint wheel=thumbWheel touch-action="none" width="100%" aria-label=t("computer.pageFor", name=name) testId="computer-frame"
+              image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=name) width="100%"
+          else if computer.image != ""
             button appearance="none" press=showLarge padding=0 border="none" background-color="transparent" width="100%" aria-label=t("computer.enlarge", name=name) testId="computer-frame"
               image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=name) width="100%"
           else
@@ -2859,6 +2907,9 @@ component ScreenCard
             for t in computer.tabs key=t.id
               button appearance="none" press=pick(t.id) min-height=44 padding="0 space.md" aria-pressed=(t.id == current) testId=`tab-${t.id}`
                 text t.title font-weight=(t.id == current ? 600 : 400) overflow-wrap="anywhere"
+        if live
+          button class=PrimaryButton buttonStyle="bordered" press=showLarge aria-label=t("computer.enlarge", name=name) testId="computer-enlarge"
+            text t("computer.enlarge", name=name)
         if heldTab == current
           button class=PrimaryButton buttonStyle="filled" press=release testId="computer-release"
             text t("computer.release")
@@ -2871,11 +2922,14 @@ component ScreenCard
           text t("computer.watching") color="ink.muted" font="-exact-footnote" text-align="center"
         if controlError != ""
           text controlError color="-exact-system-red" testId="computer-error"
+        else if driveError != ""
+          text driveError color="-exact-system-red" testId="computer-error"
         if enlarged and computer.image != ""
           column position="fixed" inset=0 z-index=40 align-items="center" justify-content="center" background-color="brand.black" testId="computer-overlay"
             button class=IconControl appearance="none" press=hideLarge aria-label=t("computer.close") title=t("computer.close") testId="computer-close" position="absolute" top=12 right=12 z-index=1 color="ink.light" width=44 height=44
               Glyph(name="close", size=22)
-            image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=name) width="100%" height="100%" object-fit="contain" testId="computer-large"
+            column id="computer-large" tabindex=(live ? 0 : -1) key=pageKey pointerdown=largePoint wheel=largeWheel touch-action="none" width="100%" height="100%" testId="computer-large"
+              image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=name) width="100%" height="100%" object-fit="contain"
 
 // Everything about a Bot that is not what it is doing: its name, colour and shape, and where it sits.
 component EditBotPage

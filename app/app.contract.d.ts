@@ -5,6 +5,7 @@
 // function per source, given its arguments as an array (then store, storage, native) and
 // answering its shape, or a Promise of it.
 //   computerControl: (args: [string, string, string]) => Reply
+//   computerInput: (args: [string, string, number, number, number, number, number, string]) => Reply
 //   createBot: (args: [string, string, string, string]) => Reply
 //   createGroup: (args: [string, string, string, string, string]) => Made
 //   createSubagent: (args: [string, string, string, string, string, boolean]) => Reply
@@ -534,10 +535,11 @@ type T206 = { "scrollLeft": T27; "scrollTop": T27; "scrollWidth": T27; "scrollHe
 type T207 = { "text": T1; "files": T58; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "computerControl" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "computerControl": { args: [T1, T1, T1]; result: T2 };
+  "computerInput": { args: [T1, T1, T27, T27, T27, T27, T27, T1]; result: T2 };
   "createBot": { args: [T1, T1, T1, T1]; result: T2 };
   "createGroup": { args: [T1, T1, T1, T1, T1]; result: T24 };
   "createSubagent": { args: [T1, T1, T1, T1, T1, T0]; result: T2 };

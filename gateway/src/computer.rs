@@ -68,6 +68,74 @@ pub fn click_messages(x: f64, y: f64, width: u32, height: u32) -> Result<Vec<Val
     ])
 }
 
+/// Where a CSS point lands in a picture drawn with `object-fit: contain`.
+/// `Ok(None)` is the letterbox around that picture: nothing is sent.
+/// Fractions are of the JPEG, which is what the preview stream addresses.
+pub fn contain_fractions(
+    x: f64,
+    y: f64,
+    box_w: f64,
+    box_h: f64,
+    image_w: u32,
+    image_h: u32,
+) -> Result<Option<(f64, f64)>, &'static str> {
+    if !x.is_finite() || !y.is_finite() || !box_w.is_finite() || !box_h.is_finite() {
+        return Err("That point is off the page.");
+    }
+    if box_w <= 0.0 || box_h <= 0.0 || image_w == 0 || image_h == 0 {
+        return Err("The picture has no size yet.");
+    }
+    let image_w = f64::from(image_w);
+    let image_h = f64::from(image_h);
+    let scale = (box_w / image_w).min(box_h / image_h);
+    if !scale.is_finite() || scale <= 0.0 {
+        return Err("The picture has no size yet.");
+    }
+    let drawn_w = image_w * scale;
+    let drawn_h = image_h * scale;
+    let origin_x = (box_w - drawn_w) / 2.0;
+    let origin_y = (box_h - drawn_h) / 2.0;
+    let fx = (x - origin_x) / drawn_w;
+    let fy = (y - origin_y) / drawn_h;
+    if !(0.0..=1.0).contains(&fx) || !(0.0..=1.0).contains(&fy) {
+        return Ok(None);
+    }
+    Ok(Some((fx, fy)))
+}
+
+/// Width and height from a JPEG SOF marker, in pixels.
+pub fn jpeg_size(bytes: &[u8]) -> Option<(u32, u32)> {
+    let mut i = 0;
+    while i + 9 < bytes.len() {
+        if bytes[i] != 0xff {
+            i += 1;
+            continue;
+        }
+        let marker = bytes[i + 1];
+        if marker == 0xd8 || marker == 0xd9 || marker == 0x01 || (0xd0..=0xd7).contains(&marker) {
+            i += 2;
+            continue;
+        }
+        if i + 4 >= bytes.len() {
+            return None;
+        }
+        let len = u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]) as usize;
+        if marker == 0xc0 || marker == 0xc1 || marker == 0xc2 {
+            let height = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
+            let width = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]) as u32;
+            if width == 0 || height == 0 {
+                return None;
+            }
+            return Some((width, height));
+        }
+        if len < 2 {
+            return None;
+        }
+        i += 2 + len;
+    }
+    None
+}
+
 /// A scroll in the same frame. `delta_y` is the wheel distance, not a fraction.
 pub fn wheel_message(
     x: f64,
@@ -135,21 +203,33 @@ pub struct Sessions {
 
 impl Sessions {
     pub fn take(&mut self, slug: &str, tab: &str, width: u32, height: u32) {
-        let image = self
+        let previous = self
             .holds
             .get(slug)
             .filter(|hold| hold.tab == tab)
-            .map(|hold| hold.image.clone())
-            .unwrap_or_default();
+            .map(|hold| (hold.image.clone(), hold.width, hold.height));
+        let (image, kept_w, kept_h) = previous.unwrap_or_default();
         self.holds.insert(
             slug.to_string(),
             Hold {
                 tab: tab.to_string(),
-                width,
-                height,
+                width: if width > 0 { width } else { kept_w },
+                height: if height > 0 { height } else { kept_h },
                 image,
             },
         );
+    }
+
+    /// The JPEG's pixel size, once a frame has arrived. A later take of the same
+    /// page keeps this when the caller has no new size.
+    pub fn remember_size(&mut self, slug: &str, width: u32, height: u32) {
+        if width == 0 || height == 0 {
+            return;
+        }
+        if let Some(hold) = self.holds.get_mut(slug) {
+            hold.width = width;
+            hold.height = height;
+        }
     }
 
     pub fn release(&mut self, slug: &str) {
@@ -444,6 +524,35 @@ mod tests {
         let click = click_messages(0.5, 0.25, 800, 400).unwrap();
         assert!(click.iter().all(|message| message["type"] != "takeControl"));
         assert!(sessions.get("ada").is_none());
+    }
+
+    #[test]
+    fn a_letterboxed_point_maps_into_the_jpeg_and_the_margin_is_not_a_click() {
+        let inside = contain_fractions(400.0, 300.0, 800.0, 800.0, 800, 400)
+            .unwrap()
+            .unwrap();
+        assert_eq!(inside.0, 0.5);
+        assert_eq!(inside.1, 0.25);
+        assert!(contain_fractions(400.0, 10.0, 800.0, 800.0, 800, 400)
+            .unwrap()
+            .is_none());
+        assert!(contain_fractions(400.0, 10.0, 0.0, 800.0, 800, 400).is_err());
+    }
+
+    #[test]
+    fn a_jpeg_sof_gives_the_frame_size_a_hold_keeps() {
+        let bytes = [
+            0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0x90, 0x02, 0x80, 0x03, 0x01, 0x11,
+            0x00, 0x02, 0x11, 0x00, 0x03, 0x11, 0x00, 0xff, 0xd9,
+        ];
+        assert_eq!(jpeg_size(&bytes), Some((640, 400)));
+        assert!(jpeg_size(&[0xff, 0xd8, 0xff, 0xd9]).is_none());
+        let mut sessions = Sessions::default();
+        sessions.take("ada", "first", 0, 0);
+        sessions.remember_size("ada", 640, 400);
+        sessions.take("ada", "first", 0, 0);
+        let hold = sessions.get("ada").unwrap();
+        assert_eq!((hold.width, hold.height), (640, 400));
     }
 
     #[test]
