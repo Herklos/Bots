@@ -956,9 +956,23 @@ const sources: Sources = {
     if (!r.ok) return emptyReport(explain(r.error, 'usage'));
     return usageReport(r.body);
   },
-  computerControl: async ([slug, tabId, action], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/control`, {
-    method: 'POST', body: JSON.stringify({ tabId, action }),
-  })),
+  computerControl: async ([slug, tabId, action], store) => {
+    if (slug === 'frame' || slug === 'page' || slug === 'tabs') return { ok: true, error: '' };
+    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/control`, {
+      method: 'POST', body: JSON.stringify({ tabId, action }),
+    }));
+  },
+  computerInput: async ([slug, kind, x, y, boxW, boxH, deltaY, text], store) => {
+    if (slug === 'frame' || slug === 'page' || slug === 'tabs') return { ok: true, error: '' };
+    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/input`, {
+      method: 'POST',
+      body: JSON.stringify({
+        kind, x, y, boxW, boxH, deltaY,
+        text: kind === 'text' ? text : '',
+        key: kind === 'key' ? text : '',
+      }),
+    }));
+  },
   loadRoom: async ([id], store): Promise<Result<'loadRoom'>> => {
     if (id === '') return { id: '', title: '', description: '', color: 'brand.default', shape: 'ball', members: [], messages: [] };
     if (id === 'fixture') {

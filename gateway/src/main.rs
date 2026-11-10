@@ -1675,6 +1675,9 @@ async fn computer_control(
             sessions.take(&slug, tab, width, height);
             if !frame.is_empty() {
                 sessions.note_image(&slug, &library::encode_file(&frame));
+                if let Some((w, h)) = computer::jpeg_size(&frame) {
+                    sessions.remember_size(&slug, w, h);
+                }
             }
         }
         "release" => sessions.release(&slug),
@@ -1711,17 +1714,30 @@ async fn computer_input(
         .map(|n| n as u32)
         .filter(|n| *n > 0)
         .unwrap_or(hold.height);
-    let messages = match body["kind"].as_str().unwrap_or("") {
-        "click" => computer::click_messages(num(&body, "x"), num(&body, "y"), width, height)
-            .map_err(ApiError::bad_request)?,
-        "wheel" => vec![computer::wheel_message(
+    let box_w = num(&body, "boxW");
+    let box_h = num(&body, "boxH");
+    let (x, y) = if box_w > 0.0 && box_h > 0.0 {
+        match computer::contain_fractions(
             num(&body, "x"),
             num(&body, "y"),
+            box_w,
+            box_h,
             width,
             height,
-            num(&body, "deltaY"),
-        )
-        .map_err(ApiError::bad_request)?],
+        ) {
+            Ok(Some(point)) => point,
+            Ok(None) => return Ok(Json(json!({ "ok": true }))),
+            Err(reason) => return Err(ApiError::bad_request(reason)),
+        }
+    } else {
+        (num(&body, "x"), num(&body, "y"))
+    };
+    let messages = match body["kind"].as_str().unwrap_or("") {
+        "click" => computer::click_messages(x, y, width, height).map_err(ApiError::bad_request)?,
+        "wheel" => vec![
+            computer::wheel_message(x, y, width, height, num(&body, "deltaY"))
+                .map_err(ApiError::bad_request)?,
+        ],
         "text" => vec![computer::text_message(body["text"].as_str().unwrap_or(""))
             .map_err(ApiError::bad_request)?],
         "key" => vec![computer::key_message(body["key"].as_str().unwrap_or(""))
@@ -1740,6 +1756,9 @@ async fn computer_input(
         }
         if !frame.is_empty() {
             sessions.note_image(&slug, &library::encode_file(&frame));
+            if let Some((w, h)) = computer::jpeg_size(&frame) {
+                sessions.remember_size(&slug, w, h);
+            }
         }
     }
     Ok(Json(json!({ "ok": true })))
