@@ -66,8 +66,17 @@ fn push_unique(out: &mut Vec<Value>, seen: &mut std::collections::HashSet<String
     out.push(row);
 }
 
+/// Working on keeps rows that still need attention.
+fn is_active(row: &Value) -> bool {
+    matches!(
+        row["status"].as_str(),
+        Some("Working" | "Waiting" | "Failed" | "Stopped")
+    )
+}
+
 /// Rows for the Bot details sheet. Remote delegates stay remote.
-/// With no subagent, the latest live turn is one Working row and not an Open target.
+/// Settled children (Done, Idle, …) stay out. With no active child, the latest
+/// live turn is one Working row and not an Open target.
 pub fn rows(projection: &Value) -> Vec<Value> {
     if is_project_enrichment(projection) {
         return Vec::new();
@@ -98,6 +107,7 @@ pub fn rows(projection: &Value) -> Vec<Value> {
             }
         }
     }
+    out.retain(is_active);
     if out.is_empty() {
         if let Some(items) = items {
             if let Some(row) = live_turn(items) {
@@ -240,7 +250,7 @@ mod tests {
                 "remoteChild": { "threadId": "remote-1", "environmentId": "env-9", "label": "Other" },
                 "childThreadId": "local-should-not-win"
             }],
-            "subagents": [{ "id": "a2", "title": "Notes", "status": "completed", "childThreadId": "local-2" }]
+            "subagents": [{ "id": "a2", "title": "Notes", "status": "failed", "childThreadId": "local-2" }]
         });
         let rows = rows(&projection);
         assert_eq!(rows.len(), 2);
@@ -249,7 +259,7 @@ mod tests {
         assert_eq!(rows[0]["status"], "Working");
         assert_eq!(rows[1]["remote"], false);
         assert_eq!(rows[1]["threadId"], "local-2");
-        assert_eq!(rows[1]["status"], "Done");
+        assert_eq!(rows[1]["status"], "Failed");
     }
 
     #[test]
@@ -315,8 +325,9 @@ mod tests {
     }
 
     #[test]
-    fn settled_work_is_done_even_when_the_word_is_unknown() {
-        let listed = rows(&json!({
+    fn settled_work_is_labelled_done_and_stays_out_of_working_on() {
+        assert_eq!(status_label("mystery", false, true), "Done");
+        assert!(rows(&json!({
             "turnItems": [{
                 "type": "subagent",
                 "id": "s",
@@ -324,9 +335,33 @@ mod tests {
                 "status": "mystery",
                 "settledAt": "2026-11-10T00:00:00Z"
             }]
-        }));
-        assert_eq!(listed[0]["status"], "Done");
+        }))
+        .is_empty());
         assert!(rows(&json!({ "turnItems": [{ "type": "message", "id": "m" }] })).is_empty());
+    }
+
+    #[test]
+    fn a_completed_child_stays_out_and_a_failed_child_stays() {
+        assert!(rows(&json!({
+            "subagents": [{
+                "id": "done",
+                "title": "/root/test",
+                "status": "completed",
+                "childThreadId": "thread-done"
+            }]
+        }))
+        .is_empty());
+        let failed = rows(&json!({
+            "subagents": [{
+                "id": "bad",
+                "title": "Broke",
+                "status": "failed",
+                "childThreadId": "thread-bad"
+            }]
+        }));
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0]["status"], "Failed");
+        assert_eq!(failed[0]["threadId"], "thread-bad");
     }
 
     #[test]
@@ -398,7 +433,7 @@ mod tests {
             "subagents": [{
                 "id": "notes",
                 "title": "Notes",
-                "status": "completed",
+                "status": "failed",
                 "childThreadId": "child-thread"
             }]
         });
@@ -436,7 +471,7 @@ mod tests {
             "subagents": [{
                 "id": "notes",
                 "title": "Notes",
-                "status": "completed",
+                "status": "failed",
                 "childThreadId": "child-thread"
             }]
         })

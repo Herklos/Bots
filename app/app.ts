@@ -261,6 +261,9 @@ function fixtureChat(child: string) {
   if (child === 'child-thread') {
     return { slug: 'fixture', working: false, partial: false, readOnly: false, threadId: 'child-thread', pins: [...(fixturePins['child-thread'] ?? [])], rows: [row({ id: 'c1', text: 'Notes' })] };
   }
+  if (child === 'child-readonly') {
+    return { slug: 'fixture', working: false, partial: false, readOnly: true, threadId: 'child-readonly', pins: [], rows: [row({ id: 'c-ro', text: 'Finished work' })] };
+  }
   return {
     slug: 'fixture', working: false, partial: true, readOnly: false, threadId: 'fixture-thread',
     pins: [...(fixturePins['fixture-thread'] ?? [])],
@@ -935,7 +938,8 @@ const sources: Sources = {
       return {
         ok: true, error: '',
         rows: [
-          { id: 'local-1', title: 'Notes', status: 'Done', remote: false, threadId: 'child-thread' },
+          { id: 'local-1', title: 'Notes', status: 'Working', remote: false, threadId: 'child-thread' },
+          { id: 'local-ro', title: 'Finished', status: 'Failed', remote: false, threadId: 'child-readonly' },
           { id: 'remote-1', title: 'Away', status: 'Working', remote: true, threadId: 'remote-thread' },
         ],
       };
