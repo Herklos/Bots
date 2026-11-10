@@ -31,6 +31,21 @@ EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/web/build.mjs" bots-web
 
 Open http://127.0.0.1:3780. Settings: `~/.hbots/.env` + `~/.hbots/t3-token`.
 
+### Watch
+
+From the repo root, with T3 Code already running:
+
+```sh
+bun scripts/dev.mjs
+```
+
+That starts both and rebuilds each when its own code changes.
+
+- **Gateway.** Debug build at http://127.0.0.1:3780. A change under `gateway/` or `design/`, or in the workspace `Cargo.toml`, rebuilds `target/debug/hbots` and restarts `serve`. An `hbots` process already listening on 3780 is stopped once that binary is ready.
+- **Frontend.** Exact's JS dev loop at http://127.0.0.1:8765. A change to the Contract, `app.ts`, strings, or assets rebuilds the page and reloads it. The loop sets `HBOTS_URL` to the gateway, so the page calls port 3780. Files land in `app/target/web-dev` (gitignored), separate from `app/target/web-dist`.
+
+Ctrl-C stops both. T3 Code on 3773 is left running. The script reads `EXACT_DIR` from the environment or from `.exact-path`. The one-shot release start above is still the path for a packed binary. While this watch is running, open http://127.0.0.1:8765.
+
 Env prefix is `HBOTS_*` (`HBOTS_HOME`, `HBOTS_PASSWORD`, `HBOTS_TAILSCALE_PATH`, `HBOTS_CLOUDFLARED_PATH`, `HBOTS_TAILNET_PORT`, `HBOTS_TAILNET_USERS`, `HBOTS_PUBLIC_LANDING_ONLY`, …). Legacy unprefixed Tailscale/tunnel names still work.
 
 **A6:** `busy_threads` reads one `orchestration.subscribeShell` snapshot, counts threads a restart would interrupt, and interrupts the subscription (`gateway/src/release.rs`, `gateway/src/t3.rs`). Routine list does the same for `scheduledTasks.subscribe`. Auto-update still waits when that read fails, including a `snapshot-required` reply.
