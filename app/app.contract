@@ -339,6 +339,7 @@ routes nav
     chat "/bot/:slug"
     group "/group/:id"
     create "/new"
+    newGroup "/new-group"
     settings "/settings"
       vault "/vault"
         vaultAdd "/vault/new"
@@ -447,12 +448,32 @@ shape RoomMessage
   id: string
   name: string
   text: string
+  from: string
 
 shape Room
   id: string
   title: string
+  description: string
+  color: string
+  shape: string
   members: RoomMember[]
   messages: RoomMessage[]
+
+// One group in the sidebar: its look, who is in it, and the last line said.
+shape Group
+  id: string
+  title: string
+  description: string
+  color: string
+  shape: string
+  members: string[]
+  line: string
+  time: string
+
+shape Made
+  ok: bool
+  id: string
+  error: string
 
 shape Prefs
   userName: string
@@ -669,6 +690,13 @@ component Bots
   state newColor = "brand.default"
   state newShape = "ball"
   state newFirst = ""
+  state groupName = ""
+  state groupAbout = ""
+  state groupColor = "brand.default"
+  state groupShape = "ball"
+  state groupMembers: string[] = []
+  state roomText = ""
+  state armedGroup = ""
   state nameDraft = ""
   state nameEditing = false
   state newPassword = ""
@@ -706,6 +734,7 @@ component Bots
   state heldTab = ""
   resource session = loadSession() as shape Session else empty()
   resource bots = loadBots(slug) as shape Bot[] else empty()
+  resource groups = loadGroups(slug, roomId) as shape Group[] else empty()
   resource chat = loadChat(slug, childThread) as shape Chat else empty()
   resource room = loadRoom(roomId) as shape Room else empty()
   resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
@@ -724,6 +753,9 @@ component Bots
   mutation signedIn as shape Reply refreshes session, bots
   mutation signedOut as shape Reply refreshes session, bots
   mutation created as shape Reply refreshes bots then afterCreate
+  mutation groupMade as shape Made refreshes groups then afterGroupMade
+  mutation roomSent as shape Reply refreshes room, groups
+  mutation groupGone as shape Reply refreshes groups
   mutation seen as shape Reply refreshes bots
   mutation reacted as shape Reply refreshes chat
   mutation sent as shape Reply refreshes chat then afterSend
@@ -759,6 +791,9 @@ component Bots
   derive lastId = match chat.rows.at(-1) { case some(m) => m.id, case none => "" }
   derive locked = session.passwordRequired and not session.authenticated
   derive query = botQuery.trim().toLowerCase()
+  derive groupError = match groupMade { case some(r) => r.error, case none => "" }
+  derive canMakeGroup = groupName.trim() != "" and groupMembers.length >= 2 and not pending(groupMade)
+  derive roomError = match roomSent { case some(r) => r.error, case none => "" }
   derive roomId = match stack(nav).filter(e => e.name == "group").at(-1) { case some(e) => e.params.id, case none => "" }
   derive qtext = messageQuery.trim().toLowerCase()
   derive shownRows = chat.rows.filter(m => m.kind != "message" or qtext == "" or m.text.toLowerCase().includes(qtext))
@@ -863,6 +898,7 @@ component Bots
 
   action pull
     refresh bots
+    refresh groups
     refresh chat
     if top(nav).name == "chat" and openUnread and not pending(seen)
       send seen = markSeen(slug)
@@ -1034,6 +1070,54 @@ component Bots
   action afterCreate
     if createError == "" and top(nav).name == "create"
       nav = back(nav)
+  action openNewGroup
+    groupName = ""
+    groupAbout = ""
+    groupColor = "brand.default"
+    groupShape = "ball"
+    groupMembers = []
+    nav = push(nav, "/new-group")
+  action editGroupName(v: string)
+    groupName = v
+  action editGroupAbout(v: string)
+    groupAbout = v
+  action pickGroupColour(c: string)
+    groupColor = c
+  action pickGroupShape(s: string)
+    groupShape = s
+  action toggleGroupMember(m: string)
+    groupMembers = groupMembers.includes(m) ? groupMembers.filter(x => x != m) : groupMembers.concat([m])
+  action makeGroup
+    if canMakeGroup
+      send groupMade = createGroup(groupName.trim(), groupAbout.trim(), groupColor, groupShape, groupMembers.join("\n"))
+  action afterGroupMade
+    match groupMade
+      case some(r)
+        if r.ok and r.id != "" and top(nav).name == "newGroup"
+          nav = push(back(nav), path("group", r.id))
+      case none
+  action removeGroup
+    if armedGroup == roomId and roomId != ""
+      send groupGone = deleteGroup(roomId)
+      armedGroup = ""
+      nav = back(nav)
+    else
+      armedGroup = roomId
+  action editRoomText(v: string)
+    roomText = v
+  action mention(m: string)
+    roomText = `${roomText}${(roomText == "" or roomText.endsWith(" ")) ? "" : " "}@${m} `
+    focus("room-composer")
+  action postRoom
+    if roomText.trim() != "" and not pending(roomSent) and roomId != ""
+      send roomSent = sendRoom(roomId, roomText.trim())
+      roomText = ""
+    focus("room-composer")
+  action roomKey(k: string, event: KeyboardEvent)
+    if k == "Enter" and not event.shiftKey and not event.isComposing
+      preventDefault()
+      if not event.repeat
+        postRoom()
   action edit(v: string)
     drafts = drafts.filter(d => not d.startsWith(`${slug}\t`)).concat([`${slug}\t${v}`])
   action pickFiles
@@ -1286,6 +1370,25 @@ component Bots
                             text b.name flex=1 color="ink.muted"
                             if showUnread(b.unread, slug == b.slug, b.hidden)
                               column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label="Unread" testId=`unread-${b.slug}`
+                  if query == ""
+                    text "Groups" class=SectionLabel testId="groups-label"
+                    for g in groups key=g.id
+                      link class=ConversationLink href=path("group", g.id) testId=`group-${g.id}` background-color=(roomId == g.id ? "surface.raised" : "transparent")
+                        row gap="space.md" align-items="center"
+                          Avatar(shape=g.shape, color=faceColor(g.color), state="idle", size=44, still=true, presence="")
+                          column gap="2px" flex=1 min-width=0
+                            row gap="space.sm" align-items="baseline"
+                              text g.title font-weight=600 flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=`group-title-${g.id}`
+                              text g.time font="-exact-footnote" color="ink.faint"
+                            text (g.line != "" ? g.line : g.description) color="ink.muted" font="-exact-footnote" overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                    button class=ConversationLink appearance="none" press=openNewGroup testId="new-group" disabled=(bots.length < 2)
+                      row gap="space.md" align-items="center"
+                        column class=Disc width=44 height=44 color="ink.muted"
+                          Glyph(name="add", size=18)
+                        column gap="2px" flex=1 min-width=0
+                          text "New group" font-weight=500 color="ink.muted"
+                          if bots.length < 2
+                            text "Needs two Bots" font="-exact-footnote" color="ink.faint"
               column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
                 link class=ConversationLink href="/vault" aria-label="Vault" testId="sidebar-vault" padding="space.xs space.md"
                   row align-items="center" gap="space.md"
@@ -1515,23 +1618,71 @@ component Bots
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
                 BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease)
           else if e.name == "group"
-            column class=Screen navigationKey=`${e.id}` position="absolute" inset=0
-              header class=PageHeader
-                text (room.title != "" ? room.title : "Room") role="heading" aria-level=1 class=PageTitle flex=1 testId="room-title"
+            column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0
+              header class=PageHeader testId="room-header"
+                button id="back" class=IconControl appearance="none" press=back aria-label="Back" title="Back" display=(wide ? "none" : "flex")
+                  column rotate="180deg"
+                    Glyph(name="chevron", size=20)
+                if room.title != ""
+                  Face(shape=room.shape, color=faceColor(room.color), state="idle", size=36, still=true)
+                column flex=1 min-width=0 gap="2px"
+                  text (room.title != "" ? room.title : "Group") role="heading" aria-level=1 class=PageTitle overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="room-title"
+                  if room.description != ""
+                    text room.description color="ink.muted" font="-exact-footnote" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="room-about"
+                button class=TextControl appearance="none" press=removeGroup color=(armedGroup == roomId ? "-exact-system-red" : "ink.muted") testId="group-delete"
+                  text (armedGroup == roomId ? "Tap again to delete" : "Delete")
               if failed(room)
-                text "Can’t load this room. Check that hbots is running, then try again." color="-exact-system-red" padding="space.lg" testId="room-error"
+                EmptyState(symbol="symbol:alert", title="Can’t load this group", message="Check that hbots is running, then try again.")
+                  button press=pull testId="room-retry"
+                    text "Try again"
               else
-                column flex=1 min-height=0 padding="space.lg" gap="space.lg" max-width="46rem" width="100%" align-self="center" box-sizing="border-box"
+                row gap="space.sm" padding="space.sm space.lg" overflow-x="auto" flex-shrink=0 testId="room-members"
                   for m in room.members key=m.slug
-                    row gap="space.md" align-items="center" min-height=52
-                      Avatar(shape="ball", color="teal", state=m.state, size=40, still=(m.state != "working"), presence="")
-                      column gap="2px" flex=1 min-width=0
-                        text m.name font-weight=600 testId=`member-${m.slug}-name`
-                        text m.line color="ink.muted" font="-exact-footnote" testId=`member-${m.slug}-state`
-                  for msg in room.messages key=msg.id
-                    row gap="space.sm" align-items="center" min-height=44
-                      text msg.name font-weight=600
-                      text msg.text flex=1 min-width=0
+                    row gap="space.sm" align-items="center" padding="4px space.md 4px 4px" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" flex-shrink=0
+                      Avatar(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state=m.state, size=28, still=(m.state != "working"), presence="")
+                      column
+                        text m.name font="-exact-footnote" font-weight=600 testId=`member-${m.slug}-name`
+                        text m.line color="ink.muted" font="-exact-caption2" testId=`member-${m.slug}-state`
+                if room.messages.length == 0
+                  column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="room-empty"
+                    Face(shape=room.shape, color=faceColor(room.color), state="idle", size=72, still=false)
+                    text "Start the conversation" class=HeroTitle text-align="center"
+                    text "Everyone hears a plain message. Write @name to wake just one Bot." color="ink.muted" text-align="center" max-width="24rem"
+                else
+                  list id="room-log" appearance="none" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" flex=1 min-height=0 padding="space.sm space.lg" virtualized=true scroll-start="end" scrollFollowEnd=true testId="room-log"
+                    for msg in room.messages key=msg.id
+                      row justify-content=(msg.from == "user" ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="2px 0" testId=`room-msg-${msg.id}`
+                        if msg.from != "user"
+                          Face(shape=shapeOf(bots, msg.from), color=faceColor(colorOf(bots, msg.from)), state="idle", size=28, still=true)
+                        column gap="2px" max-width="82%" align-items=(msg.from == "user" ? "flex-end" : "flex-start")
+                          if msg.from != "user"
+                            text msg.name font="-exact-footnote" font-weight=600 color="ink.muted" testId=`room-from-${msg.id}`
+                          if msg.from == "user"
+                            text msg.text class=Bubble testId=`room-text-${msg.id}`
+                              background-color="brand.default"
+                              color="ink.dark"
+                              border-radius="radius.lg"
+                              border-bottom-right-radius="radius.sm"
+                          else
+                            text msg.text markup="markdown" class=Bubble white-space="normal" testId=`room-text-${msg.id}`
+                              background-color="surface.bubble"
+                              color="-exact-label"
+                              border-radius="radius.lg"
+                              border-bottom-left-radius="radius.sm"
+                column width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.sm" flex-shrink=0
+                  if roomError != "" and not pending(roomSent)
+                    text roomError color="-exact-system-red" font="-exact-footnote" testId="room-send-error"
+                  row gap="space.xs" flex-wrap="wrap" testId="mention-chips"
+                    for m in room.members key=m.slug
+                      button appearance="none" press=mention(m.slug) aria-label=`Mention ${m.name}` title=`Mention ${m.name}` testId=`mention-${m.slug}` min-height=32 padding="0 space.md 0 4px" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes(`@${m.slug}`) ? "surface.soft" : "surface.card") color="-exact-label"
+                        row gap="space.xs" align-items="center"
+                          Avatar(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state="idle", size=22, still=true, presence="")
+                          text `@${m.slug}` font="-exact-footnote" font-weight=500
+                  row align-items="flex-end" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
+                    textarea id="room-composer" value=roomText input=editRoomText key=roomKey outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(room.title != "" ? `Message ${room.title}` : "Write a message…") aria-label="Message the group" testId="room-composer" flex=1 min-width=0 padding="space.sm space.sm" border="none" background-color="transparent" color="-exact-label"
+                    button class=SendControl appearance="none" press=postRoom disabled=(roomText.trim() == "" or pending(roomSent)) margin="2px 0" retainFocus=true aria-label="Send" testId="room-send"
+                      Glyph(name="send", size=18)
+                  text (roomText.includes("@") ? "Only the Bots you mention are woken." : "No @mention: the Bot that spoke last answers, or everyone at first.") color="ink.muted" font="-exact-footnote" testId="room-hint"
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader
@@ -1636,12 +1787,55 @@ component Bots
           else if e.name == "vaultEdit"
             for l in vault.filter(x => x.id == e.params.id) key=l.id
               LoginSheet(route=e.id, item=l, revealedFor=revealedFor, revealedText=revealedText, error=loginError, save=doCommitLogin, reveal=doReveal, hide=doHideReveal, drop=doDropLogin, cancel=doCloseLogin)
+          else if e.name == "newGroup"
+            column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="group-form" position="absolute" inset=0
+              header class=PageHeader
+                button id="back" class=TextControl appearance="none" press=back testId="group-cancel"
+                  text "Cancel"
+                text "New group" role="heading" aria-level=1 class=PageTitle flex=1
+                button buttonStyle="filled" press=makeGroup disabled=(not canMakeGroup) testId="group-create"
+                  text (pending(groupMade) ? "Creating…" : "Create group")
+              scroll id="group-form" flex=1 min-height=0
+                column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.lg" gap="space.lg"
+                  column align-items="center" gap="space.md"
+                    Avatar(shape=groupShape, color=faceColor(groupColor), state="idle", size=96, still=false, presence="")
+                    row gap="space.xs" flex-wrap="wrap" justify-content="center"
+                      for c in pickerColours() key=c
+                        button class=SwatchControl press=pickGroupColour(c) appearance="none" aria-label=`Colour ${faceColor(c)}` aria-pressed=(groupColor == c) testId=`group-colour-${c}` width=36 height=36 padding=0
+                          column width=26 height=26 box-sizing="border-box" margin="space.xs" border-radius="radius.full" background-color=c border=(groupColor == c ? "3px solid AccentColor" : "3px solid transparent")
+                    row gap="space.xs" flex-wrap="wrap" justify-content="center"
+                      for s in shapeNames() key=s
+                        button class=SwatchControl press=pickGroupShape(s) appearance="none" aria-label=`Shape ${s}` aria-pressed=(groupShape == s) testId=`group-shape-${s}` width=44 height=44 padding=0 border-radius="radius.md" background-color=(groupShape == s ? "surface.raised" : "transparent")
+                          Avatar(shape=s, color=faceColor(groupColor), state="idle", size=30, still=true, presence="")
+                  column gap="space.sm"
+                    text "Name" font="-exact-subheadline" font-weight=600
+                    input appearance="none" class=Field value=groupName input=editGroupName submit=makeGroup placeholder="What is this group for?" aria-label="Group name" padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-name"
+                  column gap="space.sm"
+                    text "Description" font="-exact-subheadline" font-weight=600
+                    input appearance="none" class=Field value=groupAbout input=editGroupAbout placeholder="Optional. What the group works on." aria-label="Description" padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-about"
+                  column gap="space.sm"
+                    row align-items="baseline" gap="space.sm"
+                      text "Bots" font="-exact-subheadline" font-weight=600 flex=1
+                      text (groupMembers.length < 2 ? `Pick at least two (${groupMembers.length} so far)` : `${groupMembers.length} picked`) color="ink.muted" font="-exact-footnote" testId="group-count"
+                    column gap="space.xs"
+                      for b in bots key=b.slug
+                        button appearance="none" press=toggleGroupMember(b.slug) role="checkbox" aria-checked=groupMembers.includes(b.slug) aria-label=b.name testId=`pick-bot-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border=(groupMembers.includes(b.slug) ? "2px solid AccentColor" : "2px solid surface.line") border-radius="radius.md" background-color="surface.card" color="-exact-label"
+                          row gap="space.md" align-items="center" width="100%"
+                            Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=36, still=true, presence="")
+                            text b.name font-weight=500 flex=1 min-width=0 text-align="left"
+                            column width=24 height=24 align-items="center" justify-content="center" border-radius="radius.full" background-color=(groupMembers.includes(b.slug) ? "AccentColor" : "transparent") border=(groupMembers.includes(b.slug) ? "none" : "2px solid surface.line") color="ink.dark"
+                              if groupMembers.includes(b.slug)
+                                Glyph(name="check", size=14)
+                  if groupError != "" and not pending(groupMade)
+                    text groupError color="-exact-system-red" testId="group-error"
           else
             column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="new-form" position="absolute" inset=0
               header class=PageHeader
-                button class=IconControl appearance="none" press=back aria-label="Cancel" title="Cancel" testId="new-cancel"
-                  Glyph(name="close", size=20)
+                button id="back" class=TextControl appearance="none" press=back testId="new-cancel"
+                  text "Cancel"
                 text "New Bot" role="heading" aria-level=1 class=PageTitle flex=1
+                button buttonStyle="filled" press=create disabled=(newName.trim() == "" or pending(created)) testId="create"
+                  text (pending(created) ? "Creating…" : "Get started")
               scroll id="new-form" flex=1 min-height=0
                 column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.lg" gap="space.lg"
                   column align-items="center" gap="space.md"
@@ -1659,9 +1853,6 @@ component Bots
                     input appearance="none" class=Field value=newName input=editName submit=create placeholder="What should we call your Bot?" aria-label="Name" padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-name"
                   if createError != "" and not pending(created)
                     text createError color="-exact-system-red" testId="create-error"
-                  row justify-content="center"
-                    button class=PrimaryButton buttonStyle="filled" press=create disabled=(newName.trim() == "" or pending(created)) testId="create"
-                      text (pending(created) ? "Creating…" : "Get started")
                   if suggestions.length > 0
                     column gap="space.sm"
                       text "Suggestions" font="-exact-subheadline" font-weight=600 color="ink.muted"

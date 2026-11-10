@@ -377,6 +377,25 @@ const sources: Sources = {
     return reply(r);
   },
   deleteLogin: async ([id], store) => reply(await call(store, `/api/vault/${encodeURIComponent(id)}`, { method: 'DELETE' })),
+  loadGroups: async ([focus, room], store): Promise<Result<'loadGroups'>> => {
+    if (focus === 'fixture' || room === 'fixture') {
+      return [{ id: 'fixture', title: 'Design', description: 'Where Ada and Bea trade drafts', color: 'brand.blue', shape: 'hex', members: ['ada', 'bea'], line: 'Ada: On it', time: '' }];
+    }
+    const body = await read(store, '/api/rooms');
+    return (Array.isArray(body.rooms) ? body.rooms : []).map((g: any) => ({
+      id: String(g.id), title: String(g.title ?? ''), description: String(g.description ?? ''),
+      color: String(g.color ?? 'brand.default'), shape: String(g.shape ?? 'ball'),
+      members: (Array.isArray(g.members) ? g.members : []).map(String),
+      line: g.last ? `${String(g.last.name ?? '')}: ${String(g.last.text ?? '')}`.slice(0, 120) : '',
+      time: when(g.last?.at, lastNow),
+    })).reverse();
+  },
+  createGroup: async ([title, description, color, shape, members], store): Promise<Result<'createGroup'>> => {
+    const r = await call(store, '/api/rooms', { method: 'POST', body: JSON.stringify({ title, description, color, shape, members: members === '' ? [] : members.split('\n') }) });
+    return r.ok ? { ok: true, id: String(r.body.id ?? ''), error: '' } : { ok: false, id: '', error: r.error };
+  },
+  sendRoom: async ([id, text], store) => reply(await call(store, `/api/rooms/${encodeURIComponent(id)}/messages`, { method: 'POST', body: JSON.stringify({ text }) })),
+  deleteGroup: async ([id], store) => reply(await call(store, `/api/rooms/${encodeURIComponent(id)}`, { method: 'DELETE' })),
   createBot: async ([name, color, shape, firstMessage], store) => reply(await call(store, '/api/bots', { method: 'POST', body: JSON.stringify({ name, color, shape, ...(firstMessage !== '' ? { firstMessage } : {}) }) })),
   loadProviders: async (_args, store): Promise<Result<'loadProviders'>> => {
     const p = await call(store, '/api/providers');
@@ -597,17 +616,17 @@ const sources: Sources = {
     method: 'POST', body: JSON.stringify({ tabId, action }),
   })),
   loadRoom: async ([id], store): Promise<Result<'loadRoom'>> => {
-    if (id === '') return { id: '', title: '', members: [], messages: [] };
+    if (id === '') return { id: '', title: '', description: '', color: 'brand.default', shape: 'ball', members: [], messages: [] };
     if (id === 'fixture') {
       return {
-        id: 'fixture', title: 'Design',
+        id: 'fixture', title: 'Design', description: 'Where Ada and Bea trade drafts', color: 'brand.blue', shape: 'hex',
         members: [
           { slug: 'ada', name: 'Ada', line: 'Working', state: 'working', ready: true, working: true },
           { slug: 'bea', name: 'Bea', line: 'Getting set up…', state: 'asleep', ready: false, working: false },
         ],
         messages: [
-          { id: 'r1', name: 'You', text: 'Hello' },
-          { id: 'r2', name: 'Ada', text: 'On it' },
+          { id: 'r1', name: 'You', text: 'Hello', from: 'user' },
+          { id: 'r2', name: 'Ada', text: 'On it', from: 'ada' },
         ],
       };
     }
@@ -616,12 +635,13 @@ const sources: Sources = {
     const messages = Array.isArray(body.messages) ? body.messages : [];
     return {
       id: String(body.id ?? id),
-      title: String(body.title ?? ''),
+      title: String(body.title ?? ''), description: String(body.description ?? ''),
+      color: String(body.color ?? 'brand.default'), shape: String(body.shape ?? 'ball'),
       members: members.map((m: any) => ({
         slug: String(m.slug ?? ''), name: String(m.name ?? ''), line: String(m.line ?? ''),
         state: String(m.state ?? 'idle'), ready: m.ready === true, working: m.working === true,
       })),
-      messages: messages.map((m: any) => ({ id: String(m.id ?? ''), name: String(m.name ?? ''), text: String(m.text ?? '') })),
+      messages: messages.map((m: any) => ({ id: String(m.id ?? ''), name: String(m.name ?? ''), text: String(m.text ?? ''), from: String(m.from ?? '') })),
     };
   },
 };
