@@ -13,6 +13,11 @@
   --hbots-success: light-dark(#007a45, #2fdc8f);
   --hbots-warning: light-dark(#8a5a00, #ffbf5c);
   --hbots-info: light-dark(#0a66d6, #5aa9ff);
+  --hbots-surface-canvas: light-dark(#fcfcfd, #17171b);
+  --hbots-surface-card: light-dark(#ffffff, #212126);
+  --hbots-surface-line: light-dark(#e3e5e7, #333338);
+  --hbots-surface-sidebar: light-dark(#f3f4f5, #1d1d22);
+  --hbots-surface-soft: light-dark(#e7f3ef, #213b35);
   --hbots-avatar-black: #000000;
   --hbots-avatar-white: #f2f2f0;
   --hbots-avatar-brown: #936439;

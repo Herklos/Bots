@@ -1,17 +1,20 @@
-// The screens that need no gateway: their empty and failure states, and what a sheet asks before it saves.
-// The gateway is not running in these tests, so every read fails and each screen says so.
-
-test "Settings opens with its name, appearance, Projects beta and password"
+// Navigation reflects the features available today. No live gateway is used.
+test "Settings owns the Vault and does not expose Projects"
+  expect tree missing "open-vault"
+  expect tree missing "open-projects"
   tap "open-settings"
   clock data
   expect tree has "user-name"
-  expect tree has "beta-projects"
+  expect tree missing "beta-projects"
+  expect tree has "open-vault"
   expect tree has "new-password"
   expect disabled "save-password"
   type "new-password" "a-password"
   expect enabled "save-password"
 
-test "the Vault says it cannot open without a gateway, and a new login needs a title or website"
+test "a login is reached through Settings and needs a title or website"
+  tap "open-settings"
+  clock data
   tap "open-vault"
   clock data
   expect tree has "new-login"
@@ -21,13 +24,16 @@ test "the Vault says it cannot open without a gateway, and a new login needs a t
   expect tree missing "reveal-password"
   type "login-title" "Mail"
   expect enabled "login-save"
+  back
+  back
+  expect tree has "user-name"
+  expect tree has "open-vault"
 
-test "Projects is off without the beta, and a new item needs a title"
-  tap "open-projects"
-  clock data
-  expect tree has "open-beta"
-  tap "new-project"
+test "creating a Bot works on a narrow screen"
+  size 340x740
+  tap "new-bot"
   clock settle
-  expect disabled "project-save"
-  type "project-title" "Ship it"
-  expect enabled "project-save"
+  expect disabled "create"
+  type "new-name" "Milo"
+  tap "colour-brand.violet"
+  expect enabled "create"

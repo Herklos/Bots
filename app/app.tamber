@@ -25,6 +25,13 @@ theme
   // The ink on an avatar colour: white or Night, by its contrast.
   ink.light = #ffffff  scheme=fixed
   ink.dark = #16141f  scheme=fixed
+  // Semantic surfaces and secondary ink, shared by every screen.
+  surface.canvas = light-dark(#fcfcfd, #17171b)
+  surface.card = light-dark(#ffffff, #212126)
+  surface.line = light-dark(#e3e5e7, #333338)
+  surface.sidebar = light-dark(#f3f4f5, #1d1d22)
+  surface.soft = light-dark(#e7f3ef, #213b35)
+  ink.muted = light-dark(#5d5a6e, #a8a5b8)
   // Spacing and corners.
   space.xs = 4px
   space.sm = 8px

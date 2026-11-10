@@ -47,3 +47,26 @@ The build reports two warnings that are deliberate:
 
 - `tamber-unreachable`: the tint is set for the whole app. The platform's own controls on iOS (disabled prominent buttons), macOS (switches, spinners, selects) and the web and Linux (disabled prominent buttons, selects) keep their own look. The app does not style those controls differently yet.
 - `lower-colour-one-scheme` on the avatar background: a Bot's colour is user data, so it cannot be a role. The brand's default is a fixed colour in both schemes, by design.
+
+## App surfaces
+
+The authored screen uses `surface.canvas` for the quiet page, `surface.card` for
+headers and received messages, `surface.soft` for sent messages, and `surface.line`
+for dividers and the composer. `surface.sidebar` separates navigation from the conversation. Each has light and dark values in `tokens.json`.
+`ink.muted` carries supporting text on these surfaces. The design crate checks
+primary and muted text against the canvas, card and soft surface at 4.5:1.
+
+The inbox becomes a 288-point sidebar on wide windows, with a welcome panel until
+a conversation opens. Conversation text is bounded to 46rem and forms to 44rem.
+On phones, the same routes push with the platform’s Back action. The colour picker
+wraps to keep every swatch available on narrow screens.
+
+Controls use the rounded line glyphs in `app/glyph.contract` at 20 points, with
+44-point targets. Settings and Bot details use text labels. The inbox has no
+utility buttons or grouped cards; Vault lives under Settings and Projects is
+not exposed. Headers share a minimum height and the same horizontal insets.
+
+Threebot's source and demo informed the second pass: short conversations sit
+above the composer, long conversations retain virtualized scrolling, and Bot
+creation is a focused sheet. hbots keeps its own Face and Tide palette. Source:
+https://github.com/RokaSwK/threebot and https://bot.swk.tools/.

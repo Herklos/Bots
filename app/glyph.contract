@@ -1,0 +1,33 @@
+// A single rounded, 1.7-point line family on every host. Decorative: the
+// containing control owns the accessible name and the 44-point target.
+component GlyphGallery
+  view
+    row gap=16
+      for name in ["add", "attach", "send", "stop", "lock", "chevron", "trash", "close", "check"] key=name
+        Glyph(name=name, size=20)
+
+component Glyph
+  props
+    name: string
+    size: number
+  view
+    svg width=size height=size viewBox="0 0 24 24" fill="none" stroke="currentcolor" stroke-width=1.7 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+      if name == "add"
+        path d="M12 5v14M5 12h14"
+      else if name == "attach"
+        path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"
+      else if name == "send"
+        path d="M12 19V5M6 11l6-6 6 6"
+      else if name == "stop"
+        rect x=6 y=6 width=12 height=12 rx=2 fill="currentcolor" stroke="none"
+      else if name == "lock"
+        rect x=5 y=10 width=14 height=11 rx=2
+        path d="M8 10V7a4 4 0 0 1 8 0v3"
+      else if name == "chevron"
+        path d="M9 5l7 7-7 7"
+      else if name == "trash"
+        path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"
+      else if name == "close"
+        path d="M6 6l12 12M6 18L18 6"
+      else
+        path d="M5 12l4 4L19 6"

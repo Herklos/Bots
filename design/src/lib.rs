@@ -25,6 +25,7 @@ pub struct Tokens {
     pub brand: Brand,
     pub color: Colors,
     pub avatar: Avatar,
+    pub surface: BTreeMap<String, Pair>,
     pub space: BTreeMap<String, u32>,
     pub radius: BTreeMap<String, u32>,
     pub size: BTreeMap<String, u32>,
@@ -219,6 +220,11 @@ pub fn tamber() -> String {
     );
     let _ = writeln!(s, "  ink.light = {}  scheme=fixed", c.white);
     let _ = writeln!(s, "  ink.dark = {}  scheme=fixed", c.night);
+    let _ = writeln!(s, "  // Semantic surfaces and secondary ink, shared by every screen.");
+    for (name, pair) in &t.surface {
+        let _ = writeln!(s, "  surface.{name} = light-dark({}, {})", pair.light, pair.dark);
+    }
+    let _ = writeln!(s, "  ink.muted = light-dark({}, {})", c.muted.light, c.muted.dark);
     let _ = writeln!(s, "  // Spacing and corners.");
     for k in ["xs", "sm", "md", "lg", "xl"] {
         let _ = writeln!(s, "  space.{k} = {}px", t.space[k]);
@@ -365,6 +371,9 @@ pub fn css() -> String {
         ("info", &c.info),
     ] {
         let _ = writeln!(s, "  --hbots-{k}: light-dark({}, {});", p.light, p.dark);
+    }
+    for (name, pair) in &t.surface {
+        let _ = writeln!(s, "  --hbots-surface-{name}: light-dark({}, {});", pair.light, pair.dark);
     }
     for (name, hex) in t.avatar.all() {
         let _ = writeln!(s, "  --hbots-avatar-{name}: {hex};");
@@ -618,6 +627,18 @@ mod tests {
         at_least("ink on paper", &c.night, &c.paper, 7.0);
         at_least("mist as an outline", &c.mist, &c.paper, 3.0);
         at_least("mist as an outline", &c.mist, &c.night, 3.0);
+    }
+
+    #[test]
+    fn text_reads_on_authored_surfaces() {
+        let t = tokens();
+        for name in ["canvas", "card", "soft", "sidebar"] {
+            let surface = &t.surface[name];
+            at_least(name, &t.color.night, &surface.light, 4.5);
+            at_least(name, &t.color.white, &surface.dark, 4.5);
+            at_least(name, &t.color.muted.light, &surface.light, 4.5);
+            at_least(name, &t.color.muted.dark, &surface.dark, 4.5);
+        }
     }
 
     #[test]

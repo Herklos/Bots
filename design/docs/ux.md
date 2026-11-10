@@ -15,15 +15,12 @@ How hbots feels and how a person moves through it. The screens are in `app/app.c
 ```
 Inbox ──┬── Bot chat ──── Bot details
         ├── New Bot
-        ├── Vault ──┬── Add login
-        │           └── Edit login
-        ├── Projects (beta) ──┬── Add project
-        │                     └── Edit project
-        └── Settings
+        └── Settings ──── Vault ──┬── Add login
+                                 └── Edit login
 ```
 
 - The inbox is the root. On a phone it is a list; on a wide window it is a sidebar beside the chat.
-- Back is always the platform's back. Settings and Vault are reached from the inbox, not from inside a chat.
+- Back is always the platform's back. Settings is reached from the inbox footer; Vault is reached only from Settings. Projects is deferred and has no entry point.
 - A Bot in the Hidden section stays reachable from the inbox's Hidden row.
 
 ## User flows
@@ -49,16 +46,14 @@ Inbox ──┬── Bot chat ──── Bot details
 
 ### 4. Save and use a login
 
-1. **Vault** → **Add a Login**. A login needs a website or a title; **Save** is disabled until one is filled.
+1. **Settings** → **Vault** → **Add a Login**. A login needs a website or a title; **Save** is disabled until one is filled.
 2. The list shows the title and username. The password shows as ••••••••.
 3. **Reveal** shows the password for that login only; it is not kept on screen after the person leaves.
 4. A Bot can fill a login into a browser tab without reading the password.
 
-### 5. Projects (beta)
+### 5. Projects (deferred)
 
-1. Settings → Projects beta turns the board on. Off, the Projects screen says **Projects Are Off** and points to Settings.
-2. **Add a Project** needs a title. Kind, status, area and notes are optional.
-3. The board is shared with the Bots, which can read and write it.
+Projects has no navigation entry or beta toggle while the feature is deferred.
 
 ### 6. Remote access
 
@@ -68,7 +63,7 @@ Inbox ──┬── Bot chat ──── Bot details
 
 ### 7. Settings
 
-- Name, Appearance (System, Light, Dark), Projects beta, Remote access.
+- Name, Appearance (System, Light, Dark), Vault, Remote access, Connected apps.
 - Changing Appearance applies at once, with no Save.
 
 ## Empty and failure states
@@ -81,8 +76,6 @@ Each has a title, a message that says what to do, and a symbol.
 | Vault, no logins | No Logins Yet | Save a login here. Its password stays in the Vault and shows only when you press Reveal. |
 | Vault, gateway down | Can’t Open the Vault | Check that `hbots` is running, then try again. |
 | Any screen, gateway down | Can’t Reach the Gateway | Start the `hbots` gateway on this machine or on your server, then try again. |
-| Projects, beta off | Projects Are Off | Turn on the Projects beta in Settings, then try again. |
-| Projects, empty | No Projects Yet | Track projects, tasks, machines, services, repos, notes and links on one board. |
 
 Errors are words in red next to the field or action that failed (`-exact-system-red`), never a modal, unless the person must confirm something.
 
