@@ -800,6 +800,8 @@ component Bots
   state voiceError = ""
   state reactFor = ""
   state messageMenu = ""
+  // One inbox row menu. The menu itself lives on the row, so it leaves with that row.
+  state rowMenu = ""
   state replyTo = ""
   state replyQuote = ""
   state childThread = ""
@@ -1061,6 +1063,7 @@ component Bots
     childThread = ""
     panelPage = "root"
     computerTab = ""
+    rowMenu = ""
     nav = top(nav).name == "chat" and url.startsWith("/bot/") ? replace(nav, url) : go(nav, url)
   action back
     computerEnlarged = false
@@ -1357,6 +1360,20 @@ component Bots
     messageMenu = id
   action closeMessageMenu()
     messageMenu = ""
+  action openRowMenu(key: string)
+    rowMenu = key
+  action closeRowMenu()
+    rowMenu = ""
+  // Edit from the row menu opens the same page as the panel's edit control.
+  action editBotFromRow(bslug: string)
+    open(path("chat", bslug))
+    panelTab = "details"
+    panelPage = "edit"
+    panelOpen = true
+  action editGroupFromRow(id: string)
+    open(path("group", id))
+    groupPanel = true
+    groupPage = "edit"
   action filesDropped(e: DragEvent)
     if slug != "" and not pending(attached) and e.files.length > 0
       match e.files.at(0)
@@ -1662,20 +1679,7 @@ component Bots
                 scroll id="bots-list" flex=1 min-height=0
                   column padding="0 space.sm" gap="2px"
                     for c in convos key=c.key
-                      link class=ConversationLink href=(c.kind == "group" ? path("group", c.id) : path("chat", c.id)) testId=(c.kind == "group" ? `group-${c.id}` : `bot-${c.id}`) background-color=((c.kind == "group" ? roomId == c.id : slug == c.id) ? "surface.raised" : "transparent")
-                        row gap="space.md" align-items="center" flex=1 min-width=0
-                          if c.kind == "group"
-                            Faces(faces=c.faces, size=44, tuck=-18)
-                          else
-                            Avatar(shape=c.shape, color=faceColor(c.color), state=(c.ready ? (c.working ? "working" : "idle") : "asleep"), size=44, still=(not c.working), presence=(c.working ? "online" : ""))
-                          column gap="2px" flex=1 min-width=0
-                            row gap="space.sm" align-items="baseline"
-                              text c.name font-weight=(c.unread ? 700 : 600) flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=(c.kind == "group" ? `group-title-${c.id}` : `bot-title-${c.id}`)
-                              text c.time font="-exact-footnote" color="ink.faint"
-                            row gap="space.sm" align-items="center"
-                              text c.line color=(c.unread ? "-exact-label" : "ink.muted") font="-exact-footnote" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
-                              if showUnread(c.unread, slug == c.id, false)
-                                column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${c.id}`
+                      InboxRow(row=c, bots=bots, current=(c.kind == "group" ? roomId == c.id : slug == c.id), menuOpen=(rowMenu == c.key), openMenu=openRowMenu, closeMenu=closeRowMenu, pin=doPin, hide=doHide, makeMain=doMain, editBot=editBotFromRow, editGroup=editGroupFromRow)
                     if hiddenBots.length > 0
                       button class=ConversationLink appearance="none" press=toggleHidden aria-expanded=hiddenOpen testId="hidden-toggle"
                         row gap="space.sm" align-items="center" flex=1 min-width=0
@@ -2126,6 +2130,83 @@ component Bots
           text toast font="-exact-subheadline" font-weight=500
 
 // A group's face is its members, at most three, overlapped. It has no colour or shape of its own.
+
+// One inbox row, a Bot or a group. A normal click still opens the chat or the group.
+// A secondary click or a long press (both a contextmenu) opens one menu on this row.
+// A Bot can be pinned, hidden, edited, or made main, with the actions the panel already uses.
+// A group can only be edited. The menu stays on the row, so it leaves when the row does or when a row is chosen.
+component InboxRow
+  props
+    row: Convo
+    bots: Bot[]
+    current: bool
+    menuOpen: bool
+    openMenu: action
+    closeMenu: action
+    pin: action
+    hide: action
+    makeMain: action
+    editBot: action
+    editGroup: action
+  derive mine = bots.filter(b => row.kind == "bot" and b.slug == row.id)
+  derive pinned = mine.filter(b => b.pinned).length > 0
+  action openFromSecondary()
+    preventDefault()
+    openMenu(row.key)
+  action choosePin()
+    closeMenu()
+    match first(mine)
+      case some(b)
+        pin(b.slug, not b.pinned)
+      case none
+  action chooseHide()
+    closeMenu()
+    match first(mine)
+      case some(b)
+        hide(b.slug, true)
+      case none
+  action chooseMain()
+    closeMenu()
+    match first(mine)
+      case some(b)
+        makeMain(b.slug)
+      case none
+  action chooseEdit()
+    closeMenu()
+    if row.kind == "group"
+      editGroup(row.id)
+    else
+      editBot(row.id)
+  view
+    column
+      link class=ConversationLink href=(row.kind == "group" ? path("group", row.id) : path("chat", row.id)) contextmenu=openFromSecondary testId=(row.kind == "group" ? `group-${row.id}` : `bot-${row.id}`) background-color=(current ? "surface.raised" : "transparent")
+        row gap="space.md" align-items="center" flex=1 min-width=0
+          if row.kind == "group"
+            Faces(faces=row.faces, size=44, tuck=-18)
+          else
+            Avatar(shape=row.shape, color=faceColor(row.color), state=(row.ready ? (row.working ? "working" : "idle") : "asleep"), size=44, still=(not row.working), presence=(row.working ? "online" : ""))
+          column gap="2px" flex=1 min-width=0
+            row gap="space.sm" align-items="baseline"
+              text row.name font-weight=(row.unread ? 700 : 600) flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=(row.kind == "group" ? `group-title-${row.id}` : `bot-title-${row.id}`)
+              text row.time font="-exact-footnote" color="ink.faint"
+            row gap="space.sm" align-items="center"
+              text row.line color=(row.unread ? "-exact-label" : "ink.muted") font="-exact-footnote" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+              if showUnread(row.unread, current, false)
+                column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${row.id}`
+      if menuOpen and row.kind == "group"
+        column role="menu" aria-label=row.name gap="2px" padding="space.xs" border-radius="radius.md" background-color="surface.card" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="row-menu"
+          button class=TextControl appearance="none" press=chooseEdit aria-label=t("group.edit") width="100%" justify-content="flex-start"
+            text t("group.edit") testId=`menu-edit-${row.id}`
+      if menuOpen and row.kind == "bot"
+        column role="menu" aria-label=row.name gap="2px" padding="space.xs" border-radius="radius.md" background-color="surface.card" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="row-menu"
+          button class=TextControl appearance="none" press=choosePin aria-label=(pinned ? t("edit.unpin") : t("edit.pin")) width="100%" justify-content="flex-start"
+            text (pinned ? t("edit.unpin") : t("edit.pin")) testId=`menu-pin-${row.id}`
+          button class=TextControl appearance="none" press=chooseHide aria-label=t("edit.hide") width="100%" justify-content="flex-start"
+            text t("edit.hide") testId=`menu-hide-${row.id}`
+          button class=TextControl appearance="none" press=chooseEdit aria-label=t("panel.edit") width="100%" justify-content="flex-start"
+            text t("panel.edit") testId=`menu-edit-${row.id}`
+          button class=TextControl appearance="none" press=chooseMain aria-label=t("edit.makeMain") width="100%" justify-content="flex-start"
+            text t("edit.makeMain") testId=`menu-main-${row.id}`
 
 // One transcript message. Time, reply and pin stay in the tree so the keyboard
 // can focus them. They paint while the pointer is over the message, while a tap
