@@ -227,6 +227,10 @@ style SwatchControl
     box-shadow="0 0 0 2px AccentColor"
 
 style ConversationLink
+  display="flex"
+  align-items="center"
+  width="100%"
+  box-sizing="border-box"
   color="-exact-label"
   text-decoration="none"
   padding="space.md"
@@ -1545,36 +1549,37 @@ component Bots
                         column align-items="center" gap="space.xs" width="100%" min-width=0 max-width="100%"
                           Avatar(shape=b.shape, color=faceColor(b.color), state=(b.ready ? (b.working ? "working" : "idle") : "asleep"), size=64, still=(not b.working), presence=(b.unread ? "unread" : b.working ? "online" : ""))
                           text b.name font="-exact-footnote" font-weight=600 max-width="100%" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" text-align="center"
-                list id="bots-list" appearance="none" flex=1 min-height=0 padding="0 space.sm" gap="2px"
-                  for c in convos key=c.key
-                    link class=ConversationLink href=(c.kind == "group" ? path("group", c.id) : path("chat", c.id)) testId=(c.kind == "group" ? `group-${c.id}` : `bot-${c.id}`) background-color=((c.kind == "group" ? roomId == c.id : slug == c.id) ? "surface.raised" : "transparent")
-                      row gap="space.md" align-items="center"
-                        if c.kind == "group"
-                          Faces(faces=c.faces, size=44, tuck=-18)
-                        else
-                          Avatar(shape=c.shape, color=faceColor(c.color), state=(c.ready ? (c.working ? "working" : "idle") : "asleep"), size=44, still=(not c.working), presence=(c.working ? "online" : ""))
-                        column gap="2px" flex=1 min-width=0
-                          row gap="space.sm" align-items="baseline"
-                            text c.name font-weight=(c.unread ? 700 : 600) flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=(c.kind == "group" ? `group-title-${c.id}` : `bot-title-${c.id}`)
-                            text c.time font="-exact-footnote" color="ink.faint"
-                          row gap="space.sm" align-items="center"
-                            text c.line color=(c.unread ? "-exact-label" : "ink.muted") font="-exact-footnote" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
-                            if showUnread(c.unread, slug == c.id, false)
-                              column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${c.id}`
-                  if hiddenBots.length > 0
-                    button class=ConversationLink appearance="none" press=toggleHidden aria-expanded=hiddenOpen testId="hidden-toggle"
-                      row gap="space.sm" align-items="center"
-                        text t("inbox.hidden", n=hiddenBots.length) font="-exact-footnote" color="ink.muted" flex=1
-                        column color="ink.muted" rotate=(hiddenOpen ? "90deg" : "0deg")
-                          Glyph(name="chevron", size=14)
-                    if hiddenOpen
-                      for b in hiddenBots key=b.slug
-                        button class=ConversationLink appearance="none" press=openHidden(b.slug) testId=`hidden-${b.slug}`
-                          row gap="space.md" align-items="center"
-                            Avatar(shape=b.shape, color=faceColor(b.color), state="asleep", size=32, still=true, presence="")
-                            text b.name flex=1 color="ink.muted"
-                            if showUnread(b.unread, slug == b.slug, b.hidden)
-                              column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${b.slug}`
+                scroll id="bots-list" flex=1 min-height=0
+                  column padding="0 space.sm" gap="2px"
+                    for c in convos key=c.key
+                      link class=ConversationLink href=(c.kind == "group" ? path("group", c.id) : path("chat", c.id)) testId=(c.kind == "group" ? `group-${c.id}` : `bot-${c.id}`) background-color=((c.kind == "group" ? roomId == c.id : slug == c.id) ? "surface.raised" : "transparent")
+                        row gap="space.md" align-items="center" flex=1 min-width=0
+                          if c.kind == "group"
+                            Faces(faces=c.faces, size=44, tuck=-18)
+                          else
+                            Avatar(shape=c.shape, color=faceColor(c.color), state=(c.ready ? (c.working ? "working" : "idle") : "asleep"), size=44, still=(not c.working), presence=(c.working ? "online" : ""))
+                          column gap="2px" flex=1 min-width=0
+                            row gap="space.sm" align-items="baseline"
+                              text c.name font-weight=(c.unread ? 700 : 600) flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=(c.kind == "group" ? `group-title-${c.id}` : `bot-title-${c.id}`)
+                              text c.time font="-exact-footnote" color="ink.faint"
+                            row gap="space.sm" align-items="center"
+                              text c.line color=(c.unread ? "-exact-label" : "ink.muted") font="-exact-footnote" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                              if showUnread(c.unread, slug == c.id, false)
+                                column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${c.id}`
+                    if hiddenBots.length > 0
+                      button class=ConversationLink appearance="none" press=toggleHidden aria-expanded=hiddenOpen testId="hidden-toggle"
+                        row gap="space.sm" align-items="center" flex=1 min-width=0
+                          text t("inbox.hidden", n=hiddenBots.length) font="-exact-footnote" color="ink.muted" flex=1
+                          column color="ink.muted" rotate=(hiddenOpen ? "90deg" : "0deg")
+                            Glyph(name="chevron", size=14)
+                      if hiddenOpen
+                        for b in hiddenBots key=b.slug
+                          button class=ConversationLink appearance="none" press=openHidden(b.slug) testId=`hidden-${b.slug}`
+                            row gap="space.md" align-items="center" flex=1 min-width=0
+                              Avatar(shape=b.shape, color=faceColor(b.color), state="asleep", size=32, still=true, presence="")
+                              text b.name flex=1 color="ink.muted"
+                              if showUnread(b.unread, slug == b.slug, b.hidden)
+                                column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${b.slug}`
               column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
                 link class=ConversationLink href="/vault" aria-label=t("vault.title") testId="sidebar-vault" padding="space.xs space.md"
                   row align-items="center" gap="space.md"
