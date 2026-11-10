@@ -6,6 +6,7 @@
 //! gateway can run against the same home.
 mod access; // T4: Cloudflare Access JWTs.
 mod approvals; // T5: answering a pending request.
+mod apps; // Connected apps and the executor URL.
 mod attachments; // Chat files stored on the Bot.
 mod auth;
 mod bots;
@@ -63,6 +64,7 @@ pub struct AppState {
     pub system: release::System,
     pub icons: icons::Icons,
     pub usage: usage::Usage,
+    pub apps: apps::Apps,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
 }
@@ -196,6 +198,7 @@ async fn main() -> anyhow::Result<()> {
         system: release::System::new(cfg.data_root.clone(), app_dir.clone()),
         icons: icons::Icons::new(cfg.data_root.join("icons")),
         usage: usage::Usage::new(app_dir.join("usage.json")),
+        apps: apps::Apps::new(app_dir.join("apps.json")),
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
         cfg,
@@ -315,6 +318,7 @@ fn build(state: Arc<AppState>, tailscale: bool) -> Router {
         .route("/api/routines/run", post(routines_run))
         .route("/api/icons/{host}", get(icons::get_icon))
         .route("/api/usage", get(usage::get_usage))
+        .route("/api/apps", get(apps::get_apps).put(apps::put_apps))
         .merge(release::routes())
         .route("/t3/{*rest}", any(t3_route))
         .layer(middleware::from_fn_with_state(state.clone(), require_login));
@@ -744,9 +748,12 @@ async fn logout() -> Response {
 // ---------- app API ----------
 
 async fn config_route(State(s): S) -> Json<Value> {
-    Json(
-        json!({ "botsRoot": s.cfg.bots_root, "accessLogout": false, "executorUrl": null, "appUrl": s.cfg.app_url }),
-    )
+    Json(json!({
+        "botsRoot": s.cfg.bots_root,
+        "accessLogout": false,
+        "executorUrl": if s.cfg.executor_url.is_empty() { Value::Null } else { json!(s.cfg.executor_url) },
+        "appUrl": s.cfg.app_url,
+    }))
 }
 
 async fn get_settings(State(s): S) -> Json<Value> {
