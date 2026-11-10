@@ -33,7 +33,7 @@ Tide is 2.2:1 on white, so the app can't use it for text, links or a selected st
 
 ## The avatar palette
 
-Sixteen named colours, the same in the client and the gateway. Each is a `brand.<name>` token in `app/app.tamber` (Tide is `brand.default`); the app stores the plain name and `app/app.ts` maps it to the token. The picker offers six (`teal`, `blue`, `violet`, `pink`, `orange`, `green`). Initials use `ink.light` (white) or `ink.dark` (Night), chosen per colour by `avatarInk()` in `app/app.contract`. The crate checks each choice (minimum 4.3:1). Black on the avatar palette is white in dark mode, so a black Bot still shows.
+Sixteen named colours, the same in the client and the gateway. Each is a `brand.<name>` token in `app/app.tamber` (Tide is `brand.default`); the app stores the plain name and `app/app.ts` maps it to the token. The picker offers ten (`brown`, `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet`, `pink`, `gray`). Initials use `ink.light` (white) or `ink.dark` (Night), chosen per colour by `avatarInk()` in `app/app.contract`. The crate checks each choice (minimum 4.3:1). Black on the avatar palette is white in dark mode, so a black Bot still shows.
 
 ## Light and dark
 
@@ -52,7 +52,7 @@ The build reports two warnings that are deliberate:
 
 The authored screen uses `surface.canvas` for the quiet page, `surface.card` for
 headers and received messages, `surface.soft` for sent messages, and `surface.line`
-for dividers and the composer. `surface.sidebar` separates navigation from the conversation. Each has light and dark values in `tokens.json`.
+for dividers and the composer. `surface.sidebar` separates navigation from the conversation. `surface.bubble` holds a Bot's messages, so they stay visible on the light canvas; `surface.raised` marks the selected tile or row and the composer's plus circle. `ink.faint` carries times and event lines, and reads at 4.5:1 on the canvas, card, sidebar and raised surfaces. Each has light and dark values in `tokens.json`.
 `ink.muted` carries supporting text on these surfaces. The design crate checks
 primary and muted text against the canvas, card and soft surface at 4.5:1.
 

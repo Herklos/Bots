@@ -350,10 +350,25 @@ shape Project
 // fallback is not "nothing counted yet".
 shape Usage
   ok: bool
+  error: string
   messages: number
   attachments: number
   vaultWrites: number
   iconFetches: number
+
+// One Bot's own counts. Token fields come from T3's thread projection.
+// `tokensKnown` is false when that projection did not report usage.
+shape BotUsage
+  ok: bool
+  error: string
+  messages: number
+  attachments: number
+  turns: number
+  inputTokens: number
+  outputTokens: number
+  cachedInputTokens: number
+  cacheCreationTokens: number
+  tokensKnown: bool
 
 shape ModelChoice
   instanceId: string
@@ -362,6 +377,7 @@ shape ModelChoice
 
 shape ModelList
   ok: bool
+  error: string
   current: string
   instanceId: string
   choices: ModelChoice[]
@@ -429,13 +445,16 @@ fn initialsOf(name: string): string = name.trim().split(" ").filter(w => w != ""
 fn botCountLabel(n: number): string = n == 1 ? "1 Bot" : `${n} Bots`
 // Colours come from design/tokens.json: change them there.
 // design:begin colours
-fn pickerColours(): string[] = ["brand.default", "brand.blue", "brand.violet", "brand.pink", "brand.orange", "brand.green"]
+fn pickerColours(): string[] = ["brand.brown", "brand.red", "brand.orange", "brand.amber", "brand.green", "brand.default", "brand.blue", "brand.violet", "brand.pink", "brand.gray"]
 fn avatarInk(c: string): string = c == "brand.black" || c == "brand.brown" || c == "brand.gray" ? "ink.light" : "ink.dark"
 // design:end colours
 fn colorOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.color, case none => "brand.default" }
 fn kindTitle(k: string): string = k == "project" ? "Projects" : k == "task" ? "Tasks" : k == "plan" ? "Plans" : k == "machine" ? "Machines" : k == "service" ? "Services" : k == "repo" ? "Repos" : k == "note" ? "Notes" : "Links"
 fn nText(n: number, one: string, many: string): string = n == 1 ? `1 ${one}` : `${n} ${many}`
 fn usageLine(m: number, a: number, v: number, i: number): string = `${nText(m, "message", "messages")}, ${nText(a, "attachment", "attachments")}, ${nText(v, "vault write", "vault writes")}, and ${nText(i, "icon fetch", "icon fetches")} on this machine.`
+fn tokenLine(turns: number, input: number, output: number): string = `${nText(turns, "turn", "turns")}. ${input} in, ${output} out.`
+fn cacheLine(read: number, wrote: number): string = read == 0 and wrote == 0 ? "" : `${read} read from cache, ${wrote} written to cache.`
+fn botActivity(m: number, a: number): string = m == 0 and a == 0 ? "" : a == 0 ? `${nText(m, "message", "messages")} from here.` : m == 0 ? `${nText(a, "attachment", "attachments")} from here.` : `${nText(m, "message", "messages")} and ${nText(a, "attachment", "attachments")} from here.`
 fn libraryLine(n: number, name: string): string = n == 1 ? `1 thing with ${name}.` : `${n} things with ${name}.`
 fn filterLabel(f: string): string = f == "all" ? "All" : f == "page" ? "Pages" : f == "media" ? "Media" : f == "link" ? "Links" : f == "file" ? "Files" : f == "project" ? "Projects" : f == "note" ? "Notes" : f == "task" ? "Tasks" : f == "plan" ? "Plans" : "More"
 fn shownKind(kind: string, filter: string): bool = filter == "all" or kind == filter or (filter == "more" and (kind == "repo" or kind == "machine" or kind == "service"))
@@ -476,6 +495,7 @@ component Bots
   resource vault = loadVault() as shape Login[] else empty()
   resource board = loadProjects() as shape Project[] else empty()
   resource usage = loadUsage(usageGate) as shape Usage else empty()
+  resource botUsage = loadBotUsage(slug, detailGate) as shape BotUsage else empty()
   resource models = loadModels(slug, detailGate) as shape ModelList else empty()
   resource routines = loadRoutines(slug, detailGate) as shape RoutineList else empty()
   resource lineage = loadLineage(slug, detailGate) as shape Lineage else empty()
@@ -570,11 +590,20 @@ component Bots
         wide = w
         panelOpen = w
   action togglePanel
-    panelOpen = not panelOpen
-    if failed(models)
+    let next = not panelOpen
+    panelOpen = next
+    if next and panelTab == "details"
       refresh models
-    if failed(routines)
       refresh routines
+      refresh lineage
+      refresh botUsage
+  action retryDetails
+    refresh models
+    refresh routines
+    refresh lineage
+    refresh botUsage
+  action retryUsage
+    refresh usage
   action pickPanelTab(tab: string)
     panelTab = tab
   action openHidden(bslug: string)
@@ -592,7 +621,10 @@ component Bots
     if onComputer
       refresh computer
     if onBot and panelOpen and panelTab == "details"
+      refresh models
+      refresh routines
       refresh lineage
+      refresh botUsage
     if top(nav).name == "projects"
       refresh board
   action editPassword(v: string)
@@ -886,7 +918,7 @@ component Bots
                             column gap="space.xs" max-width="82%" align-items=(m.mine ? "flex-end" : "flex-start")
                               if m.text != ""
                                 text m.text class=Bubble testId=`message-${m.id}`
-                                  background-color=(m.mine ? "brand.default" : "surface.card")
+                                  background-color=(m.mine ? "brand.default" : "surface.bubble")
                                   color=(m.mine ? "ink.dark" : "-exact-label")
                                   border-top-left-radius="radius.lg"
                                   border-top-right-radius="radius.lg"
@@ -908,7 +940,7 @@ component Bots
                         else
                           row padding="space.sm space.lg" gap="space.sm" align-items="center" testId="working"
                             Face(shape="ball", color=faceColor(colorOf(bots, e.params.slug)), state="working", size=24, still=false)
-                            text "Working…" class=Bubble background-color="surface.card" color="-exact-secondary-label" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg"
+                            text "Working…" class=Bubble background-color="surface.bubble" color="-exact-secondary-label" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg"
               if sendError != "" and not pending(sent)
                 text sendError color="-exact-system-red" padding="0 space.lg" testId="send-error"
               if attachError != "" and not pending(attached)
@@ -934,7 +966,7 @@ component Bots
                   button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label="Send" testId="send"
                     Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, pickTab=pickPanelTab, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, hide=doHide, makeMain=doMain, drop=doDropBot, go=open, models=models, modelsDown=failed(models), routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), modelError=modelError, routineSaveError=routineSaveError, routineChangeError=routineChangeError, pickModel=doPickModel, addRoutine=doAddRoutine, toggleRoutine=doToggleRoutine, runRoutine=doRunRoutine, dropRoutine=doDropRoutine, library=library, libraryDown=failed(library), itemError=libError, removeError=libRemoveError, connectorSaveError=connectorSaveError, connectorRemoveError=connectorRemoveError, saveItem=doSaveLibrary, dropItem=doDropLibrary, saveConnector=doSaveConnector, dropConnector=doDropConnector, computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease)
+                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, pickTab=pickPanelTab, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, hide=doHide, makeMain=doMain, drop=doDropBot, go=open, models=models, modelsDown=failed(models), routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), modelError=modelError, routineSaveError=routineSaveError, routineChangeError=routineChangeError, pickModel=doPickModel, addRoutine=doAddRoutine, toggleRoutine=doToggleRoutine, runRoutine=doRunRoutine, dropRoutine=doDropRoutine, botUsage=botUsage, usageDown=failed(botUsage), retryDetails=retryDetails, library=library, libraryDown=failed(library), itemError=libError, removeError=libRemoveError, connectorSaveError=connectorSaveError, connectorRemoveError=connectorRemoveError, saveItem=doSaveLibrary, dropItem=doDropLibrary, saveConnector=doSaveConnector, dropConnector=doDropConnector, computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease)
           else if e.name == "library"
             LibraryScreen(route=e.id, slug=e.params.slug, name=nameOf(bots, e.params.slug), color=colorOf(bots, e.params.slug), library=library, down=failed(library), itemError=libError, removeError=libRemoveError, connectorSaveError=connectorSaveError, connectorRemoveError=connectorRemoveError, saveItem=doSaveLibrary, dropItem=doDropLibrary, saveConnector=doSaveConnector, dropConnector=doDropConnector)
           else if e.name == "computer"
@@ -960,8 +992,10 @@ component Bots
                 section
                   header
                     text "This machine"
-                  if failed(usage)
-                    text "Can’t load usage. Check that hbots is running, then try again." color="-exact-system-red" testId="usage-line"
+                  if failed(usage) or usage.error != ""
+                    text (usage.error != "" ? usage.error : "Can’t load usage. Check that hbots is running, then try again.") color="-exact-system-red" testId="usage-line"
+                    button press=retryUsage appearance="none" min-height=44 testId="retry-usage"
+                      text "Try Again" color="AccentColor"
                   else if usage.ok and usage.messages == 0 and usage.attachments == 0 and usage.vaultWrites == 0 and usage.iconFetches == 0
                     text "Nothing counted yet." color="ink.muted" testId="usage-line"
                   else if usage.ok
@@ -1081,6 +1115,9 @@ component BotEditor
     toggleRoutine: action
     runRoutine: action
     dropRoutine: action
+    botUsage: BotUsage
+    usageDown: bool
+    retryDetails: action
   state name = bot.name
   state routineTitle = ""
   state routineKind = "hour"
@@ -1094,6 +1131,11 @@ component BotEditor
     if routineTitle.trim() != ""
       addRoutine(bot.slug, routineTitle, routineKind)
       routineTitle = ""
+  derive modelBroken = modelsDown or (not models.ok and models.error != "")
+  derive routineBroken = routinesDown or (not routines.ok and routines.error != "")
+  derive lineageBroken = lineageDown or (not lineage.ok and lineage.error != "")
+  derive usageBroken = usageDown or (not botUsage.ok and botUsage.error != "")
+  derive detailsDown = modelBroken and routineBroken and lineageBroken and usageBroken
   view
     column width="100%" gap="space.lg"
       text "Identity" class=SectionLabel
@@ -1130,10 +1172,42 @@ component BotEditor
           button class=ToggleControl appearance="none" role="switch" aria-checked=bot.hidden disabled=bot.main press=hide(bot.slug, not bot.hidden) aria-label="Hidden from the list" testId="hide-bot"
             row width=44 height=26 border-radius="radius.full" background-color=(bot.hidden ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.hidden ? "flex-end" : "flex-start")
               column width=20 height=20 margin="0 3px" border-radius="radius.full" background-color="ink.light"
+      if detailsDown
+        column class=GroupCard gap="space.sm" padding="space.md"
+          text (models.error != "" ? models.error : "Can’t load this Bot’s settings. Check that hbots is running, then try again.") color="-exact-system-red" testId="details-down"
+          button press=retryDetails buttonStyle="filled" min-height=44 testId="retry-details"
+            text "Try Again"
+      if not detailsDown
+        text "Usage" class=SectionLabel
+        column class=GroupCard gap="space.sm" padding="space.md"
+          if usageBroken
+            text (botUsage.error != "" ? botUsage.error : "Can’t load usage. Check that hbots is running, then try again.") color="-exact-system-red" testId="bot-usage-line"
+            button press=retryDetails buttonStyle="filled" min-height=44 testId="retry-bot-usage"
+              text "Try Again"
+          else if botUsage.error != ""
+            text botUsage.error color="ink.muted" testId="bot-usage-line"
+            if botActivity(botUsage.messages, botUsage.attachments) != ""
+              text botActivity(botUsage.messages, botUsage.attachments) color="ink.muted" font="-exact-footnote"
+          else if botUsage.tokensKnown
+            text tokenLine(botUsage.turns, botUsage.inputTokens, botUsage.outputTokens) testId="bot-usage-line"
+            if cacheLine(botUsage.cachedInputTokens, botUsage.cacheCreationTokens) != ""
+              text cacheLine(botUsage.cachedInputTokens, botUsage.cacheCreationTokens) color="ink.muted" font="-exact-footnote"
+            if botActivity(botUsage.messages, botUsage.attachments) != ""
+              text botActivity(botUsage.messages, botUsage.attachments) color="ink.muted" font="-exact-footnote"
+          else if botUsage.messages == 0 and botUsage.attachments == 0
+            text "Nothing counted for this Bot yet." color="ink.muted" testId="bot-usage-line"
+          else
+            text botActivity(botUsage.messages, botUsage.attachments) testId="bot-usage-line"
+            text "Token counts show after T3 Code reports a turn." color="ink.muted" font="-exact-footnote"
+          text "Counted on this machine. Nothing is sent anywhere." color="ink.muted" font="-exact-footnote"
       text "Model" class=SectionLabel
       column class=GroupCard gap="space.sm" padding="space.md"
-        if modelsDown
-          text "Can’t load models. Check that hbots is running, then try again." color="-exact-system-red" testId="model-error"
+        if detailsDown
+          text "Waiting for hbots." color="ink.muted" testId="model-wait"
+        else if modelBroken
+          text (models.error != "" ? models.error : "Can’t load models. Check that hbots is running, then try again.") color="-exact-system-red" testId="model-error"
+          button press=retryDetails buttonStyle="filled" min-height=44 testId="retry-models"
+            text "Try Again"
         else if models.choices.length == 0
           text "Getting set up…" color="ink.muted" testId="model-wait"
         else
@@ -1147,8 +1221,12 @@ component BotEditor
           text modelError color="-exact-system-red" testId="model-save-error"
       text "Routines" class=SectionLabel
       column class=GroupCard
-        if routinesDown
-          text "Can’t load routines. Check that hbots is running, then try again." color="-exact-system-red" padding="space.sm 0" testId="routine-error"
+        if detailsDown
+          text "Waiting for hbots." color="ink.muted" padding="space.sm 0" testId="routine-setup"
+        else if routineBroken
+          text (routines.error != "" ? routines.error : "Can’t load routines. Check that hbots is running, then try again.") color="-exact-system-red" padding="space.sm 0" testId="routine-error"
+          button press=retryDetails buttonStyle="filled" min-height=44 testId="retry-routines"
+            text "Try Again"
         else if routines.error != "" and routines.tasks.length == 0
           text routines.error color="ink.muted" padding="space.sm 0" testId="routine-setup"
         else
@@ -1180,8 +1258,12 @@ component BotEditor
           text routineChangeError color="-exact-system-red" testId="routine-change-error"
       text "Working on" class=SectionLabel
       column class=GroupCard
-        if lineageDown
-          text "Can’t load what this Bot is doing. Check that hbots is running, then try again." color="-exact-system-red" padding="space.sm 0" testId="lineage-error"
+        if detailsDown
+          text "Waiting for hbots." color="ink.muted" padding="space.sm 0" testId="lineage-setup"
+        else if lineageBroken
+          text (lineage.error != "" ? lineage.error : "Can’t load what this Bot is doing. Check that hbots is running, then try again.") color="-exact-system-red" padding="space.sm 0" testId="lineage-error"
+          button press=retryDetails buttonStyle="filled" min-height=44 testId="retry-lineage"
+            text "Try Again"
         else if lineage.error != ""
           text lineage.error color="ink.muted" padding="space.sm 0" testId="lineage-setup"
         else if lineage.rows.length == 0
@@ -1248,6 +1330,9 @@ component BotPanel
     toggleRoutine: action
     runRoutine: action
     dropRoutine: action
+    botUsage: BotUsage
+    usageDown: bool
+    retryDetails: action
     library: Library
     libraryDown: bool
     itemError: string
@@ -1283,7 +1368,7 @@ component BotPanel
       column id="bot-tab-details" role="tabpanel" aria-label="Details" display=(tab == "details" ? "flex" : "none") flex=1 min-height=0
         scroll id=`panel-${bot.slug}` flex=1 min-height=0
           column width="100%" box-sizing="border-box" padding="space.lg"
-            BotEditor(bot=bot, error=error, rename=rename, recolour=recolour, hide=hide, makeMain=makeMain, drop=drop, go=go, models=models, modelsDown=modelsDown, routines=routines, routinesDown=routinesDown, lineage=lineage, lineageDown=lineageDown, modelError=modelError, routineSaveError=routineSaveError, routineChangeError=routineChangeError, pickModel=pickModel, addRoutine=addRoutine, toggleRoutine=toggleRoutine, runRoutine=runRoutine, dropRoutine=dropRoutine)
+            BotEditor(bot=bot, error=error, rename=rename, recolour=recolour, hide=hide, makeMain=makeMain, drop=drop, go=go, models=models, modelsDown=modelsDown, routines=routines, routinesDown=routinesDown, lineage=lineage, lineageDown=lineageDown, modelError=modelError, routineSaveError=routineSaveError, routineChangeError=routineChangeError, pickModel=pickModel, addRoutine=addRoutine, toggleRoutine=toggleRoutine, runRoutine=runRoutine, dropRoutine=dropRoutine, botUsage=botUsage, usageDown=usageDown, retryDetails=retryDetails)
       column id="bot-tab-library" role="tabpanel" aria-label="Library" display=(tab == "library" ? "flex" : "none") flex=1 min-height=0
         LibraryContent(inPanel=true, slug=bot.slug, name=bot.name, color=bot.color, library=library, down=libraryDown, itemError=itemError, removeError=removeError, connectorSaveError=connectorSaveError, connectorRemoveError=connectorRemoveError, saveItem=saveItem, dropItem=dropItem, saveConnector=saveConnector, dropConnector=dropConnector)
       column id="bot-tab-computer" role="tabpanel" aria-label="Computer" display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0

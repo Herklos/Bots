@@ -9,13 +9,16 @@
   --hbots-ink: light-dark(#16141f, #f9f8fd);
   --hbots-accent: light-dark(#0a7a6e, #16a090);
   --hbots-muted: light-dark(#5d5a6e, #a8a5b8);
+  --hbots-faint: light-dark(#676478, #9795a8);
   --hbots-danger: light-dark(#d0112b, #ff5c6c);
   --hbots-success: light-dark(#007a45, #2fdc8f);
   --hbots-warning: light-dark(#8a5a00, #ffbf5c);
   --hbots-info: light-dark(#0a66d6, #5aa9ff);
+  --hbots-surface-bubble: light-dark(#eceef1, #26262c);
   --hbots-surface-canvas: light-dark(#fcfcfd, #17171b);
   --hbots-surface-card: light-dark(#ffffff, #212126);
   --hbots-surface-line: light-dark(#e3e5e7, #333338);
+  --hbots-surface-raised: light-dark(#e8eaee, #2a2a31);
   --hbots-surface-sidebar: light-dark(#f3f4f5, #1d1d22);
   --hbots-surface-soft: light-dark(#e7f3ef, #213b35);
   --hbots-avatar-black: #000000;

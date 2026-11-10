@@ -1,0 +1,373 @@
+{
+ "_note": "Trimmed, anonymised sample of server.getConfig().providers",
+ "providers": [
+  {
+   "instanceId": "codex",
+   "driver": "codex",
+   "enabled": true,
+   "installed": true,
+   "status": "ready",
+   "displayName": "Codex",
+   "auth": {
+    "status": "authenticated",
+    "type": "chatgpt"
+   },
+   "models": [
+    {
+     "slug": "gpt-6.1-sol",
+     "name": "GPT-6.1-Sol",
+     "capabilities": {
+      "optionDescriptors": [
+       {
+        "id": "reasoningEffort",
+        "label": "Reasoning",
+        "type": "select",
+        "options": [
+         {
+          "id": "low",
+          "label": "Low",
+          "isDefault": true
+         },
+         {
+          "id": "medium",
+          "label": "Medium"
+         },
+         {
+          "id": "high",
+          "label": "High"
+         },
+         {
+          "id": "xhigh",
+          "label": "Extra High"
+         },
+         {
+          "id": "max",
+          "label": "Max"
+         },
+         {
+          "id": "ultra",
+          "label": "Ultra"
+         }
+        ],
+        "currentValue": "low"
+       },
+       {
+        "id": "serviceTier",
+        "label": "Service Tier",
+        "type": "select",
+        "options": [
+         {
+          "id": "default",
+          "label": "Standard",
+          "isDefault": true
+         },
+         {
+          "id": "priority",
+          "label": "Fast",
+          "description": "2x speed, increased usage"
+         }
+        ],
+        "currentValue": "default"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "gpt-6-astra",
+     "name": "GPT-6-Astra",
+     "isDefault": true,
+     "capabilities": {
+      "optionDescriptors": [
+       {
+        "id": "reasoningEffort",
+        "label": "Reasoning",
+        "type": "select",
+        "options": [
+         {
+          "id": "low",
+          "label": "Low"
+         },
+         {
+          "id": "medium",
+          "label": "Medium",
+          "isDefault": true
+         },
+         {
+          "id": "high",
+          "label": "High"
+         },
+         {
+          "id": "xhigh",
+          "label": "Extra High"
+         },
+         {
+          "id": "max",
+          "label": "Max"
+         },
+         {
+          "id": "ultra",
+          "label": "Ultra"
+         }
+        ],
+        "currentValue": "medium"
+       },
+       {
+        "id": "serviceTier",
+        "label": "Service Tier",
+        "type": "select",
+        "options": [
+         {
+          "id": "default",
+          "label": "Standard",
+          "isDefault": true
+         },
+         {
+          "id": "priority",
+          "label": "Fast",
+          "description": "2x speed, increased usage"
+         }
+        ],
+        "currentValue": "default"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "gpt-6.1-terra",
+     "name": "GPT-6.1 Terra",
+     "capabilities": {
+      "optionDescriptors": [
+       {
+        "id": "reasoningEffort",
+        "label": "Reasoning",
+        "type": "select",
+        "options": [
+         {
+          "id": "low",
+          "label": "Low",
+          "isDefault": true
+         },
+         {
+          "id": "medium",
+          "label": "Medium"
+         },
+         {
+          "id": "high",
+          "label": "High"
+         },
+         {
+          "id": "xhigh",
+          "label": "Extra High"
+         },
+         {
+          "id": "max",
+          "label": "Max"
+         },
+         {
+          "id": "ultra",
+          "label": "Ultra"
+         }
+        ],
+        "currentValue": "low"
+       },
+       {
+        "id": "serviceTier",
+        "label": "Service Tier",
+        "type": "select",
+        "options": [
+         {
+          "id": "default",
+          "label": "Standard",
+          "isDefault": true
+         },
+         {
+          "id": "priority",
+          "label": "Fast",
+          "description": "1.5x speed"
+         }
+        ],
+        "currentValue": "default"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "instanceId": "claudeAgent",
+   "driver": "claudeAgent",
+   "enabled": true,
+   "installed": true,
+   "status": "ready",
+   "displayName": "Claude Code",
+   "auth": {
+    "status": "authenticated",
+    "type": "Claude Pro"
+   },
+   "models": [
+    {
+     "slug": "claude-opus-5-5",
+     "name": "Claude Opus 5.5",
+     "isDefault": true,
+     "capabilities": {
+      "optionDescriptors": [
+       {
+        "id": "effort",
+        "label": "Reasoning",
+        "type": "select",
+        "options": [
+         {
+          "id": "low",
+          "label": "Low"
+         },
+         {
+          "id": "medium",
+          "label": "Medium",
+          "isDefault": true
+         },
+         {
+          "id": "high",
+          "label": "High"
+         },
+         {
+          "id": "xhigh",
+          "label": "Extra High"
+         },
+         {
+          "id": "max",
+          "label": "Max"
+         },
+         {
+          "id": "ultrathink",
+          "label": "Ultrathink"
+         }
+        ],
+        "promptInjectedValues": [
+         "ultrathink"
+        ]
+       },
+       {
+        "id": "ultracode",
+        "label": "Ultracode",
+        "type": "boolean"
+       },
+       {
+        "id": "fastMode",
+        "label": "Fast Mode",
+        "type": "boolean"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "claude-sonnet-5-5",
+     "name": "Claude Sonnet 5.5",
+     "capabilities": {
+      "optionDescriptors": [
+       {
+        "id": "effort",
+        "label": "Reasoning",
+        "type": "select",
+        "options": [
+         {
+          "id": "low",
+          "label": "Low"
+         },
+         {
+          "id": "medium",
+          "label": "Medium"
+         },
+         {
+          "id": "high",
+          "label": "High",
+          "isDefault": true
+         },
+         {
+          "id": "xhigh",
+          "label": "Extra High"
+         },
+         {
+          "id": "max",
+          "label": "Max"
+         },
+         {
+          "id": "ultrathink",
+          "label": "Ultrathink"
+         }
+        ],
+        "promptInjectedValues": [
+         "ultrathink"
+        ]
+       },
+       {
+        "id": "ultracode",
+        "label": "Ultracode",
+        "type": "boolean"
+       }
+      ]
+     }
+    },
+    {
+     "slug": "claude-fable-5-2",
+     "name": "Claude Fable 5.2",
+     "capabilities": {
+      "optionDescriptors": [
+       {
+        "id": "effort",
+        "label": "Reasoning",
+        "type": "select",
+        "options": [
+         {
+          "id": "low",
+          "label": "Low"
+         },
+         {
+          "id": "medium",
+          "label": "Medium",
+          "isDefault": true
+         },
+         {
+          "id": "high",
+          "label": "High"
+         },
+         {
+          "id": "xhigh",
+          "label": "Extra High"
+         },
+         {
+          "id": "max",
+          "label": "Max"
+         },
+         {
+          "id": "ultrathink",
+          "label": "Ultrathink"
+         }
+        ],
+        "promptInjectedValues": [
+         "ultrathink"
+        ]
+       },
+       {
+        "id": "ultracode",
+        "label": "Ultracode",
+        "type": "boolean"
+       }
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "instanceId": "cursor",
+   "driver": "cursor",
+   "enabled": false,
+   "installed": false,
+   "status": "disabled",
+   "displayName": "Cursor",
+   "auth": {
+    "status": "unknown"
+   },
+   "models": []
+  }
+ ]
+}

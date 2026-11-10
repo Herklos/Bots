@@ -42,7 +42,9 @@ pub async fn create(
     ensure_bot(&s, &slug).await?;
     let (name, media, bytes) = prepare(&parse(&body)?)?;
     let saved = write_file(&s.cfg.bots_root, &slug, &name, &media, &bytes).await?;
-    s.usage.note(crate::usage::Event::Attachment).await;
+    s.usage
+        .note_for(&slug, crate::usage::Event::Attachment)
+        .await;
     Ok(Json(saved))
 }
 

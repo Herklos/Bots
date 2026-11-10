@@ -307,6 +307,7 @@ pub fn app(state: Arc<AppState>) -> Router {
             post(connector_save).delete(connector_delete),
         )
         .route("/api/bots/{slug}/model", get(model_get).put(model_put))
+        .route("/api/bots/{slug}/usage", get(bot_usage))
         .route(
             "/api/bots/{slug}/routines",
             get(bot_routines).post(bot_routine_save),
@@ -1020,6 +1021,55 @@ async fn model_put(
     Ok(Json(json!({ "ok": true })))
 }
 
+async fn bot_usage(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+    let bot = require_bot(&s, &slug).await?;
+    let (messages, attachments) = s.usage.bot_activity(&slug).await?;
+    let Some(thread) = bot["mainThreadId"].as_str().filter(|t| !t.is_empty()) else {
+        return Ok(Json(usage::bot_payload(
+            messages,
+            attachments,
+            &usage::TokenTotals::default(),
+            false,
+            "This Bot is still getting set up.",
+        )));
+    };
+    let Ok(rpc) = s.t3.rpc().await else {
+        return Ok(Json(usage::bot_payload(
+            messages,
+            attachments,
+            &usage::TokenTotals::default(),
+            false,
+            "Open T3 Code, then try again.",
+        )));
+    };
+    let projection = match rpc
+        .call(
+            "orchestration.getThreadProjection",
+            json!({ "threadId": thread }),
+        )
+        .await
+    {
+        Ok(projection) => projection,
+        Err(_) => {
+            return Ok(Json(usage::bot_payload(
+                messages,
+                attachments,
+                &usage::TokenTotals::default(),
+                false,
+                "Open T3 Code, then try again.",
+            )));
+        }
+    };
+    let (totals, known) = usage::tokens_from_projection(&projection);
+    Ok(Json(usage::bot_payload(
+        messages,
+        attachments,
+        &totals,
+        known,
+        "",
+    )))
+}
+
 async fn bot_routines(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
     let bot = require_bot(&s, &slug).await?;
     let Some(thread) = bot["mainThreadId"].as_str().filter(|t| !t.is_empty()) else {
@@ -1259,7 +1309,7 @@ async fn send_chat(
     rpc.call("orchestration.dispatchCommand", command.clone())
         .await
         .map_err(|e| ApiError::new(502, e.to_string()))?;
-    s.usage.note(usage::Event::Message).await;
+    s.usage.note_for(&slug, usage::Event::Message).await;
     Ok(Json(
         json!({ "ok": true, "messageId": command["messageId"] }),
     ))

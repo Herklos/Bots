@@ -40,7 +40,7 @@ Tide is the brand. It is not a text colour; use the accent (the tint) for text a
 
 - Text is never lighter than 4.5:1 on its canvas.
 - A filled control's label is Night on Tide.
-- Avatar colours are the sixteen named colours; a Bot picks one of six in the picker. Initials are Night or white, whichever reads.
+- Avatar colours are the sixteen named colours; a Bot picks one of ten in the picker. Initials are Night or white, whichever reads.
 
 ## Type
 

@@ -1,0 +1,27 @@
+{
+ "_note": "One thread from orchestration.subscribeShell snapshot.threads; updatedAt is the preview stamp, activeRunId marks a working Bot",
+ "thread": {
+  "id": "7dbe6d35-2199-4717-ac61-9006eda7230f",
+  "providerInstanceId": "claudeAgent",
+  "modelSelection": {
+   "instanceId": "claudeAgent",
+   "model": "claude-opus-5-5",
+   "options": [
+    {
+     "id": "effort",
+     "value": "medium"
+    }
+   ]
+  },
+  "status": "completed",
+  "activeRunId": null,
+  "latestRunId": "run:thread:7dbe6d35-2199-4717-ac61-9006eda7230f:ordinal:3",
+  "latestRunStartedAt": "2026-11-10T10:12:15.127Z",
+  "latestRunCompletedAt": "2026-11-10T10:12:17.892Z",
+  "pendingRuntimeRequest": null,
+  "latestVisibleMessage": null,
+  "latestUserMessageAt": "2026-11-10T10:12:15.117Z",
+  "itemCount": 12,
+  "updatedAt": "2026-11-10T10:42:17.891Z"
+ }
+}

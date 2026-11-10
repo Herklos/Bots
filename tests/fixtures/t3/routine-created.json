@@ -1,0 +1,71 @@
+{
+ "_note": "A Bot (Claude on T3) creating a routine with the schedule_task tool, captured live and sanitised. The tool arrives as mcp__t3-code__schedule_task; its last segment is schedule_task. Deleted afterwards.",
+ "toolItem": {
+  "type": "dynamic_tool",
+  "toolName": "mcp__t3-code__schedule_task",
+  "status": "completed",
+  "input": {
+   "title": "hbots test",
+   "prompt": "test only",
+   "schedule": {
+    "type": "fixed_time",
+    "timeOfDay": "08:00",
+    "weekdays": [
+     1,
+     2,
+     3,
+     4,
+     5
+    ]
+   },
+   "enabled": false
+  },
+  "output": {
+   "scheduledTaskId": "scheduled-task:e7236c70-3478-45cc-a67d-14c1f5d71e65"
+  },
+  "startedAt": "2026-11-10T13:05:17.181Z",
+  "completedAt": "2026-11-10T13:05:18.237Z"
+ },
+ "taskRow": {
+  "id": "scheduled-task:e7236c70-3478-45cc-a67d-14c1f5d71e65",
+  "title": "hbots test",
+  "prompt": "test only",
+  "enabled": false,
+  "schedule": {
+   "type": "fixed_time",
+   "timeOfDay": "08:00",
+   "weekdays": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ]
+  },
+  "threadMode": "continue",
+  "runtimeMode": "auto",
+  "createdBy": "agent",
+  "creationSource": "mcp",
+  "createdAt": "2026-11-10T13:05:17.719Z",
+  "nextRunAt": null,
+  "lastRunAt": null,
+  "lastRunStatus": "never",
+  "lastRunError": null,
+  "runCount": 0,
+  "threadId": "thread-redacted",
+  "projectId": "project-redacted"
+ },
+ "transientErrorItem": {
+  "type": "error",
+  "title": "Provider recovered",
+  "status": "completed",
+  "failure": {
+   "class": "transport_error",
+   "retryable": true
+  },
+  "retry": {
+   "attempt": 4,
+   "maxAttempts": 10
+  }
+ }
+}

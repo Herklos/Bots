@@ -62,6 +62,8 @@ pub struct Colors {
     /// Tide made readable as text and as a control: the app's tint.
     pub accent: Pair,
     pub muted: Pair,
+    /// Times and event lines: quieter than `muted`, still 4.5:1 on every surface it sits on.
+    pub faint: Pair,
     pub danger: Pair,
     pub success: Pair,
     pub warning: Pair,
@@ -225,6 +227,7 @@ pub fn tamber() -> String {
         let _ = writeln!(s, "  surface.{name} = light-dark({}, {})", pair.light, pair.dark);
     }
     let _ = writeln!(s, "  ink.muted = light-dark({}, {})", c.muted.light, c.muted.dark);
+    let _ = writeln!(s, "  ink.faint = light-dark({}, {})", c.faint.light, c.faint.dark);
     let _ = writeln!(s, "  // Spacing and corners.");
     for k in ["xs", "sm", "md", "lg", "xl"] {
         let _ = writeln!(s, "  space.{k} = {}px", t.space[k]);
@@ -365,6 +368,7 @@ pub fn css() -> String {
     for (k, p) in [
         ("accent", &c.accent),
         ("muted", &c.muted),
+        ("faint", &c.faint),
         ("danger", &c.danger),
         ("success", &c.success),
         ("warning", &c.warning),
@@ -632,12 +636,32 @@ mod tests {
     #[test]
     fn text_reads_on_authored_surfaces() {
         let t = tokens();
-        for name in ["canvas", "card", "soft", "sidebar"] {
+        for name in ["canvas", "card", "soft", "sidebar", "bubble", "raised"] {
             let surface = &t.surface[name];
             at_least(name, &t.color.night, &surface.light, 4.5);
             at_least(name, &t.color.white, &surface.dark, 4.5);
             at_least(name, &t.color.muted.light, &surface.light, 4.5);
             at_least(name, &t.color.muted.dark, &surface.dark, 4.5);
+        }
+        // Faint ink is for times and event lines: the page, a row, a selected row, a card.
+        for name in ["canvas", "card", "sidebar", "raised"] {
+            let surface = &t.surface[name];
+            at_least(&format!("faint on {name}"), &t.color.faint.light, &surface.light, 4.5);
+            at_least(&format!("faint on {name}"), &t.color.faint.dark, &surface.dark, 4.5);
+        }
+    }
+
+    #[test]
+    fn a_bot_bubble_stands_apart_from_its_page() {
+        let t = tokens();
+        // The Bot's bubble was once a card on a near-white canvas and vanished in light mode.
+        for (what, a, b) in [
+            ("light bubble on canvas", &t.surface["bubble"].light, &t.surface["canvas"].light),
+            ("dark bubble on canvas", &t.surface["bubble"].dark, &t.surface["canvas"].dark),
+            ("light raised on sidebar", &t.surface["raised"].light, &t.surface["sidebar"].light),
+            ("dark raised on sidebar", &t.surface["raised"].dark, &t.surface["sidebar"].dark),
+        ] {
+            at_least(what, a, b, 1.08);
         }
     }
 

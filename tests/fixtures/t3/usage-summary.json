@@ -1,0 +1,147 @@
+{
+ "_note": "Trimmed sample of server.getUsageSummary({sinceDay,untilDay,timeZone}); machine-wide, not per Bot",
+ "contractVersion": 6,
+ "timeZone": "Europe/Paris",
+ "sinceDay": "2026-11-03",
+ "untilDay": "2026-11-10",
+ "buckets": [
+  {
+   "day": "2026-11-03",
+   "provider": "claude",
+   "model": "claude-haiku-5-5",
+   "totals": {
+    "uncachedInputTokens": 2,
+    "cachedInputTokens": 0,
+    "cacheCreationTokens": 48518,
+    "outputTokens": 113,
+    "reasoningTokens": 0
+   },
+   "costUsd": 0.00612145,
+   "cacheSavingsUsd": 0,
+   "categoryCostUsd": {
+    "input": 0,
+    "cacheRead": 0,
+    "cacheWrite": 0.006065,
+    "output": 5.7e-05
+   },
+   "costSource": "modelPriced",
+   "records": 1,
+   "unpricedRecords": 0,
+   "sessions": 1
+  },
+  {
+   "day": "2026-11-03",
+   "provider": "claude",
+   "model": "claude-sonnet-5-5",
+   "totals": {
+    "uncachedInputTokens": 2138,
+    "cachedInputTokens": 155585876,
+    "cacheCreationTokens": 5769506,
+    "outputTokens": 790553,
+    "reasoningTokens": 0
+   },
+   "costUsd": 37.89215860000001,
+   "cacheSavingsUsd": 295.6131644000001,
+   "categoryCostUsd": {
+    "input": 0.004276,
+    "cacheRead": 15.558588,
+    "cacheWrite": 14.423765,
+    "output": 7.90553
+   },
+   "costSource": "modelPriced",
+   "records": 1050,
+   "unpricedRecords": 0,
+   "sessions": 17
+  },
+  {
+   "day": "2026-11-03",
+   "provider": "claude",
+   "model": "claude-sonnet-5-5",
+   "totals": {
+    "uncachedInputTokens": 32,
+    "cachedInputTokens": 767886,
+    "cacheCreationTokens": 136958,
+    "outputTokens": 3343,
+    "reasoningTokens": 0
+   },
+   "costUsd": 0.4526776,
+   "cacheSavingsUsd": 1.4589833999999997,
+   "categoryCostUsd": {
+    "input": 6.4e-05,
+    "cacheRead": 0.076789,
+    "cacheWrite": 0.342395,
+    "output": 0.03343
+   },
+   "costSource": "modelPriced",
+   "records": 12,
+   "unpricedRecords": 0,
+   "sessions": 2
+  },
+  {
+   "day": "2026-11-03",
+   "provider": "grok",
+   "model": "grok-4.5-build",
+   "totals": {
+    "uncachedInputTokens": 4667535,
+    "cachedInputTokens": 61546496,
+    "cacheCreationTokens": 0,
+    "outputTokens": 499053,
+    "reasoningTokens": 97493
+   },
+   "costUsd": 31.362636399999996,
+   "cacheSavingsUsd": 0,
+   "costSource": "modelPriced",
+   "records": 43,
+   "unpricedRecords": 1,
+   "sessions": 17
+  },
+  {
+   "day": "2026-11-04",
+   "provider": "claude",
+   "model": "claude-sonnet-5-5",
+   "totals": {
+    "uncachedInputTokens": 1396,
+    "cachedInputTokens": 139571392,
+    "cacheCreationTokens": 3403335,
+    "outputTokens": 571417,
+    "reasoningTokens": 0
+   },
+   "costUsd": 28.182438700000013,
+   "cacheSavingsUsd": 265.1856448000001,
+   "categoryCostUsd": {
+    "input": 0.002792,
+    "cacheRead": 13.957139,
+    "cacheWrite": 8.508338,
+    "output": 5.71417
+   },
+   "costSource": "modelPriced",
+   "records": 688,
+   "unpricedRecords": 0,
+   "sessions": 5
+  },
+  {
+   "day": "2026-11-04",
+   "provider": "grok",
+   "model": "grok-4.5-build",
+   "totals": {
+    "uncachedInputTokens": 21908727,
+    "cachedInputTokens": 356408704,
+    "cacheCreationTokens": 0,
+    "outputTokens": 2750834,
+    "reasoningTokens": 418833
+   },
+   "costUsd": 127.74306280000008,
+   "cacheSavingsUsd": 0,
+   "costSource": "modelPriced",
+   "records": 125,
+   "unpricedRecords": 9,
+   "sessions": 54
+  }
+ ],
+ "pricing": {
+  "status": "cached",
+  "source": "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json",
+  "fetchedAt": "2026-11-09T17:32:23.518Z",
+  "knownModels": 5188
+ }
+}

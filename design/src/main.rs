@@ -54,6 +54,7 @@ fn print_contrast() {
     for (name, p) in [
         ("accent", &c.accent),
         ("muted", &c.muted),
+        ("faint", &c.faint),
         ("danger", &c.danger),
         ("success", &c.success),
         ("warning", &c.warning),

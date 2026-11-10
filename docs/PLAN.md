@@ -124,7 +124,7 @@ Gateway parts that do not need the Node checkout, on main:
 
 - Site icons. `GET /api/icons/{host}` fetches a public favicon and caches it under `HBOTS_HOME/icons`. Private and loopback addresses are refused.
 - Attachments. Files live in `bots/<slug>/.bot/attachments`. A chat send can name them. The bytes stay on disk; `message.dispatch` carries the file record. The T3 contracts checkout is not here, so that record is the gateway's shape, not a verified T3 schema.
-- Usage. `GET /api/usage` reads `bots/.botapp/usage.json` (messages, attachments, vault writes, icon fetches, by UTC day, plus totals). A missing file is an empty snapshot. Nothing is sent off the machine. Settings shows the totals under **This machine**.
+- Usage. `GET /api/usage` reads `bots/.botapp/usage.json` (messages, attachments, vault writes, icon fetches, by UTC day, plus totals). A missing file is an empty snapshot. Nothing is sent off the machine. Settings shows the totals under **This machine**, and Try Again when the gateway did not answer. `GET /api/bots/{slug}/usage` adds that Bot's own message and attachment counts, plus token totals from T3's `providerTurns[].turnTokenUsage` (input, output, cache read, cache write, turns). Unavailable turns and local commands are not added. A Bot with no conversation yet says it is still getting set up. `tokensKnown` stays false, so the screen does not present those zeros as a count.
 - Library. Each Bot keeps files under `bots/<slug>/library/`, records in `bots/<slug>/.bot/library.json`, and connectors in `bots/<slug>/.bot/connectors.json`. Reads and writes go through the workspace adapter (`gateway/src/workspace.rs`). Records cover project, note, task, plan, link, repo, machine, and service. This is not the old Projects board: `GET /api/projects` still returns an empty board while that beta is off.
 - Connectors. A person can switch an http(s) MCP server on for one Bot. The name is a short token, and not `bot` or `executor`. The bearer is written into the harness files and is not returned by GET. Off removes the server and lists the name in Claude's `disabledMcpjsonServers`. The vault `bot` server stays on. A running T3 session may ignore `.mcp.json` until the next one. The gateway does not probe the server on save.
 - Model and routines. Bot details can set the same model selection T3 stores. The list is Haiku, plus the Bot's current choice and Settings' `defaultModel` when those differ. A new Bot still starts on Haiku. Routines are T3 scheduled tasks bound to that Bot's main thread. They start off. The screen offers hourly, daily at 09:00, and once. The API also accepts an interval, no faster than once a minute.
@@ -139,3 +139,71 @@ Still open:
 - Avatar drawing flow. `avatarDrawingModel` is already a settings field. The prompt, the model call and the saved image are not ported.
 - Desktop shell, and the macOS, iOS and Linux Exact hosts. The design is in `docs/native.md`.
 - The Projects beta board. It stays off. Per-Bot records live in the library instead.
+
+## Next
+
+These are not scheduled. They sit next to the messenger, the way model, routines, and Working on did.
+
+### Groups
+
+A group is a room where two or more Bots talk with the person. It is not the Working on list. That list is one Bot's child threads.
+
+Keep the room on this machine, through the workspace, for example `bots/.botapp/groups.json`: an id, a title, and the member slugs. Do not invent a T3 channel type. Each member stays the Bot it already is, with its own project and main thread.
+
+A send in the room is stored on the room, then dispatched to each member's existing thread. Replies come back into the room under that Bot's name and Face. Naming one Bot in the message should leave the others quiet. Order, and not waking every Bot on every line, are the hard parts.
+
+A shared T3 thread that several agents join is out until that protocol is confirmed.
+
+### Message reactions
+
+The gateway already toggles a reaction on one message. `POST /api/threads/{thread}/reactions` takes `{ item, emoji }` (`gateway/src/thread_meta.rs`). `item` is the message id the transcript already carries. `GET /api/threads/{thread}/meta` returns the marks. The chat does not read or send this yet.
+
+Show the marks on the message, and toggle them from it. Do not add a second store.
+
+### Reply to one message
+
+A transcript row already has an id (`chat.rs` copies `item.id` onto user and assistant messages). `message.dispatch` (`send_command`) carries text and attachments. It has no quote field, and that field is not confirmed on T3.
+
+The composer offers Reply on a message. The send stores `replyTo` in the thread meta, keyed by the `messageId` the gateway already assigns, next to reactions. The bubble shows the quoted line from that record. Do not add a field to `message.dispatch` until T3 is shown to accept it.
+
+### Unread on the inbox
+
+The inbox row is the Bot's name and label. Nothing remembers what this person has already seen.
+
+Keep a last-read message id per Bot on this machine (the Bot file or thread meta, not a new T3 concept). While that chat is open, move the mark to the latest message. The inbox shows a mark when a later message exists. Opening the chat clears it. A hidden Bot keeps its mark until it is opened.
+
+### Pin a message
+
+Pins live in the same thread meta as reactions (`gateway/src/thread_meta.rs`), as a short list of message ids. No second file.
+
+The chat shows the pinned messages above the transcript. Pin and unpin are a toggle. Cap the list. A pin whose message is no longer in the loaded transcript stays in the list and says the message is not in view.
+
+### Search one transcript
+
+Search filters the messages the open chat already loaded from `orchestration.getThreadProjection`. The box sits on that conversation, not on the inbox (the inbox already filters Bot names).
+
+The result is only what that projection contained. Do not add a search RPC, and do not scan the Bot's folder. If a match is missing because T3 did not return the older turns, say that the search covers the loaded conversation.
+
+### Open a child from Working on
+
+Working on already lists each child with `threadId` and `remote` (`gateway/src/lineage.rs`). A remote child is `{threadId, environmentId}` and must not be opened as the parent's thread.
+
+A local child (`remote` false and a `threadId`) opens a read-only transcript of that thread, through the same projection read the chat uses. The first slice does not send into the child. A remote row stays "On another machine" and does not open a local chat. Do not add `parentSlug`.
+
+### Who is working in a group
+
+This waits on Groups. One Bot's chat already has `working` (`chat.rs`, from a live turn or an active run).
+
+The room reads that flag for each member's main thread. The member's Face uses the working state, and the room says that Bot's name. Do not add a presence API. A member that is still getting set up stays on the getting-set-up line.
+
+### A token line on one turn
+
+The Bot total already sums `providerTurns[].turnTokenUsage` (`GET /api/bots/{slug}/usage`). A single turn is one of those objects: input, output, cache read, cache write.
+
+Show that line on the assistant message when the projection already shares an id between the turn and the message. If there is no shared id, leave the line off that bubble and keep the Bot total. Do not attach a turn to a message by guessing. Unavailable turns and local commands stay out, as they do in the total.
+
+### Voice in the composer
+
+`POST /api/threads/{thread}/voice` already records a call as a duration and a time (`thread_meta.rs`, `voiceCalls`). It does not store audio.
+
+The composer records a clip, plays it back before send, and sends the bytes as an attachment on the existing attachment path. After a send, record the duration with the voice route that already exists. Playback of a sent clip is that attachment. Do not add a second call log. Microphone permission is asked by the platform when the person records.

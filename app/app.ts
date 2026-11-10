@@ -32,7 +32,7 @@ const BRAND: Record<string, string> = {
   magenta: 'brand.magenta', '#ff309b': 'brand.magenta', 'brand.magenta': 'brand.magenta',
   gray: 'brand.gray', '#777777': 'brand.gray', 'brand.gray': 'brand.gray',
 };
-export const SWATCHES = ['brand.default', 'brand.blue', 'brand.violet', 'brand.pink', 'brand.orange', 'brand.green'];
+export const SWATCHES = ['brand.brown', 'brand.red', 'brand.orange', 'brand.amber', 'brand.green', 'brand.default', 'brand.blue', 'brand.violet', 'brand.pink', 'brand.gray'];
 const DEFAULT_COLOUR = 'brand.default';
 const fill = (c: unknown): string => (typeof c === 'string' ? (BRAND[c] ?? (/^#[0-9a-f]{6}$/i.test(c) ? c : DEFAULT_COLOUR)) : DEFAULT_COLOUR);
 // design:end palette
@@ -60,6 +60,18 @@ async function read(store: any, path: string): Promise<any> {
   return r.body;
 }
 const reply = (r: Answered) => (r.ok ? { ok: true, error: '' } : { ok: false, error: r.error });
+
+// The screen says what failed. A stopped gateway, an old hbots, a signed-out
+// session, and a quiet T3 are not the same problem.
+function explain(error: string, what: string): string {
+  const e = error.toLowerCase();
+  if (e.includes('reach the gateway')) return `Can’t load ${what}. Check that hbots is running, then try again.`;
+  if (e.includes('login')) return 'Sign in from Settings, then try again.';
+  if (e.includes('no conversation') || e.includes('getting set up')) return 'This Bot is still getting set up.';
+  if (e.includes('t3')) return 'T3 Code didn’t answer. Open T3 Code, then try again.';
+  if (e.includes('had a problem')) return 'Restart hbots so this screen can load, then try again.';
+  return error || `Can’t load ${what}. Check that hbots is running, then try again.`;
+}
 
 function libraryEntry(slug: string, e: any) {
   const id = String(e.id ?? '');
@@ -215,20 +227,46 @@ const sources: Sources = {
   },
   stopRun: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/stop`, { method: 'POST', body: '{}' })),
   loadUsage: async ([gate], store): Promise<Result<'loadUsage'>> => {
-    if (gate !== '1') return { ok: false, messages: 0, attachments: 0, vaultWrites: 0, iconFetches: 0 };
-    const body = await read(store, '/api/usage');
-    const totals = body.totals ?? {};
-    const n = (key: string): number => (typeof totals[key] === 'number' ? totals[key] : 0);
-    return { ok: true, messages: n('messages'), attachments: n('attachments'), vaultWrites: n('vaultWrites'), iconFetches: n('iconFetches') };
+    const blank = { ok: false, error: '', messages: 0, attachments: 0, vaultWrites: 0, iconFetches: 0 };
+    if (gate !== '1') return blank;
+    try {
+      const body = await read(store, '/api/usage');
+      const totals = body.totals ?? {};
+      const n = (key: string): number => (typeof totals[key] === 'number' ? totals[key] : 0);
+      return { ok: true, error: '', messages: n('messages'), attachments: n('attachments'), vaultWrites: n('vaultWrites'), iconFetches: n('iconFetches') };
+    } catch (e) {
+      return { ...blank, error: explain(e instanceof Error ? e.message : String(e), 'usage') };
+    }
   },
-  loadModels: async ([slug, gate], store): Promise<Result<'loadModels'>> => {
-    if (slug === '' || gate !== '1') return { ok: true, current: '', instanceId: '', choices: [] };
-    const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/model`);
-    const choices = Array.isArray(body.choices) ? body.choices : [];
+  loadBotUsage: async ([slug, gate], store): Promise<Result<'loadBotUsage'>> => {
+    const blank = { ok: true, error: '', messages: 0, attachments: 0, turns: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationTokens: 0, tokensKnown: false };
+    if (slug === '' || gate !== '1') return blank;
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/usage`);
+    if (!r.ok) return { ...blank, ok: false, error: explain(r.error, 'usage') };
+    const n = (key: string): number => (typeof r.body[key] === 'number' ? r.body[key] : 0);
     return {
       ok: true,
-      current: String(body.current ?? ''),
-      instanceId: String(body.instanceId ?? ''),
+      error: String(r.body.error ?? ''),
+      messages: n('messages'),
+      attachments: n('attachments'),
+      turns: n('turns'),
+      inputTokens: n('inputTokens'),
+      outputTokens: n('outputTokens'),
+      cachedInputTokens: n('cachedInputTokens'),
+      cacheCreationTokens: n('cacheCreationTokens'),
+      tokensKnown: r.body.tokensKnown === true,
+    };
+  },
+  loadModels: async ([slug, gate], store): Promise<Result<'loadModels'>> => {
+    if (slug === '' || gate !== '1') return { ok: true, error: '', current: '', instanceId: '', choices: [] };
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/model`);
+    if (!r.ok) return { ok: false, error: explain(r.error, 'models'), current: '', instanceId: '', choices: [] };
+    const choices = Array.isArray(r.body.choices) ? r.body.choices : [];
+    return {
+      ok: true,
+      error: '',
+      current: String(r.body.current ?? ''),
+      instanceId: String(r.body.instanceId ?? ''),
       choices: choices.map((c: any) => ({
         instanceId: String(c.instanceId ?? ''),
         model: String(c.model ?? ''),
@@ -241,11 +279,17 @@ const sources: Sources = {
   })),
   loadRoutines: async ([slug, gate], store): Promise<Result<'loadRoutines'>> => {
     if (slug === '' || gate !== '1') return { ok: true, tasks: [], error: '' };
-    const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/routines`);
-    const tasks = Array.isArray(body.tasks) ? body.tasks : [];
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/routines`);
+    if (!r.ok) {
+      if (r.error.includes('no conversation') || r.error.includes('getting set up')) {
+        return { ok: true, tasks: [], error: 'This Bot is still getting set up.' };
+      }
+      return { ok: false, tasks: [], error: explain(r.error, 'routines') };
+    }
+    const tasks = Array.isArray(r.body.tasks) ? r.body.tasks : [];
     return {
       ok: true,
-      error: String(body.error ?? ''),
+      error: String(r.body.error ?? ''),
       tasks: tasks.map((t: any) => ({
         id: String(t.id ?? ''),
         title: String(t.title ?? ''),
@@ -273,7 +317,7 @@ const sources: Sources = {
       if (r.error.includes('no conversation') || r.error.includes('getting set up')) {
         return { ok: true, rows: [], error: 'This Bot is still getting set up.' };
       }
-      throw new Error(r.error);
+      return { ok: false, rows: [], error: explain(r.error, 'what this Bot is doing') };
     }
     const rows = Array.isArray(r.body.rows) ? r.body.rows : [];
     return {
