@@ -371,6 +371,7 @@ mod tests {
             vault: Vault::new(cfg.vault_file.clone(), cfg.vault_key_file.clone()),
             projects: Projects::new(app_dir.join("projects.json")),
             threads: crate::thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
+            rooms: crate::rooms::Rooms::new(app_dir.join("groups.json")),
             routine_history: crate::routines::RoutineHistory::new(
                 app_dir.join("routine-history.json"),
             ),

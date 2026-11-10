@@ -24,6 +24,7 @@ mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-o
 mod provisioner;
 mod release; // T6b: self-update and rollback.
 mod remote_access; // T4: the scrypt password in access.json.
+mod rooms; // Local rooms. A send is stored here, then dispatched to each member's main thread.
 mod routines; // T5: T3 scheduled tasks.
 mod service; // T6b: install and remove the background service.
 mod store;
@@ -66,6 +67,7 @@ pub struct AppState {
     pub tailnet: Arc<exposure::Tailnet>,
     pub remote: Arc<remote_access::RemoteAccess>,
     pub threads: thread_meta::ThreadMeta,
+    pub rooms: rooms::Rooms,
     pub routine_history: routines::RoutineHistory,
     pub system: release::System,
     pub icons: icons::Icons,
@@ -169,6 +171,7 @@ async fn main() -> anyhow::Result<()> {
         vault: vault::Vault::new(cfg.vault_file.clone(), cfg.vault_key_file.clone()),
         projects: projects::Projects::new(app_dir.join("projects.json")),
         threads: thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
+        rooms: rooms::Rooms::new(app_dir.join("groups.json")),
         routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
         system: release::System::new(cfg.data_root.clone(), app_dir.clone()),
         icons: icons::Icons::new(cfg.data_root.join("icons")),
@@ -346,6 +349,9 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/access/tailscale", post(access_tailscale))
         .route("/api/access/tunnel", post(access_tunnel))
         .route("/api/thread-previews", post(thread_previews))
+        .route("/api/rooms", get(rooms_list).post(rooms_create))
+        .route("/api/rooms/{id}", get(room_get))
+        .route("/api/rooms/{id}/messages", post(room_send))
         .route("/api/threads/{thread}/meta", get(thread_meta_get))
         .route("/api/threads/{thread}/reactions", post(thread_reaction))
         .route("/api/threads/{thread}/voice", post(thread_voice))
@@ -637,6 +643,122 @@ async fn access_tunnel(
         s.remote.tunnel_off().await?;
     }
     Ok(Json(s.remote.status().await))
+}
+
+async fn rooms_list(State(s): S) -> ApiResult<Json<Value>> {
+    Ok(Json(json!({ "rooms": s.rooms.list().await? })))
+}
+
+async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    let title = body["title"].as_str().unwrap_or("");
+    let slugs: Vec<String> = body["members"]
+        .as_array()
+        .map(|list| {
+            list.iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let known = s.bots.list().await?;
+    if slugs.iter().any(|slug| {
+        !known
+            .iter()
+            .any(|bot| bot["slug"].as_str() == Some(slug.as_str()))
+    }) {
+        return Err(ApiError::bad_request("Pick Bots that already exist."));
+    }
+    Ok(Json(s.rooms.create(title, &slugs).await?))
+}
+
+async fn room_get(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+    let room = s.rooms.get(&id).await?;
+    let members = room_directory(&s, &room).await?;
+    Ok(Json(rooms::present(&room, &members)))
+}
+
+async fn room_send(
+    State(s): S,
+    Path(id): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    let text = body["text"].as_str().unwrap_or("").trim().to_string();
+    let room = s.rooms.get(&id).await?;
+    let members = room_directory(&s, &room).await?;
+    let (stored, dispatches) = s
+        .rooms
+        .send(
+            &id,
+            &members,
+            &text,
+            &uuid::Uuid::new_v4().to_string(),
+            &routines::stamped(),
+        )
+        .await?;
+    let commands = rooms::dispatch_commands(&dispatches, &text);
+    let mut dispatched = Vec::new();
+    if let Ok(rpc) = s.t3.rpc().await {
+        for (item, command) in dispatches.iter().zip(commands) {
+            rpc.call("orchestration.dispatchCommand", command)
+                .await
+                .map_err(|err| ApiError::new(502, err.to_string()))?;
+            s.usage
+                .note_for(&item.slug, usage::Event::Message)
+                .await;
+            dispatched.push(item.slug.clone());
+        }
+    }
+    Ok(Json(json!({
+        "ok": true,
+        "room": rooms::present(&stored, &members),
+        "dispatched": dispatched,
+    })))
+}
+
+/// Member rows for a room, with each Bot's existing main-thread working flag.
+async fn room_directory(s: &AppState, room: &Value) -> ApiResult<Vec<rooms::Member>> {
+    let slugs: Vec<String> = room["members"]
+        .as_array()
+        .map(|list| {
+            list.iter()
+                .filter_map(|value| value.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let bots = s.bots.list().await?;
+    let rpc = s.t3.rpc().await.ok();
+    let mut members = Vec::new();
+    for slug in slugs {
+        let Some(bot) = bots.iter().find(|bot| bot["slug"].as_str() == Some(slug.as_str())) else {
+            continue;
+        };
+        let thread = bot["mainThreadId"].as_str().unwrap_or("").to_string();
+        let mut working = false;
+        if !thread.is_empty() {
+            if let Some(rpc) = &rpc {
+                if let Ok(projection) = rpc
+                    .call(
+                        "orchestration.getThreadProjection",
+                        json!({ "threadId": thread }),
+                    )
+                    .await
+                {
+                    working = chat::transcript(&projection)["working"] == true;
+                }
+            }
+        }
+        members.push(rooms::Member {
+            slug,
+            title: bot["name"].as_str().unwrap_or("Bot").to_string(),
+            thread_id: thread,
+            working,
+        });
+    }
+    Ok(members)
 }
 
 async fn thread_meta_get(State(s): S, Path(thread): Path<String>) -> ApiResult<Json<Value>> {

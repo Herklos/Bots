@@ -29,7 +29,18 @@ fn faceEdge(color: string): string = color == "white" ? "light-dark(#8f8da0, #f2
 
 // The eyes are cut-outs: they take the canvas colour of the scheme.
 fn faceEye(): string = "light-dark(#f9f8fd, #16141f)"
+
+// A presence dot: online is the success colour, unread the info colour.
+fn presenceColour(kind: string): string = kind == "unread" ? "light-dark(#0a66d6, #5aa9ff)" : "light-dark(#007a45, #2fdc8f)"
 // design:end colours
+
+// The shapes: each outline in the 100-unit box and where its eyes sit. Generated from design/tokens.json.
+// design:begin shapes
+fn faceShape(shape: string): string = shape == "egg" ? "egg" : shape == "square" ? "square" : shape == "pill" ? "pill" : shape == "triangle" ? "triangle" : shape == "hex" ? "hex" : shape == "cloud" ? "cloud" : shape == "drop" ? "drop" : "ball"
+fn shapePath(shape: string): string = shape == "egg" ? "M50 10C78 10 96 28 96 54C96 77 77 92 50 92C23 92 4 77 4 54C4 28 22 10 50 10Z" : shape == "square" ? "M34 8H66A26 26 0 0 1 92 34V66A26 26 0 0 1 66 92H34A26 26 0 0 1 8 66V34A26 26 0 0 1 34 8Z" : shape == "pill" ? "M31 24H69A27 27 0 0 1 69 78H31A27 27 0 0 1 31 24Z" : shape == "triangle" ? "M43.5 17Q50 6 56.5 17L92.5 78Q98 89 86 89H14Q2 89 7.5 78Z" : shape == "hex" ? "M46 7Q50 5 54 7L87 26Q91 28.5 91 33V67Q91 71.5 87 74L54 93Q50 95 46 93L13 74Q9 71.5 9 67V33Q9 28.5 13 26Z" : shape == "cloud" ? "M31 82C15 82 6 68 10 55C13 46 20 41 29 41C31 26 45 17 58 21C68 24 74 31 75 39C88 41 96 53 92 66C89 76 81 82 71 82Z" : shape == "drop" ? "M50 6C50 6 17 44 17 66A33 33 0 0 0 83 66C83 44 50 6 50 6Z" : "M50 4A46 46 0 1 1 50 96A46 46 0 1 1 50 4Z"
+fn shapeDy(shape: string): number = shape == "egg" ? 3 : shape == "square" ? 0 : shape == "pill" ? 4.2 : shape == "triangle" ? 15 : shape == "hex" ? 0 : shape == "cloud" ? 8 : shape == "drop" ? 17 : 0
+fn shapeK(shape: string): number = shape == "egg" ? 1 : shape == "square" ? 1 : shape == "pill" ? 1.12 : shape == "triangle" ? 0.9 : shape == "hex" ? 1 : shape == "cloud" ? 0.95 : shape == "drop" ? 0.92 : 1
+// design:end shapes
 
 fn eyeGap(state: string): number = state == "working" ? 12.9 : state == "storm" || state == "asleep" ? 13.7 : 12.1
 fn eyeWidth(state: string): number = state == "asleep" ? 18.5 : state == "working" ? 8.1 : state == "storm" ? 8.9 : 9
@@ -38,10 +49,13 @@ fn eyeY(state: string): number = state == "asleep" ? 57.2 : state == "working" ?
 // Each eye leans by side * lean: left and right tilt apart (working) or together (storm).
 fn eyeTilt(state: string, side: number): number = state == "working" ? -side * 18 : state == "storm" ? side * 28 : 0
 
-// The first component is the file's root, so it takes no props: a gallery of every state.
+// The first component is the file's root, so it takes no props: a gallery of every shape and state.
 component FaceGallery
   view
-    column padding=16 gap=20
+    column padding=16 gap=16
+      row gap=12 flex-wrap="wrap"
+        for shape in ["ball", "egg", "square", "pill", "triangle", "hex", "cloud", "drop"] key=shape
+          Face(shape=shape, color="violet", state="idle", size=64, still=false)
       for state in ["idle", "working", "storm", "asleep"] key=state
         row gap=16 align-items="center"
           Face(shape="ball", color="teal", state=state, size=96, still=false)
@@ -49,6 +63,10 @@ component FaceGallery
           Face(shape="ball", color="white", state=state, size=48, still=false)
           Face(shape="ball", color="black", state=state, size=48, still=false)
           text state font="-exact-footnote"
+      row gap=16 align-items="center"
+        Avatar(shape="egg", color="pink", state="idle", size=44, still=true, presence="online")
+        Avatar(shape="hex", color="orange", state="idle", size=44, still=true, presence="unread")
+        Avatar(shape="cloud", color="blue", state="working", size=44, still=false, presence="")
 
 component Face
   props
@@ -60,6 +78,21 @@ component Face
   view
     svg width=size height=size viewBox="0 0 100 100" aria-hidden="true"
       g transform-box="fill-box" transform-origin="center" animation=(still ? "none" : state == "working" ? "faceRock 2.4s ease-in-out infinite" : state == "storm" ? "faceShake 0.3s linear infinite" : state == "asleep" ? "faceBreathe 4s ease-in-out infinite" : "faceBreathe 3s ease-in-out infinite")
-        circle cx=50 cy=50 r=46 fill=faceHex(color) stroke=faceEdge(color) stroke-width=1.25
+        path d=shapePath(faceShape(shape)) fill=faceHex(color) stroke=faceEdge(color) stroke-width=1.25
         for side in [-1, 1] key=side
-          rect x=(50 + side * eyeGap(state) - eyeWidth(state) / 2) y=(eyeY(state) - eyeLength(state) / 2) width=eyeWidth(state) height=eyeLength(state) rx=4.5 fill=faceEye() transform=`rotate(${eyeTilt(state, side)} ${50 + side * eyeGap(state)} ${eyeY(state)})` animation=(still || state == "asleep" ? "none" : `faceBlink 4.2s ease-in-out infinite`)
+          rect x=(50 + side * eyeGap(state) * shapeK(faceShape(shape)) - eyeWidth(state) * shapeK(faceShape(shape)) / 2) y=(eyeY(state) + shapeDy(faceShape(shape)) - eyeLength(state) * shapeK(faceShape(shape)) / 2) width=(eyeWidth(state) * shapeK(faceShape(shape))) height=(eyeLength(state) * shapeK(faceShape(shape))) rx=4.5 fill=faceEye() transform=`rotate(${eyeTilt(state, side)} ${50 + side * eyeGap(state) * shapeK(faceShape(shape))} ${eyeY(state) + shapeDy(faceShape(shape))})` animation=(still || state == "asleep" ? "none" : `faceBlink 4.2s ease-in-out infinite`)
+
+// A Face with an optional presence dot at its corner: "online" or "unread". Other values show none.
+component Avatar
+  props
+    shape: string
+    color: string
+    state: string
+    size: number
+    still: bool
+    presence: string
+  view
+    column position="relative" width=size height=size flex-shrink=0
+      Face(shape=shape, color=color, state=state, size=size, still=still)
+      if presence == "online" or presence == "unread"
+        column position="absolute" right=0 bottom=0 width=(size * 0.3) height=(size * 0.3) border-radius=999 background-color=presenceColour(presence) border-width=(size * 0.06) border-style="solid" border-color=faceEye() box-sizing="border-box" aria-hidden="true"

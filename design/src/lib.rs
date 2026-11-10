@@ -92,6 +92,9 @@ pub struct Motion {
 pub struct Face {
     pub radius: f64,
     pub eye: Eye,
+    /// The shapes a Bot can take, in the order the picker lists them. Each has an outline in
+    /// the 100-unit box, and where its eyes sit and how large they are.
+    pub shapes: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -108,6 +111,19 @@ static TOKENS: LazyLock<Tokens> =
 
 pub fn tokens() -> &'static Tokens {
     &TOKENS
+}
+
+impl Face {
+    /// The shape names in the listed order. The gateway accepts exactly these.
+    pub fn shape_names(&self) -> Vec<&str> {
+        self.shapes.keys().map(String::as_str).collect()
+    }
+
+    /// `(path, eye_dy, eye_k)` for a shape.
+    pub fn shape(&self, name: &str) -> Option<(&str, f64, f64)> {
+        let v = self.shapes.get(name)?;
+        Some((v["path"].as_str()?, v["eye_dy"].as_f64()?, v["eye_k"].as_f64()?))
+    }
 }
 
 impl Avatar {
@@ -343,6 +359,38 @@ pub fn face_region() -> String {
         "fn faceEye(): string = \"light-dark({}, {})\"",
         c.paper, c.night
     );
+    let _ = writeln!(s);
+    let _ = writeln!(s, "// A presence dot: online is the success colour, unread the info colour.");
+    let _ = writeln!(
+        s,
+        "fn presenceColour(kind: string): string = kind == \"unread\" ? \"light-dark({}, {})\" : \"light-dark({}, {})\"",
+        c.info.light, c.info.dark, c.success.light, c.success.dark
+    );
+    s
+}
+
+/// The Face's shapes in `app/face.contract`: each outline, and where its eyes sit.
+pub fn shapes_region() -> String {
+    let f = &tokens().face;
+    let names = f.shape_names();
+    let mut s = String::new();
+    let _ = writeln!(s, "fn faceShape(shape: string): string = {}", names
+        .iter()
+        .skip(1)
+        .map(|n| format!("shape == \"{n}\" ? \"{n}\" : "))
+        .collect::<String>() + &format!("\"{}\"", names[0]));
+    let arms = |pick: &dyn Fn(&str, f64, f64) -> String, default: &str| -> String {
+        let mut out = String::new();
+        for n in names.iter().skip(1) {
+            let (path, dy, k) = f.shape(n).expect("a listed shape has geometry");
+            let _ = write!(out, "shape == \"{n}\" ? {} : ", pick(path, dy, k));
+        }
+        out + default
+    };
+    let (path0, dy0, k0) = f.shape(names[0]).expect("a first shape");
+    let _ = writeln!(s, "fn shapePath(shape: string): string = {}", arms(&|p, _, _| format!("\"{p}\""), &format!("\"{path0}\"")));
+    let _ = writeln!(s, "fn shapeDy(shape: string): number = {}", arms(&|_, d, _| num(d), &num(dy0)));
+    let _ = writeln!(s, "fn shapeK(shape: string): number = {}", arms(&|_, _, k| num(k), &num(k0)));
     s
 }
 
@@ -507,6 +555,11 @@ pub fn outputs() -> Vec<Output> {
             path: "app/face.contract",
             region: Some("colours"),
             text: face_region(),
+        },
+        Output {
+            path: "app/face.contract",
+            region: Some("shapes"),
+            text: shapes_region(),
         },
     ]
 }
@@ -709,6 +762,21 @@ mod tests {
         }
         // The brand colour is the default avatar.
         assert_eq!(a.default_hex(), tokens().color.tide);
+    }
+
+    #[test]
+    fn the_face_has_eight_shapes_with_whole_outlines() {
+        let f = &tokens().face;
+        assert_eq!(
+            f.shape_names(),
+            ["ball", "egg", "square", "pill", "triangle", "hex", "cloud", "drop"]
+        );
+        for name in f.shape_names() {
+            let (path, dy, k) = f.shape(name).unwrap();
+            assert!(path.starts_with('M') && path.ends_with('Z'), "{name}: an open outline");
+            assert!(path.chars().all(|c| c != '"' && c != '\n'), "{name}: path has a quote");
+            assert!((0.0..=20.0).contains(&dy) && (0.8..=1.2).contains(&k), "{name}: eyes off the face");
+        }
     }
 
     #[test]
