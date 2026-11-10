@@ -459,6 +459,12 @@ shape Room
   members: RoomMember[]
   messages: RoomMessage[]
 
+// One face in a group's stack. Colour stays a brand token; the view maps it.
+shape FaceBit
+  shape: string
+  color: string
+  state: string
+
 // One row of the sidebar list: a Bot or a group, newest conversation first.
 shape Convo
   kind: string
@@ -467,6 +473,7 @@ shape Convo
   name: string
   color: string
   shape: string
+  faces: FaceBit[]
   line: string
   time: string
   at: string
@@ -664,10 +671,17 @@ shape Computer
   image: string
   error: string
 
+// One kept conversation: its text, the files waiting with it, and a held clip.
+shape DraftPack
+  stamp: string
+  texts: string[]
+  files: string[]
+  voices: string[]
+
 fn nameOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.name, case none => "" }
 fn labelOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.ready ? (b.label != "" ? b.label : "Ready to chat") : "Getting set up…", case none => "" }
 fn initialsOf(name: string): string = name.trim().split(" ").filter(w => w != "").slice(0, 2).map(w => w.slice(0, 1).toUpperCase()).join("")
-fn botCountLabel(n: number): string = n == 1 ? "1 Bot" : `${n} Bots`
+fn botCountLabel(n: number, one: string, many: string): string = n == 1 ? one : many
 // Colours come from design/tokens.json: change them there.
 // design:begin colours
 fn pickerColours(): string[] = ["brand.brown", "brand.red", "brand.orange", "brand.amber", "brand.green", "brand.default", "brand.blue", "brand.violet", "brand.pink", "brand.gray"]
@@ -677,16 +691,37 @@ fn shapeOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.s
 fn colorOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.color, case none => "brand.default" }
 fn nText(n: number, one: string, many: string): string = n == 1 ? `1 ${one}` : `${n} ${many}`
 fn usageLine(m: number, a: number, v: number, i: number): string = `${nText(m, "message", "messages")}, ${nText(a, "attachment", "attachments")}, ${nText(v, "vault write", "vault writes")}, and ${nText(i, "icon fetch", "icon fetches")} on this machine.`
-fn attachmentName(entry: string): string = match entry.split("\\t").at(-1) { case some(name) => name, case none => "Attachment" }
-fn themeLabel(t: string): string = t == "system" ? "System" : t == "dark" ? "Dark" : "Light"
+fn attachmentName(entry: string, fallback: string): string = match entry.split("\\t").at(-1) { case some(name) => name, case none => fallback }
+// A draft key is the Bot, or that Bot and a child thread. A room keeps none.
+fn convoKey(slug: string, child: string): string = slug == "" ? "" : (child == "" ? slug : `${slug}/${child}`)
+fn dropKey(rows: string[], key: string): string[] = key == "" ? rows : rows.filter(r => not r.startsWith(`${key}\u001f`))
+fn putText(rows: string[], key: string, value: string): string[] = key == "" ? rows : (value == "" ? dropKey(rows, key) : dropKey(rows, key).concat([`${key}\u001f${value}`]))
+fn putVoice(rows: string[], key: string, hold: string, id: string, preview: string, seconds: number): string[] = key == "" ? rows : ((hold == "" and id == "") ? dropKey(rows, key) : dropKey(rows, key).concat([`${key}\u001f${hold}\u001f${id}\u001f${preview}\u001f${seconds}`]))
+fn fieldAt(pack: string, n: number): string = match pack.split("\u001f").at(n) { case some(s) => s, case none => "" }
+fn voiceNumber(pack: string): number = match parseNumber(fieldAt(pack, 3)) { case some(n) => n, case none => 0 }
+fn entryId(entry: string): string = match entry.split("\\t").at(0) { case some(id) => id, case none => "" }
+fn fileIdOf(row: string): string = entryId(fieldAt(row, 1))
+fn hasFileId(rows: string[], id: string): bool = id != "" and rows.filter(r => fileIdOf(r) == id).length > 0
+fn hasVoiceId(rows: string[], id: string): bool = id != "" and rows.filter(r => fieldAt(r, 2) == id).length > 0
+fn themeLabel(theme: string, system: string, dark: string, light: string): string = theme == "system" ? system : theme == "dark" ? dark : light
 // Face colours are plain names; Bot colours are brand.* tokens from the design package.
 fn faceColor(c: string): string = c == "brand.default" ? "teal" : c == "brand.blue" ? "blue" : c == "brand.violet" ? "violet" : c == "brand.pink" ? "pink" : c == "brand.orange" ? "orange" : c == "brand.green" ? "green" : c == "brand.black" ? "black" : c == "brand.white" ? "white" : c == "brand.brown" ? "brown" : c == "brand.red" ? "red" : c == "brand.amber" ? "amber" : c == "brand.yellow" ? "yellow" : c == "brand.cyan" ? "cyan" : c == "brand.purple" ? "purple" : c == "brand.magenta" ? "magenta" : c == "brand.gray" ? "gray" : "teal"
 // The open chat is clear. A hidden Bot keeps the mark until that chat is the open one.
 fn showUnread(unread: bool, open: bool, hidden: bool): bool = unread and not open and (hidden or not hidden)
+fn bitShape(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.shape, case none => "ball" }
+fn bitColor(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.color, case none => "brand.default" }
+fn bitState(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.state, case none => "idle" }
+fn memberFaces(bots: Bot[], members: RoomMember[]): FaceBit[] = members.slice(0, 3).map(m => FaceBit(shape=shapeOf(bots, m.slug), color=colorOf(bots, m.slug), state=m.state))
+fn pickedFaces(bots: Bot[], slugs: string[]): FaceBit[] = slugs.slice(0, 3).map(slug => FaceBit(shape=shapeOf(bots, slug), color=colorOf(bots, slug), state="idle"))
 
 component Bots
   state password = ""
-  state drafts: string[] = []
+  state draftTexts: string[] = []
+  state draftFiles: string[] = []
+  state draftVoices: string[] = []
+  state draftRev = 0
+  state savedRev = 0
+  state appliedStamp = ""
   state lastText = ""
   state failedText = ""
   state answerText = ""
@@ -696,8 +731,6 @@ component Bots
   state newFirst = ""
   state groupName = ""
   state groupAbout = ""
-  state groupColor = "brand.default"
-  state groupShape = "ball"
   state groupMembers: string[] = []
   state roomText = ""
   state plusOpen = false
@@ -714,12 +747,9 @@ component Bots
   state vaultQuery = ""
   state messageQuery = ""
   state marksOn = true
-  state voiceHold = ""
   state voiceRecorder = ""
   state voiceTrack = ""
-  state voiceId = ""
-  state voicePreview = ""
-  state voiceSeconds = 0
+  state voiceKey = ""
   state voiceError = ""
   state reactFor = ""
   state replyTo = ""
@@ -735,12 +765,11 @@ component Bots
   state usagePeriod = "7d"
   state usageView = "summary"
   state toast = ""
-  // Each entry is `id\\tname` for a file waiting to go out with the next send.
-  state pendingAttaches: string[] = []
   // The page the person is driving. Cleared after Release, including when they leave.
   state wantHold = false
   state heldTab = ""
   resource session = loadSession() as shape Session else empty()
+  resource keptDrafts = loadDrafts() as shape DraftPack else empty()
   resource bots = loadBots(slug) as shape Bot[] else empty()
   resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId) as shape Convo[] else empty()
   resource chat = loadChat(slug, childThread) as shape Chat else empty()
@@ -769,6 +798,7 @@ component Bots
   mutation reacted as shape Reply refreshes chat
   mutation messagePinned as shape Reply refreshes chat
   mutation sent as shape Reply refreshes chat then afterSend
+  mutation draftSaved as shape Reply
   mutation answered as shape Reply refreshes chat then afterAnswer
   mutation stopped as shape Reply refreshes chat
   mutation renamed as shape Reply refreshes bots
@@ -808,7 +838,7 @@ component Bots
   derive roomId = match stack(nav).filter(e => e.name == "group").at(-1) { case some(e) => e.params.id, case none => "" }
   derive qtext = messageQuery.trim().toLowerCase()
   derive shownRows = chat.rows.filter(m => m.kind != "message" or qtext == "" or m.text.toLowerCase().includes(qtext))
-  derive searchNote = qtext != "" and chat.partial ? "Search covers the loaded conversation." : ""
+  derive searchNote = qtext != "" and chat.partial ? t("chat.searchPartial") : ""
   derive visibleBots = bots.filter(b => not b.hidden and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
   derive tiles = visibleBots.filter(b => query == "" and (b.main or b.pinned))
   derive openUnread = bots.filter(b => b.slug == slug and b.unread).length > 0
@@ -830,7 +860,14 @@ component Bots
   derive revealedFor = match revealed { case some(r) => r.id, case none => "" }
   derive revealedText = match revealed { case some(r) => (r.ok ? r.password : ""), case none => "" }
   derive attachError = match attached { case some(r) => r.error, case none => "" }
-  derive draft = match first(drafts.filter(d => d.startsWith(`${slug}\t`))) { case some(d) => d.slice(slug.length + 1), case none => "" }
+  derive dkey = convoKey(slug, childThread)
+  derive draft = match first(draftTexts.filter(d => d.startsWith(`${dkey}\u001f`))) { case some(d) => d.slice(dkey.length + 1).slice(0, 8000), case none => "" }
+  derive pendingAttaches = draftFiles.filter(f => f.startsWith(`${dkey}\u001f`)).map(f => f.slice(dkey.length + 1))
+  derive voicePack = match first(draftVoices.filter(v => v.startsWith(`${dkey}\u001f`))) { case some(v) => v.slice(dkey.length + 1), case none => "" }
+  derive voiceHold = fieldAt(voicePack, 0)
+  derive voiceId = fieldAt(voicePack, 1)
+  derive voicePreview = fieldAt(voicePack, 2)
+  derive voiceSeconds = voiceNumber(voicePack)
   derive answerError = match answered { case some(r) => r.error, case none => "" }
   derive canSend = draft.trim() != "" or pendingAttaches.length > 0
   derive onBot = top(nav).name == "chat"
@@ -866,6 +903,13 @@ component Bots
   // A take stops itself at two minutes. Stopping earlier cancels this wait.
   task capClip when voiceRecorder != ""
     after(120000, holdVoice)
+
+  // The store answers after the first paint. Apply it once, unless this screen already typed.
+  task restoreDrafts when keptDrafts.stamp != appliedStamp
+    after(1, applyDrafts)
+
+  task keepDrafts when draftRev != savedRev
+    after(1, writeDrafts)
 
   action fitView
     let box = frame("app-shell")
@@ -941,8 +985,26 @@ component Bots
     panelPage = "root"
     nav = top(nav).name == "chat" and url.startsWith("/bot/") ? replace(nav, url) : go(nav, url)
   action back
+    if childThread != ""
+      childThread = ""
+    else
+      nav = back(nav)
+  action closeChild
     childThread = ""
-    nav = back(nav)
+  action noteDraft
+    draftRev = draftRev + 1
+  action applyDrafts
+    let stamp = keptDrafts.stamp
+    if stamp != appliedStamp
+      appliedStamp = stamp
+      if draftRev == 0
+        draftTexts = keptDrafts.texts
+        draftFiles = keptDrafts.files
+        draftVoices = keptDrafts.voices
+  action writeDrafts
+    let rev = draftRev
+    savedRev = rev
+    send draftSaved = saveDrafts(draftTexts, draftFiles, draftVoices)
   action editChatQuery(v: string)
     messageQuery = v
   action toggleShownMark
@@ -959,10 +1021,12 @@ component Bots
   action holdVoice
     voiceError = ""
     if slug == "fixture" or slug == ""
-      voiceHold = "voice.m4a"
-    else if voiceRecorder != ""
+      draftVoices = putVoice(draftVoices, dkey, "voice.m4a", "", "", 0)
+      noteDraft()
+    else if voiceRecorder != "" and voiceKey == dkey
       send clipSaved = stopMediaRecorder(recorder=voiceRecorder)
-    else if not pending(micOpened)
+    else if voiceRecorder == "" and not pending(micOpened)
+      voiceKey = dkey
       send micOpened = getUserMedia(audio=true)
   action armMic
     match micOpened
@@ -974,15 +1038,16 @@ component Bots
         let mime = clipType.supported ? "audio/mp4" : "audio/webm"
         send recStarted = startMediaRecorder(stream=stream, mimeType=mime, path=path)
       case none
-        voiceError = "The microphone is off."
+        voiceError = t("voice.micOff")
   action recBegun
     match recStarted
       case some(r)
         voiceRecorder = r.id
-        voiceHold = "Recording"
+        draftVoices = putVoice(draftVoices, voiceKey, t("voice.recording"), "", "", 0)
+        noteDraft()
       case none
         voiceRecorder = ""
-        voiceError = "The microphone is off."
+        voiceError = t("voice.micOff")
   action stageClip
     match clipSaved
       case some(media)
@@ -990,34 +1055,32 @@ component Bots
         let secs = media.duration / 1000
         voiceRecorder = ""
         voiceTrack = ""
-        voiceSeconds = secs
         if track != ""
           send trackEnded = stopTrack(track=track)
         if media.size > 8388608
-          voiceHold = ""
-          voiceError = "That clip is too long."
+          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+          noteDraft()
+          voiceError = t("voice.tooLong")
         else if secs <= 0 or media.size == 0
-          voiceHold = ""
-          voiceError = "That clip is empty."
+          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+          noteDraft()
+          voiceError = t("voice.empty")
         else
           send voiced = stageVoice(slug, media.path, media.mimeType, secs)
       case none
         voiceRecorder = ""
-        voiceError = "That clip could not be read."
+        voiceError = t("voice.unreadable")
   action showClip
     match voiced
       case some(r)
         if r.ok and r.id != ""
-          voiceHold = r.name
-          voiceId = r.id
-          voicePreview = r.url
-          voiceSeconds = r.seconds
+          draftVoices = putVoice(draftVoices, dkey, r.name, r.id, r.url, r.seconds)
+          noteDraft()
           voiceError = ""
         else
-          voiceHold = ""
-          voiceId = ""
-          voicePreview = ""
-          voiceError = r.error != "" ? r.error : "That clip could not be read."
+          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+          noteDraft()
+          voiceError = r.error != "" ? r.error : t("voice.unreadable")
       case none
   action sendHeldVoice
     if voiceId != "" and not pending(voiceSent)
@@ -1026,10 +1089,8 @@ component Bots
     match voiceSent
       case some(r)
         if r.ok
-          voiceHold = ""
-          voiceId = ""
-          voicePreview = ""
-          voiceSeconds = 0
+          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+          noteDraft()
           voiceError = ""
         else
           voiceError = r.error
@@ -1037,12 +1098,12 @@ component Bots
   action discardVoice
     if voiceId != ""
       let id = voiceId
-      voiceHold = ""
-      voiceId = ""
-      voicePreview = ""
-      voiceSeconds = 0
+      let nextVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+      draftVoices = nextVoices
+      noteDraft()
       voiceError = ""
-      send voiceDropped = dropVoice(slug, id)
+      if not hasFileId(draftFiles, id) and not hasVoiceId(nextVoices, id) and slug != "fixture" and slug != ""
+        send voiceDropped = dropVoice(slug, id)
   action openChild(threadId: string)
     childThread = threadId
   action openNew
@@ -1085,23 +1146,17 @@ component Bots
     plusOpen = false
     groupName = ""
     groupAbout = ""
-    groupColor = "brand.default"
-    groupShape = "ball"
     groupMembers = []
     nav = push(nav, "/new-group")
   action editGroupName(v: string)
     groupName = v
   action editGroupAbout(v: string)
     groupAbout = v
-  action pickGroupColour(c: string)
-    groupColor = c
-  action pickGroupShape(s: string)
-    groupShape = s
   action toggleGroupMember(m: string)
     groupMembers = groupMembers.includes(m) ? groupMembers.filter(x => x != m) : groupMembers.concat([m])
   action makeGroup
     if canMakeGroup
-      send groupMade = createGroup(groupName.trim(), groupAbout.trim(), groupColor, groupShape, groupMembers.join("\n"))
+      send groupMade = createGroup(groupName.trim(), groupAbout.trim(), "brand.default", "ball", groupMembers.join("\n"))
   action afterGroupMade
     match groupMade
       case some(r)
@@ -1146,7 +1201,9 @@ component Bots
       if not event.repeat
         postRoom()
   action edit(v: string)
-    drafts = drafts.filter(d => not d.startsWith(`${slug}\t`)).concat([`${slug}\t${v}`])
+    let next = v.slice(0, 8000)
+    draftTexts = putText(draftTexts, dkey, next)
+    noteDraft()
   action pickFiles
     showPicker("chat-attach")
   action filesPicked(files: Picked[])
@@ -1158,11 +1215,17 @@ component Bots
   action afterAttach
     match attached
       case some(r)
-        if r.ok and r.id != ""
-          pendingAttaches = pendingAttaches.concat([`${r.id}\\t${r.name}`])
+        if r.ok and r.id != "" and dkey != "" and pendingAttaches.length < 8
+          draftFiles = draftFiles.concat([`${dkey}\u001f${r.id}\\t${r.name}`])
+          noteDraft()
       case none
   action dropPending(entry: string)
-    pendingAttaches = pendingAttaches.filter(e => e != entry)
+    let id = entryId(entry)
+    let next = draftFiles.filter(f => f != `${dkey}\u001f${entry}`)
+    draftFiles = next
+    noteDraft()
+    if id != "" and not hasFileId(next, id) and not hasVoiceId(draftVoices, id) and slug != "fixture" and slug != ""
+      send voiceDropped = dropVoice(slug, id)
   action post
     if canSend and not pending(sent)
       // pendingAttaches entries are `id\\tname`; the data module keeps the ids.
@@ -1178,7 +1241,8 @@ component Bots
         post()
   action afterSend
     if sendError == ""
-      pendingAttaches = []
+      draftFiles = dropKey(draftFiles, dkey)
+      noteDraft()
       lastText = ""
       replyTo = ""
       replyQuote = ""
@@ -1297,7 +1361,7 @@ component Bots
       send modelSaved = setModel(bslug, instanceId, model, effort)
   action afterModel
     if modelError == ""
-      toast = "Saved. It applies to the next message."
+      toast = t("toast.modelSaved")
   action doMakeDefault(instanceId: string, model: string, effort: string)
     if not pending(defaultSaved)
       send defaultSaved = setDefaultModel(instanceId, model, effort)
@@ -1329,64 +1393,64 @@ component Bots
             column align-items="center" gap="space.sm"
               Face(shape="ball", color="teal", state=(pending(signedIn) ? "working" : "idle"), size=96, still=false)
               text "hbots" role="heading" aria-level=1 class=HeroTitle
-              text "Your own Bots, in one place." color="-exact-secondary-label"
-            text "Enter the password you set in Settings → Remote access." color="-exact-secondary-label"
-            input appearance="none" class=Field type="password" value=password input=editPassword submit=login placeholder="Password" aria-label="Password" testId="password" width="100%"
+              text t("inbox.tagline") color="-exact-secondary-label"
+            text t("auth.passwordHint") color="-exact-secondary-label"
+            input appearance="none" class=Field type="password" value=password input=editPassword submit=login placeholder=t("common.password") aria-label=t("common.password") testId="password" width="100%"
             if signInError != "" and not pending(signedIn)
               text signInError color="-exact-system-red" testId="sign-in-error"
             button press=login disabled=(password == "" or pending(signedIn)) buttonStyle="filled" testId="sign-in-button"
-              text (pending(signedIn) ? "Signing in…" : "Sign In")
+              text (pending(signedIn) ? t("auth.signingIn") : t("auth.signIn"))
       else
         for e in stack(nav) key=e.id
           if e.name == "inbox"
             column class=Screen background-color="surface.sidebar" navigationSplit="288" navigationKey=`${e.id}` navigationScroll="bots-list" position="absolute" inset=0
               header class=SidebarBar
                 if searching
-                  input type="search" class=SearchField value=botQuery input=editBotQuery placeholder="Search Bots" aria-label="Search Bots" testId="bot-search" flex=1 min-width=0
+                  input type="search" class=SearchField value=botQuery input=editBotQuery placeholder=t("inbox.search") aria-label=t("inbox.search") testId="bot-search" flex=1 min-width=0
                   button class=TextControl appearance="none" press=closeSearch testId="search-cancel"
-                    text "Cancel"
+                    text t("common.cancel")
                 else
                   column flex=1
-                  button class=IconControl appearance="none" press=openSearch aria-label="Search Bots" title="Search Bots" testId="search-open"
+                  button class=IconControl appearance="none" press=openSearch aria-label=t("inbox.search") title=t("inbox.search") testId="search-open"
                     column class=Disc
                       Glyph(name="search", size=18)
-                  button class=IconControl appearance="none" press=togglePlus aria-label="New Bot or group" title="New Bot or group" aria-expanded=plusOpen testId="new-bot"
+                  button class=IconControl appearance="none" press=togglePlus aria-label=t("inbox.newMenu") title=t("inbox.newMenu") aria-expanded=plusOpen testId="new-bot"
                     column class=Disc
                       Glyph(name="add", size=18)
               if plusOpen
-                button appearance="none" press=togglePlus aria-label="Close menu" position="absolute" inset=0 z-index=9 background-color="transparent" border="none" testId="new-menu-backdrop"
+                button appearance="none" press=togglePlus aria-label=t("inbox.closeMenu") position="absolute" inset=0 z-index=9 background-color="transparent" border="none" testId="new-menu-backdrop"
                 column position="absolute" top=52 right=8 z-index=10 width=208 box-sizing="border-box" padding="space.xs" gap="2px" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-menu"
                   button class=ConversationLink appearance="none" press=openNew testId="new-bot-option" padding="space.sm space.md"
                     row gap="space.md" align-items="center"
                       Face(shape="ball", color="teal", state="idle", size=28, still=true)
-                      text "New Bot" font-weight=500
+                      text t("inbox.newBot") font-weight=500
                   button class=ConversationLink appearance="none" press=openNewGroup disabled=(bots.length < 2) testId="new-group-option" padding="space.sm space.md"
                     row gap="space.md" align-items="center"
                       Face(shape="hex", color="blue", state="idle", size=28, still=true)
                       column gap="2px"
-                        text "New group" font-weight=500
+                        text t("group.new") font-weight=500
                         if bots.length < 2
-                          text "Needs two Bots" font="-exact-footnote" color="ink.faint"
+                          text t("group.needsTwo") font="-exact-footnote" color="ink.faint"
               column navigationSplit="placeholder" flex=1 align-items="center" justify-content="center" gap="space.lg" padding="space.xl"
                 Face(shape="ball", color="teal", state="idle", size=72, still=false)
-                text "Your own Bots, in one place." class=HeroTitle text-align="center"
-                text "Choose a Bot to pick up where you left off, or create someone new." color="ink.muted" text-align="center" max-width="24rem"
+                text t("inbox.tagline") class=HeroTitle text-align="center"
+                text t("inbox.placeholderBody") color="ink.muted" text-align="center" max-width="24rem"
                 button class=PrimaryButton press=openNew buttonStyle="filled"
-                  text "New Bot"
+                  text t("inbox.newBot")
               if failed(bots) and bots.length == 0
-                EmptyState(symbol="symbol:alert", title="Can’t Reach the Gateway", message="Start the `hbots` gateway on this machine or on your server, then try again.")
+                EmptyState(symbol="symbol:alert", title=t("error.gatewayTitle"), message=t("error.gatewayHint"))
                   button press=pull testId="retry"
-                    text "Try again"
+                    text t("common.tryAgain")
               else if bots.length == 0 and not pending(bots)
                 column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="empty-bots"
                   Face(shape="ball", color="teal", state="idle", size=72, still=false)
-                  text "Meet your first Bot" role="heading" aria-level=2 class=PageTitle
-                  text "Give your Bot a name, then make it your own. Your conversations stay together, right here." color="-exact-secondary-label" text-align="center" max-width="22rem"
+                  text t("inbox.emptyTitle") role="heading" aria-level=2 class=PageTitle
+                  text t("inbox.emptyBody") color="-exact-secondary-label" text-align="center" max-width="22rem"
                   button press=openNew buttonStyle="filled" testId="empty-new"
-                    text "Create your first Bot"
+                    text t("inbox.emptyAction")
               else if query != "" and visibleBots.length == 0 and hiddenBots.length == 0
                 column flex=1 min-height=0 align-items="center" justify-content="center" padding="space.xl" testId="no-bot-match"
-                  EmptyState(symbol="symbol:search", title=`No Bots match “${botQuery.trim()}”`, message="Check the spelling, or clear the search to see every Bot.")
+                  EmptyState(symbol="symbol:search", title=t("inbox.noMatch", query=botQuery.trim()), message=t("inbox.searchHint"))
               else
                 if tiles.length > 0
                   row gap="space.xs" padding="0 space.sm space.sm" testId="bot-tiles"
@@ -1399,7 +1463,10 @@ component Bots
                   for c in convos key=c.key
                     link class=ConversationLink href=(c.kind == "group" ? path("group", c.id) : path("chat", c.id)) testId=(c.kind == "group" ? `group-${c.id}` : `bot-${c.id}`) background-color=((c.kind == "group" ? roomId == c.id : slug == c.id) ? "surface.raised" : "transparent")
                       row gap="space.md" align-items="center"
-                        Avatar(shape=c.shape, color=faceColor(c.color), state=(c.ready ? (c.working ? "working" : "idle") : "asleep"), size=44, still=(not c.working), presence=(c.working ? "online" : ""))
+                        if c.kind == "group"
+                          Faces(faces=c.faces, size=44, tuck=-18)
+                        else
+                          Avatar(shape=c.shape, color=faceColor(c.color), state=(c.ready ? (c.working ? "working" : "idle") : "asleep"), size=44, still=(not c.working), presence=(c.working ? "online" : ""))
                         column gap="2px" flex=1 min-width=0
                           row gap="space.sm" align-items="baseline"
                             text c.name font-weight=(c.unread ? 700 : 600) flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=(c.kind == "group" ? `group-title-${c.id}` : `bot-title-${c.id}`)
@@ -1407,11 +1474,11 @@ component Bots
                           row gap="space.sm" align-items="center"
                             text c.line color=(c.unread ? "-exact-label" : "ink.muted") font="-exact-footnote" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
                             if showUnread(c.unread, slug == c.id, false)
-                              column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label="Unread" testId=`unread-${c.id}`
+                              column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${c.id}`
                   if hiddenBots.length > 0
                     button class=ConversationLink appearance="none" press=toggleHidden aria-expanded=hiddenOpen testId="hidden-toggle"
                       row gap="space.sm" align-items="center"
-                        text `Hidden ${hiddenBots.length}` font="-exact-footnote" color="ink.muted" flex=1
+                        text t("inbox.hidden", n=hiddenBots.length) font="-exact-footnote" color="ink.muted" flex=1
                         column color="ink.muted" rotate=(hiddenOpen ? "90deg" : "0deg")
                           Glyph(name="chevron", size=14)
                     if hiddenOpen
@@ -1421,14 +1488,14 @@ component Bots
                             Avatar(shape=b.shape, color=faceColor(b.color), state="asleep", size=32, still=true, presence="")
                             text b.name flex=1 color="ink.muted"
                             if showUnread(b.unread, slug == b.slug, b.hidden)
-                              column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label="Unread" testId=`unread-${b.slug}`
+                              column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${b.slug}`
               column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
-                link class=ConversationLink href="/vault" aria-label="Vault" testId="sidebar-vault" padding="space.xs space.md"
+                link class=ConversationLink href="/vault" aria-label=t("vault.title") testId="sidebar-vault" padding="space.xs space.md"
                   row align-items="center" gap="space.md"
                     column color="ink.muted" width=32 align-items="center"
                       Glyph(name="lock", size=18)
-                    text "Vault" font-weight=500
-                link class=ConversationLink href="/settings" aria-label="Settings" title="Settings" testId="open-settings" padding="space.sm space.md"
+                    text t("vault.title") font-weight=500
+                link class=ConversationLink href="/settings" aria-label=t("settings.title") title=t("settings.title") testId="open-settings" padding="space.sm space.md"
                   row align-items="center" gap="space.md"
                     column width=32 height=32 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
                       if initialsOf(prefs.userName) != ""
@@ -1436,50 +1503,50 @@ component Bots
                       else
                         Glyph(name="person", size=16)
                     column flex=1 min-width=0 gap="2px"
-                      text (prefs.userName != "" ? prefs.userName : "You") font-weight=500 overflow-wrap="break-word" testId="you-name"
-                      text botCountLabel(bots.length) color="ink.muted" font="-exact-footnote"
+                      text (prefs.userName != "" ? prefs.userName : t("settings.you")) font-weight=500 overflow-wrap="break-word" testId="you-name"
+                      text botCountLabel(bots.length, t("bots.one"), t("bots.many", n=bots.length)) color="ink.muted" font="-exact-footnote"
           else if e.name == "chat"
             column class=Screen navigationKey=`${e.id}` navigationScroll="transcript" drop=filesDropped position="absolute" inset=0 padding-right=((wide and panelOpen) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="chat-header"
-                button id="back" class=IconControl appearance="none" press=back aria-label="Back" title="Back" display=(wide ? "none" : "flex")
+                button id="back" class=IconControl appearance="none" press=back aria-label=t("common.back") title=t("common.back") display=(wide ? "none" : "flex")
                   column rotate="180deg"
                     Glyph(name="chevron", size=20)
-                button class=HeaderToggle appearance="none" press=togglePanel aria-label=(panelOpen ? "Hide Bot details" : "Show Bot details") aria-expanded=panelOpen aria-controls="bot-panel" title="Bot settings" testId="panel-toggle" position="absolute" left="50%" translate="-50% 0" gap="space.sm" padding="0 space.md" max-width="75%"
+                button class=HeaderToggle appearance="none" press=togglePanel aria-label=(panelOpen ? t("chat.hideDetails") : t("chat.showDetails")) aria-expanded=panelOpen aria-controls="bot-panel" title=t("chat.botSettings") testId="panel-toggle" position="absolute" left="50%" translate="-50% 0" gap="space.sm" padding="0 space.md" max-width="75%"
                   if nameOf(bots, e.params.slug) != ""
                     column testId="chat-avatar"
                       Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state=(chat.working ? "working" : "idle"), size=28, still=true)
                   text nameOf(bots, e.params.slug) role="heading" aria-level=1 class=PageTitle overflow-wrap="anywhere" testId="chat-title" min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
                 column flex=1
-                button class=IconControl appearance="none" press=toggleChatSearch aria-label="Search this conversation" title="Search this conversation" testId="chat-search-open" width=36 height=36
+                button class=IconControl appearance="none" press=toggleChatSearch aria-label=t("chat.search") title=t("chat.search") testId="chat-search-open" width=36 height=36
                   Glyph(name=(chatSearching ? "close" : "search"), size=18)
               if failed(chat)
-                EmptyState(symbol="symbol:alert", title="Can’t load this conversation", message="Your messages haven’t loaded. Check the gateway, then try again.")
+                EmptyState(symbol="symbol:alert", title=t("error.chatTitle"), message=t("error.chatHint"))
                   button press=pull testId="retry-chat"
-                    text "Try again"
+                    text t("common.tryAgain")
               else if pending(chat) and chat.rows.length == 0
                 column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" aria-busy=true
                   Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="working", size=44, still=false)
-                  text "Loading your conversation…" color="ink.muted"
+                  text t("chat.loading") color="ink.muted"
               else if chat.rows.length == 0 and not chat.working
                 column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="empty-chat"
                   Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="idle", size=72, still=false)
                   text nameOf(bots, e.params.slug) class=HeroTitle
-                  text "A little help, a new idea, or just a hello." color="ink.muted" text-align="center"
+                  text t("chat.emptyBody") color="ink.muted" text-align="center"
                   column gap="space.sm" width="100%" max-width="24rem" margin-top="space.lg"
-                    button press=edit("Help me make a plan for today.") class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-plan"
-                      text "Make a plan for today"
-                    button press=edit("I have an idea I’d like to think through.") class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-idea"
-                      text "Think through an idea"
-                    button press=edit("What can we work on together?") class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-help"
-                      text "See what we can do together"
+                    button press=edit(t("chat.starter.planSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-plan"
+                      text t("chat.starter.plan")
+                    button press=edit(t("chat.starter.ideaSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-idea"
+                      text t("chat.starter.idea")
+                    button press=edit(t("chat.starter.helpSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-help"
+                      text t("chat.starter.help")
               else
                 column flex=1 min-height=0 justify-content="flex-end" position="relative"
                   if chatSearching
-                    input type="search" class=SearchField value=messageQuery input=editChatQuery placeholder="Search this conversation" aria-label="Search this conversation" testId="chat-search" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="0 space.lg space.xs"
+                    input type="search" class=SearchField value=messageQuery input=editChatQuery placeholder=t("chat.search") aria-label=t("chat.search") testId="chat-search" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="0 space.lg space.xs"
                   if chatSearching and searchNote != ""
                     text searchNote color="ink.muted" font="-exact-footnote" testId="search-note" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
                   if away
-                    button class=IconControl appearance="none" press=toEnd aria-label="Jump to the latest message" title="Jump to the latest" testId="to-end" position="absolute" left="50%" translate="-50% 0" bottom=8 z-index=1 width=32 height=32 border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line"
+                    button class=IconControl appearance="none" press=toEnd aria-label=t("chat.jump") title=t("chat.jumpShort") testId="to-end" position="absolute" left="50%" translate="-50% 0" bottom=8 z-index=1 width=32 height=32 border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line"
                       Glyph(name="arrow-down", size=16)
                   for p in chat.pins key=p.id
                     text p.text color="ink.muted" font="-exact-footnote" testId=`pin-${p.id}` width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
@@ -1523,12 +1590,12 @@ component Bots
                                   border-bottom-right-radius="radius.lg"
                               for f in m.files key=f.id
                                 if f.kind == "image"
-                                  link href=f.url target="_blank" aria-label=`Open ${f.name}` testId=`image-${f.id}`
+                                  link href=f.url target="_blank" aria-label=t("common.openNamed", name=f.name) testId=`image-${f.id}`
                                     image f.url aria-label=f.name max-width="20rem" width="100%" border-radius="radius.lg"
                                 else if f.kind == "audio" and f.url != ""
                                   audio f.url controls=true testId=`audio-${f.id}`
                                 else
-                                  link class=FileCard href=f.url target="_blank" aria-label=`Download ${f.name}` testId=`file-${f.id}`
+                                  link class=FileCard href=f.url target="_blank" aria-label=t("chat.downloadNamed", name=f.name) testId=`file-${f.id}`
                                     row gap="space.md" align-items="center"
                                       column class=IconTile color="AccentColor"
                                         Glyph(name="file", size=18)
@@ -1543,19 +1610,19 @@ component Bots
                                 row gap="space.xs" align-items="center" padding="0 space.xs"
                                   text m.time font="-exact-footnote" color="ink.faint"
                                   if m.react != ""
-                                    button class=TextControl appearance="none" press=doReact(m.id, m.react) aria-label="Remove reaction" min-height=24 padding="0 space.xs" testId=`react-${m.id}`
+                                    button class=TextControl appearance="none" press=doReact(m.id, m.react) aria-label=t("chat.removeReaction") min-height=24 padding="0 space.xs" testId=`react-${m.id}`
                                       text m.react font="-exact-footnote"
                                   else if not m.mine
-                                    button class=TextControl appearance="none" press=openReact(m.id) aria-label="React" title="React" min-height=24 padding="0 space.xs" testId=`add-react-${m.id}`
+                                    button class=TextControl appearance="none" press=openReact(m.id) aria-label=t("chat.react") title=t("chat.react") min-height=24 padding="0 space.xs" testId=`add-react-${m.id}`
                                       Glyph(name="smile", size=14)
-                                  button class=TextControl appearance="none" press=startReply(m.id, m.text) aria-label="Reply" title="Reply" min-height=24 padding="0 space.xs" testId=`reply-${m.id}`
-                                    text "Reply" font="-exact-footnote"
-                                  button class=TextControl appearance="none" press=doPinMessage(m.id, m.text) aria-label="Pin" title="Pin" min-height=24 padding="0 space.xs" testId=`pin-message-${m.id}`
-                                    text "Pin" font="-exact-footnote"
+                                  button class=TextControl appearance="none" press=startReply(m.id, m.text) aria-label=t("chat.reply") title=t("chat.reply") min-height=24 padding="0 space.xs" testId=`reply-${m.id}`
+                                    text t("chat.reply") font="-exact-footnote"
+                                  button class=TextControl appearance="none" press=doPinMessage(m.id, m.text) aria-label=t("chat.pin") title=t("chat.pin") min-height=24 padding="0 space.xs" testId=`pin-message-${m.id}`
+                                    text t("chat.pin") font="-exact-footnote"
                                 if reactFor == m.id
                                   row gap="2px" padding="space.xs" border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="react-picker"
                                     for em in ["👍", "❤️", "😂", "😮", "🎉", "🙏"] key=em
-                                      button class=TextControl appearance="none" press=doReact(m.id, em) aria-label=`React ${em}` width=36 height=36 min-height=36 padding=0 border-radius="radius.full" font="-exact-title3" testId=`pick-${em}`
+                                      button class=TextControl appearance="none" press=doReact(m.id, em) aria-label=t("chat.reactWith", emoji=em) width=36 height=36 min-height=36 padding=0 border-radius="radius.full" font="-exact-title3" testId=`pick-${em}`
                                         text em
                         else if m.kind == "request"
                           row padding="space.sm space.lg"
@@ -1579,22 +1646,22 @@ component Bots
                                       text c.label
                                   if m.placeholder != ""
                                     row gap="space.sm" align-items="center"
-                                      input appearance="none" class=Field value=answerText input=editAnswer placeholder=m.placeholder aria-label="Your answer" flex=1 min-width=0 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" testId="answer-text"
+                                      input appearance="none" class=Field value=answerText input=editAnswer placeholder=m.placeholder aria-label=t("chat.yourAnswer") flex=1 min-width=0 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" testId="answer-text"
                                       button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, m.key, answerText) disabled=(answerText.trim() == "") background-color="brand.default" color="ink.dark" testId="answer-send"
-                                        text "Send"
+                                        text t("common.send")
                               else
                                 row gap="space.sm" align-items="center"
-                                  input appearance="none" class=Field type="password" value=answerText input=editAnswer placeholder=(m.placeholder != "" ? m.placeholder : "Secret") aria-label="Secret" flex=1 min-width=0 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" testId="secret-text"
+                                  input appearance="none" class=Field type="password" value=answerText input=editAnswer placeholder=(m.placeholder != "" ? m.placeholder : t("chat.secret")) aria-label=t("chat.secret") flex=1 min-width=0 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" testId="secret-text"
                                   button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, "", answerText) disabled=(answerText == "") background-color="brand.default" color="ink.dark" testId="secret-save"
-                                    text "Save"
+                                    text t("common.save")
                                   button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, "", "") background-color="surface.card" testId="secret-decline"
-                                    text "Decline"
+                                    text t("chat.decline")
                               if answerError != "" and not pending(answered)
                                 text answerError color="-exact-system-red" font="-exact-footnote" testId="answer-error"
                         else
                           row padding="space.sm space.lg" gap="space.sm" align-items="center" testId="working"
                             Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="working", size=24, still=false)
-                            row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label="Working"
+                            row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working")
                               for n in [0, 1, 2] key=n
                                 column width=7 height=7 border-radius="radius.full" background-color="ink.muted" opacity=0.6
                   if pending(sent) and lastText != ""
@@ -1605,9 +1672,9 @@ component Bots
                       column align-items="flex-end" gap="space.xs" max-width="82%"
                         text failedText class=Bubble background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" opacity=0.7
                         row gap="space.sm" align-items="center"
-                          text "Not sent" font="-exact-footnote" color="-exact-system-red"
+                          text t("chat.notSent") font="-exact-footnote" color="-exact-system-red"
                           button class=TextControl appearance="none" press=retry testId="retry-send"
-                            text "Retry"
+                            text t("common.retry")
               if attachError != "" and not pending(attached)
                 text attachError color="-exact-system-red" padding="0 space.lg" testId="attach-error"
               if pendingAttaches.length > 0
@@ -1616,64 +1683,67 @@ component Bots
                     row gap="space.xs" align-items="center" padding="4px 6px 4px space.sm" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" max-width="100%" box-sizing="border-box"
                       column color="ink.muted"
                         Glyph(name="attach", size=14)
-                      text attachmentName(entry) font="-exact-footnote" color="-exact-label" overflow-wrap="anywhere" flex=1 min-width=0
-                      button class=IconControl appearance="none" press=dropPending(entry) aria-label=`Remove ${attachmentName(entry)}` title="Remove attachment" testId="pending-file" width=28 height=28
+                      text attachmentName(entry, t("chat.attachment")) font="-exact-footnote" color="-exact-label" overflow-wrap="anywhere" flex=1 min-width=0
+                      button class=IconControl appearance="none" press=dropPending(entry) aria-label=t("chat.removeNamed", name=attachmentName(entry, t("chat.attachment"))) title=t("chat.removeAttachment") testId="pending-file" width=28 height=28
                         Glyph(name="close", size=14)
               if chat.readOnly
-                text "This thread is read only." color="ink.muted" padding="space.md space.lg space.xl" testId="child-readonly"
+                text t("chat.readOnly") color="ink.muted" padding="space.md space.lg space.xl" testId="child-readonly"
               else
                 column width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.xs"
+                  if childThread != ""
+                    button class=TextControl appearance="none" press=closeChild aria-label=t("chat.backToChat") testId="close-child" min-height=44 padding="0 space.sm"
+                      text t("chat.backToChat")
                   if replyTo != ""
                     row gap="space.sm" align-items="center" padding="space.xs space.sm" border-radius="radius.md" background-color="surface.raised" border="1px solid surface.line" testId="reply-bar"
                       text replyQuote font="-exact-footnote" color="ink.muted" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="reply-quote"
-                      button class=TextControl appearance="none" press=cancelReply aria-label="Cancel reply" testId="reply-cancel" min-height=44 padding="0 space.sm"
-                        text "Cancel"
+                      button class=TextControl appearance="none" press=cancelReply aria-label=t("chat.cancelReply") testId="reply-cancel" min-height=44 padding="0 space.sm"
+                        text t("common.cancel")
                   if voicePreview != ""
                     audio voicePreview controls=true testId="voice-preview"
                   if voiceError != ""
                     text voiceError color="-exact-system-red" font="-exact-footnote" testId="voice-error"
                   row align-items="flex-end" width="100%" box-sizing="border-box" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
-                    button class=IconControl press=pickFiles disabled=(slug == "" or pending(attached) or pendingAttaches.length >= 8) appearance="none" aria-label="Attach a file" title="Attach a file" testId="attach" width=36 height=36 border-radius="radius.full" background-color="surface.raised"
+                    button class=IconControl press=pickFiles disabled=(slug == "" or pending(attached) or pendingAttaches.length >= 8) appearance="none" aria-label=t("chat.attach") title=t("chat.attach") testId="attach" width=36 height=36 border-radius="radius.full" background-color="surface.raised"
                       Glyph(name="add", size=18)
                     if voiceHold != ""
                       text voiceHold font="-exact-footnote" color="ink.muted" testId="voice-hold"
                     if voiceId != ""
-                      button class=IconControl appearance="none" press=discardVoice aria-label="Discard clip" title="Discard clip" testId="voice-discard" width=36 height=36
+                      button class=IconControl appearance="none" press=discardVoice aria-label=t("chat.discardClip") title=t("chat.discardClip") testId="voice-discard" width=36 height=36
                         Glyph(name="close", size=16)
                     input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
-                    textarea id="composer" value=draft input=edit key=composerKey paste=pasted outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(bots, e.params.slug) != "" ? `Message ${nameOf(bots, e.params.slug)}` : "Write a message…") aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
+                    textarea id="composer" value=draft input=edit key=composerKey paste=pasted maxlength=8000 outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(bots, e.params.slug) != "" ? t("chat.messageTo", name=nameOf(bots, e.params.slug)) : t("chat.write")) aria-label=t("chat.message") testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
                     if voiceRecorder != ""
-                      button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label="Stop recording" title="Stop recording" testId="voice-record" background-color="-exact-system-red" color="ink.dark"
+                      button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label=t("chat.stopRecording") title=t("chat.stopRecording") testId="voice-record" background-color="-exact-system-red" color="ink.dark"
                         Glyph(name="stop", size=16)
                     else if voiceId != ""
-                      button class=SendControl appearance="none" press=sendHeldVoice disabled=pending(voiceSent) margin="2px 0" aria-label="Send voice clip" title="Send voice clip" testId="voice-send"
+                      button class=SendControl appearance="none" press=sendHeldVoice disabled=pending(voiceSent) margin="2px 0" aria-label=t("chat.sendVoice") title=t("chat.sendVoice") testId="voice-send"
                         Glyph(name="send", size=18)
                     else if chat.working and not canSend
-                      button class=StopControl appearance="none" press=stop margin="2px 0" aria-label="Stop" testId="stop"
+                      button class=StopControl appearance="none" press=stop margin="2px 0" aria-label=t("common.stop") testId="stop"
                         Glyph(name="stop", size=16)
                     else if not canSend
-                      button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label="Record a voice clip" title="Record a voice clip" testId="voice-record" background-color="-exact-label" color="surface.canvas"
+                      button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label=t("chat.record") title=t("chat.record") testId="voice-record" background-color="-exact-label" color="surface.canvas"
                         Glyph(name="mic", size=18)
                     else
-                      button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label="Send" testId="send"
+                      button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="send"
                         Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
                 BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease)
           else if e.name == "group"
             column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="room-header"
-                button id="back" class=IconControl appearance="none" press=back aria-label="Back" title="Back" display=(wide ? "none" : "flex")
+                button id="back" class=IconControl appearance="none" press=back aria-label=t("common.back") title=t("common.back") display=(wide ? "none" : "flex")
                   column rotate="180deg"
                     Glyph(name="chevron", size=20)
-                button class=HeaderToggle appearance="none" press=toggleGroupPanel aria-label=(groupPanel ? "Hide group details" : "Show group details") aria-expanded=groupPanel aria-controls="group-panel" title="Group details" testId="group-toggle" position="absolute" left="50%" translate="-50% 0" gap="space.sm" padding="0 space.md" max-width="75%"
-                  if room.title != ""
-                    Face(shape=room.shape, color=faceColor(room.color), state="idle", size=28, still=true)
-                  text (room.title != "" ? room.title : "Group") role="heading" aria-level=1 class=PageTitle overflow="hidden" text-overflow="ellipsis" white-space="nowrap" min-width=0 testId="room-title"
+                button class=HeaderToggle appearance="none" press=toggleGroupPanel aria-label=(groupPanel ? t("group.hideDetails") : t("group.showDetails")) aria-expanded=groupPanel aria-controls="group-panel" title=t("group.detailsTitle") testId="group-toggle" position="absolute" left="50%" translate="-50% 0" gap="space.sm" padding="0 space.md" max-width="75%"
+                  if room.members.length > 0
+                    Faces(faces=memberFaces(bots, room.members), size=28, tuck=-12)
+                  text (room.title != "" ? room.title : t("group.fallback")) role="heading" aria-level=1 class=PageTitle overflow="hidden" text-overflow="ellipsis" white-space="nowrap" min-width=0 testId="room-title"
                 column flex=1
               if failed(room)
-                EmptyState(symbol="symbol:alert", title="Can’t load this group", message="Check that hbots is running, then try again.")
+                EmptyState(symbol="symbol:alert", title=t("error.groupTitle"), message=t("error.hbots"))
                   button press=pull testId="room-retry"
-                    text "Try again"
+                    text t("common.tryAgain")
               else
                 row gap="space.sm" padding="space.sm space.lg" overflow-x="auto" flex-shrink=0 testId="room-members"
                   for m in room.members key=m.slug
@@ -1684,9 +1754,9 @@ component Bots
                         text m.line color="ink.muted" font="-exact-caption2" testId=`member-${m.slug}-state`
                 if room.messages.length == 0
                   column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="room-empty"
-                    Face(shape=room.shape, color=faceColor(room.color), state="idle", size=72, still=false)
-                    text "Start the conversation" class=HeroTitle text-align="center"
-                    text "Everyone hears a plain message. Write @name to wake just one Bot." color="ink.muted" text-align="center" max-width="24rem"
+                    Faces(faces=memberFaces(bots, room.members), size=72, tuck=-28)
+                    text t("group.emptyTitle") class=HeroTitle text-align="center"
+                    text t("group.emptyBody") color="ink.muted" text-align="center" max-width="24rem"
                 else
                   list id="room-log" appearance="none" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" flex=1 min-height=0 padding="space.sm space.lg" virtualized=true scroll-start="end" scrollFollowEnd=true testId="room-log"
                     for msg in room.messages key=msg.id
@@ -1713,20 +1783,20 @@ component Bots
                     text roomError color="-exact-system-red" font="-exact-footnote" testId="room-send-error"
                   row gap="space.xs" flex-wrap="wrap" testId="mention-chips"
                     for m in room.members key=m.slug
-                      button appearance="none" press=mention(m.slug) aria-label=`Mention ${m.name}` title=`Mention ${m.name}` testId=`mention-${m.slug}` min-height=32 padding="0 space.md 0 4px" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes(`@${m.slug}`) ? "surface.soft" : "surface.card") color="-exact-label"
+                      button appearance="none" press=mention(m.slug) aria-label=t("group.mention", name=m.name) title=t("group.mention", name=m.name) testId=`mention-${m.slug}` min-height=32 padding="0 space.md 0 4px" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes(`@${m.slug}`) ? "surface.soft" : "surface.card") color="-exact-label"
                         row gap="space.xs" align-items="center"
                           Avatar(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state="idle", size=22, still=true, presence="")
                           text `@${m.slug}` font="-exact-footnote" font-weight=500
                   row align-items="flex-end" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
-                    textarea id="room-composer" value=roomText input=editRoomText key=roomKey outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(room.title != "" ? `Message ${room.title}` : "Write a message…") aria-label="Message the group" testId="room-composer" flex=1 min-width=0 padding="space.sm space.sm" border="none" background-color="transparent" color="-exact-label"
-                    button class=SendControl appearance="none" press=postRoom disabled=(roomText.trim() == "" or pending(roomSent)) margin="2px 0" retainFocus=true aria-label="Send" testId="room-send"
+                    textarea id="room-composer" value=roomText input=editRoomText key=roomKey outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(room.title != "" ? t("chat.messageTo", name=room.title) : t("chat.write")) aria-label=t("group.message") testId="room-composer" flex=1 min-width=0 padding="space.sm space.sm" border="none" background-color="transparent" color="-exact-label"
+                    button class=SendControl appearance="none" press=postRoom disabled=(roomText.trim() == "" or pending(roomSent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="room-send"
                       Glyph(name="send", size=18)
-                  text (roomText.includes("@") ? "Only the Bots you mention are woken." : "No @mention: the Bot that spoke last answers, or everyone at first.") color="ink.muted" font="-exact-footnote" testId="room-hint"
+                  text (roomText.includes("@") ? t("group.hintMention") : t("group.hintNone")) color="ink.muted" font="-exact-footnote" testId="room-hint"
               GroupPanel(shown=groupPanel, wide=wide, page=groupPage, room=room, bots=bots, closePanel=toggleGroupPanel, openEdit=openGroupEdit, goRoot=groupBack, patch=patchGroup, toggleMember=toggleGroupMemberOf, drop=dropGroup, error=groupSaveError)
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader
-                text "Settings" role="heading" aria-level=1 class=PageTitle flex=1
+                text t("settings.title") role="heading" aria-level=1 class=PageTitle flex=1
               scroll id="settings-form" flex=1 min-height=0
                 column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" margin="0 auto" padding="space.lg space.lg space.xl" gap="space.xl"
                   row class=GroupCard gap="space.lg" align-items="center" padding="space.lg"
@@ -1736,78 +1806,78 @@ component Bots
                       else
                         Glyph(name="person", size=24)
                     column flex=1 gap="2px" min-width=0
-                      input appearance="none" class=Field value=(nameEditing ? nameDraft : prefs.userName) input=doEditName change=doSaveName placeholder="Your name" aria-label="Your name" font="-exact-headline" testId="user-name"
-                      text botCountLabel(bots.length) color="ink.muted" font="-exact-footnote"
+                      input appearance="none" class=Field value=(nameEditing ? nameDraft : prefs.userName) input=doEditName change=doSaveName placeholder=t("settings.yourName") aria-label=t("settings.yourName") font="-exact-headline" testId="user-name"
+                      text botCountLabel(bots.length, t("bots.one"), t("bots.many", n=bots.length)) color="ink.muted" font="-exact-footnote"
                   column gap="space.sm"
-                    text "Appearance" class=SectionLabel
-                    row gap="space.sm" role="radiogroup" aria-label="Theme"
+                    text t("settings.appearance") class=SectionLabel
+                    row gap="space.sm" role="radiogroup" aria-label=t("settings.theme")
                       for t in ["system", "light", "dark"] key=t
                         button press=doPickTheme(t) role="radio" aria-checked=(prefs.theme == t) appearance="none" flex=1 padding="space.sm" border-radius="radius.md" testId=`theme-${t}` border=(prefs.theme == t ? "2px solid AccentColor" : "2px solid transparent") background-color="surface.card"
                           column gap="space.xs" align-items="center"
                             row width="100%" height=44 border-radius="radius.sm" overflow="hidden" border="1px solid surface.line"
                               column flex=1 background-color=(t == "dark" ? "#17171b" : "#fcfcfd")
                               column flex=1 background-color=(t == "light" ? "#fcfcfd" : t == "dark" ? "#17171b" : "#17171b")
-                            text themeLabel(t) font="-exact-footnote" font-weight=500
+                            text themeLabel(t, t("theme.system"), t("theme.dark"), t("theme.light")) font="-exact-footnote" font-weight=500
                   column gap="space.sm"
-                    text "New Bots start with" class=SectionLabel
+                    text t("settings.defaultModel") class=SectionLabel
                     column class=GroupCard padding="space.sm"
                       if providers.length == 0
-                        text "No provider is ready in T3 Code yet." color="ink.muted" font="-exact-subheadline" padding="space.sm"
+                        text t("settings.noProvider") color="ink.muted" font="-exact-subheadline" padding="space.sm"
                       else
                         ModelPicker(providers=providers, instanceId=prefs.defaultInstance, model=prefs.defaultModel, effort="", efforts=[], prefix="default", pick=doMakeDefault)
                   column gap="space.sm"
-                    text "Usage" class=SectionLabel
+                    text t("panel.usage") class=SectionLabel
                     column class=GroupCard padding="0"
                       UsageView(report=report, down=failed(report), period=usagePeriod, view=usageView, pickPeriod=pickPeriod, pickView=pickView, showBots=true)
-                    text "Counted on this machine. Nothing is sent anywhere." color="ink.muted" font="-exact-footnote" padding="0 space.md"
+                    text t("settings.usageNote") color="ink.muted" font="-exact-footnote" padding="0 space.md"
                   column gap="space.sm"
-                    text "Private data" class=SectionLabel
+                    text t("settings.private") class=SectionLabel
                     button class=PanelRow appearance="none" press=open("/vault") testId="open-vault"
                       column class=IconTile color="AccentColor"
                         Glyph(name="lock", size=18)
                       column flex=1 gap="2px" min-width=0
-                        text "Vault" font-weight=600
-                        text "Manage saved logins" color="ink.muted" font="-exact-footnote"
+                        text t("vault.title") font-weight=600
+                        text t("settings.vaultNote") color="ink.muted" font="-exact-footnote"
                       column color="ink.muted"
                         Glyph(name="chevron", size=18)
                   column gap="space.sm"
-                    text "Remote access" class=SectionLabel
+                    text t("settings.remote") class=SectionLabel
                     column class=GroupCard gap="space.md" padding="space.md"
-                      text (session.passwordRequired ? "A password protects hbots when you open it from another device." : "No password is set. Anyone who can reach this machine can open hbots.") color="ink.muted" font="-exact-footnote"
+                      text (session.passwordRequired ? t("settings.passwordOn") : t("settings.passwordOff")) color="ink.muted" font="-exact-footnote"
                       row gap="space.sm" align-items="center"
-                        input appearance="none" class=Field type="password" value=newPassword input=editNewPassword submit=doSavePassword placeholder=(session.passwordRequired ? "New password" : "Set a password") aria-label="Password" autocomplete="new-password" flex=1 min-width=0 min-height=36 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" font="-exact-subheadline" testId="new-password"
+                        input appearance="none" class=Field type="password" value=newPassword input=editNewPassword submit=doSavePassword placeholder=(session.passwordRequired ? t("settings.newPassword") : t("settings.setPassword")) aria-label=t("common.password") autocomplete="new-password" flex=1 min-width=0 min-height=36 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" font="-exact-subheadline" testId="new-password"
                         button class=ChoiceButton appearance="none" press=doSavePassword disabled=(newPassword == "" or pending(passwordSet)) background-color=(newPassword == "" ? "surface.raised" : "brand.default") color=(newPassword == "" ? "ink.muted" : "ink.dark") testId="save-password"
-                          text (session.passwordRequired ? "Change" : "Set")
+                          text (session.passwordRequired ? t("settings.change") : t("settings.set"))
                       if passwordError != "" and not pending(passwordSet)
                         text passwordError color="-exact-system-red" font="-exact-footnote" testId="password-error"
                   column gap="space.sm"
-                    text "About" class=SectionLabel
+                    text t("settings.about") class=SectionLabel
                     column class=GroupCard padding="space.xs space.md"
                       row justify-content="space-between" align-items="center" min-height=40 font="-exact-subheadline"
                         text "hbots" color="ink.muted"
-                        text (about.ok ? about.version : "Unknown") testId="about-version"
+                        text (about.ok ? about.version : t("settings.unknown")) testId="about-version"
                       row justify-content="space-between" align-items="center" min-height=40 border-top="1px solid surface.line" font="-exact-subheadline"
                         text about.harness color="ink.muted"
-                        text (about.connected ? "Connected" : "Not connected") color=(about.connected ? "-exact-label" : "-exact-system-red") testId="about-harness"
+                        text (about.connected ? t("settings.connected") : t("settings.disconnected")) color=(about.connected ? "-exact-label" : "-exact-system-red") testId="about-harness"
                     if session.passwordRequired
                       button class=ChoiceRow appearance="none" press=logout justify-content="center" color="-exact-system-red" testId="sign-out"
-                        text "Sign out" font-weight=500
+                        text t("settings.signOut") font-weight=500
           else if e.name == "vault"
             column class=Screen navigationKey=`${e.id}` navigationScroll="vault-list" position="absolute" inset=0
               header class=PageHeader flex-wrap="wrap"
-                text "Vault" role="heading" aria-level=1 class=PageTitle flex=1
-                button class=IconControl appearance="none" press=open("/vault/new") aria-label="New login" title="New login" testId="new-login"
+                text t("vault.title") role="heading" aria-level=1 class=PageTitle flex=1
+                button class=IconControl appearance="none" press=open("/vault/new") aria-label=t("vault.new") title=t("vault.new") testId="new-login"
                   Glyph(name="add", size=20)
-                input type="search" class=SearchField value=vaultQuery input=editVaultQuery placeholder="Search Vault" aria-label="Search Vault" testId="vault-search" width="100%"
+                input type="search" class=SearchField value=vaultQuery input=editVaultQuery placeholder=t("vault.search") aria-label=t("vault.search") testId="vault-search" width="100%"
               if failed(vault)
-                EmptyState(symbol="symbol:alert", title="Can’t open the Vault", message="Check that `hbots` is running, then try again.")
+                EmptyState(symbol="symbol:alert", title=t("error.vaultTitle"), message=t("error.hbotsCode"))
               else if vault.length == 0 and not pending(vault)
-                EmptyState(symbol="symbol:lock", title="No logins yet", message="Save a login here. Its password stays in the Vault and shows only when you press Reveal.")
+                EmptyState(symbol="symbol:lock", title=t("vault.emptyTitle"), message=t("vault.emptyBody"))
                   button press=open("/vault/new") testId="empty-login"
-                    text "Add a login"
+                    text t("vault.add")
               else if vquery != "" and shownVault.length == 0
                 column flex=1 min-height=0 align-items="center" justify-content="center" padding="space.xl" testId="no-vault-match"
-                  EmptyState(symbol="symbol:search", title=`No logins match “${vaultQuery.trim()}”`, message="Check the spelling, or clear the search to see every login.")
+                  EmptyState(symbol="symbol:search", title=t("vault.noMatch", query=vaultQuery.trim()), message=t("vault.searchHint"))
               else
                 list id="vault-list" appearance="none" width="100%" box-sizing="border-box" flex=1 min-height=0 gap="space.sm" padding="space.md max(space.lg, calc((100% - 40rem) / 2))"
                   for v in shownVault key=v.id
@@ -1831,32 +1901,25 @@ component Bots
             column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="group-form" position="absolute" inset=0
               header class=PageHeader
                 button id="back" class=TextControl appearance="none" press=back testId="group-cancel"
-                  text "Cancel"
-                text "New group" role="heading" aria-level=1 class=PageTitle flex=1
+                  text t("common.cancel")
+                text t("group.new") role="heading" aria-level=1 class=PageTitle flex=1
                 button buttonStyle="filled" press=makeGroup disabled=(not canMakeGroup) testId="group-create"
-                  text (pending(groupMade) ? "Creating…" : "Create group")
+                  text (pending(groupMade) ? t("common.creating") : t("group.create"))
               scroll id="group-form" flex=1 min-height=0
                 column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.lg" gap="space.lg"
                   column align-items="center" gap="space.md"
-                    Avatar(shape=groupShape, color=faceColor(groupColor), state="idle", size=96, still=false, presence="")
-                    row gap="space.xs" flex-wrap="wrap" justify-content="center"
-                      for c in pickerColours() key=c
-                        button class=SwatchControl press=pickGroupColour(c) appearance="none" aria-label=`Colour ${faceColor(c)}` aria-pressed=(groupColor == c) testId=`group-colour-${c}` width=36 height=36 padding=0
-                          column width=26 height=26 box-sizing="border-box" margin="space.xs" border-radius="radius.full" background-color=c border=(groupColor == c ? "3px solid AccentColor" : "3px solid transparent")
-                    row gap="space.xs" flex-wrap="wrap" justify-content="center"
-                      for s in shapeNames() key=s
-                        button class=SwatchControl press=pickGroupShape(s) appearance="none" aria-label=`Shape ${s}` aria-pressed=(groupShape == s) testId=`group-shape-${s}` width=44 height=44 padding=0 border-radius="radius.md" background-color=(groupShape == s ? "surface.raised" : "transparent")
-                          Avatar(shape=s, color=faceColor(groupColor), state="idle", size=30, still=true, presence="")
+                    Faces(faces=pickedFaces(bots, groupMembers), size=72, tuck=-28)
+                    text (groupMembers.length == 0 ? t("group.pickFaces") : t("group.face")) color="ink.muted" font="-exact-footnote" text-align="center"
                   column gap="space.sm"
-                    text "Name" font="-exact-subheadline" font-weight=600
-                    input appearance="none" class=Field value=groupName input=editGroupName submit=makeGroup placeholder="What is this group for?" aria-label="Group name" padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-name"
+                    text t("common.name") font="-exact-subheadline" font-weight=600
+                    input appearance="none" class=Field value=groupName input=editGroupName submit=makeGroup placeholder=t("group.namePlaceholder") aria-label=t("group.name") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-name"
                   column gap="space.sm"
-                    text "Description" font="-exact-subheadline" font-weight=600
-                    input appearance="none" class=Field value=groupAbout input=editGroupAbout placeholder="Optional. What the group works on." aria-label="Description" padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-about"
+                    text t("common.description") font="-exact-subheadline" font-weight=600
+                    input appearance="none" class=Field value=groupAbout input=editGroupAbout placeholder=t("group.aboutPlaceholder") aria-label=t("common.description") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-about"
                   column gap="space.sm"
                     row align-items="baseline" gap="space.sm"
-                      text "Bots" font="-exact-subheadline" font-weight=600 flex=1
-                      text (groupMembers.length < 2 ? `Pick at least two (${groupMembers.length} so far)` : `${groupMembers.length} picked`) color="ink.muted" font="-exact-footnote" testId="group-count"
+                      text t("common.bots") font="-exact-subheadline" font-weight=600 flex=1
+                      text (groupMembers.length < 2 ? t("group.pickMore", n=groupMembers.length) : t("group.picked", n=groupMembers.length)) color="ink.muted" font="-exact-footnote" testId="group-count"
                     column gap="space.xs"
                       for b in bots key=b.slug
                         button appearance="none" press=toggleGroupMember(b.slug) role="checkbox" aria-checked=groupMembers.includes(b.slug) aria-label=b.name testId=`pick-bot-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border=(groupMembers.includes(b.slug) ? "2px solid AccentColor" : "2px solid surface.line") border-radius="radius.md" background-color="surface.card" color="-exact-label"
@@ -1872,30 +1935,30 @@ component Bots
             column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="new-form" position="absolute" inset=0
               header class=PageHeader
                 button id="back" class=TextControl appearance="none" press=back testId="new-cancel"
-                  text "Cancel"
-                text "New Bot" role="heading" aria-level=1 class=PageTitle flex=1
+                  text t("common.cancel")
+                text t("inbox.newBot") role="heading" aria-level=1 class=PageTitle flex=1
                 button buttonStyle="filled" press=create disabled=(newName.trim() == "" or pending(created)) testId="create"
-                  text (pending(created) ? "Creating…" : "Get started")
+                  text (pending(created) ? t("common.creating") : t("create.start"))
               scroll id="new-form" flex=1 min-height=0
                 column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.lg" gap="space.lg"
                   column align-items="center" gap="space.md"
                     Avatar(shape=newShape, color=faceColor(newColor), state="idle", size=96, still=false, presence="")
                     row gap="space.xs" flex-wrap="wrap" justify-content="center"
                       for c in pickerColours() key=c
-                        button class=SwatchControl press=pick(c) appearance="none" aria-label=`Colour ${faceColor(c)}` aria-pressed=(newColor == c) testId=`colour-${c}` width=36 height=36 padding=0
+                        button class=SwatchControl press=pick(c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(newColor == c) testId=`colour-${c}` width=36 height=36 padding=0
                           column width=26 height=26 box-sizing="border-box" margin="space.xs" border-radius="radius.full" background-color=c border=(newColor == c ? "3px solid AccentColor" : "3px solid transparent")
                     row gap="space.xs" flex-wrap="wrap" justify-content="center"
                       for s in shapeNames() key=s
-                        button class=SwatchControl press=pickShape(s) appearance="none" aria-label=`Shape ${s}` aria-pressed=(newShape == s) testId=`shape-${s}` width=44 height=44 padding=0 border-radius="radius.md" background-color=(newShape == s ? "surface.raised" : "transparent")
+                        button class=SwatchControl press=pickShape(s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(newShape == s) testId=`shape-${s}` width=44 height=44 padding=0 border-radius="radius.md" background-color=(newShape == s ? "surface.raised" : "transparent")
                           Avatar(shape=s, color=faceColor(newColor), state="idle", size=30, still=true, presence="")
                   column gap="space.sm"
-                    text "Name" font="-exact-subheadline" font-weight=600
-                    input appearance="none" class=Field value=newName input=editName submit=create placeholder="What should we call your Bot?" aria-label="Name" padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-name"
+                    text t("common.name") font="-exact-subheadline" font-weight=600
+                    input appearance="none" class=Field value=newName input=editName submit=create placeholder=t("create.namePlaceholder") aria-label=t("common.name") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-name"
                   if createError != "" and not pending(created)
                     text createError color="-exact-system-red" testId="create-error"
                   if suggestions.length > 0
                     column gap="space.sm"
-                      text "Suggestions" font="-exact-subheadline" font-weight=600 color="ink.muted"
+                      text t("create.suggestions") font="-exact-subheadline" font-weight=600 color="ink.muted"
                       column gap="space.sm"
                         for s in suggestions key=s.name
                           button class=PanelRow appearance="none" press=useStart(s.name, s.color, s.shape, s.first) testId=`start-${s.name}`
@@ -1906,6 +1969,26 @@ component Bots
       if toast != ""
         row position="absolute" bottom=88 left="50%" translate="-50% 0" padding="space.md space.lg" border-radius="radius.full" background-color="-exact-label" color="surface.canvas" max-width="90%" box-sizing="border-box" testId="toast" role="status" aria-live="polite"
           text toast font="-exact-subheadline" font-weight=500
+
+// A group's face is its members, at most three, overlapped. It has no colour or shape of its own.
+component Faces
+  props
+    faces: FaceBit[]
+    size: number
+    tuck: number
+  view
+    row align-items="center" testId="group-faces" aria-hidden="true" flex-shrink=0
+      if faces.length == 0
+        column width=size height=size border-radius="radius.full" border="2px dashed surface.line" background-color="surface.raised"
+      if faces.length >= 1
+        column z-index=1 flex-shrink=0 border="2px solid surface.canvas" border-radius="radius.full" background-color="surface.canvas"
+          Avatar(shape=bitShape(faces, 0), color=faceColor(bitColor(faces, 0)), state=bitState(faces, 0), size=size, still=true, presence="")
+      if faces.length >= 2
+        column z-index=2 flex-shrink=0 margin-left=tuck border="2px solid surface.canvas" border-radius="radius.full" background-color="surface.canvas"
+          Avatar(shape=bitShape(faces, 1), color=faceColor(bitColor(faces, 1)), state=bitState(faces, 1), size=size, still=true, presence="")
+      if faces.length >= 3
+        column z-index=3 flex-shrink=0 margin-left=tuck border="2px solid surface.canvas" border-radius="radius.full" background-color="surface.canvas"
+          Avatar(shape=bitShape(faces, 2), color=faceColor(bitColor(faces, 2)), state=bitState(faces, 2), size=size, still=true, presence="")
 
 // A Vault login's sheet. The password field starts empty: a saved password is shown only after Reveal.
 component LoginSheet
@@ -1938,32 +2021,32 @@ component LoginSheet
   view
     column class=Screen navigationKey=`${route}` navigationPresentation="modal" position="absolute" inset=0
       header class=PageHeader justify-content="space-between"
-        button press=cancel aria-label="Cancel" testId="login-cancel"
+        button press=cancel aria-label=t("common.cancel") testId="login-cancel"
           Glyph(name="close", size=20)
-        text (item.id == "" ? "New login" : item.title) role="heading" aria-level=1
-        button press=save(item.id, ttl, site, user, pass, note) disabled=(ttl.trim() == "" and site.trim() == "") buttonStyle="filled" aria-label="Save" testId="login-save"
-          text "Save"
+        text (item.id == "" ? t("vault.new") : item.title) role="heading" aria-level=1
+        button press=save(item.id, ttl, site, user, pass, note) disabled=(ttl.trim() == "" and site.trim() == "") buttonStyle="filled" aria-label=t("common.save") testId="login-save"
+          text t("common.save")
       list class=FormList appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
         section
           row
-            text "Title"
-            input appearance="none" class=Field value=ttl input=editTitle placeholder="Title" aria-label="Title" text-align="end" flex=1 min-width=0 testId="login-title"
+            text t("vault.titleField")
+            input appearance="none" class=Field value=ttl input=editTitle placeholder=t("vault.titleField") aria-label=t("vault.titleField") text-align="end" flex=1 min-width=0 testId="login-title"
           row
-            text "Website"
-            input appearance="none" class=Field type="url" value=site input=editWebsite placeholder="Website" aria-label="Website" autocapitalize="none" text-align="end" flex=1 min-width=0 testId="login-website"
+            text t("vault.website")
+            input appearance="none" class=Field type="url" value=site input=editWebsite placeholder=t("vault.website") aria-label=t("vault.website") autocapitalize="none" text-align="end" flex=1 min-width=0 testId="login-website"
           footer
-            text "A login needs a website or a title."
+            text t("vault.needsSite")
         section
           row
-            text "Username"
-            input appearance="none" class=Field value=user input=editUsername placeholder="Username" aria-label="Username" autocapitalize="none" autocomplete="username" text-align="end" flex=1 min-width=0 testId="login-username"
+            text t("vault.username")
+            input appearance="none" class=Field value=user input=editUsername placeholder=t("vault.username") aria-label=t("vault.username") autocapitalize="none" autocomplete="username" text-align="end" flex=1 min-width=0 testId="login-username"
           row
-            text "Password"
-            input appearance="none" class=Field type="password" value=pass input=editPassword placeholder=(item.hasPassword ? "New password (blank keeps it)" : "Password") aria-label="Password" autocomplete="new-password" text-align="end" flex=1 min-width=0 testId="login-password"
+            text t("common.password")
+            input appearance="none" class=Field type="password" value=pass input=editPassword placeholder=(item.hasPassword ? t("vault.passwordKeep") : t("common.password")) aria-label=t("common.password") autocomplete="new-password" text-align="end" flex=1 min-width=0 testId="login-password"
         section
           if item.hasPassword
             row
-              text "Saved password"
+              text t("vault.savedPassword")
               if revealedFor == item.id and revealedText != ""
                 text revealedText user-select="text" testId="revealed-password"
               else
@@ -1971,27 +2054,27 @@ component LoginSheet
             row
               if revealedFor == item.id and revealedText != ""
                 button press=hide buttonStyle="bordered" testId="hide-password"
-                  text "Hide"
+                  text t("common.hide")
               else
                 button press=reveal(item.id) buttonStyle="bordered" testId="reveal-password"
-                  text "Reveal"
+                  text t("vault.reveal")
         section
           row
-            text "Notes"
-            input appearance="none" class=Field value=note input=editHints placeholder="Notes" aria-label="Notes" text-align="end" flex=1 min-width=0 testId="login-notes"
+            text t("vault.notes")
+            input appearance="none" class=Field value=note input=editHints placeholder=t("vault.notes") aria-label=t("vault.notes") text-align="end" flex=1 min-width=0 testId="login-notes"
         if error != ""
           section
             text error color="-exact-system-red" testId="login-error"
         if item.id != ""
           section
             button commandfor="drop-login" command="show-modal" testId="login-delete"
-              text "Delete login"
-      dialog id="drop-login" role="alertdialog" aria-label="Delete this login?"
-        text "It is removed from the Vault. This can’t be undone."
+              text t("vault.delete")
+      dialog id="drop-login" role="alertdialog" aria-label=t("vault.deleteAsk")
+        text t("vault.deleteBody")
         button press=drop(item.id) destructive=true commandfor="drop-login" command="close" testId="drop-login-ok"
-          text "Delete"
+          text t("common.delete")
         button commandfor="drop-login" command="close" testId="drop-login-cancel"
-          text "Cancel"
+          text t("common.cancel")
 
 // ---------- the Bot panel ----------
 
@@ -2061,39 +2144,27 @@ component GroupPanel
     column id="group-panel" display=(shown ? "flex" : "none") position="absolute" top=(wide ? 0 : 72) right=0 bottom=0 width=(wide ? "20rem" : "100%") box-sizing="border-box" background-color="surface.canvas" border-left="1px solid surface.line" testId="group-panel"
       row align-items="center" gap="space.xs" padding="space.sm space.sm space.sm space.md" min-height=52 box-sizing="border-box"
         if page == "edit"
-          button class=IconControl appearance="none" press=goRoot aria-label="Back" title="Back" testId="group-panel-back"
+          button class=IconControl appearance="none" press=goRoot aria-label=t("common.back") title=t("common.back") testId="group-panel-back"
             column rotate="180deg"
               Glyph(name="chevron", size=20)
-          text "Edit group" role="heading" aria-level=2 class=PageTitle flex=1 testId="group-panel-title"
+          text t("group.edit") role="heading" aria-level=2 class=PageTitle flex=1 testId="group-panel-title"
         else
           column flex=1
-          button class=IconControl appearance="none" press=openEdit aria-label="Edit group" title="Edit group" testId="group-edit"
+          button class=IconControl appearance="none" press=openEdit aria-label=t("group.edit") title=t("group.edit") testId="group-edit"
             Glyph(name="settings", size=20)
-          button class=IconControl appearance="none" press=closePanel aria-label="Close panel" title="Close panel" testId="group-panel-close"
+          button class=IconControl appearance="none" press=closePanel aria-label=t("panel.close") title=t("panel.close") testId="group-panel-close"
             Glyph(name="close", size=20)
       if page == "edit"
         scroll flex=1 min-height=0
           column gap="space.lg" padding="space.sm space.lg space.xl" testId="group-edit-page"
             column gap="space.sm"
-              text "Name" class=SectionLabel
-              input appearance="none" class=Field value=title input=editTitle change=patch("title") aria-label="Group name" padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-edit-name"
+              text t("common.name") class=SectionLabel
+              input appearance="none" class=Field value=title input=editTitle change=patch("title") aria-label=t("group.name") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-edit-name"
             column gap="space.sm"
-              text "Description" class=SectionLabel
-              input appearance="none" class=Field value=about input=editAbout change=patch("description") placeholder="What the group works on" aria-label="Description" padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-edit-about"
+              text t("common.description") class=SectionLabel
+              input appearance="none" class=Field value=about input=editAbout change=patch("description") placeholder=t("group.aboutPlaceholderShort") aria-label=t("common.description") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-edit-about"
             column gap="space.sm"
-              text "Colour" class=SectionLabel
-              row gap="space.xs" flex-wrap="wrap"
-                for c in pickerColours() key=c
-                  button class=SwatchControl press=patch("color", c) appearance="none" aria-label=`Colour ${faceColor(c)}` aria-pressed=(room.color == c) testId=`group-edit-colour-${c}` width=40 height=40 padding=0
-                    column width=30 height=30 box-sizing="border-box" border-radius="radius.full" background-color=c border=(room.color == c ? "3px solid AccentColor" : "3px solid transparent")
-            column gap="space.sm"
-              text "Shape" class=SectionLabel
-              row gap="space.xs" flex-wrap="wrap"
-                for s in shapeNames() key=s
-                  button class=SwatchControl press=patch("shape", s) appearance="none" aria-label=`Shape ${s}` aria-pressed=(room.shape == s) testId=`group-edit-shape-${s}` width=48 height=48 padding=0 border-radius="radius.md" background-color=(room.shape == s ? "surface.raised" : "transparent")
-                    Avatar(shape=s, color=faceColor(room.color), state="idle", size=34, still=true, presence="")
-            column gap="space.sm"
-              text "Bots" class=SectionLabel
+              text t("common.bots") class=SectionLabel
               for b in bots key=b.slug
                 button appearance="none" press=toggleMember(b.slug) role="checkbox" aria-checked=picked.includes(b.slug) aria-label=b.name testId=`group-edit-member-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border=(picked.includes(b.slug) ? "2px solid AccentColor" : "2px solid surface.line") border-radius="radius.md" background-color="surface.card" color="-exact-label"
                   row gap="space.md" align-items="center" width="100%"
@@ -2108,25 +2179,25 @@ component GroupPanel
               column class=IconTile color="-exact-system-red"
                 Glyph(name="trash", size=18)
               column flex=1 gap="2px"
-                text "Delete group" font-weight=600 color="-exact-system-red"
-                text "Removes the group. The Bots and their chats stay." color="ink.muted" font="-exact-footnote"
-              button class=IconControl appearance="none" commandfor="drop-group" command="show-modal" aria-label="Delete group" title="Delete group" color="-exact-system-red" testId="group-delete"
+                text t("group.delete") font-weight=600 color="-exact-system-red"
+                text t("group.deleteNote") color="ink.muted" font="-exact-footnote"
+              button class=IconControl appearance="none" commandfor="drop-group" command="show-modal" aria-label=t("group.delete") title=t("group.delete") color="-exact-system-red" testId="group-delete"
                 Glyph(name="trash", size=20)
-            dialog id="drop-group" role="alertdialog" aria-label=`Delete ${room.title}?`
-              text "The group and what was said in it are removed. The Bots and their own chats stay."
+            dialog id="drop-group" role="alertdialog" aria-label=t("group.deleteNamed", name=room.title)
+              text t("group.deleteBody")
               button press=drop destructive=true commandfor="drop-group" command="close" testId="group-delete-ok"
-                text "Delete"
+                text t("common.delete")
               button commandfor="drop-group" command="close" testId="group-delete-cancel"
-                text "Cancel"
+                text t("common.cancel")
       else
         scroll flex=1 min-height=0
           column gap="space.lg" padding="0 space.lg space.xl"
             column align-items="center" gap="space.xs"
-              Face(shape=room.shape, color=faceColor(room.color), state=(room.members.filter(m => m.working).length > 0 ? "working" : "idle"), size=72, still=(room.members.filter(m => m.working).length == 0))
+              Faces(faces=memberFaces(bots, room.members), size=72, tuck=-28)
               text room.title font="-exact-title3" font-weight=700 letter-spacing="-0.3px" text-align="center" overflow-wrap="anywhere" testId="group-details-name"
-              text (room.description != "" ? room.description : "No description yet") color="ink.muted" font="-exact-footnote" text-align="center" testId="group-details-about"
+              text (room.description != "" ? room.description : t("group.noAbout")) color="ink.muted" font="-exact-footnote" text-align="center" testId="group-details-about"
             column gap="2px"
-              text `Bots, ${room.members.length}` class=SectionLabel testId="group-members-label"
+              text t("group.botsCount", n=room.members.length) class=SectionLabel testId="group-members-label"
               for m in room.members key=m.slug
                 link class=ConversationLink href=path("chat", m.slug) testId=`group-member-${m.slug}` padding="space.sm space.md"
                   row gap="space.md" align-items="center"
@@ -2134,7 +2205,7 @@ component GroupPanel
                     column gap="2px" flex=1 min-width=0
                       text m.name font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
                       text m.line color="ink.muted" font="-exact-footnote"
-            text "Write @name to wake one Bot. A message with no @name goes to whoever spoke last." color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="group-details-hint"
+            text t("group.hint") color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="group-details-hint"
 
 component BotPanel
   props
@@ -2199,15 +2270,15 @@ component BotPanel
     column id="bot-panel" display=(shown ? "flex" : "none") position="absolute" top=(wide ? 0 : 72) right=0 bottom=0 width=(wide ? "20rem" : "100%") box-sizing="border-box" background-color="surface.canvas" border-left="1px solid surface.line" testId="bot-panel"
       row align-items="center" gap="space.xs" padding="space.sm space.sm space.sm space.md" min-height=52 box-sizing="border-box"
         if page != "root"
-          button class=IconControl appearance="none" press=goRoot aria-label="Back" title="Back" testId="panel-back"
+          button class=IconControl appearance="none" press=goRoot aria-label=t("common.back") title=t("common.back") testId="panel-back"
             column rotate="180deg"
               Glyph(name="chevron", size=20)
-          text (page == "model" ? "Model" : page == "usage" ? "Usage" : "Edit Bot") role="heading" aria-level=2 class=PageTitle flex=1 testId="panel-page-title"
+          text (page == "model" ? t("panel.model") : page == "usage" ? t("panel.usage") : t("panel.edit")) role="heading" aria-level=2 class=PageTitle flex=1 testId="panel-page-title"
         else
           column flex=1
-          button class=IconControl appearance="none" press=goEdit aria-label="Edit Bot" title="Edit Bot" testId="panel-edit"
+          button class=IconControl appearance="none" press=goEdit aria-label=t("panel.edit") title=t("panel.edit") testId="panel-edit"
             Glyph(name="settings", size=20)
-          button class=IconControl appearance="none" press=closePanel aria-label="Close panel" title="Close panel" testId="panel-close"
+          button class=IconControl appearance="none" press=closePanel aria-label=t("panel.close") title=t("panel.close") testId="panel-close"
             Glyph(name="close", size=20)
       if page == "model"
         scroll flex=1 min-height=0
@@ -2222,43 +2293,43 @@ component BotPanel
         column align-items="center" gap="space.xs" padding="0 space.lg space.md"
           Avatar(shape=bot.shape, color=faceColor(bot.color), state=(bot.hidden ? "asleep" : working ? "working" : "idle"), size=72, still=(not working), presence="")
           text bot.name font="-exact-title3" font-weight=700 letter-spacing="-0.3px" testId="details-name" text-align="center" overflow-wrap="anywhere"
-          text (bot.hidden ? "Hidden from your inbox" : working ? "Working" : bot.ready ? "Ready" : "Getting set up…") color="ink.muted" font="-exact-footnote" testId="details-status"
-        row role="tablist" appearance="none" background-color="surface.canvas" aria-label="Bot sidebar" justify-content="center" padding="space.xs space.md space.md" gap="space.xs"
+          text (bot.hidden ? t("panel.hiddenInbox") : working ? t("status.working") : bot.ready ? t("status.ready") : t("status.settingUp")) color="ink.muted" font="-exact-footnote" testId="details-status"
+        row role="tablist" appearance="none" background-color="surface.canvas" aria-label=t("panel.sidebar") justify-content="center" padding="space.xs space.md space.md" gap="space.xs"
           for t in ["details", "library", "computer"] key=t
             button id=`panel-tab-${t}` key=tabKey tabindex=(tab == t ? 0 : -1) class=Segment appearance="none" role="tab" aria-selected=(tab == t) aria-controls=`bot-tab-${t}` press=pickTab(t) min-height=36 padding="space.xs space.md" testId=`panel-tab-${t}` background-color=(tab == t ? "surface.raised" : "transparent") color=(tab == t ? "-exact-label" : "ink.muted")
-              text (t == "details" ? "Details" : t == "library" ? "Library" : "Computer") font="-exact-subheadline"
-        column id="bot-tab-details" role="tabpanel" aria-label="Details" display=(tab == "details" ? "flex" : "none") flex=1 min-height=0
+              text (t == "details" ? t("panel.details") : t == "library" ? t("panel.library") : t("panel.computer")) font="-exact-subheadline"
+        column id="bot-tab-details" role="tabpanel" aria-label=t("panel.details") display=(tab == "details" ? "flex" : "none") flex=1 min-height=0
           scroll id=`panel-${bot.slug}` flex=1 min-height=0
             column width="100%" box-sizing="border-box" padding="0 space.lg space.xl" gap="space.sm"
               if modelsDown
-                text "Can’t load the model. Check that hbots is running, then try again." color="-exact-system-red" testId="model-error"
+                text t("error.model") color="-exact-system-red" testId="model-error"
               else
-                button class=PanelRow appearance="none" press=goModel testId="model-row" aria-label=`Model: ${models.currentName}`
+                button class=PanelRow appearance="none" press=goModel testId="model-row" aria-label=t("panel.modelNamed", name=models.currentName)
                   column class=IconTile color="AccentColor"
                     text (models.providerName != "" ? models.providerName.slice(0, 1) : "?") font-weight=700
                   column flex=1 gap="2px" min-width=0
-                    text (models.currentName != "" ? models.currentName : "Choosing a model…") font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="model-name"
+                    text (models.currentName != "" ? models.currentName : t("panel.choosingModel")) font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="model-name"
                     text (models.effortLabel != "" ? `${models.providerName}, ${models.effortLabel}` : models.providerName) color="ink.muted" font="-exact-footnote"
                   column color="ink.muted"
                     Glyph(name="chevron", size=18)
-              button class=PanelRow appearance="none" press=goUsage testId="usage-card" aria-label="Usage"
+              button class=PanelRow appearance="none" press=goUsage testId="usage-card" aria-label=t("panel.usage")
                 column flex=1 gap="space.xs" min-width=0
                   row gap="space.sm" align-items="baseline"
-                    text `Usage, ${report.periodLabel != "" ? report.periodLabel : "7 days"}` color="ink.muted" font="-exact-footnote" flex=1
+                    text t("panel.usagePeriod", period=(report.periodLabel != "" ? report.periodLabel : t("usage.days7"))) color="ink.muted" font="-exact-footnote" flex=1
                   if reportDown
-                    text "Can’t load usage." color="-exact-system-red" font="-exact-footnote"
+                    text t("error.usageShort") color="-exact-system-red" font="-exact-footnote"
                   else
-                    text `${report.tokens} tokens` font="-exact-headline" font-weight=600 testId="usage-tokens"
+                    text t("panel.tokenCount", n=report.tokens) font="-exact-headline" font-weight=600 testId="usage-tokens"
                     row gap="3px" align-items="flex-end" height=30
                       for d in report.days key=d.day
                         column flex=1 height=d.spx border-radius="2px" background-color="brand.default"
                 column color="ink.muted"
                   Glyph(name="chevron", size=18)
-              text "Routines" class=SectionLabel
+              text t("panel.routines") class=SectionLabel
               if routinesDown
-                text "Can’t load routines. Check that hbots is running, then try again." color="-exact-system-red" padding="0 space.md" testId="routine-error"
+                text t("error.routines") color="-exact-system-red" padding="0 space.md" testId="routine-error"
               else if routines.tasks.length == 0
-                text `Ask ${bot.name} in chat to set one up, like “every weekday at 8”.` color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="routine-empty"
+                text t("panel.routineEmpty", name=bot.name) color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="routine-empty"
               else
                 column gap="2px"
                   for r in routines.tasks key=r.id
@@ -2271,16 +2342,16 @@ component BotPanel
                         if r.next != "" and not r.paused
                           text r.next color="ink.faint" font="-exact-footnote"
                         if r.failed
-                          text "Last run failed" color="-exact-system-red" font="-exact-footnote"
+                          text t("panel.runFailed") color="-exact-system-red" font="-exact-footnote"
                       if r.paused
-                        text "Paused" color="ink.faint" font="-exact-footnote"
+                        text t("status.paused") color="ink.faint" font="-exact-footnote"
               if routines.error != "" and routines.tasks.length == 0
                 text routines.error color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="routine-setup"
-              text "Working on" class=SectionLabel
+              text t("panel.workingOn") class=SectionLabel
               if lineageDown
-                text "Can’t load what this Bot is doing. Check that hbots is running, then try again." color="-exact-system-red" padding="0 space.md" testId="lineage-error"
+                text t("error.lineage") color="-exact-system-red" padding="0 space.md" testId="lineage-error"
               else if lineage.rows.length == 0
-                text "No other threads yet." color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="lineage-empty"
+                text t("panel.noThreads") color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="lineage-empty"
               else
                 column gap="2px"
                   for line in lineage.rows key=line.id
@@ -2289,16 +2360,16 @@ component BotPanel
                         Glyph(name="chevron", size=14)
                       column flex=1 gap="2px" min-width=0
                         text line.title font-weight=500 overflow-wrap="anywhere"
-                        text (line.remote ? "On another machine" : line.threadId != "" ? "On this machine" : "") color="ink.muted" font="-exact-footnote" testId=`where-${line.id}`
+                        text (line.remote ? t("panel.remote") : line.threadId != "" ? t("panel.local") : "") color="ink.muted" font="-exact-footnote" testId=`where-${line.id}`
                       if not line.remote and line.threadId != ""
                         button class=TextControl appearance="none" press=openChild(line.threadId) min-height=28 padding="0 space.sm" font="-exact-footnote" color="AccentColor" testId=`open-${line.id}`
-                          text "Open"
+                          text t("common.open")
                       row class=Chip
                         text line.status
-        column id="bot-tab-library" role="tabpanel" aria-label="Library" display=(tab == "library" ? "flex" : "none") flex=1 min-height=0
+        column id="bot-tab-library" role="tabpanel" aria-label=t("panel.library") display=(tab == "library" ? "flex" : "none") flex=1 min-height=0
           scroll id="panel-library-scroll" flex=1 min-height=0
             BotShelf(shelf=shelf, down=shelfDown, name=bot.name)
-        column id="bot-tab-computer" role="tabpanel" aria-label="Computer" display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0
+        column id="bot-tab-computer" role="tabpanel" aria-label=t("panel.computer") display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0
           scroll id="panel-computer-scroll" flex=1 min-height=0
             ScreenCard(name=bot.name, computer=computer, down=computerDown, heldTab=heldTab, controlError=controlError, take=take, release=release)
 
@@ -2320,24 +2391,24 @@ component ModelPicker
   view
     column gap="space.md" testId=`${prefix}-picker`
       if providers.length > 1
-        row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label="Provider"
+        row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("model.provider")
           for p in providers key=p.instanceId
             button class=Segment appearance="none" role="radio" aria-checked=(shownProvider == p.instanceId) press=showProvider(p.instanceId) testId=`provider-${p.instanceId}` border="1px solid surface.line" background-color=(shownProvider == p.instanceId ? "surface.raised" : "transparent")
               text p.name
       for p in providers.filter(x => x.instanceId == shownProvider and x.account != "") key=p.instanceId
         text p.account color="ink.muted" font="-exact-footnote" padding="0 space.xs"
-      column gap="2px" role="radiogroup" aria-label="Model"
+      column gap="2px" role="radiogroup" aria-label=t("panel.model")
         for p in providers.filter(x => x.instanceId == shownProvider) key=p.instanceId
           for m in p.models key=m.slug
             button class=ChoiceRow appearance="none" role="radio" aria-checked=(instanceId == p.instanceId and model == m.slug) press=pick(p.instanceId, m.slug, "") testId=`${prefix}-${m.slug}` background-color=(instanceId == p.instanceId and model == m.slug ? "surface.raised" : "transparent")
               text m.name font-weight=500 flex=1 min-width=0
               if m.recommended
-                text "Recommended" color="ink.faint" font="-exact-footnote"
+                text t("model.recommended") color="ink.faint" font="-exact-footnote"
               if instanceId == p.instanceId and model == m.slug
                 column color="AccentColor"
                   Glyph(name="check", size=16)
       if efforts.length > 0
-        row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label="Effort"
+        row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("model.effort")
           for e in efforts key=e.id
             button class=Segment appearance="none" role="radio" aria-checked=(effort == e.id) press=pick(instanceId, model, e.id) testId=`effort-${e.id}` border="1px solid surface.line" background-color=(effort == e.id ? "AccentColor" : "transparent") color=(effort == e.id ? "AccentColorText" : "-exact-label")
               text e.label
@@ -2356,17 +2427,17 @@ component ModelPage
   view
     column gap="space.lg" padding="space.sm space.lg space.xl" testId="model-page"
       if down
-        text "Can’t load providers. Check that hbots and T3 Code are running, then try again." color="-exact-system-red" testId="provider-error"
+        text t("error.providers") color="-exact-system-red" testId="provider-error"
       else if models.providers.length == 0
-        text "No provider is ready in T3 Code yet. Set one up there, then come back." color="ink.muted" testId="provider-none"
+        text t("model.noProviderLong") color="ink.muted" testId="provider-none"
       else
         ModelPicker(providers=models.providers, instanceId=models.instanceId, model=models.current, effort=models.effort, efforts=models.efforts, prefix="model", pick=choose)
-        text `Applies to ${bot.name}’s next message.` color="ink.muted" font="-exact-footnote" padding="0 space.xs"
+        text t("model.applies", name=bot.name) color="ink.muted" font="-exact-footnote" padding="0 space.xs"
         row align-items="center" gap="space.md" padding="space.xs 0" border-top="1px solid surface.line"
           column flex=1 gap="2px"
-            text "Use for new Bots" font-weight=500 font="-exact-subheadline"
-            text "New Bots start with this model." color="ink.muted" font="-exact-footnote"
-          button class=ToggleControl appearance="none" role="switch" aria-checked=isDefault press=makeDefault(models.instanceId, models.current, models.effort) aria-label="Use for new Bots" testId="default-model"
+            text t("model.useDefault") font-weight=500 font="-exact-subheadline"
+            text t("model.defaultNote") color="ink.muted" font="-exact-footnote"
+          button class=ToggleControl appearance="none" role="switch" aria-checked=isDefault press=makeDefault(models.instanceId, models.current, models.effort) aria-label=t("model.useDefault") testId="default-model"
             row width=36 height=22 border-radius="radius.full" background-color=(isDefault ? "AccentColor" : "surface.line") align-items="center" justify-content=(isDefault ? "flex-end" : "flex-start")
               column width=16 height=16 margin="0 3px" border-radius="radius.full" background-color="ink.light"
         if error != ""
@@ -2384,34 +2455,34 @@ component UsageView
     showBots: bool
   view
     column gap="space.lg" padding="space.sm space.lg space.xl" testId="usage-view"
-      row gap="space.xs" role="radiogroup" aria-label="Period"
+      row gap="space.xs" role="radiogroup" aria-label=t("usage.period")
         for p in ["today", "7d", "30d", "all"] key=p
           button class=Segment appearance="none" role="radio" aria-checked=(period == p) press=pickPeriod(p) testId=`period-${p}` border="1px solid surface.line" min-height=32 flex=1 min-width=0 padding="2px space.xs" font="-exact-footnote" white-space="nowrap" box-sizing="border-box"
             background-color=(period == p ? "surface.raised" : "transparent")
-            text (p == "today" ? "Today" : p == "7d" ? "7 days" : p == "30d" ? "30 days" : "All time")
-      row gap="space.xs" role="radiogroup" aria-label="View"
+            text (p == "today" ? t("usage.today") : p == "7d" ? t("usage.days7") : p == "30d" ? t("usage.days30") : t("usage.all"))
+      row gap="space.xs" role="radiogroup" aria-label=t("usage.view")
         for v in ["summary", "detail"] key=v
           button class=Segment appearance="none" role="radio" aria-checked=(view == v) press=pickView(v) testId=`view-${v}` min-height=28 font="-exact-footnote" padding="2px space.md"
             background-color=(view == v ? "surface.raised" : "transparent")
             color=(view == v ? "-exact-label" : "ink.muted")
-            text (v == "summary" ? "Summary" : "Detail")
+            text (v == "summary" ? t("usage.summary") : t("usage.detail"))
       if down or not report.ok
-        text (report.error != "" ? report.error : "Can’t load usage. Check that hbots is running, then try again.") color="-exact-system-red" testId="usage-error"
+        text (report.error != "" ? report.error : t("error.loadUsage")) color="-exact-system-red" testId="usage-error"
       else if report.empty
-        text "Nothing counted in this period." color="ink.muted" testId="usage-empty"
+        text t("usage.empty") color="ink.muted" testId="usage-empty"
       else
         row gap="space.lg"
           column gap="2px" flex=1
             text report.tokens font="-exact-headline" font-weight=700 testId="figure-tokens"
-            text "tokens" color="ink.muted" font="-exact-footnote"
+            text t("usage.tokensWord") color="ink.muted" font="-exact-footnote"
           column gap="2px" flex=1
             text report.messages font="-exact-headline" font-weight=700 testId="figure-messages"
-            text "messages" color="ink.muted" font="-exact-footnote"
+            text t("usage.messagesWord") color="ink.muted" font="-exact-footnote"
           column gap="2px" flex=1
             text report.turns font="-exact-headline" font-weight=700 testId="figure-turns"
-            text "turns" color="ink.muted" font="-exact-footnote"
+            text t("usage.turnsWord") color="ink.muted" font="-exact-footnote"
         column gap="space.xs"
-          row gap="4px" align-items="flex-end" width="100%" height=72 role="img" aria-label=`Tokens per day, ${report.first} to ${report.last}`
+          row gap="4px" align-items="flex-end" width="100%" height=72 role="img" aria-label=t("usage.perDay", first=report.first, last=report.last)
             for d in report.days key=d.day
               column flex=1 min-width=0 height=d.px border-radius="3px" background-color="brand.default"
           row justify-content="space-between"
@@ -2421,52 +2492,52 @@ component UsageView
           text report.sentence color="ink.muted" font="-exact-footnote"
         if view == "detail"
           column gap="space.sm" testId="usage-detail"
-            text "By day" class=SectionLabel
+            text t("usage.byDay") class=SectionLabel
             column gap="2px"
               for d in report.rows key=d.day
                 row gap="space.md" align-items="center" padding="space.xs space.md"
                   column flex=1 gap="2px" min-width=0
                     text d.label font-weight=500
-                    text `${d.input} in, ${d.output} out, ${d.cached} cached` color="ink.muted" font="-exact-footnote"
+                    text t("usage.dayLine", input=d.input, output=d.output, cached=d.cached) color="ink.muted" font="-exact-footnote"
                   column align-items="flex-end" gap="2px"
                     text d.tokens font-weight=600
-                    text `${d.messages} msg` color="ink.faint" font="-exact-footnote"
-            text "By model" class=SectionLabel
+                    text t("usage.msg", n=d.messages) color="ink.faint" font="-exact-footnote"
+            text t("usage.byModel") class=SectionLabel
             column gap="space.sm" padding="0 space.md"
               for m in report.models key=m.name
                 column gap="space.xs"
                   row gap="space.md" align-items="baseline"
                     text m.name font-weight=500 flex=1 min-width=0
-                    text `${m.tokens}, ${m.turns} turns` color="ink.muted" font="-exact-footnote"
+                    text t("usage.modelLine", tokens=m.tokens, turns=m.turns) color="ink.muted" font="-exact-footnote"
                   row height=6 border-radius="3px" background-color="surface.line"
                     column width=`${m.share}%` height=6 border-radius="3px" background-color="brand.default"
             if showBots
-              text "By Bot" class=SectionLabel
+              text t("usage.byBot") class=SectionLabel
               column gap="space.sm" padding="0 space.md"
                 for b in report.bots key=b.slug
                   column gap="space.xs"
                     row gap="space.md" align-items="center"
                       Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=22, still=true, presence="")
                       text b.name font-weight=500 flex=1 min-width=0
-                      text `${b.tokens}, ${b.messages} msg` color="ink.muted" font="-exact-footnote"
+                      text t("usage.botLine", tokens=b.tokens, messages=b.messages) color="ink.muted" font="-exact-footnote"
                     row height=6 border-radius="3px" background-color="surface.line"
                       column width=`${b.share}%` height=6 border-radius="3px" background-color="brand.default"
-            text "Totals" class=SectionLabel
+            text t("usage.totals") class=SectionLabel
             column gap="2px" padding="0 space.md"
               row justify-content="space-between"
-                text "Input" color="ink.muted"
+                text t("usage.input") color="ink.muted"
                 text report.input
               row justify-content="space-between"
-                text "Output" color="ink.muted"
+                text t("usage.output") color="ink.muted"
                 text report.output
               row justify-content="space-between"
-                text "Read from cache" color="ink.muted"
+                text t("usage.cached") color="ink.muted"
                 text report.cached
               row justify-content="space-between"
-                text "Written to cache" color="ink.muted"
+                text t("usage.cacheWrite") color="ink.muted"
                 text report.cacheWrite
               row justify-content="space-between"
-                text "Attachments" color="ink.muted"
+                text t("usage.attachments") color="ink.muted"
                 text report.attachments
 
 // What a Bot has kept, to look at: pictures, files and links. Nothing here can be changed.
@@ -2478,24 +2549,24 @@ component BotShelf
   view
     column gap="space.lg" padding="0 space.lg space.xl" testId="shelf"
       if down or not shelf.ok
-        text "Can’t open this library. Check that hbots is running, then try again." color="-exact-system-red" testId="library-error"
+        text t("error.library") color="-exact-system-red" testId="library-error"
       else if shelf.total == 0
-        text `Files, pictures and links shared with ${name} show up here.` color="ink.muted" testId="library-status"
+        text t("library.empty", name=name) color="ink.muted" testId="library-status"
       else
-        text (shelf.total == 1 ? `1 thing with ${name}.` : `${shelf.total} things with ${name}.`) color="ink.muted" testId="library-count"
+        text (shelf.total == 1 ? t("library.one", name=name) : t("library.many", n=shelf.total, name=name)) color="ink.muted" testId="library-count"
         if shelf.pictures.length > 0
           column gap="space.sm"
-            text "Pictures" class=SectionLabel
+            text t("library.pictures") class=SectionLabel
             row gap="space.xs" flex-wrap="wrap"
               for p in shelf.pictures key=p.id
-                link href=p.url target="_blank" aria-label=`Open ${p.title}` testId=`picture-${p.id}`
+                link href=p.url target="_blank" aria-label=t("common.openNamed", name=p.title) testId=`picture-${p.id}`
                   image p.url aria-label=p.title width=88 height=88 border-radius="radius.md" object-fit="cover"
         if shelf.files.length > 0
           column gap="space.sm"
-            text "Files" class=SectionLabel
+            text t("library.files") class=SectionLabel
             column gap="space.xs"
               for f in shelf.files key=f.id
-                link class=FileCard href=f.url target="_blank" aria-label=`Open ${f.title}` testId=`shelf-file-${f.id}` min-width=0
+                link class=FileCard href=f.url target="_blank" aria-label=t("common.openNamed", name=f.title) testId=`shelf-file-${f.id}` min-width=0
                   row gap="space.md" align-items="center"
                     column class=IconTile color="AccentColor"
                       Glyph(name="file", size=18)
@@ -2504,10 +2575,10 @@ component BotShelf
                       text f.detail color="ink.muted" font="-exact-footnote" overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
         if shelf.links.length > 0
           column gap="space.sm"
-            text "Links" class=SectionLabel
+            text t("library.links") class=SectionLabel
             column gap="space.xs"
               for l in shelf.links key=l.id
-                link class=FileCard href=l.url target="_blank" aria-label=`Open ${l.title}` testId=`shelf-link-${l.id}` min-width=0
+                link class=FileCard href=l.url target="_blank" aria-label=t("common.openNamed", name=l.title) testId=`shelf-link-${l.id}` min-width=0
                   row gap="space.md" align-items="center"
                     column class=IconTile color="AccentColor"
                       Glyph(name="globe", size=18)
@@ -2528,33 +2599,33 @@ component ScreenCard
   view
     column gap="space.md" padding="0 space.lg space.xl" testId="screen"
       if down or not computer.ok
-        text "Can’t open this Bot’s browser. Check that hbots is running, then try again." color="-exact-system-red" testId="computer-error"
+        text t("error.computer") color="-exact-system-red" testId="computer-error"
       else if computer.tabs.length == 0
         column align-items="center" gap="space.sm" padding="space.xl 0"
           column color="ink.faint"
             Glyph(name="monitor", size=32)
-          text `${name} has not opened a page.` color="ink.muted" text-align="center" testId="computer-status"
+          text t("computer.none", name=name) color="ink.muted" text-align="center" testId="computer-status"
       else
         column border-radius="radius.md" overflow="hidden" border="1px solid surface.line" background-color="surface.card"
           if computer.image != ""
-            image `data:image/jpeg;base64,${computer.image}` aria-label=`Page open for ${name}` width="100%" testId="computer-frame"
+            image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=name) width="100%" testId="computer-frame"
           else
             column align-items="center" justify-content="center" height=140 color="ink.faint"
               Glyph(name="monitor", size=28)
         for t in computer.tabs.slice(0, 1) key=t.id
           column gap="space.xs" align-items="center"
-            text `${name}’s screen` color="ink.muted" testId="computer-status"
+            text t("computer.screen", name=name) color="ink.muted" testId="computer-status"
             text t.title font-weight=500 text-align="center" overflow-wrap="anywhere"
           if heldTab == t.id
             button class=PrimaryButton buttonStyle="filled" press=release testId="computer-release"
-              text "Release"
+              text t("computer.release")
           else
             button class=PrimaryButton buttonStyle="bordered" press=take(t.id) testId="computer-take"
-              text "Take control"
+              text t("computer.take")
         if heldTab != ""
-          text "You have this page. Release it so the Bot can use it again." color="ink.muted" font="-exact-footnote" text-align="center"
+          text t("computer.held") color="ink.muted" font="-exact-footnote" text-align="center"
         else
-          text "Watching changes nothing. Take control to type or click yourself." color="ink.muted" font="-exact-footnote" text-align="center"
+          text t("computer.watching") color="ink.muted" font="-exact-footnote" text-align="center"
         if controlError != ""
           text controlError color="-exact-system-red" testId="computer-error"
 
@@ -2576,66 +2647,66 @@ component EditBotPage
   view
     column gap="space.lg" padding="space.sm space.lg space.xl" testId="edit-page"
       column gap="space.sm"
-        text "Name" class=SectionLabel
-        input appearance="none" class=Field value=name input=editName change=rename(bot.slug) aria-label="Name" padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="bot-name"
+        text t("common.name") class=SectionLabel
+        input appearance="none" class=Field value=name input=editName change=rename(bot.slug) aria-label=t("common.name") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="bot-name"
       column gap="space.sm"
-        text "Colour" class=SectionLabel
+        text t("edit.colour") class=SectionLabel
         row gap="space.xs" flex-wrap="wrap"
           for c in pickerColours() key=c
-            button class=SwatchControl press=recolour(bot.slug, c) appearance="none" aria-label=`Colour ${faceColor(c)}` aria-pressed=(bot.color == c) testId=`colour-${c}` width=40 height=40 padding=0
+            button class=SwatchControl press=recolour(bot.slug, c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(bot.color == c) testId=`colour-${c}` width=40 height=40 padding=0
               column width=30 height=30 box-sizing="border-box" border-radius="radius.full" background-color=c border=(bot.color == c ? "3px solid AccentColor" : "3px solid transparent")
       column gap="space.sm"
-        text "Shape" class=SectionLabel
+        text t("edit.shape") class=SectionLabel
         row gap="space.xs" flex-wrap="wrap"
           for s in shapeNames() key=s
-            button class=SwatchControl press=reshape(bot.slug, s) appearance="none" aria-label=`Shape ${s}` aria-pressed=(bot.shape == s) testId=`shape-${s}` width=48 height=48 padding=0 border-radius="radius.md" background-color=(bot.shape == s ? "surface.raised" : "transparent")
+            button class=SwatchControl press=reshape(bot.slug, s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(bot.shape == s) testId=`shape-${s}` width=48 height=48 padding=0 border-radius="radius.md" background-color=(bot.shape == s ? "surface.raised" : "transparent")
               Avatar(shape=s, color=faceColor(bot.color), state="idle", size=34, still=true, presence="")
       column gap="2px"
         row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
           column class=IconTile color="AccentColor"
             Glyph(name="pin", size=18)
           column flex=1 gap="2px"
-            text "Pin to the top" font-weight=600
-            text "Shows as a tile above the list." color="ink.muted" font="-exact-footnote"
-          button class=ToggleControl appearance="none" role="switch" aria-checked=bot.pinned disabled=bot.main press=pin(bot.slug, not bot.pinned) aria-label="Pin to the top" testId="pin-bot"
+            text t("edit.pin") font-weight=600
+            text t("edit.pinNote") color="ink.muted" font="-exact-footnote"
+          button class=ToggleControl appearance="none" role="switch" aria-checked=bot.pinned disabled=bot.main press=pin(bot.slug, not bot.pinned) aria-label=t("edit.pin") testId="pin-bot"
             row width=44 height=26 border-radius="radius.full" background-color=(bot.pinned or bot.main ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.pinned or bot.main ? "flex-end" : "flex-start")
               column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
         row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
           column class=IconTile color="AccentColor"
             Glyph(name="star", size=18)
           column flex=1 gap="2px"
-            text "Main Bot" font-weight=600
-            text (bot.main ? "Your default Bot" : "Make this your default Bot") color="ink.muted" font="-exact-footnote"
+            text t("edit.main") font-weight=600
+            text (bot.main ? t("edit.isDefault") : t("edit.makeDefault")) color="ink.muted" font="-exact-footnote"
           if bot.main
-            column color="AccentColor" aria-label="Main Bot" testId="is-main"
+            column color="AccentColor" aria-label=t("edit.main") testId="is-main"
               Glyph(name="check", size=20)
           else
-            button class=IconControl appearance="none" press=makeMain(bot.slug) aria-label="Make main Bot" title="Make main Bot" testId="make-main"
+            button class=IconControl appearance="none" press=makeMain(bot.slug) aria-label=t("edit.makeMain") title=t("edit.makeMain") testId="make-main"
               Glyph(name="star", size=20)
         row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
           column class=IconTile color="ink.muted"
             Glyph(name="eye-off", size=18)
           column flex=1 gap="2px"
-            text "Hide from inbox" font-weight=600
-            text "Keep this conversation tucked away." color="ink.muted" font="-exact-footnote"
-          button class=ToggleControl appearance="none" role="switch" aria-checked=bot.hidden disabled=bot.main press=hide(bot.slug, not bot.hidden) aria-label="Hidden from the list" testId="hide-bot"
+            text t("edit.hide") font-weight=600
+            text t("edit.hideNote") color="ink.muted" font="-exact-footnote"
+          button class=ToggleControl appearance="none" role="switch" aria-checked=bot.hidden disabled=bot.main press=hide(bot.slug, not bot.hidden) aria-label=t("edit.hidden") testId="hide-bot"
             row width=44 height=26 border-radius="radius.full" background-color=(bot.hidden ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.hidden ? "flex-end" : "flex-start")
               column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
       if bot.main
-        text "Your main Bot stays in the inbox. Choose another main Bot before hiding or deleting this one." color="ink.muted" font="-exact-footnote" padding="0 space.md"
+        text t("edit.mainStays") color="ink.muted" font="-exact-footnote" padding="0 space.md"
       if error != ""
         text error color="-exact-system-red" testId="bot-error" padding="0 space.md"
       row align-items="center" gap="space.md" min-height=56 padding="0 space.md" border-top="1px solid surface.line"
         column class=IconTile color="-exact-system-red"
           Glyph(name="trash", size=18)
         column flex=1 gap="2px"
-          text "Delete Bot" font-weight=600 color=(bot.main ? "ink.muted" : "-exact-system-red")
-          text "Moves its folder to the trash." color="ink.muted" font="-exact-footnote"
-        button class=IconControl appearance="none" commandfor=`drop-bot-${bot.slug}` command="show-modal" disabled=bot.main aria-label="Delete Bot" title="Delete Bot" color="-exact-system-red" testId="delete-bot"
+          text t("edit.delete") font-weight=600 color=(bot.main ? "ink.muted" : "-exact-system-red")
+          text t("edit.deleteMove") color="ink.muted" font="-exact-footnote"
+        button class=IconControl appearance="none" commandfor=`drop-bot-${bot.slug}` command="show-modal" disabled=bot.main aria-label=t("edit.delete") title=t("edit.delete") color="-exact-system-red" testId="delete-bot"
           Glyph(name="trash", size=20)
-      dialog id=`drop-bot-${bot.slug}` role="alertdialog" aria-label=`Delete ${bot.name}?`
-        text "Its folder moves to the trash. This can’t be undone from here."
+      dialog id=`drop-bot-${bot.slug}` role="alertdialog" aria-label=t("edit.deleteNamed", name=bot.name)
+        text t("edit.deleteBody")
         button press=drop(bot.slug) destructive=true commandfor=`drop-bot-${bot.slug}` command="close" testId="drop-bot-ok"
-          text "Delete"
+          text t("common.delete")
         button commandfor=`drop-bot-${bot.slug}` command="close" testId="drop-bot-cancel"
-          text "Cancel"
+          text t("common.cancel")
