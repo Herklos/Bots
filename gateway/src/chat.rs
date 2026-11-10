@@ -63,7 +63,7 @@ fn peer(peers: &Peers, thread: &Value) -> Value {
 }
 
 /// A line the transcript shows between messages: who the Bot messaged, who messaged it, a
-/// routine made or run, a helper started. Anything else in a turn is not for the person.
+/// routine made or run, a one-off child thread started. Anything else in a turn is not for the person.
 fn event_for(item: &Value, peers: &Peers, ordinal: i64) -> Option<Value> {
     let id = format!("event-{}", item["id"].as_str().unwrap_or(""));
     let at = item["startedAt"]
@@ -105,10 +105,11 @@ fn event_for(item: &Value, peers: &Peers, ordinal: i64) -> Option<Value> {
         "user_message" if item["scheduledTaskId"].is_string() => {
             line("ran", "Routine ran", "", Value::Null)
         }
+        // A T3 child thread for this turn, not a lasting hbots Subagent.
         "subagent" => line(
             "started",
-            "Started",
-            item["title"].as_str().unwrap_or("a helper"),
+            "Started child thread",
+            item["title"].as_str().unwrap_or("one-off work"),
             Value::Null,
         ),
         _ => None,
