@@ -70,6 +70,15 @@ Bun.serve({
         projects.push({ id: payload.projectId, title: payload.title, workspaceRoot: payload.workspaceRoot });
         return ok(ws, id, {});
       }
+      if (tag === 'projects.mutate' && payload.type === 'project.update') {
+        const project = projects.find((p) => p.id === payload.projectId);
+        if (project) {
+          project.title = payload.title;
+          project.faviconPath = payload.faviconPath;
+          project.projectIcon = payload.projectIcon;
+        }
+        return ok(ws, id, {});
+      }
       if (tag === 'orchestration.launchThread') { threads.set(payload.threadId, []); return ok(ws, id, {}); }
       if (tag === 'orchestration.getThreadProjection') {
         const items = threads.get(payload.threadId);
