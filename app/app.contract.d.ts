@@ -377,7 +377,8 @@ type T67 = T22 | null;
 type T68 = T25 | null;
 type T69 = { "path": T1; "name": T1; "type": T1; "size": T25; "width": T68; "height": T68; "duration": T68; };
 type T70 = T69[];
-type T71 = { "key": T1; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; "code": T1; "repeat": T0; "isComposing": T0; };
+type T71 = { "offsetX": T25; "offsetY": T25; "files": T61; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; };
+type T72 = { "key": T1; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; "code": T1; "repeat": T0; "isComposing": T0; };
 
 /** Sources called by compiled mutation sends. */
 export type MutationSource = "computerControl" | "createBot" | "deleteBot" | "deleteLogin" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveLogin" | "sendMessage" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";

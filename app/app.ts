@@ -129,7 +129,7 @@ function fixtureChat(child: string) {
     rows: [
       row({ id: 'm1', mine: true, text: 'Hello', tail: false }),
       row({ id: 'm2', time: '9:00 AM', text: 'Hi there', react: '🔥', quote: 'Hello', tokens: '12 in, 3 out, 4 read from cache, 1 written to cache.', head: true }),
-      row({ id: 'm3', text: 'No tokens here', head: false }),
+      row({ id: 'm3', time: '9:01 AM', text: 'No tokens here', head: false }),
       row({ id: 'voice1', mine: true, files: [{ id: 'voice', name: 'voice.m4a', kind: 'file', size: '1 KB', url: '' }] }),
     ],
   };
@@ -219,6 +219,8 @@ function usageReport(b: any) {
 let lastNow = 0;
 const frames: Record<string, string> = {};
 const threads: Record<string, string> = {};
+const TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', pdf: 'application/pdf', txt: 'text/plain', md: 'text/markdown', csv: 'text/csv', json: 'application/json', mp4: 'video/mp4', m4a: 'audio/mp4' };
+const guessType = (name: string): string => TYPES[name.split('.').pop()?.toLowerCase() ?? ''] ?? 'application/octet-stream';
 const GAP = 60 * 60_000;
 const fileSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 // A day mark: the clock today, then "Yesterday 9:41 AM", the weekday for a week, then the date.
@@ -414,7 +416,9 @@ const sources: Sources = {
       body: JSON.stringify({ text, attachmentIds }),
     }));
   },
-  uploadAttachment: async ([slug, path, name, mediaType], store, storage): Promise<Result<'uploadAttachment'>> => {
+  uploadAttachment: async ([slug, path, rawName, rawType], store, storage): Promise<Result<'uploadAttachment'>> => {
+    const name = rawName !== '' ? rawName : decodeURIComponent(String(path).split('/').pop() ?? 'file');
+    const mediaType = rawType !== '' ? rawType : guessType(name);
     try {
       const bytes = new Uint8Array(await storage.fs.readFile(String(path)));
       if (bytes.byteLength === 0) return { ok: false, id: '', name: '', error: 'That file is empty.' };

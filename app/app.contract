@@ -666,6 +666,7 @@ component Bots
   state messageQuery = ""
   state marksOn = true
   state voiceHold = ""
+  state reactFor = ""
   state childThread = ""
   // Wide windows show the Bot's panel beside the chat, like Threebot's desktop.
   state wide = false
@@ -943,7 +944,16 @@ component Bots
       failedText = ""
       send sent = sendMessage(slug, again, "")
   action doReact(item: string, emoji: string)
+    reactFor = ""
     send reacted = reactTo(slug, item, emoji)
+  action openReact(item: string)
+    reactFor = (reactFor == item ? "" : item)
+  action filesDropped(e: DragEvent)
+    if slug != "" and not pending(attached) and e.files.length > 0
+      match e.files.at(0)
+        case some(f)
+          send attached = uploadAttachment(slug, f, "", "")
+        case none
   action editAnswer(v: string)
     answerText = v
   action answer(rid: string, kind: string, key: string, value: string)
@@ -1047,7 +1057,7 @@ component Bots
         column flex=1 justify-content="center" align-items="center" padding="space.xl" testId="sign-in"
           column width="100%" max-width="22rem" gap="space.lg" box-sizing="border-box" padding="space.xl" border="1px solid surface.line" border-radius="radius.lg" background-color="surface.card"
             column align-items="center" gap="space.sm"
-              Face(shape="ball", color="teal", state="idle", size=72, still=false)
+              Face(shape="ball", color="teal", state=(pending(signedIn) ? "working" : "idle"), size=96, still=false)
               text "hbots" role="heading" aria-level=1 class=HeroTitle
               text "Your own Bots, in one place." color="-exact-secondary-label"
             text "Enter the password you set in Settings → Remote access." color="-exact-secondary-label"
@@ -1145,7 +1155,7 @@ component Bots
                       text (prefs.userName != "" ? prefs.userName : "You") font-weight=500 overflow-wrap="break-word" testId="you-name"
                       text botCountLabel(bots.length) color="ink.muted" font="-exact-footnote"
           else if e.name == "chat"
-            column class=Screen navigationKey=`${e.id}` navigationScroll="transcript" position="absolute" inset=0 padding-right=((wide and panelOpen) ? "20rem" : "0px")
+            column class=Screen navigationKey=`${e.id}` navigationScroll="transcript" drop=filesDropped position="absolute" inset=0 padding-right=((wide and panelOpen) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="chat-header"
                 button id="back" class=IconControl appearance="none" press=back aria-label="Back" title="Back" display=(wide ? "none" : "flex")
                   column rotate="180deg"
@@ -1246,8 +1256,13 @@ component Bots
                                     button class=TextControl appearance="none" press=doReact(m.id, "👍") aria-label="Remove reaction" min-height=24 padding="0 space.xs" testId=`react-${m.id}`
                                       text m.react font="-exact-footnote"
                                   else if not m.mine
-                                    button class=TextControl appearance="none" press=doReact(m.id, "👍") aria-label="React with thumbs up" title="React" min-height=24 padding="0 space.xs" testId=`add-react-${m.id}`
+                                    button class=TextControl appearance="none" press=openReact(m.id) aria-label="React" title="React" min-height=24 padding="0 space.xs" testId=`add-react-${m.id}`
                                       Glyph(name="smile", size=14)
+                                if reactFor == m.id
+                                  row gap="space.xs" padding="space.xs space.sm" border-radius="radius.full" background-color="surface.card" border="1px solid surface.line" testId="react-picker"
+                                    for em in ["👍", "❤️", "😂", "🎉", "🙏"] key=em
+                                      button class=TextControl appearance="none" press=doReact(m.id, em) aria-label=`React ${em}` min-height=28 padding="0 space.xs" testId=`pick-${em}`
+                                        text em
                         else if m.kind == "request"
                           row padding="space.sm space.lg"
                             column gap="space.sm" padding="space.md space.lg" border-radius="radius.lg" background-color="surface.bubble" flex=1 max-width="32rem" testId=`request-${m.id}`
