@@ -520,6 +520,7 @@ shape Prefs
   theme: string
   defaultInstance: string
   defaultModel: string
+  defaultEffort: string
 
 // Result of uploading one chat attachment to the gateway.
 shape Attached
@@ -750,6 +751,9 @@ fn fileIdOf(row: string): string = entryId(fieldAt(row, 1))
 fn hasFileId(rows: string[], id: string): bool = id != "" and rows.filter(r => fileIdOf(r) == id).length > 0
 fn hasVoiceId(rows: string[], id: string): bool = id != "" and rows.filter(r => fieldAt(r, 2) == id).length > 0
 fn themeLabel(theme: string, system: string, dark: string, light: string): string = theme == "system" ? system : theme == "dark" ? dark : light
+// Keep the level only when the model being chosen lists it. Otherwise the gateway uses that model's default.
+fn keptEffort(levels: Effort[], current: string): string = levels.filter(e => e.id == current).length > 0 ? current : ""
+fn modelEfforts(providers: Provider[], instanceId: string, model: string): Effort[] = match first(providers.filter(p => p.instanceId == instanceId)) { case some(p) => match first(p.models.filter(m => m.slug == model)) { case some(m) => m.efforts, case none => [] }, case none => [] }
 // Face colours are plain names; Bot colours are brand.* tokens from the design package.
 fn faceColor(c: string): string = c == "brand.default" ? "teal" : c == "brand.blue" ? "blue" : c == "brand.violet" ? "violet" : c == "brand.pink" ? "pink" : c == "brand.orange" ? "orange" : c == "brand.green" ? "green" : c == "brand.black" ? "black" : c == "brand.white" ? "white" : c == "brand.brown" ? "brown" : c == "brand.red" ? "red" : c == "brand.amber" ? "amber" : c == "brand.yellow" ? "yellow" : c == "brand.cyan" ? "cyan" : c == "brand.purple" ? "purple" : c == "brand.magenta" ? "magenta" : c == "brand.gray" ? "gray" : "teal"
 // The open chat is clear. A hidden Bot keeps the mark until that chat is the open one.
@@ -1977,7 +1981,7 @@ component Bots
                       if providers.length == 0
                         text t("settings.noProvider") color="ink.muted" font="-exact-subheadline" padding="space.sm"
                       else
-                        ModelPicker(providers=providers, instanceId=prefs.defaultInstance, model=prefs.defaultModel, effort="", efforts=[], prefix="default", pick=doMakeDefault)
+                        ModelPicker(providers=providers, instanceId=prefs.defaultInstance, model=prefs.defaultModel, effort=prefs.defaultEffort, prefix="default", pick=doMakeDefault)
                   column gap="space.sm"
                     text t("panel.usage") class=SectionLabel
                     column class=GroupCard padding="0"
@@ -2854,7 +2858,6 @@ component ModelPicker
     instanceId: string
     model: string
     effort: string
-    efforts: Effort[]
     prefix: string
     pick: action
   state viewing = ""
@@ -2873,16 +2876,16 @@ component ModelPicker
       column gap="2px" role="radiogroup" aria-label=t("panel.model")
         for p in providers.filter(x => x.instanceId == shownProvider) key=p.instanceId
           for m in p.models key=m.slug
-            button class=ChoiceRow appearance="none" role="radio" aria-checked=(instanceId == p.instanceId and model == m.slug) press=pick(p.instanceId, m.slug, "") testId=`${prefix}-${m.slug}` background-color=(instanceId == p.instanceId and model == m.slug ? "surface.raised" : "transparent")
+            button class=ChoiceRow appearance="none" role="radio" aria-checked=(instanceId == p.instanceId and model == m.slug) press=pick(p.instanceId, m.slug, keptEffort(m.efforts, effort)) testId=`${prefix}-${m.slug}` background-color=(instanceId == p.instanceId and model == m.slug ? "surface.raised" : "transparent")
               text m.name font-weight=500 flex=1 min-width=0
               if m.recommended
                 text t("model.recommended") color="ink.faint" font="-exact-footnote"
               if instanceId == p.instanceId and model == m.slug
                 column color="AccentColor"
                   Glyph(name="check", size=16)
-      if efforts.length > 0
+      if modelEfforts(providers, instanceId, model).length > 0
         row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("model.effort")
-          for e in efforts key=e.id
+          for e in modelEfforts(providers, instanceId, model) key=e.id
             button class=Segment appearance="none" role="radio" aria-checked=(effort == e.id) press=pick(instanceId, model, e.id) testId=`effort-${e.id}` border="1px solid surface.line" background-color=(effort == e.id ? "AccentColor" : "transparent") color=(effort == e.id ? "AccentColorText" : "-exact-label")
               text e.label
 
@@ -2904,7 +2907,7 @@ component ModelPage
       else if models.providers.length == 0
         text t("model.noProviderLong") color="ink.muted" testId="provider-none"
       else
-        ModelPicker(providers=models.providers, instanceId=models.instanceId, model=models.current, effort=models.effort, efforts=models.efforts, prefix="model", pick=choose)
+        ModelPicker(providers=models.providers, instanceId=models.instanceId, model=models.current, effort=models.effort, prefix="model", pick=choose)
         text t("model.applies", name=bot.name) color="ink.muted" font="-exact-footnote" padding="0 space.xs"
         row align-items="center" gap="space.md" padding="space.xs 0" border-top="1px solid surface.line"
           column flex=1 gap="2px"
