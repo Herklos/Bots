@@ -16,28 +16,47 @@ const bots = [
   { slug: 'quiet', name: 'Archive', color: 'brand.gray', shape: 'pill', primary: false, pinned: false, hidden: true, mainThreadId: 't-quiet', working: false, unread: false, preview: null },
 ].map((b) => ({ label: '', ...b }));
 
-const state = { bots, settings: { userName: 'Alex', theme: 'system', beta: { projects: false } }, chats: {} };
+const state = { bots, settings: { userName: 'Alex', theme: 'system', beta: { projects: false } } };
 
-// Overridden per step as the transcript grows richer.
-const chatFor = (slug) => state.chats[slug] ?? {
-  messages: [
-    { id: 'm1', role: 'user', text: 'Morning. Go through today’s feedback.', at: ago(4) },
-    { id: 'm2', role: 'bot', text: 'On it, pulling in today’s feedback now.', at: ago(3) },
-  ],
-  requests: [], working: slug === 'ship',
+const inbox = { slug: 'inbox', name: 'Inbox', color: 'brand.pink', shape: 'hex' };
+const scout = { slug: 'scout', name: 'Scout', color: 'brand.blue', shape: 'cloud' };
+const m = (id, ordinal, role, text, minutes, extra = {}) => ({ id, ordinal, role, text, at: ago(minutes), files: [], attachments: [], streaming: false, from: null, ...extra });
+const chats = {
+  ship: {
+    messages: [
+      m('m1', 1, 'user', 'Morning. Go through today’s feedback.', 60 * 26),
+      m('m2', 2, 'bot', 'On it, pulling in today’s feedback now.', 60 * 26 - 1),
+      m('m3', 4, 'bot', 'Done. Here is what came in overnight:\n\n- **12** new items, 3 flagged as bugs\n- Most common ask: *dark mode for the sidebar*\n- One refund request, already routed to `Ledger`\n\n```\nfeedback.csv  12 rows\n```\nWant me to draft replies?', 60 * 25),
+      m('m4', 5, 'user', 'Yes, draft them. And send me the summary as a file.', 60 * 24),
+      m('m5', 7, 'bot', 'Here is the summary.', 60 * 24 - 2, { files: [{ id: 'f1', name: 'Feedback summary.pdf', mime: 'application/pdf', bytes: 1258291, kind: 'file' }, { id: 'f2', name: 'chart.png', mime: 'image/png', bytes: 83000, kind: 'image' }] }),
+      m('m6', 9, 'bot', 'Inbox has the drafts if you want a look.', 8, { from: null }),
+      m('m7', 11, 'user', 'Morning. Go through today’s feedback.', 4),
+      m('m8', 12, 'bot', 'On it, pulling in today’s feedback now.', 3),
+    ],
+    events: [
+      { id: 'event-e1', ordinal: 3, at: ago(60 * 25 + 1), kind: 'sent', text: 'Messaged', title: '', bot: inbox },
+      { id: 'event-e2', ordinal: 6, at: ago(60 * 24 - 1), kind: 'routine', text: 'Created routine', title: 'Morning briefing', bot: null },
+      { id: 'event-e3', ordinal: 8, at: ago(10), kind: 'from', text: 'Message from', title: '', bot: scout },
+      { id: 'event-e4', ordinal: 10, at: ago(6), kind: 'ran', text: 'Routine ran', title: '', bot: null },
+    ],
+    requests: [{ id: 'req1', itemId: 'i1', kind: 'approval_request', title: 'Run `git status` in the Feedback folder?', reason: 'The Bot wants to read the folder’s state.', requestKind: 'command',
+      options: [{ decision: 'accept', label: 'Allow' }, { decision: 'decline', label: 'Deny' }] }],
+    working: true,
+  },
 };
+const chatFor = (slug) => chats[slug] ?? { messages: [], events: [], requests: [], working: false };
 
 export function sample(method, path, params, body) {
   if (path === '/api/session') return { authenticated: true, passwordRequired: false };
   if (path === '/api/config') return { botsRoot: '/sample', version: '0.0.0', harness: { name: 'T3 Code', connected: true }, appUrl: '' };
-  if (path === '/api/bots' && method === 'GET') return { bots: state.bots };
+  if (path === '/api/bots' && method === 'GET') return { bots: state.bots, now };
   if (path === '/api/settings') return state.settings;
   if (path === '/api/vault') return { items: [] };
   if (path === '/api/projects') return { beta: true, items: [] };
   const m = path.match(/^\/api\/bots\/([^/]+)\/(.+)$/);
   if (m) {
     const [, slug, rest] = m;
-    if (rest === 'chat' && method === 'GET') return chatFor(slug);
+    if (rest === 'chat' && method === 'GET') return { ...chatFor(slug), now };
     if (rest === 'seen') return { ok: true };
     if (rest === 'model') return { current: 'claude-haiku-5-5', instanceId: 'claudeAgent', choices: [{ instanceId: 'claudeAgent', model: 'claude-haiku-5-5', label: 'Haiku' }] };
     if (rest === 'routines') return { tasks: [], error: '' };

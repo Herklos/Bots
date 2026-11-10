@@ -948,7 +948,7 @@ async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
 async fn list_bots(State(s): S) -> ApiResult<Response> {
     Ok((
         [(header::CACHE_CONTROL, "no-store")],
-        Json(json!({ "bots": roster::list(&s, s.bots.list().await?).await })),
+        Json(json!({ "bots": roster::list(&s, s.bots.list().await?).await, "now": unix_now() * 1000 })),
     )
         .into_response())
 }
@@ -1414,8 +1414,22 @@ async fn read_chat(State(s): S, Path(slug): Path<String>) -> ApiResult<Response>
         )
         .await
         .map_err(|e| ApiError::new(502, e.to_string()))?;
-    let mut out = chat::transcript(&projection);
+    let peers: chat::Peers = s
+        .bots
+        .list()
+        .await?
+        .iter()
+        .filter_map(|b| {
+            Some((
+                b["mainThreadId"].as_str()?.to_string(),
+                json!({ "slug": b["slug"], "name": b["name"], "color": b["color"], "shape": b["shape"] }),
+            ))
+        })
+        .collect();
+    let mut out = chat::transcript_for(&projection, &peers);
     out["threadId"] = json!(thread);
+    // The client has no clock it may read in its data code, so the gateway says what time it is.
+    out["now"] = json!(unix_now() * 1000);
     Ok(([(header::CACHE_CONTROL, "no-store")], Json(out)).into_response())
 }
 

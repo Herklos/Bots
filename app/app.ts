@@ -116,6 +116,66 @@ function libraryEntry(slug: string, e: any) {
   };
 }
 
+const GAP = 60 * 60_000;
+const fileSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
+// A day mark: the clock today, then "Yesterday 9:41 AM", the weekday for a week, then the date.
+function dayLabel(at: string, now: number): string {
+  const d = new Date(at);
+  const days = Math.round((dayStart(now) - dayStart(d.getTime())) / 86_400_000);
+  const day = days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : days < 7 ? DAYS[d.getDay()]! : `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return `${day} ${clock(d)}`;
+}
+const blank = { key: '', time: '', title: '', files: [] as any[], botSlug: '', botName: '', botColor: 'brand.default', botShape: 'ball', variant: '', choices: [] as any[], placeholder: '' };
+
+// The transcript as rows: day marks, messages in runs, the lines between them, what the Bot is
+// waiting on, and the working line. A run is one sender's messages with no break between them.
+function chatRows(slug: string, body: any, now: number): any[] {
+  const peer = (b: any) => (b && typeof b === 'object'
+    ? { botSlug: String(b.slug ?? ''), botName: String(b.name ?? ''), botColor: fill(b.color), botShape: String(b.shape ?? 'ball') } : {});
+  const timeline = [
+    ...(body.messages as any[]).map((m) => ({ ...m, _t: 'message' })),
+    ...((body.events ?? []) as any[]).map((e) => ({ ...e, _t: 'event' })),
+  ].sort((a, b) => (a.ordinal ?? 0) - (b.ordinal ?? 0));
+  const rows: any[] = [];
+  let prev: any = null;
+  let last = 0;
+  for (const item of timeline) {
+    const t = Date.parse(String(item.at ?? ''));
+    if (now > 0 && Number.isFinite(t) && (last === 0 || t - last > GAP || dayStart(t) !== dayStart(last))) {
+      rows.push({ ...blank, id: `day-${item.id}`, kind: 'day', mine: false, text: dayLabel(String(item.at), now), head: true, tail: true });
+    }
+    if (Number.isFinite(t)) last = t;
+    if (item._t === 'event') {
+      rows.push({ ...blank, ...peer(item.bot), id: String(item.id), kind: 'event', mine: false, text: String(item.text ?? ''), title: String(item.title ?? ''), head: true, tail: true, variant: String(item.kind ?? '') });
+      prev = null;
+      continue;
+    }
+    const mine = item.role === 'user' && !item.from;
+    const who = `${mine}:${item.from?.slug ?? ''}`;
+    const files = ((item.files ?? []) as any[]).map((f) => ({
+      id: String(f.id), name: String(f.name), kind: String(f.kind), size: fileSize(Number(f.bytes ?? 0)),
+      url: `${API}/api/bots/${encodeURIComponent(slug)}/attachments/${encodeURIComponent(String(f.id))}`,
+    }));
+    const row = { ...blank, ...peer(item.from), id: String(item.id), kind: 'message', mine, text: String(item.text ?? ''), files, head: !(prev && prev.who === who && t - prev.t < 5 * 60_000), tail: true,
+      time: Number.isFinite(t) ? clock(new Date(t)) : '' };
+    if (prev && !row.head) rows[prev.index].tail = false;
+    rows.push(row);
+    prev = { who, t, index: rows.length - 1 };
+  }
+  for (const r of (body.requests ?? []) as any[]) {
+    const kind = String(r.kind);
+    const choices = kind === 'approval_request'
+      ? ((r.options ?? []) as any[]).map((o) => ({ label: String(o.label ?? o.decision), value: String(o.decision), key: '', warn: String(o.warning ?? '') }))
+      : kind === 'user_input_request'
+        ? (((r.questions ?? [])[0]?.options ?? []) as any[]).map((o) => ({ label: String(o.label), value: String(o.value ?? o.label), key: String(r.questions[0].id), warn: '' }))
+        : [];
+    rows.push({ ...blank, id: String(r.id), kind: 'request', mine: false, text: String(r.title ?? ''), title: String(r.reason ?? ''), head: true, tail: true, variant: kind, key: String((r.questions ?? [])[0]?.id ?? ''), choices,
+      placeholder: String(r.placeholder ?? ((r.questions ?? [])[0]?.allowCustomAnswer ? 'Type an answer' : '')) });
+  }
+  if (body.working === true) rows.push({ ...blank, id: 'working', kind: 'working', mine: false, text: '', head: true, tail: true });
+  return rows;
+}
+
 const sources: Sources = {
   loadSession: async (_args, store): Promise<Result<'loadSession'>> => {
     const r = await call(store, '/api/session');
@@ -128,7 +188,7 @@ const sources: Sources = {
     return reply(r);
   },
   signOut: async (_args, store) => { store.set('session', ''); return { ok: true, error: '' }; },
-  loadBots: async ([now], store): Promise<Result<'loadBots'>> => {
+  loadBots: async (_args, store): Promise<Result<'loadBots'>> => {
     const body = await read(store, '/api/bots');
     const at = (b: any): string => (typeof b.preview?.at === 'string' ? b.preview.at : '');
     // The main Bot first, then the most recent conversation; a Bot with none goes last.
@@ -137,7 +197,7 @@ const sources: Sources = {
       slug: String(b.slug), name: String(b.name), label: String(b.label ?? ''), initials: initials(String(b.name)),
       color: fill(b.color), shape: String(b.shape ?? 'ball'), main: b.primary === true, pinned: b.pinned === true, hidden: b.hidden === true,
       ready: typeof b.mainThreadId === 'string', working: b.working === true, unread: b.unread === true,
-      line: lineOf(b), time: when(b.preview?.at, now),
+      line: lineOf(b), time: when(b.preview?.at, Number(body.now)),
     }));
   },
   renameBot: async ([slug, name], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ name }) })),
@@ -193,28 +253,14 @@ const sources: Sources = {
   loadChat: async ([slug], store): Promise<Result<'loadChat'>> => {
     if (slug === '') return { slug, rows: [], working: false }; // no chat is open: nothing to read
     const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat`);
-    const fileLabel = (m: any): string => {
-      const list = Array.isArray(m.attachments) ? m.attachments : [];
-      const names = list.map((a: any) => String(a?.name ?? a?.fileName ?? '').trim()).filter(Boolean);
-      return names.length === 0 ? '' : names.join(', ');
-    };
-    const raw = [
-      ...(body.messages as any[]).map((m) => ({
-        id: String(m.id), kind: 'message', mine: m.role === 'user', text: String(m.text ?? ''), files: fileLabel(m),
-      })),
-      ...(body.requests as any[]).map((r) => ({ id: String(r.id), kind: 'request', mine: false, text: String(r.title), files: '' })),
-      ...(body.working === true ? [{ id: 'working', kind: 'working', mine: false, text: '', files: '' }] : []),
-    ];
-    // A run of same-sender messages shares one bubble group: `head` is its first
-    // row, `tail` its last, so the view can set the tail corner and the spacing.
-    const rows = raw.map((r, i) => {
-      const prev = raw[i - 1];
-      const next = raw[i + 1];
-      const samePrev = !!prev && prev.kind === 'message' && prev.kind === r.kind && prev.mine === r.mine;
-      const sameNext = !!next && next.kind === 'message' && next.kind === r.kind && next.mine === r.mine;
-      return { ...r, head: !samePrev, tail: !sameNext };
-    });
+    const rows = chatRows(slug, body, Number(body.now));
     return { slug, rows, working: body.working === true };
+  },
+  respondRequest: async ([slug, id, kind, key, value], store) => {
+    const body = kind === 'secret_request'
+      ? (value === '' ? { kind, decision: 'decline' } : { kind, secret: value })
+      : kind === 'user_input_request' ? { kind, answers: { [key]: value } } : { kind, decision: value };
+    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/requests/${encodeURIComponent(id)}/respond`, { method: 'POST', body: JSON.stringify(body) }));
   },
   sendMessage: async ([slug, text, pending], store) => {
     const attachmentIds = String(pending ?? '')

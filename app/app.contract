@@ -67,6 +67,34 @@ style TileLink
   :focus-visible
     box-shadow="0 0 0 2px AccentColor"
 
+// A file on a message: a type tile, its name and size, and a download glyph.
+style FileCard
+  display="flex"
+  min-width=240
+  padding="space.sm space.md"
+  border-radius="radius.lg"
+  background-color="surface.card"
+  border="1px solid surface.line"
+  color="-exact-label"
+  text-decoration="none"
+  :hover
+    background-color="surface.raised"
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+// An answer button on a request card.
+style ChoiceButton
+  min-height=36
+  padding="space.xs space.lg"
+  border="1px solid surface.line"
+  border-radius="radius.full"
+  font="-exact-subheadline"
+  font-weight=500
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
 style QuietButton
   min-width=44
   min-height=44
@@ -312,10 +340,6 @@ routes nav
         vaultAdd "/vault/new"
         vaultEdit "/vault/:id"
 
-// The clock: the Unix time at launch, so `epochAtZero + performanceNow()` is now.
-shape Clock
-  epochAtZero: number
-
 shape Reply
   ok: bool
   error: string
@@ -340,16 +364,42 @@ shape Bot
   working: bool
   unread: bool
 
-// One row of the transcript: a message, a card the Bot is waiting on, or the working line.
-// `head`/`tail` mark a run of same-sender messages, for the bubble corners and spacing.
+// A file on a message: an image shows in place, any other file as a card.
+shape FileRef
+  id: string
+  name: string
+  kind: string
+  size: string
+  url: string
+
+// One answer a request offers. `key` is the question it answers; `warn` is a caution to show.
+shape Choice
+  label: string
+  value: string
+  key: string
+  warn: string
+
+// One row of the transcript: a day mark, a message, a line between messages, a request the
+// Bot is waiting on, or the working line. `head` and `tail` mark a run of one sender's messages
+// for the bubble corners. `variant` is the kind of an event or a request.
 shape Row
   id: string
   kind: string
   mine: bool
   text: string
-  files: string
+  title: string
+  time: string
   head: bool
   tail: bool
+  variant: string
+  files: FileRef[]
+  botSlug: string
+  botName: string
+  botColor: string
+  botShape: string
+  choices: Choice[]
+  placeholder: string
+  key: string
 
 shape Chat
   slug: string
@@ -516,7 +566,10 @@ fn faceColor(c: string): string = c == "brand.default" ? "teal" : c == "brand.bl
 
 component Bots
   state password = ""
-  state draft = ""
+  state drafts: string[] = []
+  state lastText = ""
+  state failedText = ""
+  state answerText = ""
   state newName = ""
   state newColor = "brand.default"
   state nameDraft = ""
@@ -524,7 +577,6 @@ component Bots
   state newPassword = ""
   state botQuery = ""
   state searching = false
-  state nowMs = 0
   state hiddenOpen = false
   state vaultQuery = ""
   // Wide windows show the Bot's panel beside the chat, like Threebot's desktop.
@@ -539,8 +591,7 @@ component Bots
   state wantHold = false
   state heldTab = ""
   resource session = loadSession() as shape Session else empty()
-  resource time = exactTime() as shape Clock else empty()
-  resource bots = loadBots(stamp) as shape Bot[] else empty()
+  resource bots = loadBots() as shape Bot[] else empty()
   resource chat = loadChat(slug) as shape Chat else empty()
   resource prefs = loadPrefs() as shape Prefs else empty()
   resource vault = loadVault() as shape Login[] else empty()
@@ -557,6 +608,7 @@ component Bots
   mutation created as shape Reply refreshes bots then afterCreate
   mutation seen as shape Reply refreshes bots
   mutation sent as shape Reply refreshes chat then afterSend
+  mutation answered as shape Reply refreshes chat then afterAnswer
   mutation stopped as shape Reply refreshes chat
   mutation renamed as shape Reply refreshes bots
   mutation recoloured as shape Reply refreshes bots
@@ -584,7 +636,6 @@ component Bots
   derive createError = match created { case some(r) => r.error, case none => "" }
   derive sendError = match sent { case some(r) => r.error, case none => "" }
   derive lastId = match chat.rows.at(-1) { case some(m) => m.id, case none => "" }
-  derive stamp = nowMs > 0 ? nowMs : time.epochAtZero + performanceNow()
   derive locked = session.passwordRequired and not session.authenticated
   derive query = botQuery.trim().toLowerCase()
   derive visibleBots = bots.filter(b => not b.hidden and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
@@ -609,6 +660,8 @@ component Bots
   derive projectError = match projectSaved { case some(r) => r.error, case none => "" }
   derive projectRemoveError = match projectRemoved { case some(r) => r.error, case none => "" }
   derive attachError = match attached { case some(r) => r.error, case none => "" }
+  derive draft = match first(drafts.filter(d => d.startsWith(`${slug}\t`))) { case some(d) => d.slice(slug.length + 1), case none => "" }
+  derive answerError = match answered { case some(r) => r.error, case none => "" }
   derive canSend = draft.trim() != "" or pendingAttaches.length > 0
   derive onBot = top(nav).name == "chat" or top(nav).name == "library" or top(nav).name == "computer"
   derive onLibrary = top(nav).name == "library" or (top(nav).name == "chat" and panelTab == "library")
@@ -668,7 +721,7 @@ component Bots
     nav = go(nav, path("chat", bslug))
 
   action pull
-    nowMs = time.epochAtZero + performanceNow()
+    refresh bots
     refresh chat
     if top(nav).name == "chat" and openUnread and not pending(seen)
       send seen = markSeen(slug)
@@ -726,7 +779,7 @@ component Bots
     if createError == "" and top(nav).name == "create"
       nav = back(nav)
   action edit(v: string)
-    draft = v
+    drafts = drafts.filter(d => not d.startsWith(`${slug}\t`)).concat([`${slug}\t${v}`])
   action pickFiles
     showPicker("chat-attach")
   action filesPicked(files: Picked[])
@@ -746,13 +799,31 @@ component Bots
   action post
     if canSend and not pending(sent)
       // pendingAttaches entries are `id\\tname`; the data module keeps the ids.
+      lastText = draft.trim()
+      failedText = ""
       send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"))
-      draft = ""
+      edit("")
     focus("composer")
   action afterSend
     if sendError == ""
       pendingAttaches = []
+      lastText = ""
+    else
+      failedText = lastText
     toEnd()
+  action retry
+    if failedText != "" and not pending(sent)
+      let again = failedText
+      lastText = again
+      failedText = ""
+      send sent = sendMessage(slug, again, "")
+  action editAnswer(v: string)
+    answerText = v
+  action answer(rid: string, kind: string, key: string, value: string)
+    if not pending(answered)
+      send answered = respondRequest(slug, rid, kind, key, value)
+  action afterAnswer
+    answerText = ""
   action stop
     send stopped = stopRun(slug)
   action toEnd
@@ -1000,43 +1071,113 @@ component Bots
                       text "See what we can do together"
               else
                 column flex=1 min-height=0 justify-content="flex-end"
-                  list id="transcript" testId="transcript" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="space.xl 0" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true max-height="100%" min-height=0 flex-shrink=1
+                  list id="transcript" testId="transcript" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="space.lg 0" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true max-height="100%" min-height=0 flex-shrink=1
                     for m in chat.rows key=m.id
                       column
-                        if m.kind == "message"
-                          row justify-content=(m.mine ? "flex-end" : "flex-start") padding=(m.head ? "space.sm space.lg" : "2px space.lg")
-                            column gap="space.xs" max-width="82%" align-items=(m.mine ? "flex-end" : "flex-start")
-                              if m.text != ""
+                        if m.kind == "day"
+                          text m.text text-align="center" font="-exact-footnote" color="ink.faint" padding="space.lg space.lg space.xs" testId=`day-${m.id}`
+                        else if m.kind == "event"
+                          row justify-content="center" align-items="center" gap="space.xs" flex-wrap="wrap" padding="space.sm space.lg" testId=`event-${m.id}`
+                            text m.text font="-exact-footnote" color="ink.faint"
+                            if m.botName != ""
+                              row gap="space.xs" align-items="center" padding="2px space.sm 2px 2px" border-radius="radius.full" background-color="surface.bubble"
+                                Avatar(shape=m.botShape, color=faceColor(m.botColor), state="idle", size=18, still=true, presence="")
+                                text m.botName font="-exact-footnote" color="-exact-label"
+                            if m.title != ""
+                              row gap="space.xs" align-items="center" padding="2px space.sm" border-radius="radius.full" background-color="surface.bubble"
+                                column color="ink.muted"
+                                  Glyph(name=(m.variant == "routine" ? "clock" : "check"), size=14)
+                                text m.title font="-exact-footnote" color="-exact-label"
+                        else if m.kind == "message"
+                          row justify-content=(m.mine ? "flex-end" : "flex-start") padding=(m.head ? "space.sm space.lg 2px" : "2px space.lg")
+                            column gap="2px" max-width="82%" align-items=(m.mine ? "flex-end" : "flex-start")
+                              if m.text != "" and m.mine
                                 text m.text class=Bubble testId=`message-${m.id}`
-                                  background-color=(m.mine ? "brand.default" : "surface.bubble")
-                                  color=(m.mine ? "ink.dark" : "-exact-label")
+                                  background-color="brand.default"
+                                  color="ink.dark"
                                   border-top-left-radius="radius.lg"
                                   border-top-right-radius="radius.lg"
-                                  border-bottom-left-radius=((not m.mine and m.tail) ? "radius.sm" : "radius.lg")
-                                  border-bottom-right-radius=((m.mine and m.tail) ? "radius.sm" : "radius.lg")
-                              if m.files != ""
-                                text m.files class=FileChip testId=`files-${m.id}`
-                                  background-color=(m.mine ? "brand.default" : "surface.card")
-                                  color=(m.mine ? "ink.dark" : "-exact-secondary-label")
-                                  border=(m.mine ? "none" : "1px solid surface.line")
+                                  border-bottom-left-radius="radius.lg"
+                                  border-bottom-right-radius=(m.tail ? "radius.sm" : "radius.lg")
+                              else if m.text != ""
+                                text m.text markup="markdown" class=Bubble white-space="normal" testId=`message-${m.id}`
+                                  background-color="surface.bubble"
+                                  color="-exact-label"
+                                  border-top-left-radius="radius.lg"
+                                  border-top-right-radius="radius.lg"
+                                  border-bottom-left-radius=(m.tail ? "radius.sm" : "radius.lg")
+                                  border-bottom-right-radius="radius.lg"
+                              for f in m.files key=f.id
+                                if f.kind == "image"
+                                  link href=f.url target="_blank" aria-label=`Open ${f.name}` testId=`image-${f.id}`
+                                    image f.url aria-label=f.name max-width="20rem" width="100%" border-radius="radius.lg"
+                                else
+                                  link class=FileCard href=f.url target="_blank" aria-label=`Download ${f.name}` testId=`file-${f.id}`
+                                    row gap="space.md" align-items="center"
+                                      column class=IconTile color="AccentColor"
+                                        Glyph(name="file", size=18)
+                                      column gap="2px" flex=1 min-width=0
+                                        text f.name font-weight=500 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                                        text f.size font="-exact-footnote" color="ink.muted"
+                                      column color="ink.muted"
+                                        Glyph(name="download", size=18)
+                              if m.tail and m.time != ""
+                                text m.time font="-exact-footnote" color="ink.faint" padding="0 space.xs"
                         else if m.kind == "request"
-                          row padding=(m.head ? "space.sm space.md" : "2px space.md")
-                            column gap="space.xs" padding="space.md space.lg" border-radius="radius.lg" background-color="surface.card" border="1px solid surface.line" flex=1 testId=`request-${m.id}`
+                          row padding="space.sm space.lg"
+                            column gap="space.sm" padding="space.md space.lg" border-radius="radius.lg" background-color="surface.bubble" flex=1 max-width="32rem" testId=`request-${m.id}`
                               row gap="space.sm" align-items="center"
-                                column color="AccentColor"
-                                  Glyph(name="info", size=16)
+                                Avatar(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="idle", size=24, still=true, presence="")
                                 text m.text font-weight=600 flex=1 min-width=0
-                              text "Answer this in T3 Code for now. It will show up here once the Bot can take your answer." color="-exact-secondary-label" font="-exact-footnote"
+                              if m.title != ""
+                                text m.title color="ink.muted" font="-exact-footnote"
+                              if m.variant == "approval_request"
+                                row gap="space.sm" flex-wrap="wrap"
+                                  for c in m.choices key=c.value
+                                    button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, c.key, c.value) testId=`answer-${c.value}`
+                                      background-color=(c.value == "accept" ? "brand.default" : "surface.card")
+                                      color=(c.value == "accept" ? "ink.dark" : "-exact-label")
+                                      text c.label
+                              else if m.variant == "user_input_request"
+                                column gap="space.sm"
+                                  for c in m.choices key=c.value
+                                    button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, c.key, c.value) background-color="surface.card" testId=`answer-${c.value}`
+                                      text c.label
+                                  if m.placeholder != ""
+                                    row gap="space.sm" align-items="center"
+                                      input appearance="none" class=Field value=answerText input=editAnswer placeholder=m.placeholder aria-label="Your answer" flex=1 min-width=0 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" testId="answer-text"
+                                      button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, m.key, answerText) disabled=(answerText.trim() == "") background-color="brand.default" color="ink.dark" testId="answer-send"
+                                        text "Send"
+                              else
+                                row gap="space.sm" align-items="center"
+                                  input appearance="none" class=Field type="password" value=answerText input=editAnswer placeholder=(m.placeholder != "" ? m.placeholder : "Secret") aria-label="Secret" flex=1 min-width=0 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" testId="secret-text"
+                                  button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, "", answerText) disabled=(answerText == "") background-color="brand.default" color="ink.dark" testId="secret-save"
+                                    text "Save"
+                                  button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, "", "") background-color="surface.card" testId="secret-decline"
+                                    text "Decline"
+                              if answerError != "" and not pending(answered)
+                                text answerError color="-exact-system-red" font="-exact-footnote" testId="answer-error"
                         else
                           row padding="space.sm space.lg" gap="space.sm" align-items="center" testId="working"
                             Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="working", size=24, still=false)
-                            text "Working…" class=Bubble background-color="surface.bubble" color="-exact-secondary-label" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg"
-              if sendError != "" and not pending(sent)
-                text sendError color="-exact-system-red" padding="0 space.lg" testId="send-error"
+                            row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label="Working"
+                              for n in [0, 1, 2] key=n
+                                column width=7 height=7 border-radius="radius.full" background-color="ink.muted" opacity=0.6
+                  if pending(sent) and lastText != ""
+                    row justify-content="flex-end" padding="2px space.lg" testId="sending"
+                      text lastText class=Bubble opacity=0.6 background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" max-width="82%"
+                  if failedText != "" and not pending(sent)
+                    row justify-content="flex-end" padding="2px space.lg" testId="not-sent"
+                      column align-items="flex-end" gap="space.xs" max-width="82%"
+                        text failedText class=Bubble background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" opacity=0.7
+                        row gap="space.sm" align-items="center"
+                          text "Not sent" font="-exact-footnote" color="-exact-system-red"
+                          button class=TextControl appearance="none" press=retry testId="retry-send"
+                            text "Retry"
               if attachError != "" and not pending(attached)
                 text attachError color="-exact-system-red" padding="0 space.lg" testId="attach-error"
               if pendingAttaches.length > 0
-                row gap="space.sm" flex-wrap="wrap" padding="0 space.md space.xs" testId="pending-files"
+                row gap="space.sm" flex-wrap="wrap" padding="0 space.lg space.xs" align-self="center" width="100%" max-width="44rem" box-sizing="border-box" testId="pending-files"
                   for entry in pendingAttaches key=entry
                     row gap="space.xs" align-items="center" padding="4px 6px 4px space.sm" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" max-width="100%" box-sizing="border-box"
                       column color="ink.muted"
@@ -1044,11 +1185,11 @@ component Bots
                       text attachmentName(entry) font="-exact-footnote" color="-exact-label" overflow-wrap="anywhere" flex=1 min-width=0
                       button class=IconControl appearance="none" press=dropPending(entry) aria-label=`Remove ${attachmentName(entry)}` title="Remove attachment" testId="pending-file" width=28 height=28
                         Glyph(name="close", size=14)
-              row align-items="flex-end" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.md space.lg space.xl" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line"
-                button class=IconControl press=pickFiles disabled=(slug == "" or pending(attached) or pendingAttaches.length >= 8) appearance="none" aria-label="Attach a file" testId="attach" width=36 height=36 border-radius="radius.full"
-                  Glyph(name="attach", size=20)
+              row align-items="flex-end" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
+                button class=IconControl press=pickFiles disabled=(slug == "" or pending(attached) or pendingAttaches.length >= 8) appearance="none" aria-label="Attach a file" title="Attach a file" testId="attach" width=36 height=36 border-radius="radius.full" background-color="surface.raised"
+                  Glyph(name="add", size=18)
                 input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
-                textarea id="composer" value=draft input=edit rows=1 field-sizing="content" max-height=140 placeholder="Write a message…" aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
+                textarea id="composer" value=draft input=edit rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(bots, e.params.slug) != "" ? `Message ${nameOf(bots, e.params.slug)}` : "Write a message…") aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
                 if chat.working and not canSend
                   button class=StopControl appearance="none" press=stop margin="2px 0" aria-label="Stop" testId="stop"
                     Glyph(name="stop", size=16)

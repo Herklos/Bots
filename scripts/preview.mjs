@@ -42,7 +42,7 @@ const env = {
 try {
   const build = Bun.spawn([process.execPath, resolve(exact, 'host/web/build.mjs'), 'bots-web'], { cwd: root, env, stdout: 'ignore', stderr: 'inherit' });
   if ((await build.exited) !== 0) { process.exitCode = 1; throw new Error('build failed'); }
-  const run = Bun.spawn([process.execPath, resolve(exact, 'scripts/agent.mjs'), 'web', '--app', 'bots', '--size', size, '--epoch', 'now', ...args], { cwd: root, env, stdout: 'inherit', stderr: 'inherit' });
+  const run = Bun.spawn([process.execPath, resolve(exact, 'scripts/agent.mjs'), 'web', '--app', 'bots', '--size', size, ...args], { cwd: root, env, stdout: 'inherit', stderr: 'inherit' });
   process.exitCode = await run.exited;
 } finally {
   gateway.stop(true);
