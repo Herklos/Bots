@@ -1995,7 +1995,7 @@ component Bots
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader
                 text t("settings.title") role="heading" aria-level=1 class=PageTitle flex=1
-              row role="tablist" aria-label=t("settings.domains") justify-content="center" flex-wrap="wrap" gap="space.xs" padding="0 space.lg space.md"
+              row role="tablist" aria-label=t("settings.domains") justify-content="center" flex-wrap="wrap" gap="space.xs" padding="space.md space.lg space.sm"
                 for d in ["user", "models", "access", "updates"] key=d
                   button class=Segment appearance="none" role="tab" aria-selected=(settingsDomain == d) press=pickSettingsDomain(d) min-height=36 padding="space.xs space.md" testId=`settings-domain-${d}` background-color=(settingsDomain == d ? "surface.raised" : "transparent") color=(settingsDomain == d ? "-exact-label" : "ink.muted")
                     text settingsDomainLabel(d, t("settings.domainUser"), t("settings.domainModels"), t("settings.domainAccess"), t("settings.domainUpdates")) font="-exact-subheadline"
