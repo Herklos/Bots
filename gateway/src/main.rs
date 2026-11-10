@@ -15,7 +15,6 @@ mod computer; // The Bot's browser, watch first.
 mod config;
 mod error;
 mod exposure; // T4: Tailscale listener and the publish commands.
-#[allow(dead_code)] // Called from the provisioner when a thread's face is synced.
 mod face_icon; // The Bot face written into the workspace for the thread list.
 mod icons; // Site icons cached under HBOTS_HOME/icons.
 mod library; // Files and records through the workspace adapter.
