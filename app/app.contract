@@ -1941,9 +1941,9 @@ component UsageView
             text report.turns font="-exact-headline" font-weight=700 testId="figure-turns"
             text "turns" color="ink.muted" font="-exact-footnote"
         column gap="space.xs"
-          row gap="3px" align-items="flex-end" justify-content="center" height=72 role="img" aria-label=`Tokens per day, ${report.first} to ${report.last}`
+          row gap="4px" align-items="flex-end" width="100%" height=72 role="img" aria-label=`Tokens per day, ${report.first} to ${report.last}`
             for d in report.days key=d.day
-              column flex=1 max-width=28 height=d.px border-radius="3px" background-color="brand.default"
+              column flex=1 min-width=0 height=d.px border-radius="3px" background-color="brand.default"
           row justify-content="space-between"
             text report.first color="ink.faint" font="-exact-footnote"
             text report.last color="ink.faint" font="-exact-footnote"
