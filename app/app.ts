@@ -123,11 +123,11 @@ function blankChat(slug: string) {
 type PinRow = { id: string; text: string; missing: boolean };
 type ChatRow = any;
 
-// The contract runner has no gateway: a small conversation, a read only child and a missing pin.
+// The contract runner has no gateway: a small conversation, a writable child and a missing pin.
 function fixtureChat(child: string) {
   const row = (r: Record<string, unknown>) => ({ ...blank, head: true, tail: true, mine: false, text: '', ...r, kind: 'message' }) as ChatRow;
   if (child === 'child-thread') {
-    return { slug: 'fixture', working: false, partial: false, readOnly: true, threadId: 'child-thread', pins: [] as PinRow[], rows: [row({ id: 'c1', text: 'Notes' })] };
+    return { slug: 'fixture', working: false, partial: false, readOnly: false, threadId: 'child-thread', pins: [] as PinRow[], rows: [row({ id: 'c1', text: 'Notes' })] };
   }
   return {
     slug: 'fixture', working: false, partial: true, readOnly: false, threadId: '',
@@ -475,20 +475,23 @@ const sources: Sources = {
       readOnly: body.readOnly === true, pins, threadId,
     };
   },
-  respondRequest: async ([slug, id, kind, key, value], store) => {
-    const body = kind === 'secret_request'
+  respondRequest: async ([slug, id, kind, key, value, child], store) => {
+    const body: Record<string, unknown> = kind === 'secret_request'
       ? (value === '' ? { kind, decision: 'decline' } : { kind, secret: value })
       : kind === 'user_input_request' ? { kind, answers: { [key]: value } } : { kind, decision: value };
+    if (child !== '') body.child = child;
     return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/requests/${encodeURIComponent(id)}/respond`, { method: 'POST', body: JSON.stringify(body) }));
   },
-  sendMessage: async ([slug, text, pending], store) => {
+  sendMessage: async ([slug, text, pending, child], store) => {
     const attachmentIds = String(pending ?? '')
       .split('\n')
       .map((line) => line.split('\t')[0]?.trim())
       .filter((id) => !!id);
+    const body: Record<string, unknown> = { text, attachmentIds };
+    if (child !== '') body.child = child;
     return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/chat`, {
       method: 'POST',
-      body: JSON.stringify({ text, attachmentIds }),
+      body: JSON.stringify(body),
     }));
   },
   uploadAttachment: async ([slug, path, rawName, rawType], store, storage): Promise<Result<'uploadAttachment'>> => {
@@ -501,12 +504,20 @@ const sources: Sources = {
     if (!saved.ok) return { ok: false, id: '', name: '', url: '', seconds: 0, error: saved.error };
     return { ok: true, id: saved.id, name: saved.name, url: saved.url, seconds: Number.isFinite(secs) ? secs : 0, error: '' };
   },
-  sendVoice: async ([slug, seconds, attachmentId], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/voice`, {
-    method: 'POST',
-    body: JSON.stringify({ seconds: Number(seconds), attachmentId }),
-  })),
+  sendVoice: async ([slug, seconds, attachmentId, child], store) => {
+    const body: Record<string, unknown> = { seconds: Number(seconds), attachmentId };
+    if (child !== '') body.child = child;
+    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/voice`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }));
+  },
   dropVoice: async ([slug, id], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/attachments/${encodeURIComponent(id)}`, { method: 'DELETE' })),
-  stopRun: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/stop`, { method: 'POST', body: '{}' })),
+  stopRun: async ([slug, child], store) => {
+    const body: Record<string, unknown> = {};
+    if (child !== '') body.child = child;
+    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/stop`, { method: 'POST', body: JSON.stringify(body) }));
+  },
   loadUsage: async ([gate], store): Promise<Result<'loadUsage'>> => {
     const blank = { ok: false, error: '', messages: 0, attachments: 0, vaultWrites: 0, iconFetches: 0 };
     if (gate !== '1') return blank;

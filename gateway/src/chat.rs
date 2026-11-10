@@ -336,6 +336,19 @@ pub fn send_command(thread: &str, text: &str, attachments: &[Value]) -> Value {
     })
 }
 
+/// A send aimed at a child. The command is built only after the child resolves, so a remote
+/// child or the parent id produces no command and does not write the parent. No quote field.
+pub fn child_send(
+    rows: &[Value],
+    parent: &str,
+    asked: &str,
+    text: &str,
+    attachments: &[Value],
+) -> Result<Value, &'static str> {
+    let thread = crate::lineage::thread_for(rows, parent, Some(asked))?;
+    Ok(send_command(&thread, text, attachments))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -652,5 +665,44 @@ mod tests {
         let texts: Vec<&str> = t["messages"].as_array().unwrap().iter().map(|m| m["text"].as_str().unwrap()).collect();
         assert_eq!(texts, vec!["hi", "hello", "thanks", "welcome"]);
         assert!(t["events"].as_array().unwrap().is_empty(), "the Bot's messaging inside the group is hidden too");
+    }
+
+    fn family() -> Value {
+        json!({
+            "turnItems": [{
+                "type": "subagent",
+                "id": "away",
+                "title": "Away",
+                "status": "running",
+                "remoteChild": { "threadId": "remote-1", "environmentId": "env-9" },
+                "childThreadId": "should-not-win"
+            }],
+            "subagents": [{
+                "id": "notes",
+                "title": "Notes",
+                "status": "completed",
+                "childThreadId": "child-thread"
+            }]
+        })
+    }
+
+    #[test]
+    fn a_child_dispatch_uses_the_child_thread_and_a_refusal_does_not_write_the_parent() {
+        let rows = crate::lineage::rows(&family());
+        let sent = child_send(&rows, "parent-thread", "child-thread", "hello", &[]).unwrap();
+        assert_eq!(sent["type"], "message.dispatch");
+        assert_eq!(sent["threadId"], "child-thread");
+        assert!(sent.get("quote").is_none());
+        assert!(sent.get("parentSlug").is_none());
+
+        let mut written = Vec::new();
+        for asked in ["remote-1", "parent-thread", "no-such-thread"] {
+            match child_send(&rows, "parent-thread", asked, "nope", &[]) {
+                Ok(command) => written.push(command),
+                Err(message) => assert_eq!(message, "That thread stays on the other machine."),
+            }
+        }
+        assert!(written.is_empty(), "a refused child does not write the parent");
+        assert!(written.iter().all(|command| command["threadId"] != "parent-thread"));
     }
 }

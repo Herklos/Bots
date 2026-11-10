@@ -1025,17 +1025,9 @@ async fn respond_request(
 ) -> ApiResult<Json<Value>> {
     require_json(&h)?;
     let body = parse(&body)?;
-    let bot = s
-        .bots
-        .get(&slug)
-        .await?
-        .ok_or_else(|| ApiError::not_found("no such bot"))?;
-    let thread = bot["mainThreadId"]
-        .as_str()
-        .filter(|t| !t.is_empty())
-        .ok_or_else(|| ApiError::bad_request("This Bot has no conversation yet."))?;
+    let thread = resolve_chat_thread(&s, &slug, body["child"].as_str()).await?;
     let kind = body["kind"].as_str().unwrap_or("");
-    let outbound = approvals::outbound(kind, thread, &id, &body).map_err(ApiError::bad_request)?;
+    let outbound = approvals::outbound(kind, &thread, &id, &body).map_err(ApiError::bad_request)?;
     Ok(Json(approvals::send(&s.t3, outbound).await?))
 }
 
@@ -1659,6 +1651,35 @@ async fn main_thread(s: &AppState, slug: &str) -> ApiResult<String> {
         .ok_or_else(|| ApiError::new(409, "This Bot has no conversation yet"))
 }
 
+/// Rows of the parent's thread family. Used only to decide which child a send may use.
+async fn parent_rows(s: &AppState, parent: &str) -> ApiResult<Vec<Value>> {
+    let rpc = s
+        .t3
+        .rpc()
+        .await
+        .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
+    let projection = rpc
+        .call(
+            "orchestration.getThreadProjection",
+            json!({ "threadId": parent }),
+        )
+        .await
+        .map_err(|e| ApiError::new(502, e.to_string()))?;
+    Ok(lineage::rows(&projection))
+}
+
+/// Parent thread, or a resolved local child. A remote child or the parent id is an error
+/// and nothing has been written yet.
+async fn resolve_chat_thread(s: &AppState, slug: &str, asked: Option<&str>) -> ApiResult<String> {
+    let parent = main_thread(s, slug).await?;
+    let child = asked.map(str::trim).filter(|id| !id.is_empty());
+    if child.is_none() {
+        return Ok(parent);
+    }
+    let rows = parent_rows(s, &parent).await?;
+    lineage::thread_for(&rows, &parent, child).map_err(ApiError::bad_request)
+}
+
 async fn read_chat(
     State(s): S,
     Path(slug): Path<String>,
@@ -1682,18 +1703,10 @@ async fn read_chat(
             )
             .await
             .map_err(|e| ApiError::new(502, e.to_string()))?;
-        let opened = lineage::rows(&parent_projection)
-            .iter()
-            .find(|row| row["threadId"].as_str() == Some(child))
-            .and_then(|row| lineage::open_child(row, &parent));
-        match opened {
-            Some(id) => (id, true),
-            None => {
-                return Err(ApiError::bad_request(
-                    "That thread stays on the other machine.",
-                ))
-            }
-        }
+        let id = lineage::thread_for(&lineage::rows(&parent_projection), &parent, Some(child))
+            .map_err(ApiError::bad_request)?;
+        // A resolved local child is the thread the person is in, and they can send on it.
+        (id, false)
     } else {
         (parent, false)
     };
@@ -1741,12 +1754,21 @@ async fn send_chat(
     if text.is_empty() && files.is_empty() {
         return Err(ApiError::bad_request("Write a message first."));
     }
-    let thread = main_thread(&s, &slug).await?;
+    let parent = main_thread(&s, &slug).await?;
+    let asked = body["child"].as_str().map(str::trim).filter(|id| !id.is_empty());
+    // Resolve before any reply is stored or any command is dispatched. A refused child
+    // builds no command, so the parent thread is not written.
+    let command = if let Some(child) = asked {
+        let rows = parent_rows(&s, &parent).await?;
+        chat::child_send(&rows, &parent, child, &text, &files).map_err(ApiError::bad_request)?
+    } else {
+        chat::send_command(&parent, &text, &files)
+    };
+    let thread = command["threadId"].as_str().unwrap_or(&parent).to_string();
     let rpc =
         s.t3.rpc()
             .await
             .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
-    let command = chat::send_command(&thread, &text, &files);
     if let Some(reply_to) = body["replyTo"].as_str().filter(|id| !id.is_empty()) {
         s.threads
             .set_reply(
@@ -1779,7 +1801,7 @@ async fn send_voice(
         .and_then(Value::as_f64)
         .filter(|n| n.is_finite())
         .ok_or_else(|| ApiError::bad_request("invalid duration"))?;
-    let thread = main_thread(&s, &slug).await?;
+    let thread = resolve_chat_thread(&s, &slug, body["child"].as_str()).await?;
     let attachment_id = body["attachmentId"]
         .as_str()
         .map(str::trim)
@@ -1850,8 +1872,15 @@ async fn send_voice(
     })))
 }
 
-async fn stop_chat(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
-    let thread = main_thread(&s, &slug).await?;
+async fn stop_chat(
+    State(s): S,
+    Path(slug): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    let thread = resolve_chat_thread(&s, &slug, body["child"].as_str()).await?;
     let rpc =
         s.t3.rpc()
             .await

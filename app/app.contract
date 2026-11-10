@@ -1018,7 +1018,7 @@ component Bots
       case none
   action sendHeldVoice
     if voiceId != "" and not pending(voiceSent)
-      send voiceSent = sendVoice(slug, voiceSeconds, voiceId)
+      send voiceSent = sendVoice(slug, voiceSeconds, voiceId, childThread)
   action afterVoice
     match voiceSent
       case some(r)
@@ -1165,7 +1165,7 @@ component Bots
       // pendingAttaches entries are `id\\tname`; the data module keeps the ids.
       lastText = draft.trim()
       failedText = ""
-      send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"))
+      send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"), childThread)
       edit("")
     focus("composer")
   action composerKey(k: string, event: KeyboardEvent)
@@ -1185,7 +1185,7 @@ component Bots
       let again = failedText
       lastText = again
       failedText = ""
-      send sent = sendMessage(slug, again, "")
+      send sent = sendMessage(slug, again, "", childThread)
   action doReact(item: string, emoji: string)
     reactFor = ""
     send reacted = reactTo(slug, item, emoji)
@@ -1201,11 +1201,11 @@ component Bots
     answerText = v
   action answer(rid: string, kind: string, key: string, value: string)
     if not pending(answered)
-      send answered = respondRequest(slug, rid, kind, key, value)
+      send answered = respondRequest(slug, rid, kind, key, value, childThread)
   action afterAnswer
     answerText = ""
   action stop
-    send stopped = stopRun(slug)
+    send stopped = stopRun(slug, childThread)
   action toEnd
     away = false
     scrollIntoView("transcript", lastId, block="end")
@@ -1315,13 +1315,13 @@ component Bots
             column align-items="center" gap="space.sm"
               Face(shape="ball", color="teal", state=(pending(signedIn) ? "working" : "idle"), size=96, still=false)
               text "hbots" role="heading" aria-level=1 class=HeroTitle
-              text "Your own Bots, in one place." color="-exact-secondary-label"
+              text t("inbox.tagline") color="-exact-secondary-label"
             text "Enter the password you set in Settings → Remote access." color="-exact-secondary-label"
             input appearance="none" class=Field type="password" value=password input=editPassword submit=login placeholder="Password" aria-label="Password" testId="password" width="100%"
             if signInError != "" and not pending(signedIn)
               text signInError color="-exact-system-red" testId="sign-in-error"
             button press=login disabled=(password == "" or pending(signedIn)) buttonStyle="filled" testId="sign-in-button"
-              text (pending(signedIn) ? "Signing in…" : "Sign In")
+              text (pending(signedIn) ? t("auth.signingIn") : t("auth.signIn"))
       else
         for e in stack(nav) key=e.id
           if e.name == "inbox"
@@ -1330,7 +1330,7 @@ component Bots
                 if searching
                   input type="search" class=SearchField value=botQuery input=editBotQuery placeholder="Search Bots" aria-label="Search Bots" testId="bot-search" flex=1 min-width=0
                   button class=TextControl appearance="none" press=closeSearch testId="search-cancel"
-                    text "Cancel"
+                    text t("common.cancel")
                 else
                   column flex=1
                   button class=IconControl appearance="none" press=openSearch aria-label="Search Bots" title="Search Bots" testId="search-open"
@@ -1355,7 +1355,7 @@ component Bots
                           text "Needs two Bots" font="-exact-footnote" color="ink.faint"
               column navigationSplit="placeholder" flex=1 align-items="center" justify-content="center" gap="space.lg" padding="space.xl"
                 Face(shape="ball", color="teal", state="idle", size=72, still=false)
-                text "Your own Bots, in one place." class=HeroTitle text-align="center"
+                text t("inbox.tagline") class=HeroTitle text-align="center"
                 text "Choose a Bot to pick up where you left off, or create someone new." color="ink.muted" text-align="center" max-width="24rem"
                 button class=PrimaryButton press=openNew buttonStyle="filled"
                   text "New Bot"
@@ -1409,12 +1409,12 @@ component Bots
                             if showUnread(b.unread, slug == b.slug, b.hidden)
                               column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label="Unread" testId=`unread-${b.slug}`
               column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
-                link class=ConversationLink href="/vault" aria-label="Vault" testId="sidebar-vault" padding="space.xs space.md"
+                link class=ConversationLink href="/vault" aria-label=t("vault.title") testId="sidebar-vault" padding="space.xs space.md"
                   row align-items="center" gap="space.md"
                     column color="ink.muted" width=32 align-items="center"
                       Glyph(name="lock", size=18)
-                    text "Vault" font-weight=500
-                link class=ConversationLink href="/settings" aria-label="Settings" title="Settings" testId="open-settings" padding="space.sm space.md"
+                    text t("vault.title") font-weight=500
+                link class=ConversationLink href="/settings" aria-label=t("settings.title") title=t("settings.title") testId="open-settings" padding="space.sm space.md"
                   row align-items="center" gap="space.md"
                     column width=32 height=32 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
                       if initialsOf(prefs.userName) != ""
@@ -1469,7 +1469,7 @@ component Bots
                       Glyph(name="arrow-down", size=16)
                   for p in chat.pins key=p.id
                     text p.text color="ink.muted" font="-exact-footnote" testId=`pin-${p.id}` width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
-                  list id="transcript" testId=(chat.readOnly ? "child-transcript" : "transcript") width="100%" box-sizing="border-box" padding="space.lg max(0px, calc((100% - 46rem) / 2))" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true scroll=moved max-height="100%" min-height=0 flex-shrink=1
+                  list id="transcript" testId=(childThread != "" ? "child-transcript" : "transcript") width="100%" box-sizing="border-box" padding="space.lg max(0px, calc((100% - 46rem) / 2))" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true scroll=moved max-height="100%" min-height=0 flex-shrink=1
                     for m in shownRows key=m.id
                       column
                         if m.kind == "day"
@@ -1703,7 +1703,7 @@ component Bots
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader
-                text "Settings" role="heading" aria-level=1 class=PageTitle flex=1
+                text t("settings.title") role="heading" aria-level=1 class=PageTitle flex=1
               scroll id="settings-form" flex=1 min-height=0
                 column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" margin="0 auto" padding="space.lg space.lg space.xl" gap="space.xl"
                   row class=GroupCard gap="space.lg" align-items="center" padding="space.lg"
@@ -1743,7 +1743,7 @@ component Bots
                       column class=IconTile color="AccentColor"
                         Glyph(name="lock", size=18)
                       column flex=1 gap="2px" min-width=0
-                        text "Vault" font-weight=600
+                        text t("vault.title") font-weight=600
                         text "Manage saved logins" color="ink.muted" font="-exact-footnote"
                       column color="ink.muted"
                         Glyph(name="chevron", size=18)
@@ -1772,7 +1772,7 @@ component Bots
           else if e.name == "vault"
             column class=Screen navigationKey=`${e.id}` navigationScroll="vault-list" position="absolute" inset=0
               header class=PageHeader flex-wrap="wrap"
-                text "Vault" role="heading" aria-level=1 class=PageTitle flex=1
+                text t("vault.title") role="heading" aria-level=1 class=PageTitle flex=1
                 button class=IconControl appearance="none" press=open("/vault/new") aria-label="New login" title="New login" testId="new-login"
                   Glyph(name="add", size=20)
                 input type="search" class=SearchField value=vaultQuery input=editVaultQuery placeholder="Search Vault" aria-label="Search Vault" testId="vault-search" width="100%"
@@ -1808,7 +1808,7 @@ component Bots
             column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="group-form" position="absolute" inset=0
               header class=PageHeader
                 button id="back" class=TextControl appearance="none" press=back testId="group-cancel"
-                  text "Cancel"
+                  text t("common.cancel")
                 text "New group" role="heading" aria-level=1 class=PageTitle flex=1
                 button buttonStyle="filled" press=makeGroup disabled=(not canMakeGroup) testId="group-create"
                   text (pending(groupMade) ? "Creating…" : "Create group")
@@ -1849,7 +1849,7 @@ component Bots
             column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="new-form" position="absolute" inset=0
               header class=PageHeader
                 button id="back" class=TextControl appearance="none" press=back testId="new-cancel"
-                  text "Cancel"
+                  text t("common.cancel")
                 text "New Bot" role="heading" aria-level=1 class=PageTitle flex=1
                 button buttonStyle="filled" press=create disabled=(newName.trim() == "" or pending(created)) testId="create"
                   text (pending(created) ? "Creating…" : "Get started")
@@ -1915,7 +1915,7 @@ component LoginSheet
   view
     column class=Screen navigationKey=`${route}` navigationPresentation="modal" position="absolute" inset=0
       header class=PageHeader justify-content="space-between"
-        button press=cancel aria-label="Cancel" testId="login-cancel"
+        button press=cancel aria-label=t("common.cancel") testId="login-cancel"
           Glyph(name="close", size=20)
         text (item.id == "" ? "New login" : item.title) role="heading" aria-level=1
         button press=save(item.id, ttl, site, user, pass, note) disabled=(ttl.trim() == "" and site.trim() == "") buttonStyle="filled" aria-label="Save" testId="login-save"
@@ -1968,7 +1968,7 @@ component LoginSheet
         button press=drop(item.id) destructive=true commandfor="drop-login" command="close" testId="drop-login-ok"
           text "Delete"
         button commandfor="drop-login" command="close" testId="drop-login-cancel"
-          text "Cancel"
+          text t("common.cancel")
 
 // ---------- the Bot panel ----------
 
@@ -2094,7 +2094,7 @@ component GroupPanel
               button press=drop destructive=true commandfor="drop-group" command="close" testId="group-delete-ok"
                 text "Delete"
               button commandfor="drop-group" command="close" testId="group-delete-cancel"
-                text "Cancel"
+                text t("common.cancel")
       else
         scroll flex=1 min-height=0
           column gap="space.lg" padding="0 space.lg space.xl"
@@ -2615,4 +2615,4 @@ component EditBotPage
         button press=drop(bot.slug) destructive=true commandfor=`drop-bot-${bot.slug}` command="close" testId="drop-bot-ok"
           text "Delete"
         button commandfor=`drop-bot-${bot.slug}` command="close" testId="drop-bot-cancel"
-          text "Cancel"
+          text t("common.cancel")

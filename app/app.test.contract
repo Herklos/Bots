@@ -145,8 +145,10 @@ test "a local child opens and a remote child stays on the other machine"
   tap "open-local-1"
   clock data
   expect tree has "child-transcript"
-  expect tree missing "send"
-  expect text "child-readonly" == "This thread is read only."
+  expect tree has "composer"
+  expect tree missing "child-readonly"
+  type "composer" "On the child"
+  expect tree has "send"
 
 test "a token line shows only when the turn shares an id"
   at "/bot/fixture"

@@ -107,7 +107,7 @@ fn one(agent: &Value) -> Option<Value> {
     }))
 }
 
-/// A local child opens as that thread, read only. A remote child does not open, and never as the parent.
+/// A local child opens as that thread. A remote child does not open, and never as the parent.
 pub fn open_child(row: &Value, parent: &str) -> Option<String> {
     if row["remote"] == true {
         return None;
@@ -118,6 +118,19 @@ pub fn open_child(row: &Value, parent: &str) -> Option<String> {
     } else {
         Some(thread.to_string())
     }
+}
+
+/// The thread a send, stop, voice clip, or request answer uses.
+/// No child means the parent. A local child is that thread. A remote child, or the parent id
+/// passed as the child, is refused. This writes nothing.
+pub fn thread_for(rows: &[Value], parent: &str, asked: Option<&str>) -> Result<String, &'static str> {
+    let Some(child) = asked.map(str::trim).filter(|id| !id.is_empty()) else {
+        return Ok(parent.to_string());
+    };
+    rows.iter()
+        .find(|row| row["threadId"].as_str() == Some(child))
+        .and_then(|row| open_child(row, parent))
+        .ok_or("That thread stays on the other machine.")
 }
 
 #[cfg(test)]
@@ -261,5 +274,46 @@ mod tests {
         assert_eq!(open_child(remote, "parent-thread"), None);
         assert_ne!(open_child(remote, "parent-thread").as_deref(), Some("parent-thread"));
         assert_eq!(open_child(&json!({ "remote": false, "threadId": "parent-thread" }), "parent-thread"), None);
+    }
+
+    fn family() -> Value {
+        json!({
+            "turnItems": [{
+                "type": "subagent",
+                "id": "away",
+                "title": "Away",
+                "status": "running",
+                "remoteChild": { "threadId": "remote-1", "environmentId": "env-9" },
+                "childThreadId": "should-not-win"
+            }],
+            "subagents": [{
+                "id": "notes",
+                "title": "Notes",
+                "status": "completed",
+                "childThreadId": "child-thread"
+            }]
+        })
+    }
+
+    #[test]
+    fn resolving_a_local_child_returns_that_thread_and_refuses_a_remote_or_the_parent() {
+        let mut rows = rows(&family());
+        rows.push(json!({ "remote": false, "threadId": "parent-thread", "id": "self" }));
+        assert_eq!(
+            thread_for(&rows, "parent-thread", Some("child-thread")).as_deref(),
+            Ok("child-thread")
+        );
+        assert_eq!(thread_for(&rows, "parent-thread", None).as_deref(), Ok("parent-thread"));
+        assert_eq!(thread_for(&rows, "parent-thread", Some("  ")).as_deref(), Ok("parent-thread"));
+        assert!(thread_for(&rows, "parent-thread", Some("remote-1")).is_err());
+        assert!(thread_for(&rows, "parent-thread", Some("parent-thread")).is_err());
+        assert_ne!(
+            thread_for(&rows, "parent-thread", Some("remote-1")).as_deref(),
+            Ok("parent-thread")
+        );
+        assert_ne!(
+            thread_for(&rows, "parent-thread", Some("parent-thread")).as_deref(),
+            Ok("parent-thread")
+        );
     }
 }

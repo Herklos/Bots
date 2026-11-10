@@ -36,12 +36,12 @@
 //   recolourBot: (args: [string, string]) => Reply
 //   renameBot: (args: [string, string]) => Reply
 //   reshapeBot: (args: [string, string]) => Reply
-//   respondRequest: (args: [string, string, string, string, string]) => Reply
+//   respondRequest: (args: [string, string, string, string, string, string]) => Reply
 //   revealPassword: (args: [string]) => Revealed
 //   saveLogin: (args: [string, string, string, string, string, string]) => Reply
-//   sendMessage: (args: [string, string, string]) => Reply
+//   sendMessage: (args: [string, string, string, string]) => Reply
 //   sendRoom: (args: [string, string]) => Reply
-//   sendVoice: (args: [string, number, string]) => Reply
+//   sendVoice: (args: [string, number, string, string]) => Reply
 //   setDefaultModel: (args: [string, string, string]) => Reply
 //   setModel: (args: [string, string, string, string]) => Reply
 //   setPassword: (args: [string]) => Reply
@@ -50,7 +50,7 @@
 //   signIn: (args: [string]) => Reply
 //   signOut: (args: []) => Reply
 //   stageVoice: (args: [string, string, string, number]) => VoiceHeld
-//   stopRun: (args: [string]) => Reply
+//   stopRun: (args: [string, string]) => Reply
 //   updateGroup: (args: [string, string, string]) => Reply
 //   uploadAttachment: (args: [string, string, string, string]) => Attached
 // The shapes. None is exported: name one by its source, `type Reply = Result<'computerControl'>`.
@@ -540,12 +540,12 @@ export interface SourceMap {
   "recolourBot": { args: [T1, T1]; result: T2 };
   "renameBot": { args: [T1, T1]; result: T2 };
   "reshapeBot": { args: [T1, T1]; result: T2 };
-  "respondRequest": { args: [T1, T1, T1, T1, T1]; result: T2 };
+  "respondRequest": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "revealPassword": { args: [T1]; result: T28 };
   "saveLogin": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
-  "sendMessage": { args: [T1, T1, T1]; result: T2 };
+  "sendMessage": { args: [T1, T1, T1, T1]; result: T2 };
   "sendRoom": { args: [T1, T1]; result: T2 };
-  "sendVoice": { args: [T1, T25, T1]; result: T2 };
+  "sendVoice": { args: [T1, T25, T1, T1]; result: T2 };
   "setDefaultModel": { args: [T1, T1, T1]; result: T2 };
   "setModel": { args: [T1, T1, T1, T1]; result: T2 };
   "setPassword": { args: [T1]; result: T2 };
@@ -554,7 +554,7 @@ export interface SourceMap {
   "signIn": { args: [T1]; result: T2 };
   "signOut": { args: []; result: T2 };
   "stageVoice": { args: [T1, T1, T1, T25]; result: T26 };
-  "stopRun": { args: [T1]; result: T2 };
+  "stopRun": { args: [T1, T1]; result: T2 };
   "updateGroup": { args: [T1, T1, T1]; result: T2 };
   "uploadAttachment": { args: [T1, T1, T1, T1]; result: T24 };
 }
