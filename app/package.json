@@ -1,0 +1,8 @@
+{
+  "name": "hbots",
+  "private": true,
+  "dependencies": {
+    "@exact/media-capture": "file:../../../Contrib/exact/packages/media-capture",
+    "@exact/recording": "file:../../../Contrib/exact/packages/recording"
+  }
+}

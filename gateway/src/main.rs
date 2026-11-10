@@ -1744,31 +1744,52 @@ async fn send_voice(
         .and_then(Value::as_f64)
         .filter(|n| n.is_finite())
         .ok_or_else(|| ApiError::bad_request("invalid duration"))?;
-    let bytes = body["data"]
-        .as_str()
-        .map(|data| {
-            base64::engine::Engine::decode(
-                &base64::engine::general_purpose::STANDARD,
-                data,
-            )
-        })
-        .transpose()
-        .map_err(|_| ApiError::bad_request("That clip could not be read."))?
-        .unwrap_or_default();
-    if bytes.is_empty() {
-        return Err(ApiError::bad_request("That clip is empty."));
-    }
     let thread = main_thread(&s, &slug).await?;
-    let stored = chat::store_voice_send(
-        &s.cfg.bots_root,
-        &slug,
-        &s.threads,
-        &thread,
-        &bytes,
-        seconds,
-        &routines::stamped(),
-    )
-    .await?;
+    let attachment_id = body["attachmentId"]
+        .as_str()
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+        .map(str::to_string);
+    let (stored, wrote) = if let Some(id) = attachment_id {
+        (
+            chat::dispatch_stored_voice(
+                &s.cfg.bots_root,
+                &slug,
+                &s.threads,
+                &thread,
+                &id,
+                seconds,
+                &routines::stamped(),
+            )
+            .await?,
+            false,
+        )
+    } else {
+        let bytes = body["data"]
+            .as_str()
+            .map(|data| {
+                base64::engine::Engine::decode(&base64::engine::general_purpose::STANDARD, data)
+            })
+            .transpose()
+            .map_err(|_| ApiError::bad_request("That clip could not be read."))?
+            .unwrap_or_default();
+        if bytes.is_empty() {
+            return Err(ApiError::bad_request("That clip is empty."));
+        }
+        (
+            chat::store_voice_send(
+                &s.cfg.bots_root,
+                &slug,
+                &s.threads,
+                &thread,
+                &bytes,
+                seconds,
+                &routines::stamped(),
+            )
+            .await?,
+            true,
+        )
+    };
     let rpc = s
         .t3
         .rpc()
@@ -1781,9 +1802,11 @@ async fn send_voice(
     .await
     .map_err(|e| ApiError::new(502, e.to_string()))?;
     s.usage.note_for(&slug, usage::Event::Message).await;
-    s.usage
-        .note_for(&slug, usage::Event::Attachment)
-        .await;
+    if wrote {
+        s.usage
+            .note_for(&slug, usage::Event::Attachment)
+            .await;
+    }
     Ok(Json(json!({
         "ok": true,
         "attachment": stored["attachment"],

@@ -4,6 +4,7 @@
   "id": "software.drakkar.hbots",
   "start_url": "/",
   "display": "standalone",
+  "audio_session": "playback",
   "theme_color": "#1cc3b0",
   "background_color": "#ffffff",
   "icons": [{ "src": "assets/icon-1024.png", "sizes": "1024x1024", "type": "image/png" }],

@@ -1,4 +1,4 @@
-import type { Answer, Result, Sources } from './app.contract.d.ts';
+import type { Answer, Result, Sources, Storage } from './app.contract.d.ts';
 
 // Where the hbots gateway (the `hbots` binary) listens. A data module can't read the page's address
 // (no `location`, and `fetch` refuses a relative URL), so the web build is made with this placeholder
@@ -9,7 +9,7 @@ const HBOTS_URL = import.meta.env.HBOTS_URL ?? 'http://hbots-origin.invalid';
 const API: string = HBOTS_URL.replace(/\/$/, '');
 // Any gateway the person runs: their machine, a Tailscale address or a tunnel. Plain `http:` to a host
 // name on Apple also needs `appTransportSecurity.allowsArbitraryLoads` in app.json.
-export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session\nfs.read app:/tmp';
+export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session\nfs.read app:/tmp\nfs.write app:/tmp\ndevice.microphone purpose.microphone';
 
 // The avatar palette: the names a Bot may carry, and the app tokens they map to. Its values
 // come from design/tokens.json: change them there.
@@ -130,7 +130,7 @@ function fixtureChat(child: string) {
       row({ id: 'm1', mine: true, text: 'Hello', tail: false }),
       row({ id: 'm2', time: '9:00 AM', text: 'Hi there', react: '🔥', quote: 'Hello', tokens: '12 in, 3 out, 4 read from cache, 1 written to cache.', head: true }),
       row({ id: 'm3', time: '9:01 AM', text: 'No tokens here', head: false }),
-      row({ id: 'voice1', mine: true, files: [{ id: 'voice', name: 'voice.m4a', kind: 'file', size: '1 KB', url: '' }] }),
+      row({ id: 'voice1', mine: true, files: [{ id: 'voice', name: 'voice.m4a', kind: 'audio', size: '1 KB', url: '/api/bots/fixture/attachments/voice' }] }),
     ],
   };
 }
@@ -281,6 +281,33 @@ function chatRows(slug: string, body: any, now: number, reactions: Record<string
   return rows;
 }
 
+async function storeUpload(store: any, storage: Storage, slug: string, path: string, rawName: string, rawType: string) {
+  const name = rawName !== '' ? rawName : decodeURIComponent(String(path).split('/').pop() ?? 'file');
+  const mediaType = rawType !== '' ? rawType : guessType(name);
+  const fail = (error: string) => ({ ok: false, id: '', name: '', url: '', error });
+  try {
+    const bytes = new Uint8Array(await storage.fs.readFile(String(path)));
+    if (bytes.byteLength === 0) return fail('That file is empty.');
+    if (bytes.byteLength > 8 << 20) return fail('Attach a file under 8 MB.');
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+    const data = btoa(binary);
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/attachments`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: String(name || 'file'),
+        mediaType: String(mediaType || 'application/octet-stream'),
+        data,
+      }),
+    });
+    if (!r.ok) return fail(r.error);
+    const id = String(r.body.id ?? r.body.attachmentId ?? '');
+    return { ok: true, id, name: String(r.body.name ?? name ?? 'file'), url: `${API}/api/bots/${encodeURIComponent(slug)}/attachments/${encodeURIComponent(id)}`, error: '' };
+  } catch {
+    return fail('Can’t read that file. Try another one.');
+  }
+}
+
 const sources: Sources = {
   loadSession: async (_args, store): Promise<Result<'loadSession'>> => {
     const r = await call(store, '/api/session');
@@ -417,34 +444,20 @@ const sources: Sources = {
     }));
   },
   uploadAttachment: async ([slug, path, rawName, rawType], store, storage): Promise<Result<'uploadAttachment'>> => {
-    const name = rawName !== '' ? rawName : decodeURIComponent(String(path).split('/').pop() ?? 'file');
-    const mediaType = rawType !== '' ? rawType : guessType(name);
-    try {
-      const bytes = new Uint8Array(await storage.fs.readFile(String(path)));
-      if (bytes.byteLength === 0) return { ok: false, id: '', name: '', error: 'That file is empty.' };
-      if (bytes.byteLength > 8 << 20) return { ok: false, id: '', name: '', error: 'Attach a file under 8 MB.' };
-      let binary = '';
-      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
-      const data = btoa(binary);
-      const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/attachments`, {
-        method: 'POST',
-        body: JSON.stringify({
-          name: String(name || 'file'),
-          mediaType: String(mediaType || 'application/octet-stream'),
-          data,
-        }),
-      });
-      if (!r.ok) return { ok: false, id: '', name: '', error: r.error };
-      return {
-        ok: true,
-        id: String(r.body.id ?? r.body.attachmentId ?? ''),
-        name: String(r.body.name ?? name ?? 'file'),
-        error: '',
-      };
-    } catch {
-      return { ok: false, id: '', name: '', error: 'Can’t read that file. Try another one.' };
-    }
+    const saved = await storeUpload(store, storage, slug, path, rawName, rawType);
+    return { ok: saved.ok, id: saved.id, name: saved.name, error: saved.error };
   },
+  stageVoice: async ([slug, path, mediaType, seconds], store, storage) => {
+    const saved = await storeUpload(store, storage, slug, path, '', mediaType);
+    const secs = Number(seconds);
+    if (!saved.ok) return { ok: false, id: '', name: '', url: '', seconds: 0, error: saved.error };
+    return { ok: true, id: saved.id, name: saved.name, url: saved.url, seconds: Number.isFinite(secs) ? secs : 0, error: '' };
+  },
+  sendVoice: async ([slug, seconds, attachmentId], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/voice`, {
+    method: 'POST',
+    body: JSON.stringify({ seconds: Number(seconds), attachmentId }),
+  })),
+  dropVoice: async ([slug, id], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/attachments/${encodeURIComponent(id)}`, { method: 'DELETE' })),
   stopRun: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/stop`, { method: 'POST', body: '{}' })),
   loadUsage: async ([gate], store): Promise<Result<'loadUsage'>> => {
     const blank = { ok: false, error: '', messages: 0, attachments: 0, vaultWrites: 0, iconFetches: 0 };

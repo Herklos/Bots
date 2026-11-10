@@ -7,6 +7,8 @@ use Face from "./face.contract"
 use Avatar from "./face.contract"
 use shapeNames from "./face.contract"
 use Glyph from "./glyph.contract"
+use getUserMedia, stopTrack, MediaStream, MediaStreamTrack from "@exact/media-capture"
+use startMediaRecorder, stopMediaRecorder, isTypeSupported, MediaRecorderInfo, RecordedMedia, TypeSupport from "@exact/recording"
 
 // Shared screen rhythm. Colours are generated from design/tokens.json.
 style Screen
@@ -366,7 +368,7 @@ shape Bot
   working: bool
   unread: bool
 
-// A file on a message: an image shows in place, any other file as a card.
+// A file on a message: an image shows in place, audio plays, any other file is a card.
 shape FileRef
   id: string
   name: string
@@ -463,6 +465,15 @@ shape Attached
   ok: bool
   id: string
   name: string
+  error: string
+
+// A clip stored once, ready to hear and then send on the voice route.
+shape VoiceHeld
+  ok: bool
+  id: string
+  name: string
+  url: string
+  seconds: number
   error: string
 
 // A Vault login, as the list may see it: the password is never in this shape.
@@ -670,6 +681,12 @@ component Bots
   state messageQuery = ""
   state marksOn = true
   state voiceHold = ""
+  state voiceRecorder = ""
+  state voiceTrack = ""
+  state voiceId = ""
+  state voicePreview = ""
+  state voiceSeconds = 0
+  state voiceError = ""
   state reactFor = ""
   state childThread = ""
   // Wide windows show the Bot's panel beside the chat, like Threebot's desktop.
@@ -703,6 +720,7 @@ component Bots
   resource lineage = loadLineage(slug, detailGate) as shape Lineage else empty()
   resource shelf = loadShelf(slug, libraryGate) as shape Shelf else empty()
   resource computer = loadComputer(slug, computerGate) as shape Computer else empty()
+  resource clipType = isTypeSupported(type="audio/mp4") as shape TypeSupport else empty()
   mutation signedIn as shape Reply refreshes session, bots
   mutation signedOut as shape Reply refreshes session, bots
   mutation created as shape Reply refreshes bots then afterCreate
@@ -724,6 +742,13 @@ component Bots
   mutation loginRemoved as shape Reply refreshes vault then afterLoginRemove
   mutation revealed as shape Revealed
   mutation attached as shape Attached then afterAttach
+  mutation micOpened as shape MediaStream then armMic
+  mutation recStarted as shape MediaRecorderInfo then recBegun
+  mutation clipSaved as shape RecordedMedia then stageClip
+  mutation trackEnded as shape MediaStreamTrack
+  mutation voiced as shape VoiceHeld then showClip
+  mutation voiceSent as shape Reply refreshes chat then afterVoice
+  mutation voiceDropped as shape Reply
   mutation modelSaved as shape Reply refreshes models then afterModel
   mutation defaultSaved as shape Reply refreshes prefs, models
   mutation controlled as shape Reply refreshes computer then afterControl
@@ -792,6 +817,10 @@ component Bots
 
   task letGo when holding and not onComputer
     after(1, releaseHeld)
+
+  // A take stops itself at two minutes. Stopping earlier cancels this wait.
+  task capClip when voiceRecorder != ""
+    after(120000, holdVoice)
 
   action fitView
     let box = frame("app-shell")
@@ -879,8 +908,95 @@ component Bots
     messageQuery = ""
     if next
       focus("chat-search")
+  // The contract runner has no microphone: the fixture hold is the file name, at once.
+  // Anywhere else, the first press records and the next press stops.
   action holdVoice
-    voiceHold = "voice.m4a"
+    voiceError = ""
+    if slug == "fixture" or slug == ""
+      voiceHold = "voice.m4a"
+    else if voiceRecorder != ""
+      send clipSaved = stopMediaRecorder(recorder=voiceRecorder)
+    else if not pending(micOpened)
+      send micOpened = getUserMedia(audio=true)
+  action armMic
+    match micOpened
+      case some(s)
+        let stream = s.id
+        let track = match s.tracks.at(0) { case some(t) => t.id, case none => "" }
+        voiceTrack = track
+        let path = clipType.supported ? "app:/tmp/voice.m4a" : "app:/tmp/voice.webm"
+        let mime = clipType.supported ? "audio/mp4" : "audio/webm"
+        send recStarted = startMediaRecorder(stream=stream, mimeType=mime, path=path)
+      case none
+        voiceError = "The microphone is off."
+  action recBegun
+    match recStarted
+      case some(r)
+        voiceRecorder = r.id
+        voiceHold = "Recording"
+      case none
+        voiceRecorder = ""
+        voiceError = "The microphone is off."
+  action stageClip
+    match clipSaved
+      case some(media)
+        let track = voiceTrack
+        let secs = media.duration / 1000
+        voiceRecorder = ""
+        voiceTrack = ""
+        voiceSeconds = secs
+        if track != ""
+          send trackEnded = stopTrack(track=track)
+        if media.size > 8388608
+          voiceHold = ""
+          voiceError = "That clip is too long."
+        else if secs <= 0 or media.size == 0
+          voiceHold = ""
+          voiceError = "That clip is empty."
+        else
+          send voiced = stageVoice(slug, media.path, media.mimeType, secs)
+      case none
+        voiceRecorder = ""
+        voiceError = "That clip could not be read."
+  action showClip
+    match voiced
+      case some(r)
+        if r.ok and r.id != ""
+          voiceHold = r.name
+          voiceId = r.id
+          voicePreview = r.url
+          voiceSeconds = r.seconds
+          voiceError = ""
+        else
+          voiceHold = ""
+          voiceId = ""
+          voicePreview = ""
+          voiceError = r.error != "" ? r.error : "That clip could not be read."
+      case none
+  action sendHeldVoice
+    if voiceId != "" and not pending(voiceSent)
+      send voiceSent = sendVoice(slug, voiceSeconds, voiceId)
+  action afterVoice
+    match voiceSent
+      case some(r)
+        if r.ok
+          voiceHold = ""
+          voiceId = ""
+          voicePreview = ""
+          voiceSeconds = 0
+          voiceError = ""
+        else
+          voiceError = r.error
+      case none
+  action discardVoice
+    if voiceId != ""
+      let id = voiceId
+      voiceHold = ""
+      voiceId = ""
+      voicePreview = ""
+      voiceSeconds = 0
+      voiceError = ""
+      send voiceDropped = dropVoice(slug, id)
   action openChild(threadId: string)
     childThread = threadId
   action openNew
@@ -1273,6 +1389,8 @@ component Bots
                                 if f.kind == "image"
                                   link href=f.url target="_blank" aria-label=`Open ${f.name}` testId=`image-${f.id}`
                                     image f.url aria-label=f.name max-width="20rem" width="100%" border-radius="radius.lg"
+                                else if f.kind == "audio" and f.url != ""
+                                  audio f.url controls=true testId=`audio-${f.id}`
                                 else
                                   link class=FileCard href=f.url target="_blank" aria-label=`Download ${f.name}` testId=`file-${f.id}`
                                     row gap="space.md" align-items="center"
@@ -1364,22 +1482,36 @@ component Bots
               if chat.readOnly
                 text "This thread is read only." color="ink.muted" padding="space.md space.lg space.xl" testId="child-readonly"
               else
-                row align-items="flex-end" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
-                  button class=IconControl press=pickFiles disabled=(slug == "" or pending(attached) or pendingAttaches.length >= 8) appearance="none" aria-label="Attach a file" title="Attach a file" testId="attach" width=36 height=36 border-radius="radius.full" background-color="surface.raised"
-                    Glyph(name="add", size=18)
-                  if voiceHold != ""
-                    text voiceHold font="-exact-footnote" color="ink.muted" testId="voice-hold"
-                  input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
-                  textarea id="composer" value=draft input=edit key=composerKey paste=pasted outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(bots, e.params.slug) != "" ? `Message ${nameOf(bots, e.params.slug)}` : "Write a message…") aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
-                  if chat.working and not canSend
-                    button class=StopControl appearance="none" press=stop margin="2px 0" aria-label="Stop" testId="stop"
-                      Glyph(name="stop", size=16)
-                  else if not canSend
-                    button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label="Record a voice clip" title="Record a voice clip" testId="voice-record" background-color="-exact-label" color="surface.canvas"
-                      Glyph(name="mic", size=18)
-                  else
-                    button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label="Send" testId="send"
-                      Glyph(name="send", size=18)
+                column width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.xs"
+                  if voicePreview != ""
+                    audio voicePreview controls=true testId="voice-preview"
+                  if voiceError != ""
+                    text voiceError color="-exact-system-red" font="-exact-footnote" testId="voice-error"
+                  row align-items="flex-end" width="100%" box-sizing="border-box" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
+                    button class=IconControl press=pickFiles disabled=(slug == "" or pending(attached) or pendingAttaches.length >= 8) appearance="none" aria-label="Attach a file" title="Attach a file" testId="attach" width=36 height=36 border-radius="radius.full" background-color="surface.raised"
+                      Glyph(name="add", size=18)
+                    if voiceHold != ""
+                      text voiceHold font="-exact-footnote" color="ink.muted" testId="voice-hold"
+                    if voiceId != ""
+                      button class=IconControl appearance="none" press=discardVoice aria-label="Discard clip" title="Discard clip" testId="voice-discard" width=36 height=36
+                        Glyph(name="close", size=16)
+                    input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
+                    textarea id="composer" value=draft input=edit key=composerKey paste=pasted outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(bots, e.params.slug) != "" ? `Message ${nameOf(bots, e.params.slug)}` : "Write a message…") aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
+                    if voiceRecorder != ""
+                      button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label="Stop recording" title="Stop recording" testId="voice-record" background-color="-exact-system-red" color="ink.dark"
+                        Glyph(name="stop", size=16)
+                    else if voiceId != ""
+                      button class=SendControl appearance="none" press=sendHeldVoice disabled=pending(voiceSent) margin="2px 0" aria-label="Send voice clip" title="Send voice clip" testId="voice-send"
+                        Glyph(name="send", size=18)
+                    else if chat.working and not canSend
+                      button class=StopControl appearance="none" press=stop margin="2px 0" aria-label="Stop" testId="stop"
+                        Glyph(name="stop", size=16)
+                    else if not canSend
+                      button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label="Record a voice clip" title="Record a voice clip" testId="voice-record" background-color="-exact-label" color="surface.canvas"
+                        Glyph(name="mic", size=18)
+                    else
+                      button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label="Send" testId="send"
+                        Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
                 BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease)
           else if e.name == "group"

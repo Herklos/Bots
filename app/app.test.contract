@@ -157,7 +157,7 @@ test "a token line shows only when the turn shares an id"
 test "the composer holds a voice clip and the sent clip is that attachment"
   at "/bot/fixture"
   clock data
-  expect tree has "file-voice"
+  expect tree has "audio-voice"
   tap "voice-record"
   clock settle
   expect text "voice-hold" == "voice.m4a"

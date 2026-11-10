@@ -41,6 +41,8 @@ fn files_of(attachments: &[Value]) -> Vec<Value> {
             let mime = a["mimeType"].as_str().unwrap_or("");
             let kind = if a["type"] == "image" || mime.starts_with("image/") {
                 "image"
+            } else if a["type"] == "audio" || mime.starts_with("audio/") {
+                "audio"
             } else {
                 "file"
             };
@@ -273,6 +275,37 @@ pub async fn store_voice_send(
     }))
 }
 
+const VOICE_TYPES: &[&str] = &["audio/mp4", "audio/webm", "audio/mpeg", "audio/wav"];
+
+/// Dispatches a clip that is already stored. It does not write a second file.
+/// A file that is not audio is refused. The command gains no quote field.
+pub async fn dispatch_stored_voice(
+    root: &std::path::Path,
+    slug: &str,
+    threads: &crate::thread_meta::ThreadMeta,
+    thread: &str,
+    attachment_id: &str,
+    seconds: f64,
+    at: &str,
+) -> crate::error::ApiResult<Value> {
+    let (meta, _) = crate::attachments::read_file(root, slug, attachment_id).await?;
+    let media = meta["mediaType"].as_str().unwrap_or("").to_ascii_lowercase();
+    if !VOICE_TYPES.contains(&media.as_str()) {
+        return Err(crate::error::ApiError::bad_request(
+            "That file is not a voice clip.",
+        ));
+    }
+    let seen = threads
+        .add_voice_call(Some(thread), Some(&json!(seconds)), at)
+        .await?;
+    let command = send_command(thread, "", &[crate::attachments::command_part(&meta)]);
+    Ok(json!({
+        "attachment": meta,
+        "voiceCalls": seen["voiceCalls"],
+        "command": command,
+    }))
+}
+
 /// The command a phone send dispatches.
 /// `attachments` is the gateway's file records (`attachments::command_part`).
 pub fn send_command(thread: &str, text: &str, attachments: &[Value]) -> Value {
@@ -478,5 +511,110 @@ mod tests {
         assert!(out["command"].get("quote").is_none());
         assert_eq!(out["command"]["attachments"][0]["id"], id);
         assert_eq!(out["command"]["type"], "message.dispatch");
+        assert_eq!(out["attachment"]["mediaType"], "audio/mp4");
+        assert_eq!(
+            crate::attachments::read_dir(dir.path(), "ada")
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn an_audio_attachment_plays_as_audio() {
+        let out = transcript(&json!({
+            "turnItems": [{
+                "id": "v",
+                "type": "user_message",
+                "text": "",
+                "status": "completed",
+                "attachments": [
+                    { "id": "voice", "name": "voice.m4a", "mimeType": "audio/mp4", "sizeBytes": 12, "type": "file" },
+                    { "id": "note", "name": "n.txt", "mimeType": "text/plain", "sizeBytes": 1, "type": "file" }
+                ]
+            }]
+        }));
+        let files = &out["messages"][0]["files"];
+        assert_eq!(files[0]["kind"], "audio");
+        assert_eq!(files[1]["kind"], "file");
+    }
+
+    #[tokio::test]
+    async fn a_short_clip_stays_an_attachment_the_player_can_use() {
+        let dir = tempfile::tempdir().unwrap();
+        let threads = crate::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
+        let bytes = b"short-clip";
+        let out = store_voice_send(dir.path(), "ada", &threads, "thread-1", bytes, 4.2, "2026-11-10T00:00:00.000Z")
+            .await
+            .unwrap();
+        let id = out["attachment"]["id"].as_str().unwrap();
+        let (_meta, disk) = crate::attachments::read_file(dir.path(), "ada", id).await.unwrap();
+        assert_eq!(disk, bytes);
+        assert!(out["voiceCalls"].as_array().unwrap().is_empty());
+        let raw = std::fs::read_to_string(dir.path().join("thread-meta.json")).unwrap();
+        assert!(raw.contains("\"seconds\": 4"));
+        assert!(!raw.contains("audio"));
+        assert!(!raw.contains("short-clip"));
+        assert_eq!(out["command"]["attachments"][0]["id"], id);
+        assert!(out["command"].get("quote").is_none());
+    }
+
+    #[tokio::test]
+    async fn a_stored_audio_file_is_dispatched_without_a_second_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let threads = crate::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
+        let meta = crate::attachments::write_file(dir.path(), "ada", "voice.m4a", "audio/mp4", b"once")
+            .await
+            .unwrap();
+        let id = meta["id"].as_str().unwrap().to_string();
+        let out = dispatch_stored_voice(
+            dir.path(),
+            "ada",
+            &threads,
+            "thread-1",
+            &id,
+            12.0,
+            "2026-11-10T00:00:00.000Z",
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            crate::attachments::read_dir(dir.path(), "ada").await.unwrap().len(),
+            1
+        );
+        assert_eq!(out["command"]["attachments"][0]["id"], id);
+        assert_eq!(out["attachment"]["id"], id);
+        assert!(out["command"].get("quote").is_none());
+        assert_eq!(out["voiceCalls"][0]["seconds"], 12);
+        assert!(out["voiceCalls"][0].get("audio").is_none());
+        let raw = serde_json::to_string(&out["voiceCalls"]).unwrap();
+        assert!(!raw.contains("once"));
+    }
+
+    #[tokio::test]
+    async fn a_non_audio_file_is_refused_as_a_voice_clip() {
+        let dir = tempfile::tempdir().unwrap();
+        let threads = crate::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
+        let meta = crate::attachments::write_file(dir.path(), "ada", "note.txt", "text/plain", b"hi")
+            .await
+            .unwrap();
+        let id = meta["id"].as_str().unwrap();
+        let err = dispatch_stored_voice(
+            dir.path(),
+            "ada",
+            &threads,
+            "thread-1",
+            id,
+            12.0,
+            "2026-11-10T00:00:00.000Z",
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.message, "That file is not a voice clip.");
+        assert!(threads.get(Some("thread-1")).await.unwrap()["voiceCalls"]
+            .as_array()
+            .unwrap()
+            .is_empty());
     }
 }
