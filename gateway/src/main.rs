@@ -1342,19 +1342,9 @@ async fn model_put(
         .save(&slug, &json!({ "model": selection }), false)
         .await?;
     if let Ok(rpc) = s.t3.rpc().await {
-        if let Some(project) = bot["projectId"].as_str().filter(|id| !id.is_empty()) {
-            rpc.call(
-                "projects.mutate",
-                provisioner::project_model_update(project, &selection),
-            )
+        provisioner::push_model(&rpc, &bot, &selection)
             .await
             .map_err(|e| ApiError::new(502, format!("T3 didn't take the model: {e}")))?;
-        }
-        if let Some(thread) = bot["mainThreadId"].as_str().filter(|id| !id.is_empty()) {
-            rpc.dispatch(provisioner::thread_model_command(thread, &selection))
-                .await
-                .map_err(|e| ApiError::new(502, format!("T3 didn't take the model: {e}")))?;
-        }
     }
     Ok(Json(json!({ "ok": true })))
 }
