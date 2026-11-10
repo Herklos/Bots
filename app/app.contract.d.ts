@@ -32,6 +32,7 @@
 //   makeMainBot: (args: [string]) => Reply
 //   markSeen: (args: [string]) => Reply
 //   pinBot: (args: [string, boolean]) => Reply
+//   pinMessage: (args: [string, string, string, string]) => Reply
 //   reactTo: (args: [string, string, string]) => Reply
 //   recolourBot: (args: [string, string]) => Reply
 //   renameBot: (args: [string, string]) => Reply
@@ -39,7 +40,7 @@
 //   respondRequest: (args: [string, string, string, string, string, string]) => Reply
 //   revealPassword: (args: [string]) => Revealed
 //   saveLogin: (args: [string, string, string, string, string, string]) => Reply
-//   sendMessage: (args: [string, string, string, string]) => Reply
+//   sendMessage: (args: [string, string, string, string, string, string]) => Reply
 //   sendRoom: (args: [string, string]) => Reply
 //   sendVoice: (args: [string, number, string, string]) => Reply
 //   setDefaultModel: (args: [string, string, string]) => Reply
@@ -505,7 +506,7 @@ type T184 = { "scrollLeft": T25; "scrollTop": T25; "scrollWidth": T25; "scrollHe
 type T185 = { "text": T1; "files": T78; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "computerControl" | "createBot" | "createGroup" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveLogin" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "computerControl" | "createBot" | "createGroup" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveLogin" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "computerControl": { args: [T1, T1, T1]; result: T2 };
@@ -536,6 +537,7 @@ export interface SourceMap {
   "makeMainBot": { args: [T1]; result: T2 };
   "markSeen": { args: [T1]; result: T2 };
   "pinBot": { args: [T1, T0]; result: T2 };
+  "pinMessage": { args: [T1, T1, T1, T1]; result: T2 };
   "reactTo": { args: [T1, T1, T1]; result: T2 };
   "recolourBot": { args: [T1, T1]; result: T2 };
   "renameBot": { args: [T1, T1]; result: T2 };
@@ -543,7 +545,7 @@ export interface SourceMap {
   "respondRequest": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "revealPassword": { args: [T1]; result: T28 };
   "saveLogin": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
-  "sendMessage": { args: [T1, T1, T1, T1]; result: T2 };
+  "sendMessage": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "sendRoom": { args: [T1, T1]; result: T2 };
   "sendVoice": { args: [T1, T25, T1, T1]; result: T2 };
   "setDefaultModel": { args: [T1, T1, T1]; result: T2 };

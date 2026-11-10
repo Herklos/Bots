@@ -722,6 +722,8 @@ component Bots
   state voiceSeconds = 0
   state voiceError = ""
   state reactFor = ""
+  state replyTo = ""
+  state replyQuote = ""
   state childThread = ""
   // Wide windows show the Bot's panel beside the chat, like Threebot's desktop.
   state wide = false
@@ -765,6 +767,7 @@ component Bots
   mutation groupSaved as shape Reply refreshes room, convos
   mutation seen as shape Reply refreshes bots
   mutation reacted as shape Reply refreshes chat
+  mutation messagePinned as shape Reply refreshes chat
   mutation sent as shape Reply refreshes chat then afterSend
   mutation answered as shape Reply refreshes chat then afterAnswer
   mutation stopped as shape Reply refreshes chat
@@ -1165,7 +1168,7 @@ component Bots
       // pendingAttaches entries are `id\\tname`; the data module keeps the ids.
       lastText = draft.trim()
       failedText = ""
-      send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"), childThread)
+      send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"), childThread, replyTo, replyQuote)
       edit("")
     focus("composer")
   action composerKey(k: string, event: KeyboardEvent)
@@ -1177,6 +1180,8 @@ component Bots
     if sendError == ""
       pendingAttaches = []
       lastText = ""
+      replyTo = ""
+      replyQuote = ""
     else
       failedText = lastText
     toEnd()
@@ -1185,7 +1190,16 @@ component Bots
       let again = failedText
       lastText = again
       failedText = ""
-      send sent = sendMessage(slug, again, "", childThread)
+      send sent = sendMessage(slug, again, "", childThread, replyTo, replyQuote)
+  action startReply(id: string, text: string)
+    replyTo = id
+    replyQuote = text.slice(0, 500)
+  action cancelReply
+    replyTo = ""
+    replyQuote = ""
+  action doPinMessage(id: string, text: string)
+    if chat.threadId != "" and not pending(messagePinned)
+      send messagePinned = pinMessage(slug, chat.threadId, id, text)
   action doReact(item: string, emoji: string)
     reactFor = ""
     send reacted = reactTo(slug, item, emoji)
@@ -1534,6 +1548,10 @@ component Bots
                                   else if not m.mine
                                     button class=TextControl appearance="none" press=openReact(m.id) aria-label="React" title="React" min-height=24 padding="0 space.xs" testId=`add-react-${m.id}`
                                       Glyph(name="smile", size=14)
+                                  button class=TextControl appearance="none" press=startReply(m.id, m.text) aria-label="Reply" title="Reply" min-height=24 padding="0 space.xs" testId=`reply-${m.id}`
+                                    text "Reply" font="-exact-footnote"
+                                  button class=TextControl appearance="none" press=doPinMessage(m.id, m.text) aria-label="Pin" title="Pin" min-height=24 padding="0 space.xs" testId=`pin-message-${m.id}`
+                                    text "Pin" font="-exact-footnote"
                                 if reactFor == m.id
                                   row gap="2px" padding="space.xs" border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="react-picker"
                                     for em in ["👍", "❤️", "😂", "😮", "🎉", "🙏"] key=em
@@ -1605,6 +1623,11 @@ component Bots
                 text "This thread is read only." color="ink.muted" padding="space.md space.lg space.xl" testId="child-readonly"
               else
                 column width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.xs"
+                  if replyTo != ""
+                    row gap="space.sm" align-items="center" padding="space.xs space.sm" border-radius="radius.md" background-color="surface.raised" border="1px solid surface.line" testId="reply-bar"
+                      text replyQuote font="-exact-footnote" color="ink.muted" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="reply-quote"
+                      button class=TextControl appearance="none" press=cancelReply aria-label="Cancel reply" testId="reply-cancel" min-height=44 padding="0 space.sm"
+                        text "Cancel"
                   if voicePreview != ""
                     audio voicePreview controls=true testId="voice-preview"
                   if voiceError != ""

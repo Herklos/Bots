@@ -124,14 +124,23 @@ type PinRow = { id: string; text: string; missing: boolean };
 type ChatRow = any;
 
 // The contract runner has no gateway: a small conversation, a writable child and a missing pin.
+// Pins are mutable so a Pin tap can toggle a row without a live gateway.
+const fixturePins: Record<string, PinRow[]> = {
+  'fixture-thread': [
+    { id: 'm1', text: 'Hello', missing: false },
+    { id: 'missing', text: NOT_IN_VIEW, missing: true },
+  ],
+  'child-thread': [],
+};
+
 function fixtureChat(child: string) {
   const row = (r: Record<string, unknown>) => ({ ...blank, head: true, tail: true, mine: false, text: '', ...r, kind: 'message' }) as ChatRow;
   if (child === 'child-thread') {
-    return { slug: 'fixture', working: false, partial: false, readOnly: false, threadId: 'child-thread', pins: [] as PinRow[], rows: [row({ id: 'c1', text: 'Notes' })] };
+    return { slug: 'fixture', working: false, partial: false, readOnly: false, threadId: 'child-thread', pins: [...(fixturePins['child-thread'] ?? [])], rows: [row({ id: 'c1', text: 'Notes' })] };
   }
   return {
-    slug: 'fixture', working: false, partial: true, readOnly: false, threadId: '',
-    pins: [{ id: 'm1', text: 'Hello', missing: false }, { id: 'missing', text: NOT_IN_VIEW, missing: true }],
+    slug: 'fixture', working: false, partial: true, readOnly: false, threadId: 'fixture-thread',
+    pins: [...(fixturePins['fixture-thread'] ?? [])],
     rows: [
       row({ id: 'm1', mine: true, text: 'Hello', tail: false }),
       row({ id: 'm2', time: '9:00 AM', text: 'Hi there', react: '🔥', quote: 'Hello', tokens: '12 in, 3 out, 4 read from cache, 1 written to cache.', head: true }),
@@ -352,6 +361,20 @@ const sources: Sources = {
   makeMainBot: async ([slug], store) => reply(await call(store, '/api/main-bot', { method: 'PUT', body: JSON.stringify({ slug }) })),
   reshapeBot: async ([slug, shape], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ shape }) })),
   reactTo: async ([slug, item, emoji], store) => reply(await call(store, `/api/threads/${encodeURIComponent(threads[slug] ?? '')}/reactions`, { method: 'POST', body: JSON.stringify({ item, emoji }) })),
+  pinMessage: async ([slug, thread, item, text], store) => {
+    if (slug === 'fixture') {
+      const key = thread || 'fixture-thread';
+      const list = fixturePins[key] ?? (fixturePins[key] = []);
+      const at = list.findIndex((row) => row.id === item);
+      if (at >= 0) list.splice(at, 1);
+      else list.push({ id: String(item), text: String(text || NOT_IN_VIEW), missing: false });
+      return { ok: true, error: '' };
+    }
+    return reply(await call(store, `/api/threads/${encodeURIComponent(thread)}/pins`, {
+      method: 'POST',
+      body: JSON.stringify({ item }),
+    }));
+  },
   pinBot: async ([slug, pinned], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ pinned }) })),
   deleteBot: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'DELETE' })),
   loadPrefs: async (_args, store): Promise<Result<'loadPrefs'>> => {
@@ -482,13 +505,17 @@ const sources: Sources = {
     if (child !== '') body.child = child;
     return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/requests/${encodeURIComponent(id)}/respond`, { method: 'POST', body: JSON.stringify(body) }));
   },
-  sendMessage: async ([slug, text, pending, child], store) => {
+  sendMessage: async ([slug, text, pending, child, replyTo, quote], store) => {
     const attachmentIds = String(pending ?? '')
       .split('\n')
       .map((line) => line.split('\t')[0]?.trim())
       .filter((id) => !!id);
     const body: Record<string, unknown> = { text, attachmentIds };
     if (child !== '') body.child = child;
+    if (replyTo !== '') {
+      body.replyTo = replyTo;
+      body.quote = String(quote ?? '').slice(0, 500);
+    }
     return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/chat`, {
       method: 'POST',
       body: JSON.stringify(body),

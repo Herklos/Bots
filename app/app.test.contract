@@ -117,6 +117,24 @@ test "a message shows a reaction, a quote, and a pin that is not in view"
   expect text "quote-m2" == "Hello"
   expect text "pin-missing" == "This message is not in view."
 
+test "reply quotes a line and pin toggles a row"
+  at "/bot/fixture"
+  clock data
+  expect text "pin-missing" == "This message is not in view."
+  tap "reply-m2"
+  expect text "reply-quote" == "Hi there"
+  expect tree has "reply-cancel"
+  tap "reply-cancel"
+  expect tree missing "reply-cancel"
+  tap "pin-message-m2"
+  clock data
+  expect text "pin-m2" == "Hi there"
+  expect text "pin-missing" == "This message is not in view."
+  tap "pin-message-m2"
+  clock data
+  expect tree missing "pin-m2"
+  expect text "pin-missing" == "This message is not in view."
+
 test "the open chat is clear and a hidden Bot keeps its mark"
   size 1440x900
   at "/bot/fixture"
