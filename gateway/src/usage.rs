@@ -35,6 +35,8 @@ impl Event {
 pub struct Usage {
     path: PathBuf,
     lock: Mutex<()>,
+    /// Each Bot thread's turns, kept for as long as its `updatedAt` stamp holds.
+    turns: Mutex<std::collections::HashMap<String, (String, Vec<Turn>)>>,
 }
 
 impl Usage {
@@ -42,6 +44,7 @@ impl Usage {
         Self {
             path,
             lock: Mutex::new(()),
+            turns: Mutex::new(std::collections::HashMap::new()),
         }
     }
 
@@ -69,6 +72,34 @@ impl Usage {
         let _g = self.lock.lock().await;
         let doc = read_doc(&self.path).await?;
         Ok(with_totals(doc))
+    }
+
+    /// The whole counts file.
+    pub async fn doc(&self) -> ApiResult<Value> {
+        let _g = self.lock.lock().await;
+        read_doc(&self.path).await
+    }
+
+    /// A thread's finished turns. They are read again only when the thread's stamp moves.
+    pub async fn turns_for(&self, s: &AppState, thread: &str, stamp: &str) -> anyhow::Result<Vec<Turn>> {
+        if !stamp.is_empty() {
+            if let Some((seen, turns)) = self.turns.lock().await.get(thread) {
+                if seen == stamp {
+                    return Ok(turns.clone());
+                }
+            }
+        }
+        let projection = s
+            .t3
+            .rpc()
+            .await?
+            .call("orchestration.getThreadProjection", json!({ "threadId": thread }))
+            .await?;
+        let turns = turns_from_projection(&projection);
+        if !stamp.is_empty() {
+            self.turns.lock().await.insert(thread.to_string(), (stamp.to_string(), turns.clone()));
+        }
+        Ok(turns)
     }
 
     /// Messages and attachments this Bot sent through the gateway.
@@ -279,6 +310,185 @@ fn unix_now() -> u64 {
         .unwrap_or(0)
 }
 
+// ---------- the report: tokens by period, day and model ----------
+
+/// One finished provider turn on a Bot's thread.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Turn {
+    pub at_ms: i64,
+    pub model: String,
+    pub input: u64,
+    pub output: u64,
+    pub cached: u64,
+    pub cache_write: u64,
+}
+
+/// `YYYY-MM-DDTHH:MM:SS(.sss)Z` as Unix milliseconds. T3 writes this form everywhere.
+pub fn parse_iso_ms(text: &str) -> Option<i64> {
+    let b = text.as_bytes();
+    if b.len() < 19 || b[4] != b'-' || b[7] != b'-' || (b[10] != b'T' && b[10] != b' ') {
+        return None;
+    }
+    let n = |from: usize, to: usize| text.get(from..to)?.parse::<i64>().ok();
+    let (y, m, d) = (n(0, 4)?, n(5, 7)?, n(8, 10)?);
+    let (hh, mm, ss) = (n(11, 13)?, n(14, 16)?, n(17, 19)?);
+    let millis = text
+        .get(19..)
+        .and_then(|rest| rest.strip_prefix('.'))
+        .map(|rest| rest.chars().take_while(char::is_ascii_digit).take(3).collect::<String>())
+        .filter(|digits| !digits.is_empty())
+        .map(|digits| format!("{digits:0<3}").parse::<i64>().unwrap_or(0))
+        .unwrap_or(0);
+    // days_from_civil (Howard Hinnant)
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    Some(((days * 24 + hh) * 60 + mm) * 60_000 + ss * 1000 + millis)
+}
+
+/// The finished turns of a thread projection that reported tokens. A turn is dated when it
+/// completed, or started if it never did.
+pub fn turns_from_projection(projection: &Value) -> Vec<Turn> {
+    projection["providerTurns"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|t| {
+            let usage = t.get("turnTokenUsage").filter(|u| u.is_object())?;
+            if usage["usageStatus"] == "unavailable" || usage["localCommand"] == true {
+                return None;
+            }
+            let at = t["completedAt"].as_str().or(t["startedAt"].as_str()).and_then(parse_iso_ms)?;
+            Some(Turn {
+                at_ms: at,
+                model: t["model"].as_str().unwrap_or("").to_string(),
+                input: count_u64(&usage["inputTokens"]),
+                output: count_u64(&usage["outputTokens"]),
+                cached: count_u64(&usage["cachedInputTokens"]),
+                cache_write: count_u64(&usage["cacheCreationTokens"]),
+            })
+        })
+        .collect()
+}
+
+/// The day a moment falls on for someone `offset_min` minutes east of UTC, as a count of days.
+fn day_index(ms: i64, offset_min: i64) -> i64 {
+    (ms + offset_min * 60_000).div_euclid(86_400_000)
+}
+
+fn day_name(index: i64) -> String {
+    day_key((index * 86_400).max(0) as u64)
+}
+
+/// `(first day, last day, fill empty days)` of a period ending today, in the person's day.
+pub fn period_days(period: &str, now_ms: i64, offset_min: i64) -> Option<(i64, i64, bool)> {
+    let today = day_index(now_ms, offset_min);
+    match period {
+        "today" => Some((today, today, true)),
+        "7d" => Some((today - 6, today, true)),
+        "30d" => Some((today - 29, today, true)),
+        "all" => Some((i64::MIN, today, false)),
+        _ => None,
+    }
+}
+
+/// Tokens and activity in a period: totals, one row per day, and a row per model.
+/// `activity` holds each day's `(messages, attachments)` by day name.
+pub fn report(
+    turns: &[Turn],
+    activity: &std::collections::BTreeMap<String, (u64, u64)>,
+    range: (i64, i64, bool),
+    offset_min: i64,
+) -> Value {
+    #[derive(Default, Clone, Copy)]
+    struct Sum {
+        turns: u64,
+        input: u64,
+        output: u64,
+        cached: u64,
+        cache_write: u64,
+    }
+    let (first, last, fill) = range;
+    let mut by_day: std::collections::BTreeMap<i64, Sum> = std::collections::BTreeMap::new();
+    let mut by_model: std::collections::BTreeMap<String, Sum> = std::collections::BTreeMap::new();
+    let mut total = Sum::default();
+    for t in turns {
+        let day = day_index(t.at_ms, offset_min);
+        if day < first || day > last {
+            continue;
+        }
+        for sum in [
+            by_day.entry(day).or_default(),
+            by_model.entry(t.model.clone()).or_default(),
+            &mut total,
+        ] {
+            sum.turns += 1;
+            sum.input += t.input;
+            sum.output += t.output;
+            sum.cached += t.cached;
+            sum.cache_write += t.cache_write;
+        }
+    }
+    // Activity days come as names; turn them into indexes inside the range.
+    let mut messages: std::collections::BTreeMap<i64, (u64, u64)> = std::collections::BTreeMap::new();
+    for (name, (m, a)) in activity {
+        if let Some(ms) = parse_iso_ms(&format!("{name}T00:00:00Z")) {
+            let day = ms.div_euclid(86_400_000);
+            if day >= first && day <= last {
+                messages.insert(day, (*m, *a));
+            }
+        }
+    }
+    let (mut msgs, mut atts) = (0, 0);
+    for (m, a) in messages.values() {
+        msgs += m;
+        atts += a;
+    }
+    let mut days: Vec<i64> = by_day.keys().chain(messages.keys()).copied().collect();
+    if fill {
+        days.extend(first..=last);
+    }
+    days.sort_unstable();
+    days.dedup();
+    let series: Vec<Value> = days
+        .iter()
+        .map(|d| {
+            let s = by_day.get(d).copied().unwrap_or_default();
+            let (m, a) = messages.get(d).copied().unwrap_or_default();
+            json!({ "day": day_name(*d), "turns": s.turns, "input": s.input, "output": s.output,
+                "cached": s.cached, "cacheWrite": s.cache_write, "messages": m, "attachments": a })
+        })
+        .collect();
+    let mut models: Vec<(String, Sum)> = by_model.into_iter().collect();
+    models.sort_by(|a, b| (b.1.input + b.1.output).cmp(&(a.1.input + a.1.output)));
+    json!({
+        "ok": true,
+        "totals": { "messages": msgs, "attachments": atts, "turns": total.turns, "input": total.input, "output": total.output,
+            "cached": total.cached, "cacheWrite": total.cache_write, "tokens": total.input + total.output },
+        "series": series,
+        "byModel": models.iter().map(|(model, s)| json!({ "model": model, "turns": s.turns, "input": s.input,
+            "output": s.output, "cached": s.cached, "cacheWrite": s.cache_write, "tokens": s.input + s.output })).collect::<Vec<_>>(),
+    })
+}
+
+/// A Bot's `(messages, attachments)` for each day it has any, or the machine's with an empty slug.
+pub fn activity_by_day(doc: &Value, slug: &str) -> std::collections::BTreeMap<String, (u64, u64)> {
+    doc["days"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(day, entry)| {
+            let bucket = if slug.is_empty() { entry } else { &entry["bots"][slug] };
+            let m = bucket["messages"].as_u64().unwrap_or(0);
+            let a = bucket["attachments"].as_u64().unwrap_or(0);
+            (m + a > 0).then(|| (day.clone(), (m, a)))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -379,4 +589,72 @@ mod tests {
         assert!(snap["totals"].as_object().unwrap().is_empty());
         assert!(snap["totals"].get("messages").is_none());
     }
+
+    fn fixture_turns() -> Vec<Turn> {
+        let f: Value = serde_json::from_str(include_str!("../../tests/fixtures/t3/thread-projection.json")).unwrap();
+        turns_from_projection(&f["value"])
+    }
+
+    #[test]
+    fn iso_times_parse_to_milliseconds() {
+        assert_eq!(parse_iso_ms("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(parse_iso_ms("1970-01-02T00:00:01.250Z"), Some(86_401_250));
+        assert_eq!(parse_iso_ms("2026-11-10T08:23:56.048Z"), Some(1_794_299_036_048));
+        assert_eq!(parse_iso_ms("nope"), None);
+    }
+
+    #[test]
+    fn a_real_thread_gives_three_turns_with_a_time_and_a_model() {
+        let turns = fixture_turns();
+        assert_eq!(turns.len(), 3);
+        assert!(turns.iter().all(|t| t.model == "claude-opus-5-5" && t.at_ms > 0 && t.input > 0));
+    }
+
+    #[test]
+    fn a_period_counts_the_persons_days_and_fills_the_empty_ones() {
+        let turns = vec![
+            Turn { at_ms: parse_iso_ms("2026-11-10T23:30:00Z").unwrap(), model: "a".into(), input: 100, output: 10, cached: 60, cache_write: 5 },
+            Turn { at_ms: parse_iso_ms("2026-11-04T12:00:00Z").unwrap(), model: "b".into(), input: 50, output: 5, cached: 0, cache_write: 0 },
+            Turn { at_ms: parse_iso_ms("2026-10-01T12:00:00Z").unwrap(), model: "a".into(), input: 1000, output: 100, cached: 0, cache_write: 0 },
+        ];
+        let now = parse_iso_ms("2026-11-10T23:45:00Z").unwrap();
+        let none = std::collections::BTreeMap::new();
+        // UTC: all three turns are on their own days; "today" holds one.
+        let today = report(&turns, &none, period_days("today", now, 0).unwrap(), 0);
+        assert_eq!(today["totals"]["turns"], 1);
+        assert_eq!(today["series"].as_array().unwrap().len(), 1);
+        // The week: 7 days filled, 2 turns (the October one is out).
+        let week = report(&turns, &none, period_days("7d", now, 0).unwrap(), 0);
+        assert_eq!(week["series"].as_array().unwrap().len(), 7);
+        assert_eq!(week["totals"]["turns"], 2);
+        assert_eq!(week["totals"]["tokens"], 165);
+        assert_eq!(week["byModel"][0]["model"], "a");
+        // Someone two hours east is already on the 11th: the 23:30 turn is their tomorrow-today.
+        let east = report(&turns, &none, period_days("today", now, 120).unwrap(), 120);
+        assert_eq!(east["series"][0]["day"], "2026-11-11");
+        assert_eq!(east["totals"]["turns"], 1);
+        // All time: only days with data, oldest first.
+        let all = report(&turns, &none, period_days("all", now, 0).unwrap(), 0);
+        assert_eq!(all["totals"]["turns"], 3);
+        let days: Vec<&str> = all["series"].as_array().unwrap().iter().map(|d| d["day"].as_str().unwrap()).collect();
+        assert_eq!(days, ["2026-10-01", "2026-11-04", "2026-11-10"]);
+        assert!(period_days("century", now, 0).is_none());
+    }
+
+    #[test]
+    fn messages_and_attachments_join_the_series_by_day() {
+        let mut doc = json!({ "version": 1, "days": {} });
+        record_for(&mut doc, "2026-11-10", "ada", "messages", 400);
+        record_for(&mut doc, "2026-11-10", "ada", "messages", 400);
+        record_for(&mut doc, "2026-11-10", "ada", "attachments", 400);
+        record_for(&mut doc, "2026-11-10", "bob", "messages", 400);
+        let ada = activity_by_day(&doc, "ada");
+        let now = parse_iso_ms("2026-11-10T12:00:00Z").unwrap();
+        let r = report(&[], &ada, period_days("7d", now, 0).unwrap(), 0);
+        assert_eq!((r["totals"]["messages"].as_u64(), r["totals"]["attachments"].as_u64()), (Some(2), Some(1)));
+        assert_eq!(r["series"][6]["messages"], 2);
+        let machine = activity_by_day(&doc, "");
+        assert_eq!(report(&[], &machine, period_days("today", now, 0).unwrap(), 0)["totals"]["messages"], 3);
+    }
+
 }

@@ -21,6 +21,7 @@ mod lineage; // Subagents and delegated threads of one Bot.
 mod mcp;
 mod projects;
 mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-origin check.
+mod providers; // The providers and models T3 Code offers.
 mod provisioner;
 mod release; // T6b: self-update and rollback.
 mod remote_access; // T4: the scrypt password in access.json.
@@ -69,6 +70,7 @@ pub struct AppState {
     pub remote: Arc<remote_access::RemoteAccess>,
     pub threads: thread_meta::ThreadMeta,
     pub roster: roster::Roster,
+    pub providers: providers::Providers,
     pub rooms: rooms::Rooms,
     pub routine_history: routines::RoutineHistory,
     pub system: release::System,
@@ -174,6 +176,7 @@ async fn main() -> anyhow::Result<()> {
         projects: projects::Projects::new(app_dir.join("projects.json")),
         threads: thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
         roster: roster::Roster::default(),
+        providers: providers::Providers::default(),
         rooms: rooms::Rooms::new(app_dir.join("groups.json")),
         routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
         system: release::System::new(cfg.data_root.clone(), app_dir.clone()),
@@ -313,6 +316,7 @@ pub fn app(state: Arc<AppState>) -> Router {
             "/api/bots/{slug}/connectors",
             post(connector_save).delete(connector_delete),
         )
+        .route("/api/providers", get(providers_get))
         .route("/api/bots/{slug}/model", get(model_get).put(model_put))
         .route("/api/bots/{slug}/usage", get(bot_usage))
         .route(
@@ -365,6 +369,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/routines/run", post(routines_run))
         .route("/api/icons/{host}", get(icons::get_icon))
         .route("/api/usage", get(usage::get_usage))
+        .route("/api/usage/report", get(usage_report))
         .merge(release::routes())
         .route("/t3/{*rest}", any(t3_route))
         .layer(middleware::from_fn_with_state(state.clone(), require_login));
@@ -925,6 +930,12 @@ async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
         return Err(ApiError::bad_request("settings must be an object"));
     }
     let current = s.settings().await;
+    let mut patch = patch;
+    // The default model is checked like a Bot's, and stored as T3 stores a selection.
+    if patch.get("defaultModel").is_some_and(|v| v.is_object()) {
+        let chosen = checked_selection(&s, &patch["defaultModel"], &current["defaultModel"]).await?;
+        patch["defaultModel"] = chosen;
+    }
     let mut next = store::merge(&current, &patch);
     if let Some(beta) = patch.get("beta") {
         let beta = beta
@@ -1106,6 +1117,31 @@ async fn connector_delete(
     Ok(Json(s.library.delete_connector(&slug, &name).await?))
 }
 
+/// Every provider T3 Code has ready, with its models and effort levels.
+async fn providers_get(State(s): S) -> ApiResult<Json<Value>> {
+    let list = s
+        .providers
+        .list(&s.t3)
+        .await
+        .map_err(|e| ApiError::new(502, format!("T3 didn't list providers: {e}")))?;
+    Ok(Json(json!({ "ok": true, "providers": list["providers"] })))
+}
+
+/// A model choice from a request body, checked against T3's providers. When T3 can't be read
+/// the old character check stands, so a choice is never lost to a hiccup.
+async fn checked_selection(s: &AppState, body: &Value, current: &Value) -> ApiResult<Value> {
+    let instance = body["instanceId"].as_str().unwrap_or("");
+    let model = body["model"].as_str().unwrap_or("");
+    let effort = body["effort"].as_str();
+    // The character check first: it also refuses an empty choice.
+    let plain = provisioner::model_selection(instance, model).map_err(ApiError::bad_request)?;
+    match s.providers.list(&s.t3).await {
+        Ok(list) => providers::selection(&list, instance, model, effort, current)
+            .map_err(ApiError::bad_request),
+        Err(_) => Ok(plain),
+    }
+}
+
 async fn model_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
     let bot = require_bot(&s, &slug).await?;
     let settings = s.settings().await;
@@ -1118,6 +1154,7 @@ async fn model_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Valu
         "ok": true,
         "current": current["model"].as_str().unwrap_or(""),
         "instanceId": current["instanceId"].as_str().unwrap_or("claudeAgent"),
+        "effort": providers::effort_of(&current),
         "choices": provisioner::model_choices(&bot["model"], &settings["defaultModel"]),
     })))
 }
@@ -1131,11 +1168,7 @@ async fn model_put(
     require_json(&h)?;
     let bot = require_bot(&s, &slug).await?;
     let body = parse(&body)?;
-    let selection = provisioner::model_selection(
-        body["instanceId"].as_str().unwrap_or(""),
-        body["model"].as_str().unwrap_or(""),
-    )
-    .map_err(ApiError::bad_request)?;
+    let selection = checked_selection(&s, &body, &bot["model"]).await?;
     s.bots
         .save(&slug, &json!({ "model": selection }), false)
         .await?;
@@ -1155,6 +1188,65 @@ async fn model_put(
         }
     }
     Ok(Json(json!({ "ok": true })))
+}
+
+/// Tokens and activity for one Bot or all of them over a period: `period` is today, 7d, 30d or
+/// all; `bot` is a slug or all; `offset` is the person's minutes east of UTC.
+async fn usage_report(
+    State(s): S,
+    Query(q): Query<HashMap<String, String>>,
+) -> ApiResult<Json<Value>> {
+    let period = q.get("period").map(String::as_str).unwrap_or("7d");
+    let offset = q
+        .get("offset")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(0)
+        .clamp(-840, 840);
+    let which = q.get("bot").map(String::as_str).unwrap_or("all");
+    let now_ms = unix_now() as i64 * 1000;
+    let range = usage::period_days(period, now_ms, offset)
+        .ok_or_else(|| ApiError::bad_request("Pick today, 7d, 30d or all."))?;
+    let bots: Vec<Value> = s
+        .bots
+        .list()
+        .await?
+        .into_iter()
+        .filter(|b| which == "all" || b["slug"] == which)
+        .collect();
+    if which != "all" && bots.is_empty() {
+        return Err(ApiError::not_found("Bot not found"));
+    }
+    let doc = s.usage.doc().await?;
+    let facts = s.roster.facts(&s).await;
+    let (mut turns, mut by_bot, mut error) = (Vec::new(), Vec::new(), "");
+    for bot in &bots {
+        let slug = bot["slug"].as_str().unwrap_or("");
+        let mine = match bot["mainThreadId"].as_str().filter(|t| !t.is_empty()) {
+            Some(thread) => {
+                let stamp = facts.get(thread).map(|f| f.stamp.as_str()).unwrap_or("");
+                match s.usage.turns_for(&s, thread, stamp).await {
+                    Ok(t) => t,
+                    Err(_) => {
+                        error = "Open T3 Code, then try again.";
+                        Vec::new()
+                    }
+                }
+            }
+            None => Vec::new(),
+        };
+        let own = usage::report(&mine, &usage::activity_by_day(&doc, slug), range, offset);
+        by_bot.push(json!({
+            "slug": slug, "name": bot["name"], "color": bot["color"], "shape": bot["shape"],
+            "tokens": own["totals"]["tokens"], "turns": own["totals"]["turns"], "messages": own["totals"]["messages"],
+        }));
+        turns.extend(mine);
+    }
+    let activity = usage::activity_by_day(&doc, if which == "all" { "" } else { which });
+    let mut out = usage::report(&turns, &activity, range, offset);
+    out["period"] = json!(period);
+    out["error"] = json!(error);
+    out["byBot"] = json!(if which == "all" { by_bot } else { Vec::new() });
+    Ok(Json(out))
 }
 
 async fn bot_usage(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
