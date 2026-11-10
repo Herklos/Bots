@@ -122,7 +122,11 @@ impl Face {
     /// `(path, eye_dy, eye_k)` for a shape.
     pub fn shape(&self, name: &str) -> Option<(&str, f64, f64)> {
         let v = self.shapes.get(name)?;
-        Some((v["path"].as_str()?, v["eye_dy"].as_f64()?, v["eye_k"].as_f64()?))
+        Some((
+            v["path"].as_str()?,
+            v["eye_dy"].as_f64()?,
+            v["eye_k"].as_f64()?,
+        ))
     }
 }
 
@@ -238,12 +242,27 @@ pub fn tamber() -> String {
     );
     let _ = writeln!(s, "  ink.light = {}  scheme=fixed", c.white);
     let _ = writeln!(s, "  ink.dark = {}  scheme=fixed", c.night);
-    let _ = writeln!(s, "  // Semantic surfaces and secondary ink, shared by every screen.");
+    let _ = writeln!(
+        s,
+        "  // Semantic surfaces and secondary ink, shared by every screen."
+    );
     for (name, pair) in &t.surface {
-        let _ = writeln!(s, "  surface.{name} = light-dark({}, {})", pair.light, pair.dark);
+        let _ = writeln!(
+            s,
+            "  surface.{name} = light-dark({}, {})",
+            pair.light, pair.dark
+        );
     }
-    let _ = writeln!(s, "  ink.muted = light-dark({}, {})", c.muted.light, c.muted.dark);
-    let _ = writeln!(s, "  ink.faint = light-dark({}, {})", c.faint.light, c.faint.dark);
+    let _ = writeln!(
+        s,
+        "  ink.muted = light-dark({}, {})",
+        c.muted.light, c.muted.dark
+    );
+    let _ = writeln!(
+        s,
+        "  ink.faint = light-dark({}, {})",
+        c.faint.light, c.faint.dark
+    );
     let _ = writeln!(s, "  // Spacing and corners.");
     for k in ["xs", "sm", "md", "lg", "xl"] {
         let _ = writeln!(s, "  space.{k} = {}px", t.space[k]);
@@ -360,7 +379,10 @@ pub fn face_region() -> String {
         c.paper, c.night
     );
     let _ = writeln!(s);
-    let _ = writeln!(s, "// A presence dot: online is the success colour, unread the info colour.");
+    let _ = writeln!(
+        s,
+        "// A presence dot: online is the success colour, unread the info colour."
+    );
     let _ = writeln!(
         s,
         "fn presenceColour(kind: string): string = kind == \"unread\" ? \"light-dark({}, {})\" : \"light-dark({}, {})\"",
@@ -374,11 +396,16 @@ pub fn shapes_region() -> String {
     let f = &tokens().face;
     let names = f.shape_names();
     let mut s = String::new();
-    let _ = writeln!(s, "fn faceShape(shape: string): string = {}", names
-        .iter()
-        .skip(1)
-        .map(|n| format!("shape == \"{n}\" ? \"{n}\" : "))
-        .collect::<String>() + &format!("\"{}\"", names[0]));
+    let _ = writeln!(
+        s,
+        "fn faceShape(shape: string): string = {}",
+        names
+            .iter()
+            .skip(1)
+            .map(|n| format!("shape == \"{n}\" ? \"{n}\" : "))
+            .collect::<String>()
+            + &format!("\"{}\"", names[0])
+    );
     let arms = |pick: &dyn Fn(&str, f64, f64) -> String, default: &str| -> String {
         let mut out = String::new();
         for n in names.iter().skip(1) {
@@ -388,9 +415,21 @@ pub fn shapes_region() -> String {
         out + default
     };
     let (path0, dy0, k0) = f.shape(names[0]).expect("a first shape");
-    let _ = writeln!(s, "fn shapePath(shape: string): string = {}", arms(&|p, _, _| format!("\"{p}\""), &format!("\"{path0}\"")));
-    let _ = writeln!(s, "fn shapeDy(shape: string): number = {}", arms(&|_, d, _| num(d), &num(dy0)));
-    let _ = writeln!(s, "fn shapeK(shape: string): number = {}", arms(&|_, _, k| num(k), &num(k0)));
+    let _ = writeln!(
+        s,
+        "fn shapePath(shape: string): string = {}",
+        arms(&|p, _, _| format!("\"{p}\""), &format!("\"{path0}\""))
+    );
+    let _ = writeln!(
+        s,
+        "fn shapeDy(shape: string): number = {}",
+        arms(&|_, d, _| num(d), &num(dy0))
+    );
+    let _ = writeln!(
+        s,
+        "fn shapeK(shape: string): number = {}",
+        arms(&|_, _, k| num(k), &num(k0))
+    );
     s
 }
 
@@ -425,7 +464,11 @@ pub fn css() -> String {
         let _ = writeln!(s, "  --hbots-{k}: light-dark({}, {});", p.light, p.dark);
     }
     for (name, pair) in &t.surface {
-        let _ = writeln!(s, "  --hbots-surface-{name}: light-dark({}, {});", pair.light, pair.dark);
+        let _ = writeln!(
+            s,
+            "  --hbots-surface-{name}: light-dark({}, {});",
+            pair.light, pair.dark
+        );
     }
     for (name, hex) in t.avatar.all() {
         let _ = writeln!(s, "  --hbots-avatar-{name}: {hex};");
@@ -699,8 +742,18 @@ mod tests {
         // Faint ink is for times and event lines: the page, a row, a selected row, a card.
         for name in ["canvas", "card", "sidebar", "raised"] {
             let surface = &t.surface[name];
-            at_least(&format!("faint on {name}"), &t.color.faint.light, &surface.light, 4.5);
-            at_least(&format!("faint on {name}"), &t.color.faint.dark, &surface.dark, 4.5);
+            at_least(
+                &format!("faint on {name}"),
+                &t.color.faint.light,
+                &surface.light,
+                4.5,
+            );
+            at_least(
+                &format!("faint on {name}"),
+                &t.color.faint.dark,
+                &surface.dark,
+                4.5,
+            );
         }
     }
 
@@ -709,10 +762,26 @@ mod tests {
         let t = tokens();
         // The Bot's bubble was once a card on a near-white canvas and vanished in light mode.
         for (what, a, b) in [
-            ("light bubble on canvas", &t.surface["bubble"].light, &t.surface["canvas"].light),
-            ("dark bubble on canvas", &t.surface["bubble"].dark, &t.surface["canvas"].dark),
-            ("light raised on sidebar", &t.surface["raised"].light, &t.surface["sidebar"].light),
-            ("dark raised on sidebar", &t.surface["raised"].dark, &t.surface["sidebar"].dark),
+            (
+                "light bubble on canvas",
+                &t.surface["bubble"].light,
+                &t.surface["canvas"].light,
+            ),
+            (
+                "dark bubble on canvas",
+                &t.surface["bubble"].dark,
+                &t.surface["canvas"].dark,
+            ),
+            (
+                "light raised on sidebar",
+                &t.surface["raised"].light,
+                &t.surface["sidebar"].light,
+            ),
+            (
+                "dark raised on sidebar",
+                &t.surface["raised"].dark,
+                &t.surface["sidebar"].dark,
+            ),
         ] {
             at_least(what, a, b, 1.08);
         }
@@ -773,9 +842,18 @@ mod tests {
         );
         for name in f.shape_names() {
             let (path, dy, k) = f.shape(name).unwrap();
-            assert!(path.starts_with('M') && path.ends_with('Z'), "{name}: an open outline");
-            assert!(path.chars().all(|c| c != '"' && c != '\n'), "{name}: path has a quote");
-            assert!((0.0..=20.0).contains(&dy) && (0.8..=1.2).contains(&k), "{name}: eyes off the face");
+            assert!(
+                path.starts_with('M') && path.ends_with('Z'),
+                "{name}: an open outline"
+            );
+            assert!(
+                path.chars().all(|c| c != '"' && c != '\n'),
+                "{name}: path has a quote"
+            );
+            assert!(
+                (0.0..=20.0).contains(&dy) && (0.8..=1.2).contains(&k),
+                "{name}: eyes off the face"
+            );
         }
     }
 

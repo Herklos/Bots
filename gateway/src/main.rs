@@ -25,6 +25,7 @@ mod provisioner;
 mod release; // T6b: self-update and rollback.
 mod remote_access; // T4: the scrypt password in access.json.
 mod rooms; // Local rooms. A send is stored here, then dispatched to each member's main thread.
+mod roster; // What an inbox row needs: preview, working, unread.
 mod routines; // T5: T3 scheduled tasks.
 mod service; // T6b: install and remove the background service.
 mod store;
@@ -67,6 +68,7 @@ pub struct AppState {
     pub tailnet: Arc<exposure::Tailnet>,
     pub remote: Arc<remote_access::RemoteAccess>,
     pub threads: thread_meta::ThreadMeta,
+    pub roster: roster::Roster,
     pub rooms: rooms::Rooms,
     pub routine_history: routines::RoutineHistory,
     pub system: release::System,
@@ -171,6 +173,7 @@ async fn main() -> anyhow::Result<()> {
         vault: vault::Vault::new(cfg.vault_file.clone(), cfg.vault_key_file.clone()),
         projects: projects::Projects::new(app_dir.join("projects.json")),
         threads: thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
+        roster: roster::Roster::default(),
         rooms: rooms::Rooms::new(app_dir.join("groups.json")),
         routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
         system: release::System::new(cfg.data_root.clone(), app_dir.clone()),
@@ -280,6 +283,7 @@ pub fn app(state: Arc<AppState>) -> Router {
             "/api/bots/{slug}",
             get(get_bot).put(save_bot).delete(delete_bot),
         )
+        .route("/api/bots/{slug}/seen", post(mark_seen))
         .route("/api/bots/{slug}/chat", get(read_chat).post(send_chat))
         .route("/api/bots/{slug}/stop", post(stop_chat))
         .route(
@@ -905,6 +909,8 @@ async fn config_route(State(s): S, surface: Option<Extension<exposure::Surface>>
         "botsRoot": s.cfg.bots_root,
         "accessLogout": s.access.is_some() && !on_tailnet,
         "appUrl": s.cfg.app_url,
+        "version": env!("CARGO_PKG_VERSION"),
+        "harness": { "name": "T3 Code", "connected": s.t3.rpc().await.is_ok() },
     }))
 }
 
@@ -942,7 +948,7 @@ async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
 async fn list_bots(State(s): S) -> ApiResult<Response> {
     Ok((
         [(header::CACHE_CONTROL, "no-store")],
-        Json(json!({ "bots": s.bots.list().await? })),
+        Json(json!({ "bots": roster::list(&s, s.bots.list().await?).await })),
     )
         .into_response())
 }
@@ -970,6 +976,14 @@ async fn save_bot(
 ) -> ApiResult<Json<Value>> {
     require_json(&h)?;
     Ok(Json(s.bots.save(&slug, &parse(&body)?, false).await?))
+}
+
+/// The person has this Bot's chat open: everything up to now is read.
+async fn mark_seen(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+    s.bots
+        .save(&slug, &json!({ "lastSeenAt": vault::now_iso() }), false)
+        .await?;
+    Ok(Json(json!({ "ok": true })))
 }
 
 async fn delete_bot(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {

@@ -12,6 +12,18 @@ use tokio::sync::Mutex;
 pub const MANAGED_START: &str = "<!-- bot:managed:start -->";
 pub const MANAGED_END: &str = "<!-- bot:managed:end -->";
 
+/// The shape names a Bot may have, from the design crate. The old default, `sphere`, reads as the ball.
+pub fn shape_name(raw: &str) -> Option<String> {
+    let shapes = hbots_design::tokens().face.shape_names();
+    if raw == "sphere" {
+        return shapes.first().map(|s| s.to_string());
+    }
+    shapes.contains(&raw).then(|| raw.to_string())
+}
+
+/// Bots pinned as tiles above the inbox, besides the main Bot.
+pub const MAX_PINNED: usize = 2;
+
 pub fn valid_slug(slug: &str) -> bool {
     let b = slug.as_bytes();
     !b.is_empty()
@@ -102,13 +114,18 @@ impl Bots {
                 continue;
             };
             let mut bot = json!({
-                "label": "", "shape": "sphere", "color": hbots_design::tokens().avatar.default, "section": null, "pinned": false,
+                "label": "", "shape": "ball", "color": hbots_design::tokens().avatar.default, "section": null, "pinned": false,
                 "hidden": false, "primary": false, "notifications": true, "projectId": null, "mainThreadId": null,
             })
             .as_object()
             .cloned()
             .unwrap_or_default();
             bot.extend(obj(&meta));
+            let shape = bot["shape"]
+                .as_str()
+                .and_then(shape_name)
+                .unwrap_or_else(|| "ball".into());
+            bot.insert("shape".into(), json!(shape));
             let display = meta["name"]
                 .as_str()
                 .filter(|n| !n.trim().is_empty())
@@ -235,10 +252,28 @@ impl Bots {
             if current.is_none() && !create {
                 return Err(ApiError::not_found("Bot not found"));
             }
-            for key in ["primary", "hidden"] {
+            for key in ["primary", "hidden", "pinned"] {
                 if patch.get(key).is_some_and(|v| !v.is_boolean()) {
                     return Err(ApiError::bad_request(format!("{key} must be a boolean")));
                 }
+            }
+            if let Some(shape) = patch.get("shape") {
+                if shape.as_str().and_then(shape_name).is_none() {
+                    return Err(ApiError::bad_request("Pick a shape from the list."));
+                }
+            }
+            if patch["pinned"] == true
+                && current.as_ref().is_none_or(|c| c["pinned"] != true)
+                && bots
+                    .iter()
+                    .filter(|b| b["pinned"] == true && b["primary"] != true && b["slug"] != slug)
+                    .count()
+                    >= MAX_PINNED
+            {
+                return Err(ApiError::new(
+                    409,
+                    "Two Bots can be pinned. Unpin one first.",
+                ));
             }
             let is_main = current.as_ref().is_some_and(|c| c["primary"] == true);
             if is_main && (patch["hidden"] == true || patch["primary"] == false) {
@@ -246,6 +281,9 @@ impl Bots {
             }
             let mut next = current.as_ref().map(obj).unwrap_or_default();
             let mut clean = obj(patch);
+            if let Some(shape) = patch["shape"].as_str().and_then(shape_name) {
+                clean.insert("shape".into(), json!(shape));
+            }
             let wants_main = clean.remove("primary") == Some(Value::Bool(true));
             clean.remove("slug");
             clean.remove("workspaceRoot");
@@ -302,6 +340,12 @@ impl Bots {
             .map(str::trim)
             .filter(|n| !n.is_empty())
             .ok_or_else(|| ApiError::bad_request("A Bot needs a name."))?;
+        if input
+            .get("shape")
+            .is_some_and(|v| !v.is_null() && v.as_str().and_then(shape_name).is_none())
+        {
+            return Err(ApiError::bad_request("Pick a shape from the list."));
+        }
         let base = slugify(name);
         let (mut slug, mut n) = (base.clone(), 2);
         while tokio::fs::try_exists(self.root.join(&slug))
@@ -327,12 +371,14 @@ impl Bots {
         .await?;
         let text = |k: &str, d: &str| json!(input[k].as_str().unwrap_or(d));
         let bot = json!({
-            "name": name, "label": text("label", ""), "shape": text("shape", "sphere"), "color": text("color", &hbots_design::tokens().avatar.default),
+            "name": name, "label": text("label", ""), "shape": input["shape"].as_str().and_then(shape_name).unwrap_or_else(|| "ball".into()), "color": text("color", &hbots_design::tokens().avatar.default),
             "section": input["section"].as_str(), "pinned": input["pinned"] == true, "hidden": false,
             "primary": input["primary"] == true, "notifications": true, "projectId": null, "mainThreadId": null,
             "model": input.get("model").cloned().unwrap_or(Value::Null),
             "brief": input["brief"].as_str(),
+            "firstMessage": input["firstMessage"].as_str().map(str::trim).filter(|m| !m.is_empty()).map(|m| m.chars().take(2000).collect::<String>()),
             "createdAt": now_iso(),
+            "lastSeenAt": now_iso(),
         });
         self.save(&slug, &bot, true).await
     }
@@ -455,6 +501,98 @@ mod tests {
         assert_eq!(slugify("Élodie_B"), "elodie-b");
         assert_eq!(slugify("!!!"), "bot");
         assert!(valid_slug("ada-2") && !valid_slug("-ada") && !valid_slug("../x"));
+    }
+
+    #[test]
+    fn shapes_come_from_the_design_crate_and_sphere_reads_as_the_ball() {
+        assert_eq!(shape_name("hex").as_deref(), Some("hex"));
+        assert_eq!(shape_name("sphere").as_deref(), Some("ball"));
+        assert_eq!(shape_name("blob"), None);
+        assert_eq!(shape_name(""), None);
+    }
+
+    #[tokio::test]
+    async fn a_bot_takes_a_shape_and_refuses_an_unknown_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        let ada = bots
+            .create(&json!({ "name": "Ada", "shape": "cloud" }))
+            .await
+            .unwrap();
+        assert_eq!(ada["shape"], "cloud");
+        let plain = bots.create(&json!({ "name": "Bob" })).await.unwrap();
+        assert_eq!(plain["shape"], "ball");
+        assert!(bots
+            .create(&json!({ "name": "Cy", "shape": "blob" }))
+            .await
+            .is_err());
+        let slug = ada["slug"].as_str().unwrap();
+        let saved = bots
+            .save(slug, &json!({ "shape": "sphere" }), false)
+            .await
+            .unwrap();
+        assert_eq!(saved["shape"], "ball");
+        assert!(bots
+            .save(slug, &json!({ "shape": "blob" }), false)
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn only_two_bots_besides_the_main_one_can_be_pinned() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        let mut slugs = Vec::new();
+        for name in ["Main", "One", "Two", "Three"] {
+            slugs.push(
+                bots.create(&json!({ "name": name })).await.unwrap()["slug"]
+                    .as_str()
+                    .unwrap()
+                    .to_string(),
+            );
+        }
+        bots.select(&slugs[0]).await.unwrap();
+        assert!(bots
+            .save(&slugs[1], &json!({ "pinned": true }), false)
+            .await
+            .is_ok());
+        assert!(bots
+            .save(&slugs[2], &json!({ "pinned": true }), false)
+            .await
+            .is_ok());
+        let third = bots
+            .save(&slugs[3], &json!({ "pinned": true }), false)
+            .await
+            .unwrap_err();
+        assert_eq!(third.status, 409);
+        // Pinning one already pinned is fine, and unpinning makes room.
+        assert!(bots
+            .save(&slugs[1], &json!({ "pinned": true }), false)
+            .await
+            .is_ok());
+        bots.save(&slugs[1], &json!({ "pinned": false }), false)
+            .await
+            .unwrap();
+        assert!(bots
+            .save(&slugs[3], &json!({ "pinned": true }), false)
+            .await
+            .is_ok());
+        assert!(bots
+            .save(&slugs[0], &json!({ "pinned": "yes" }), false)
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn a_new_bot_starts_seen_and_remembers_its_first_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        let ada = bots
+            .create(&json!({ "name": "Ada", "firstMessage": "  Plan my day.  " }))
+            .await
+            .unwrap();
+        assert!(ada["lastSeenAt"].as_str().is_some_and(|t| !t.is_empty()));
+        assert_eq!(ada["firstMessage"], "Plan my day.");
     }
 
     #[test]

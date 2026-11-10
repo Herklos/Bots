@@ -184,6 +184,21 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
                 .await
                 .map_err(|e| anyhow::anyhow!(e.message))?;
         }
+        // What the person typed on New Bot goes out once, as their own message.
+        if let Some(first) = bot["firstMessage"].as_str().filter(|m| !m.is_empty()) {
+            let id = uuid::Uuid::new_v4().to_string();
+            rpc.dispatch(json!({
+                "type": "message.dispatch", "threadId": thread, "messageId": id, "text": first,
+                "attachments": [], "createdBy": "user", "creationSource": "web",
+                "dispatchMode": { "type": "start_immediately" },
+            }))
+            .await?;
+            state
+                .bots
+                .save(&slug, &json!({ "firstMessage": null }), false)
+                .await
+                .map_err(|e| anyhow::anyhow!(e.message))?;
+        }
     }
     Ok(())
 }

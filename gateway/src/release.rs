@@ -1108,7 +1108,7 @@ fn busy_in_snapshot(snapshot: &Value) -> usize {
         .count()
 }
 
-fn thread_is_busy(thread: &Value) -> bool {
+pub(crate) fn thread_is_busy(thread: &Value) -> bool {
     const LIVE: &[&str] = &["queued", "preparing", "starting", "running", "waiting"];
     if thread
         .get("status")
