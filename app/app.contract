@@ -2901,7 +2901,7 @@ component ModelPage
     isDefault: bool
     error: string
   action choose(i: string, m: string, e: string)
-    pick(bot.slug, i, m, e, models.runtimeMode)
+    pick(bot.slug, i, m, e, "")
   action chooseMode(mode: string)
     pick(bot.slug, models.instanceId, models.current, models.effort, mode)
   view
@@ -2911,15 +2911,18 @@ component ModelPage
       else if models.providers.length == 0
         text t("model.noProviderLong") color="ink.muted" testId="provider-none"
       else
-        ModelPicker(providers=models.providers, instanceId=models.instanceId, model=models.current, effort=models.effort, prefix="model", pick=choose)
-        row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("model.access")
-          button class=Segment appearance="none" role="radio" aria-checked=(models.runtimeMode == "approval-required") press=chooseMode("approval-required") testId="access-ask" border="1px solid surface.line" background-color=(models.runtimeMode == "approval-required" ? "surface.raised" : "transparent")
-            text t("model.ask")
-          button class=Segment appearance="none" role="radio" aria-checked=(models.runtimeMode == "auto") press=chooseMode("auto") testId="access-auto" border="1px solid surface.line" background-color=(models.runtimeMode == "auto" ? "surface.raised" : "transparent")
-            text t("model.auto")
-          button class=Segment appearance="none" role="radio" aria-checked=(models.runtimeMode == "full-access") press=chooseMode("full-access") testId="access-full" border="1px solid surface.line" background-color=(models.runtimeMode == "full-access" ? "surface.raised" : "transparent")
-            text t("model.fullAccess")
-        text t("model.applies", name=bot.name) color="ink.muted" font="-exact-footnote" padding="0 space.xs"
+        column gap="space.xs"
+          ModelPicker(providers=models.providers, instanceId=models.instanceId, model=models.current, effort=models.effort, prefix="model", pick=choose)
+          text t("model.applies", name=bot.name) color="ink.muted" font="-exact-footnote" padding="0 space.xs"
+        column gap="space.xs"
+          row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("model.access")
+            button class=Segment appearance="none" role="radio" aria-checked=(models.runtimeMode == "approval-required") press=chooseMode("approval-required") testId="access-ask" border="1px solid surface.line" background-color=(models.runtimeMode == "approval-required" ? "surface.raised" : "transparent")
+              text t("model.ask")
+            button class=Segment appearance="none" role="radio" aria-checked=(models.runtimeMode == "auto") press=chooseMode("auto") testId="access-auto" border="1px solid surface.line" background-color=(models.runtimeMode == "auto" ? "surface.raised" : "transparent")
+              text t("model.auto")
+            button class=Segment appearance="none" role="radio" aria-checked=(models.runtimeMode == "full-access") press=chooseMode("full-access") testId="access-full" border="1px solid surface.line" background-color=(models.runtimeMode == "full-access" ? "surface.raised" : "transparent")
+              text t("model.fullAccess")
+          text t("model.nextThread") color="ink.muted" font="-exact-footnote" padding="0 space.xs"
         row align-items="center" gap="space.md" padding="space.xs 0" border-top="1px solid surface.line"
           column flex=1 gap="2px"
             text t("model.useDefault") font-weight=500 font="-exact-subheadline"

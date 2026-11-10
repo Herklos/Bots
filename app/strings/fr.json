@@ -177,6 +177,7 @@
   "model.defaultNote": "Les nouveaux Bots commencent avec ce modèle.",
   "model.effort": "Effort",
   "model.fullAccess": "Accès complet",
+  "model.nextThread": "Utilisé la prochaine fois qu’un fil est créé.",
   "model.noProviderLong": "Aucun fournisseur n’est prêt dans T3 Code. Configurez-en un là-bas, puis revenez.",
   "model.provider": "Fournisseur",
   "model.recommended": "Recommandé",
