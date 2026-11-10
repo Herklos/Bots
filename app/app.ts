@@ -520,13 +520,14 @@ const sources: Sources = {
     // `bea` is the second fixture Bot, so a draft test can open her and come back without a gateway.
     if (focus === 'tabs') {
       return [
-        { slug: 'tabs', name: 'Tabs', label: '', initials: 'T', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '' },
+        { slug: 'tabs', name: 'Tabs', label: '', initials: 'T', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', prompt: '', inheritParentPrompt: false },
       ];
     }
     if (focus === 'fixture' || focus === 'bea') {
       return [
-        { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '' },
-        { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true, shape: 'ball', pinned: false, working: false, line: 'Getting set up…', time: '' },
+        { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', prompt: '', inheritParentPrompt: false },
+        { slug: 'ada-junior-1', name: 'Ada junior 1', label: '', initials: 'AJ', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: 'fixture', prompt: 'Look things up.', inheritParentPrompt: true },
+        { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true, shape: 'ball', pinned: false, working: false, line: 'Getting set up…', time: '', parentSlug: '', prompt: '', inheritParentPrompt: false },
       ];
     }
     const body = await botsBody(store);
@@ -544,6 +545,9 @@ const sources: Sources = {
       color: fill(b.color), shape: String(b.shape ?? 'ball'), main: b.primary === true, pinned: b.pinned === true, hidden: b.hidden === true,
       ready: typeof b.mainThreadId === 'string', working: b.working === true, unread: b.unread === true,
       line: lineOf(b), time: when(b.preview?.at, Number(body.now)),
+      parentSlug: typeof b.parentSlug === 'string' ? b.parentSlug : '',
+      prompt: typeof b.subagent?.prompt === 'string' ? b.subagent.prompt : '',
+      inheritParentPrompt: b.subagent?.inheritParentPrompt === true,
     }));
   },
   renameBot: async ([slug, name], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ name }) })),
@@ -657,6 +661,20 @@ const sources: Sources = {
   sendRoom: async ([id, text], store) => reply(await call(store, `/api/rooms/${encodeURIComponent(id)}/messages`, { method: 'POST', body: JSON.stringify({ text }) })),
   deleteGroup: async ([id], store) => reply(await call(store, `/api/rooms/${encodeURIComponent(id)}`, { method: 'DELETE' })),
   createBot: async ([name, color, shape, firstMessage], store) => reply(await call(store, '/api/bots', { method: 'POST', body: JSON.stringify({ name, color, shape, ...(firstMessage !== '' ? { firstMessage } : {}) }) })),
+  createSubagent: async ([parentSlug, name, shape, color, prompt, inheritParentPrompt], store) => reply(await call(store, '/api/bots', {
+    method: 'POST',
+    body: JSON.stringify({
+      parentSlug,
+      ...(name !== '' ? { name } : {}),
+      shape,
+      color,
+      subagent: { prompt, inheritParentPrompt },
+    }),
+  })),
+  saveSubagent: async ([slug, name, shape, color, prompt, inheritParentPrompt], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name, shape, color, subagent: { prompt, inheritParentPrompt } }),
+  })),
   loadProviders: async (_args, store): Promise<Result<'loadProviders'>> => {
     const p = await call(store, '/api/providers');
     return (p.ok && Array.isArray(p.body.providers) ? p.body.providers : []).map((x: any) => ({

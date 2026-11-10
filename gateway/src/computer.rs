@@ -28,7 +28,10 @@ pub fn etag(image: &str) -> String {
 /// Which listed server tab a watch frames. An unknown id falls back to the first.
 pub fn frame_tab<'a>(tabs: &'a [Value], asked: Option<&str>) -> Option<&'a Value> {
     if let Some(id) = asked.map(str::trim).filter(|id| !id.is_empty()) {
-        if let Some(hit) = tabs.iter().find(|tab| tab.get("id").and_then(Value::as_str) == Some(id)) {
+        if let Some(hit) = tabs
+            .iter()
+            .find(|tab| tab.get("id").and_then(Value::as_str) == Some(id))
+        {
             return Some(hit);
         }
     }
@@ -66,7 +69,13 @@ pub fn click_messages(x: f64, y: f64, width: u32, height: u32) -> Result<Vec<Val
 }
 
 /// A scroll in the same frame. `delta_y` is the wheel distance, not a fraction.
-pub fn wheel_message(x: f64, y: f64, width: u32, height: u32, delta_y: f64) -> Result<Value, &'static str> {
+pub fn wheel_message(
+    x: f64,
+    y: f64,
+    width: u32,
+    height: u32,
+    delta_y: f64,
+) -> Result<Value, &'static str> {
     if !delta_y.is_finite() {
         return Err("That scroll is not a distance.");
     }
@@ -134,7 +143,12 @@ impl Sessions {
             .unwrap_or_default();
         self.holds.insert(
             slug.to_string(),
-            Hold { tab: tab.to_string(), width, height, image },
+            Hold {
+                tab: tab.to_string(),
+                width,
+                height,
+                image,
+            },
         );
     }
 
@@ -198,27 +212,47 @@ pub async fn one_frame(t3: &T3, thread: &str, tab_id: &str) -> Result<Vec<u8>, S
     read_one_jpeg(&mut ws).await
 }
 
-pub async fn send_control(t3: &T3, thread: &str, tab_id: &str, action: &str) -> Result<Vec<u8>, String> {
+pub async fn send_control(
+    t3: &T3,
+    thread: &str,
+    tab_id: &str,
+    action: &str,
+) -> Result<Vec<u8>, String> {
     let message = control_message(action).map_err(str::to_string)?;
     deliver(t3, thread, tab_id, &[message]).await
 }
 
 /// Input on the held page. The messages are the click, scroll, text, or key, not a new take.
 /// The bytes are the next JPEG from that same interactive session.
-pub async fn send_input(t3: &T3, thread: &str, tab_id: &str, messages: &[Value]) -> Result<Vec<u8>, String> {
-    if messages.iter().any(|message| message.get("type").and_then(Value::as_str) == Some("takeControl")) {
+pub async fn send_input(
+    t3: &T3,
+    thread: &str,
+    tab_id: &str,
+    messages: &[Value],
+) -> Result<Vec<u8>, String> {
+    if messages
+        .iter()
+        .any(|message| message.get("type").and_then(Value::as_str) == Some("takeControl"))
+    {
         return Err("A click does not take control.".into());
     }
     deliver(t3, thread, tab_id, messages).await
 }
 
-async fn deliver(t3: &T3, thread: &str, tab_id: &str, messages: &[Value]) -> Result<Vec<u8>, String> {
+async fn deliver(
+    t3: &T3,
+    thread: &str,
+    tab_id: &str,
+    messages: &[Value],
+) -> Result<Vec<u8>, String> {
     let mut ws = connect(t3, thread, tab_id, true).await?;
     use futures_util::SinkExt;
     for message in messages {
-        ws.send(tokio_tungstenite::tungstenite::Message::text(message.to_string()))
-            .await
-            .map_err(|_| "The browser closed the connection.".to_string())?;
+        ws.send(tokio_tungstenite::tungstenite::Message::text(
+            message.to_string(),
+        ))
+        .await
+        .map_err(|_| "The browser closed the connection.".to_string())?;
     }
     match tokio::time::timeout(Duration::from_millis(800), read_one_jpeg(&mut ws)).await {
         Ok(Ok(bytes)) => Ok(bytes),
@@ -343,7 +377,9 @@ mod tests {
         assert_eq!(messages[0]["y"], 100);
         assert_eq!(messages[1]["x"], 400);
         assert_eq!(messages[2]["y"], 100);
-        assert!(messages.iter().all(|message| message["type"] != "takeControl"));
+        assert!(messages
+            .iter()
+            .all(|message| message["type"] != "takeControl"));
         assert!(click_messages(1.5, 0.0, 800, 400).is_err());
     }
 
@@ -399,7 +435,10 @@ mod tests {
     fn release_drops_the_held_page() {
         let mut sessions = Sessions::default();
         sessions.take("ada", "first", 800, 400);
-        assert_eq!(sessions.get("ada").map(|hold| hold.tab.as_str()), Some("first"));
+        assert_eq!(
+            sessions.get("ada").map(|hold| hold.tab.as_str()),
+            Some("first")
+        );
         sessions.release("ada");
         assert!(sessions.get("ada").is_none());
         let click = click_messages(0.5, 0.25, 800, 400).unwrap();

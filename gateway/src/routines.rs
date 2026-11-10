@@ -71,7 +71,7 @@ fn clock_12(time: &str) -> String {
     let h: u32 = h.trim().parse().unwrap_or(0) % 24;
     format!(
         "{}:{} {}",
-        if h % 12 == 0 { 12 } else { h % 12 },
+        if h.is_multiple_of(12) { 12 } else { h % 12 },
         m.get(..2).unwrap_or("00"),
         if h < 12 { "AM" } else { "PM" }
     )
@@ -110,7 +110,7 @@ pub fn schedule_label(task: &Value) -> String {
             let ms = schedule["everyMs"].as_u64().unwrap_or(0);
             if ms == 0 {
                 "On a timer".into()
-            } else if ms % 3_600_000 == 0 {
+            } else if ms.is_multiple_of(3_600_000) {
                 let hours = ms / 3_600_000;
                 if hours == 1 {
                     "Every hour".into()
