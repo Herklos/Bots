@@ -678,6 +678,10 @@ shape DraftPack
   files: string[]
   voices: string[]
 
+// The host locale, so the data module can pick the same string table as t().
+shape HostTime
+  locale: string
+
 fn nameOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.name, case none => "" }
 fn labelOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.ready ? (b.label != "" ? b.label : "Ready to chat") : "Getting set up…", case none => "" }
 fn initialsOf(name: string): string = name.trim().split(" ").filter(w => w != "").slice(0, 2).map(w => w.slice(0, 1).toUpperCase()).join("")
@@ -768,7 +772,8 @@ component Bots
   // The page the person is driving. Cleared after Release, including when they leave.
   state wantHold = false
   state heldTab = ""
-  resource session = loadSession() as shape Session else empty()
+  resource hostTime = exactTime() as shape HostTime
+  resource session = loadSession(hostTime.locale) as shape Session else empty()
   resource keptDrafts = loadDrafts() as shape DraftPack else empty()
   resource bots = loadBots(slug != "" ? slug : roomId) as shape Bot[] else empty()
   resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId) as shape Convo[] else empty()
@@ -779,13 +784,13 @@ component Bots
   resource about = loadAbout() as shape About else empty()
   resource prefs = loadPrefs() as shape Prefs else empty()
   resource vault = loadVault() as shape Login[] else empty()
-  resource usage = loadUsage(usageGate) as shape Usage else empty()
-  resource report = loadUsageReport(slug, usagePeriod, reportGate) as shape UsageReport else empty()
-  resource models = loadModels(slug, detailGate) as shape ModelList else empty()
-  resource routines = loadRoutines(slug, detailGate) as shape RoutineList else empty()
-  resource lineage = loadLineage(slug, detailGate) as shape Lineage else empty()
+  resource usage = loadUsage(usageGate, hostTime.locale) as shape Usage else empty()
+  resource report = loadUsageReport(slug, usagePeriod, reportGate, hostTime.locale) as shape UsageReport else empty()
+  resource models = loadModels(slug, detailGate, hostTime.locale) as shape ModelList else empty()
+  resource routines = loadRoutines(slug, detailGate, hostTime.locale) as shape RoutineList else empty()
+  resource lineage = loadLineage(slug, detailGate, hostTime.locale) as shape Lineage else empty()
   resource shelf = loadShelf(slug, libraryGate) as shape Shelf else empty()
-  resource computer = loadComputer(slug, computerGate) as shape Computer else empty()
+  resource computer = loadComputer(slug, computerGate, hostTime.locale) as shape Computer else empty()
   resource clipType = isTypeSupported(type="audio/mp4") as shape TypeSupport else empty()
   mutation signedIn as shape Reply refreshes session, bots
   mutation signedOut as shape Reply refreshes session, bots
@@ -1210,7 +1215,7 @@ component Bots
     if slug != "" and not pending(attached) and files.length > 0
       match files.at(0)
         case some(f)
-          send attached = uploadAttachment(slug, f.path, f.name, f.type)
+          send attached = uploadAttachment(slug, f.path, f.name, f.type, hostTime.locale)
         case none
   action afterAttach
     match attached
@@ -1273,7 +1278,7 @@ component Bots
     if slug != "" and not pending(attached) and e.files.length > 0
       match e.files.at(0)
         case some(f)
-          send attached = uploadAttachment(slug, f, "", "")
+          send attached = uploadAttachment(slug, f, "", "", hostTime.locale)
         case none
   action editAnswer(v: string)
     answerText = v
@@ -1294,7 +1299,7 @@ component Bots
       preventDefault()
       match e.files.at(0)
         case some(f)
-          send attached = uploadAttachment(slug, f, "", "")
+          send attached = uploadAttachment(slug, f, "", "", hostTime.locale)
         case none
   // Bot details: a Bot's name, colour, visibility and main status, and its deletion.
   action doRename(bslug: string, name: string)

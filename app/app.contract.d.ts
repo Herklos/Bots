@@ -15,20 +15,20 @@
 //   loadAbout: (args: []) => About
 //   loadBots: (args: [string]) => Bot[]
 //   loadChat: (args: [string, string]) => Chat
-//   loadComputer: (args: [string, string]) => Computer
+//   loadComputer: (args: [string, string, string]) => Computer
 //   loadConvos: (args: [string, string, string]) => Convo[]
 //   loadDrafts: (args: []) => DraftPack
-//   loadLineage: (args: [string, string]) => Lineage
-//   loadModels: (args: [string, string]) => ModelList
+//   loadLineage: (args: [string, string, string]) => Lineage
+//   loadModels: (args: [string, string, string]) => ModelList
 //   loadPrefs: (args: []) => Prefs
 //   loadProviders: (args: []) => Provider[]
 //   loadRoom: (args: [string]) => Room
-//   loadRoutines: (args: [string, string]) => RoutineList
-//   loadSession: (args: []) => Session
+//   loadRoutines: (args: [string, string, string]) => RoutineList
+//   loadSession: (args: [string]) => Session
 //   loadShelf: (args: [string, string]) => Shelf
 //   loadSuggestions: (args: []) => Suggestion[]
-//   loadUsage: (args: [string]) => Usage
-//   loadUsageReport: (args: [string, string, string]) => UsageReport
+//   loadUsage: (args: [string, string]) => Usage
+//   loadUsageReport: (args: [string, string, string, string]) => UsageReport
 //   loadVault: (args: []) => Login[]
 //   makeMainBot: (args: [string]) => Reply
 //   markSeen: (args: [string]) => Reply
@@ -55,7 +55,7 @@
 //   stageVoice: (args: [string, string, string, number]) => VoiceHeld
 //   stopRun: (args: [string, string]) => Reply
 //   updateGroup: (args: [string, string, string]) => Reply
-//   uploadAttachment: (args: [string, string, string, string]) => Attached
+//   uploadAttachment: (args: [string, string, string, string, string]) => Attached
 // The shapes. None is exported: name one by its source, `type Reply = Result<'computerControl'>`.
 //   Reply = { ok: boolean; error: string }
 //   Session = { authenticated: boolean; passwordRequired: boolean }
@@ -382,135 +382,136 @@ type T56 = T55[];
 type T57 = { "ok": T0; "tabs": T56; "image": T1; "error": T1; };
 type T58 = T1[];
 type T59 = { "stamp": T1; "texts": T58; "files": T58; "voices": T58; };
-type T60 = { "accessibilityTextSize": T0; };
-type T61 = { "prefersContrast": T1; };
-type T62 = { "permanentlyDenied": T0; "shouldShowRationale": T0; };
-type T63 = T62 | null;
-type T64 = "notDetermined" | "restricted" | "denied" | "authorized";
-type T65 = { "authorizationStatus": T64; };
-type T66 = T65 | null;
-type T67 = "granted" | "prompt" | "denied" | "unknown";
-type T68 = { "android": T63; "apple": T66; "available": T0; "state": T67; };
-type T69 = T27 | null;
-type T70 = { "max": T27; "min": T27; "step": T69; };
-type T71 = T1 | null;
-type T72 = { "refused": T71; };
-type T73 = "audioinput" | "videoinput" | "audiooutput";
-type T74 = { "deviceId": T1; "facingMode": T71; "groupId": T1; "kind": T73; "label": T1; };
-type T75 = T74[];
-type T76 = { "devices": T75; };
-type T77 = { "cameraId": T71; "isClientSilenced": T0; "lensFacing": T71; };
-type T78 = T77 | null;
-type T79 = { "deviceType": T71; "portName": T71; "portType": T71; "position": T71; };
-type T80 = T79 | null;
-type T81 = T70 | null;
-type T82 = T58 | null;
-type T83 = T0 | null;
-type T84 = { "aspectRatio": T81; "facingMode": T82; "frameRate": T81; "height": T81; "torch": T83; "width": T81; "zoom": T81; };
-type T85 = T84 | null;
-type T86 = "audio" | "video";
-type T87 = "idle" | "interrupted" | "background" | "silenced" | "in-use" | "multitasking" | "system-pressure";
-type T88 = T87 | null;
-type T89 = "live" | "ended";
-type T90 = { "aspectRatio": T69; "autoGainControl": T83; "channelCount": T69; "deviceId": T71; "echoCancellation": T83; "facingMode": T71; "frameRate": T69; "groupId": T71; "height": T69; "latency": T69; "noiseSuppression": T83; "resizeMode": T71; "sampleRate": T69; "sampleSize": T69; "torch": T83; "width": T69; "zoom": T69; };
-type T91 = { "android": T78; "apple": T80; "capabilities": T85; "enabled": T0; "id": T1; "kind": T86; "label": T1; "muteReason": T88; "muted": T0; "readyState": T89; "settings": T90; };
-type T92 = T91[];
-type T93 = { "active": T0; "id": T1; "tracks": T92; };
-type T94 = { "aspectRatio": T69; "autoGainControl": T83; "channelCount": T69; "deviceId": T71; "echoCancellation": T83; "facingMode": T71; "frameRate": T69; "groupId": T71; "height": T69; "latency": T69; "noiseSuppression": T83; "resizeMode": T71; "sampleRate": T69; "sampleSize": T69; "torch": T83; "width": T69; "zoom": T69; };
-type T95 = { "permanentlyDenied": T0; "shouldShowRationale": T0; };
-type T96 = T95 | null;
-type T97 = "undetermined" | "denied" | "granted" | "notDetermined" | "restricted" | "authorized";
-type T98 = { "recordPermission": T97; };
-type T99 = T98 | null;
-type T100 = "granted" | "prompt" | "denied" | "unknown";
-type T101 = { "android": T96; "apple": T99; "available": T0; "state": T100; };
-type T102 = { "x": T27; "y": T27; };
-type T103 = T27[];
-type T104 = { "audioLevel": T27; "levels": T103; "totalAudioEnergy": T27; "totalSamplesDuration": T27; };
-type T105 = "requested" | "interrupted" | "media-reset" | "background" | "track-ended" | "error" | "session-ended";
-type T106 = T105 | null;
-type T107 = { "duration": T27; "mimeType": T1; "path": T1; "size": T27; };
-type T108 = T107 | null;
-type T109 = "inactive" | "recording" | "paused";
-type T110 = { "audioBitsPerSecond": T69; "duration": T27; "error": T71; "id": T1; "mimeType": T1; "path": T1; "reason": T106; "result": T108; "state": T109; };
-type T111 = { "supported": T0; "type": T1; };
-type T112 = "mic" | "camcorder" | "voiceRecognition" | "voiceCommunication" | "unprocessed" | "voicePerformance";
-type T113 = T112 | null;
-type T114 = { "audioSource": T113; "privacySensitive": T83; };
-type T115 = "mixWithOthers" | "duckOthers" | "allowBluetoothHFP" | "allowBluetoothA2DP" | "defaultToSpeaker" | "bluetoothHighQualityRecording" | "farFieldInput" | "overrideMutedMicrophoneInterruption";
-type T116 = T115[];
-type T117 = T116 | null;
-type T118 = "builtInWideAngleCamera" | "builtInUltraWideCamera" | "builtInTelephotoCamera" | "builtInDualCamera" | "builtInDualWideCamera" | "builtInTripleCamera" | "builtInTrueDepthCamera" | "builtInLiDARDepthCamera" | "continuityCamera" | "deskViewCamera" | "external";
-type T119 = T118 | null;
-type T120 = "default" | "measurement" | "voiceChat" | "videoChat" | "videoRecording";
-type T121 = T120 | null;
-type T122 = "stereo" | "cardioid" | "omnidirectional";
-type T123 = T122 | null;
-type T124 = { "categoryOptions": T117; "deviceType": T119; "inputDataSource": T71; "mode": T121; "polarPattern": T123; "preferredIOBufferDuration": T69; "prefersNoInterruptionsFromSystemAlerts": T83; };
-type T125 = T94 | null;
-type T126 = T114 | null;
-type T127 = T124 | null;
-type T128 = { "audio": T83; "audioConstraints": T125; "video": T83; "videoConstraints": T125; "android": T126; "apple": T127; };
-type T129 = "builtInWideAngleCamera" | "builtInUltraWideCamera" | "builtInTelephotoCamera" | "builtInDualCamera" | "builtInDualWideCamera" | "builtInTripleCamera" | "builtInTrueDepthCamera" | "builtInLiDARDepthCamera" | "continuityCamera" | "deskViewCamera" | "external";
-type T130 = T129 | null;
-type T131 = "locked" | "autoExpose" | "continuousAutoExposure";
-type T132 = T131 | null;
-type T133 = T102 | null;
-type T134 = "locked" | "autoFocus" | "continuousAutoFocus";
-type T135 = T134 | null;
-type T136 = { "deviceType": T130; "exposureMode": T132; "exposurePointOfInterest": T133; "focusMode": T135; "focusPointOfInterest": T133; };
-type T137 = T136 | null;
-type T138 = { "aspectRatio": T69; "facingMode": T71; "frameRate": T69; "height": T69; "resizeMode": T71; "torch": T83; "track": T1; "width": T69; "zoom": T69; "apple": T137; };
-type T139 = { "track": T1; };
-type T140 = { "enabled": T0; "track": T1; };
-type T141 = { "track": T1; };
-type T142 = "aac" | "heAac" | "opus";
-type T143 = T142 | null;
-type T144 = "mpeg4" | "ogg" | "webm";
-type T145 = T144 | null;
-type T146 = { "audioEncoder": T143; "outputFormat": T145; };
-type T147 = "min" | "low" | "medium" | "high" | "max";
-type T148 = T147 | null;
-type T149 = "constant" | "longTermAverage" | "variableConstrained" | "variable";
-type T150 = T149 | null;
-type T151 = "aac" | "alac" | "linearPCM" | "opus";
-type T152 = T151 | null;
-type T153 = { "audioQuality": T148; "bitRateStrategy": T150; "formatID": T152; };
-type T154 = "constant" | "variable";
-type T155 = T154 | null;
-type T156 = T146 | null;
-type T157 = T153 | null;
-type T158 = { "audioBitrateMode": T155; "audioBitsPerSecond": T69; "mimeType": T71; "path": T1; "stream": T1; "android": T156; "apple": T157; };
-type T159 = { "recorder": T1; };
+type T60 = { "locale": T1; };
+type T61 = { "accessibilityTextSize": T0; };
+type T62 = { "prefersContrast": T1; };
+type T63 = { "permanentlyDenied": T0; "shouldShowRationale": T0; };
+type T64 = T63 | null;
+type T65 = "notDetermined" | "restricted" | "denied" | "authorized";
+type T66 = { "authorizationStatus": T65; };
+type T67 = T66 | null;
+type T68 = "granted" | "prompt" | "denied" | "unknown";
+type T69 = { "android": T64; "apple": T67; "available": T0; "state": T68; };
+type T70 = T27 | null;
+type T71 = { "max": T27; "min": T27; "step": T70; };
+type T72 = T1 | null;
+type T73 = { "refused": T72; };
+type T74 = "audioinput" | "videoinput" | "audiooutput";
+type T75 = { "deviceId": T1; "facingMode": T72; "groupId": T1; "kind": T74; "label": T1; };
+type T76 = T75[];
+type T77 = { "devices": T76; };
+type T78 = { "cameraId": T72; "isClientSilenced": T0; "lensFacing": T72; };
+type T79 = T78 | null;
+type T80 = { "deviceType": T72; "portName": T72; "portType": T72; "position": T72; };
+type T81 = T80 | null;
+type T82 = T71 | null;
+type T83 = T58 | null;
+type T84 = T0 | null;
+type T85 = { "aspectRatio": T82; "facingMode": T83; "frameRate": T82; "height": T82; "torch": T84; "width": T82; "zoom": T82; };
+type T86 = T85 | null;
+type T87 = "audio" | "video";
+type T88 = "idle" | "interrupted" | "background" | "silenced" | "in-use" | "multitasking" | "system-pressure";
+type T89 = T88 | null;
+type T90 = "live" | "ended";
+type T91 = { "aspectRatio": T70; "autoGainControl": T84; "channelCount": T70; "deviceId": T72; "echoCancellation": T84; "facingMode": T72; "frameRate": T70; "groupId": T72; "height": T70; "latency": T70; "noiseSuppression": T84; "resizeMode": T72; "sampleRate": T70; "sampleSize": T70; "torch": T84; "width": T70; "zoom": T70; };
+type T92 = { "android": T79; "apple": T81; "capabilities": T86; "enabled": T0; "id": T1; "kind": T87; "label": T1; "muteReason": T89; "muted": T0; "readyState": T90; "settings": T91; };
+type T93 = T92[];
+type T94 = { "active": T0; "id": T1; "tracks": T93; };
+type T95 = { "aspectRatio": T70; "autoGainControl": T84; "channelCount": T70; "deviceId": T72; "echoCancellation": T84; "facingMode": T72; "frameRate": T70; "groupId": T72; "height": T70; "latency": T70; "noiseSuppression": T84; "resizeMode": T72; "sampleRate": T70; "sampleSize": T70; "torch": T84; "width": T70; "zoom": T70; };
+type T96 = { "permanentlyDenied": T0; "shouldShowRationale": T0; };
+type T97 = T96 | null;
+type T98 = "undetermined" | "denied" | "granted" | "notDetermined" | "restricted" | "authorized";
+type T99 = { "recordPermission": T98; };
+type T100 = T99 | null;
+type T101 = "granted" | "prompt" | "denied" | "unknown";
+type T102 = { "android": T97; "apple": T100; "available": T0; "state": T101; };
+type T103 = { "x": T27; "y": T27; };
+type T104 = T27[];
+type T105 = { "audioLevel": T27; "levels": T104; "totalAudioEnergy": T27; "totalSamplesDuration": T27; };
+type T106 = "requested" | "interrupted" | "media-reset" | "background" | "track-ended" | "error" | "session-ended";
+type T107 = T106 | null;
+type T108 = { "duration": T27; "mimeType": T1; "path": T1; "size": T27; };
+type T109 = T108 | null;
+type T110 = "inactive" | "recording" | "paused";
+type T111 = { "audioBitsPerSecond": T70; "duration": T27; "error": T72; "id": T1; "mimeType": T1; "path": T1; "reason": T107; "result": T109; "state": T110; };
+type T112 = { "supported": T0; "type": T1; };
+type T113 = "mic" | "camcorder" | "voiceRecognition" | "voiceCommunication" | "unprocessed" | "voicePerformance";
+type T114 = T113 | null;
+type T115 = { "audioSource": T114; "privacySensitive": T84; };
+type T116 = "mixWithOthers" | "duckOthers" | "allowBluetoothHFP" | "allowBluetoothA2DP" | "defaultToSpeaker" | "bluetoothHighQualityRecording" | "farFieldInput" | "overrideMutedMicrophoneInterruption";
+type T117 = T116[];
+type T118 = T117 | null;
+type T119 = "builtInWideAngleCamera" | "builtInUltraWideCamera" | "builtInTelephotoCamera" | "builtInDualCamera" | "builtInDualWideCamera" | "builtInTripleCamera" | "builtInTrueDepthCamera" | "builtInLiDARDepthCamera" | "continuityCamera" | "deskViewCamera" | "external";
+type T120 = T119 | null;
+type T121 = "default" | "measurement" | "voiceChat" | "videoChat" | "videoRecording";
+type T122 = T121 | null;
+type T123 = "stereo" | "cardioid" | "omnidirectional";
+type T124 = T123 | null;
+type T125 = { "categoryOptions": T118; "deviceType": T120; "inputDataSource": T72; "mode": T122; "polarPattern": T124; "preferredIOBufferDuration": T70; "prefersNoInterruptionsFromSystemAlerts": T84; };
+type T126 = T95 | null;
+type T127 = T115 | null;
+type T128 = T125 | null;
+type T129 = { "audio": T84; "audioConstraints": T126; "video": T84; "videoConstraints": T126; "android": T127; "apple": T128; };
+type T130 = "builtInWideAngleCamera" | "builtInUltraWideCamera" | "builtInTelephotoCamera" | "builtInDualCamera" | "builtInDualWideCamera" | "builtInTripleCamera" | "builtInTrueDepthCamera" | "builtInLiDARDepthCamera" | "continuityCamera" | "deskViewCamera" | "external";
+type T131 = T130 | null;
+type T132 = "locked" | "autoExpose" | "continuousAutoExposure";
+type T133 = T132 | null;
+type T134 = T103 | null;
+type T135 = "locked" | "autoFocus" | "continuousAutoFocus";
+type T136 = T135 | null;
+type T137 = { "deviceType": T131; "exposureMode": T133; "exposurePointOfInterest": T134; "focusMode": T136; "focusPointOfInterest": T134; };
+type T138 = T137 | null;
+type T139 = { "aspectRatio": T70; "facingMode": T72; "frameRate": T70; "height": T70; "resizeMode": T72; "torch": T84; "track": T1; "width": T70; "zoom": T70; "apple": T138; };
+type T140 = { "track": T1; };
+type T141 = { "enabled": T0; "track": T1; };
+type T142 = { "track": T1; };
+type T143 = "aac" | "heAac" | "opus";
+type T144 = T143 | null;
+type T145 = "mpeg4" | "ogg" | "webm";
+type T146 = T145 | null;
+type T147 = { "audioEncoder": T144; "outputFormat": T146; };
+type T148 = "min" | "low" | "medium" | "high" | "max";
+type T149 = T148 | null;
+type T150 = "constant" | "longTermAverage" | "variableConstrained" | "variable";
+type T151 = T150 | null;
+type T152 = "aac" | "alac" | "linearPCM" | "opus";
+type T153 = T152 | null;
+type T154 = { "audioQuality": T149; "bitRateStrategy": T151; "formatID": T153; };
+type T155 = "constant" | "variable";
+type T156 = T155 | null;
+type T157 = T147 | null;
+type T158 = T154 | null;
+type T159 = { "audioBitrateMode": T156; "audioBitsPerSecond": T70; "mimeType": T72; "path": T1; "stream": T1; "android": T157; "apple": T158; };
 type T160 = { "recorder": T1; };
 type T161 = { "recorder": T1; };
-type T162 = { "interval": T69; "recorder": T1; };
-type T163 = { "type": T1; };
-type T164 = { "history": T69; "interval": T69; "track": T1; };
-type T165 = { "slug": T1; "id": T1; };
-type T166 = { "id": T27; "name": T1; "url": T1; "tab": T1; "params": T165; "fragment": T1; };
-type T167 = T166[];
-type T168 = { "name": T1; "stack": T167; };
-type T169 = T168[];
-type T170 = { "tab": T1; "tabs": T169; "next": T27; };
-type T171 = T4[];
-type T172 = T29[];
-type T173 = T23[];
-type T174 = T10[];
-type T175 = T2 | null;
-type T176 = T24 | null;
-type T177 = T30 | null;
-type T178 = T26 | null;
-type T179 = T93 | null;
-type T180 = T110 | null;
-type T181 = T91 | null;
-type T182 = T28 | null;
-type T183 = { "key": T1; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; "code": T1; "repeat": T0; "isComposing": T0; };
-type T184 = { "path": T1; "name": T1; "type": T1; "size": T27; "width": T69; "height": T69; "duration": T69; };
-type T185 = T184[];
-type T186 = { "offsetX": T27; "offsetY": T27; "files": T58; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; };
-type T187 = { "scrollLeft": T27; "scrollTop": T27; "scrollWidth": T27; "scrollHeight": T27; "clientWidth": T27; "clientHeight": T27; "firstVisibleKey": T71; "firstVisibleOffset": T27; };
-type T188 = { "text": T1; "files": T58; };
+type T162 = { "recorder": T1; };
+type T163 = { "interval": T70; "recorder": T1; };
+type T164 = { "type": T1; };
+type T165 = { "history": T70; "interval": T70; "track": T1; };
+type T166 = { "slug": T1; "id": T1; };
+type T167 = { "id": T27; "name": T1; "url": T1; "tab": T1; "params": T166; "fragment": T1; };
+type T168 = T167[];
+type T169 = { "name": T1; "stack": T168; };
+type T170 = T169[];
+type T171 = { "tab": T1; "tabs": T170; "next": T27; };
+type T172 = T4[];
+type T173 = T29[];
+type T174 = T23[];
+type T175 = T10[];
+type T176 = T2 | null;
+type T177 = T24 | null;
+type T178 = T30 | null;
+type T179 = T26 | null;
+type T180 = T94 | null;
+type T181 = T111 | null;
+type T182 = T92 | null;
+type T183 = T28 | null;
+type T184 = { "key": T1; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; "code": T1; "repeat": T0; "isComposing": T0; };
+type T185 = { "path": T1; "name": T1; "type": T1; "size": T27; "width": T70; "height": T70; "duration": T70; };
+type T186 = T185[];
+type T187 = { "offsetX": T27; "offsetY": T27; "files": T58; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; };
+type T188 = { "scrollLeft": T27; "scrollTop": T27; "scrollWidth": T27; "scrollHeight": T27; "clientWidth": T27; "clientHeight": T27; "firstVisibleKey": T72; "firstVisibleOffset": T27; };
+type T189 = { "text": T1; "files": T58; };
 
 /** Sources called by compiled mutation sends. */
 export type MutationSource = "computerControl" | "createBot" | "createGroup" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
@@ -525,23 +526,23 @@ export interface SourceMap {
   "dropVoice": { args: [T1, T1]; result: T2 };
   "hideBot": { args: [T1, T0]; result: T2 };
   "loadAbout": { args: []; result: T11 };
-  "loadBots": { args: [T1]; result: T171 };
+  "loadBots": { args: [T1]; result: T172 };
   "loadChat": { args: [T1, T1]; result: T15 };
-  "loadComputer": { args: [T1, T1]; result: T57 };
-  "loadConvos": { args: [T1, T1, T1]; result: T173 };
+  "loadComputer": { args: [T1, T1, T1]; result: T57 };
+  "loadConvos": { args: [T1, T1, T1]; result: T174 };
   "loadDrafts": { args: []; result: T59 };
-  "loadLineage": { args: [T1, T1]; result: T44 };
-  "loadModels": { args: [T1, T1]; result: T38 };
+  "loadLineage": { args: [T1, T1, T1]; result: T44 };
+  "loadModels": { args: [T1, T1, T1]; result: T38 };
   "loadPrefs": { args: []; result: T25 };
   "loadProviders": { args: []; result: T37 };
   "loadRoom": { args: [T1]; result: T20 };
-  "loadRoutines": { args: [T1, T1]; result: T41 };
-  "loadSession": { args: []; result: T3 };
+  "loadRoutines": { args: [T1, T1, T1]; result: T41 };
+  "loadSession": { args: [T1]; result: T3 };
   "loadShelf": { args: [T1, T1]; result: T54 };
-  "loadSuggestions": { args: []; result: T174 };
-  "loadUsage": { args: [T1]; result: T31 };
-  "loadUsageReport": { args: [T1, T1, T1]; result: T51 };
-  "loadVault": { args: []; result: T172 };
+  "loadSuggestions": { args: []; result: T175 };
+  "loadUsage": { args: [T1, T1]; result: T31 };
+  "loadUsageReport": { args: [T1, T1, T1, T1]; result: T51 };
+  "loadVault": { args: []; result: T173 };
   "makeMainBot": { args: [T1]; result: T2 };
   "markSeen": { args: [T1]; result: T2 };
   "pinBot": { args: [T1, T0]; result: T2 };
@@ -567,7 +568,7 @@ export interface SourceMap {
   "stageVoice": { args: [T1, T1, T1, T27]; result: T28 };
   "stopRun": { args: [T1, T1]; result: T2 };
   "updateGroup": { args: [T1, T1, T1]; result: T2 };
-  "uploadAttachment": { args: [T1, T1, T1, T1]; result: T26 };
+  "uploadAttachment": { args: [T1, T1, T1, T1, T1]; result: T26 };
 }
 
 export type Source = keyof SourceMap;

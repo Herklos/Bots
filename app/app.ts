@@ -1,4 +1,6 @@
 import type { Answer, Result, Sources, Storage } from './app.contract.d.ts';
+import en from './strings/en.json' with { type: 'json' };
+import fr from './strings/fr.json' with { type: 'json' };
 
 // Where the hbots gateway (the `hbots` binary) listens. A data module can't read the page's address
 // (no `location`, and `fetch` refuses a relative URL), so the web build is made with this placeholder
@@ -61,6 +63,46 @@ function lineOf(b: any): string {
 const initials = (name: string): string => name.trim().split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('') || '?';
 
 type Answered = { ok: true; body: any } | { ok: false; error: string };
+
+// Sentences the client writes. Probes in explain() stay the English wording call() returns.
+// The host locale (exactTime, fr* → French) picks the table the screen shows.
+const GATEWAY_PROBLEM = 'The gateway had a problem. Try again.';
+const REACH_GATEWAY = 'Can’t reach the gateway. Check that `hbots` is running, then try again.';
+const FILE_EMPTY = 'That file is empty.';
+const FILE_TOO_BIG = 'Attach a file under 8 MB.';
+const FILE_READ = 'Can’t read that file. Try another one.';
+const LOAD_KEY: Record<string, string> = {
+  usage: 'error.loadUsage',
+  models: 'error.loadModels',
+  providers: 'error.loadProviders',
+  routines: 'error.routines',
+  'what this Bot is doing': 'error.lineage',
+};
+const CLIENT_ERRORS: Record<string, string> = {
+  [GATEWAY_PROBLEM]: 'error.gatewayProblem',
+  [REACH_GATEWAY]: 'error.reach',
+  [FILE_EMPTY]: 'error.fileEmpty',
+  [FILE_TOO_BIG]: 'error.fileTooBig',
+  [FILE_READ]: 'error.fileRead',
+};
+let hostLocale = 'en';
+function noteLocale(locale: string) {
+  if (locale) hostLocale = locale;
+}
+function say(key: string): string {
+  const table: Record<string, string> = hostLocale.toLowerCase().startsWith('fr') ? fr : en;
+  const text = table[key] ?? (en as Record<string, string>)[key];
+  return typeof text === 'string' ? text : key;
+}
+function localize(error: string): string {
+  const key = CLIENT_ERRORS[error];
+  return key ? say(key) : error;
+}
+function loadSentence(what: string): string {
+  const key = LOAD_KEY[what];
+  return key ? say(key) : `Can’t load ${what}. Check that hbots is running, then try again.`;
+}
+
 async function call(store: any, path: string, init: RequestInit = {}): Promise<Answered> {
   const session = store.get('session');
   try {
@@ -68,11 +110,11 @@ async function call(store: any, path: string, init: RequestInit = {}): Promise<A
       headers: { 'content-type': 'application/json', ...(session ? { authorization: `Bearer ${session}` } : {}) } });
     const body = await res.json().catch(() => ({}));
     if (res.ok) return { ok: true, body };
-    return { ok: false, error: typeof body.error === 'string' ? body.error : 'The gateway had a problem. Try again.' };
+    return { ok: false, error: typeof body.error === 'string' ? body.error : GATEWAY_PROBLEM };
   } catch (e) {
     if ((e as { code?: string }).code === 'bake') throw e; // there is no gateway at build time
     console.log(`gateway request failed: ${path}: ${String((e as { code?: string }).code ?? '')} ${String(e)}`);
-    return { ok: false, error: 'Can’t reach the gateway. Check that `hbots` is running, then try again.' };
+    return { ok: false, error: REACH_GATEWAY };
   }
 }
 // A read that fails fails its resource, so Exact keeps the last answer while it retries.
@@ -87,7 +129,7 @@ function botsBody(store: any): Promise<any> {
   if (!botsInflight) botsInflight = read(store, '/api/bots').finally(() => { botsInflight = null; });
   return botsInflight;
 }
-const reply = (r: Answered) => (r.ok ? { ok: true, error: '' } : { ok: false, error: r.error });
+const reply = (r: Answered) => (r.ok ? { ok: true, error: '' } : { ok: false, error: localize(r.error) });
 
 // The screen says what failed. A stopped gateway, an old hbots, a signed-out
 // session, and a quiet T3 are not the same problem.
@@ -155,12 +197,12 @@ function fixtureChat(child: string) {
 
 function explain(error: string, what: string): string {
   const e = error.toLowerCase();
-  if (e.includes('reach the gateway')) return `Can’t load ${what}. Check that hbots is running, then try again.`;
-  if (e.includes('login')) return 'Sign in from Settings, then try again.';
-  if (e.includes('no conversation') || e.includes('getting set up')) return 'This Bot is still getting set up.';
-  if (e.includes('t3')) return 'T3 Code didn’t answer. Open T3 Code, then try again.';
-  if (e.includes('had a problem')) return 'Restart hbots so this screen can load, then try again.';
-  return error || `Can’t load ${what}. Check that hbots is running, then try again.`;
+  if (e.includes('reach the gateway')) return loadSentence(what);
+  if (e.includes('login')) return say('error.signIn');
+  if (e.includes('no conversation') || e.includes('getting set up')) return say('error.settingUp');
+  if (e.includes('t3')) return say('error.t3');
+  if (e.includes('had a problem')) return say('error.restart');
+  return error || loadSentence(what);
 }
 
 function libraryEntry(slug: string, e: any) {
@@ -302,11 +344,11 @@ function chatRows(slug: string, body: any, now: number, reactions: Record<string
 async function storeUpload(store: any, storage: Storage, slug: string, path: string, rawName: string, rawType: string) {
   const name = rawName !== '' ? rawName : decodeURIComponent(String(path).split('/').pop() ?? 'file');
   const mediaType = rawType !== '' ? rawType : guessType(name);
-  const fail = (error: string) => ({ ok: false, id: '', name: '', url: '', error });
+  const fail = (error: string) => ({ ok: false, id: '', name: '', url: '', error: localize(error) });
   try {
     const bytes = new Uint8Array(await storage.fs.readFile(String(path)));
-    if (bytes.byteLength === 0) return fail('That file is empty.');
-    if (bytes.byteLength > 8 << 20) return fail('Attach a file under 8 MB.');
+    if (bytes.byteLength === 0) return fail(FILE_EMPTY);
+    if (bytes.byteLength > 8 << 20) return fail(FILE_TOO_BIG);
     let binary = '';
     for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
     const data = btoa(binary);
@@ -322,7 +364,7 @@ async function storeUpload(store: any, storage: Storage, slug: string, path: str
     const id = String(r.body.id ?? r.body.attachmentId ?? '');
     return { ok: true, id, name: String(r.body.name ?? name ?? 'file'), url: `${API}/api/bots/${encodeURIComponent(slug)}/attachments/${encodeURIComponent(id)}`, error: '' };
   } catch {
-    return fail('Can’t read that file. Try another one.');
+    return fail(FILE_READ);
   }
 }
 
@@ -403,7 +445,8 @@ function draftRows(raw: string | null): { stamp: string; texts: string[]; files:
 }
 
 const sources: Sources = {
-  loadSession: async (_args, store): Promise<Result<'loadSession'>> => {
+  loadSession: async ([locale], store): Promise<Result<'loadSession'>> => {
+    noteLocale(locale);
     const r = await call(store, '/api/session');
     if (!r.ok) throw new Error(r.error);
     return { authenticated: r.body.authenticated === true, passwordRequired: r.body.passwordRequired === true };
@@ -609,7 +652,8 @@ const sources: Sources = {
       body: JSON.stringify(body),
     }));
   },
-  uploadAttachment: async ([slug, path, rawName, rawType], store, storage): Promise<Result<'uploadAttachment'>> => {
+  uploadAttachment: async ([slug, path, rawName, rawType, locale], store, storage): Promise<Result<'uploadAttachment'>> => {
+    noteLocale(locale);
     const saved = await storeUpload(store, storage, slug, path, rawName, rawType);
     return { ok: saved.ok, id: saved.id, name: saved.name, error: saved.error };
   },
@@ -633,7 +677,8 @@ const sources: Sources = {
     if (child !== '') body.child = child;
     return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/stop`, { method: 'POST', body: JSON.stringify(body) }));
   },
-  loadUsage: async ([gate], store): Promise<Result<'loadUsage'>> => {
+  loadUsage: async ([gate, locale], store): Promise<Result<'loadUsage'>> => {
+    noteLocale(locale);
     const blank = { ok: false, error: '', messages: 0, attachments: 0, vaultWrites: 0, iconFetches: 0 };
     if (gate !== '1') return blank;
     try {
@@ -645,7 +690,8 @@ const sources: Sources = {
       return { ...blank, error: explain(e instanceof Error ? e.message : String(e), 'usage') };
     }
   },
-  loadModels: async ([slug, gate], store): Promise<Result<'loadModels'>> => {
+  loadModels: async ([slug, gate, locale], store): Promise<Result<'loadModels'>> => {
+    noteLocale(locale);
     const none = { ok: true, error: '', current: '', instanceId: '', effort: '', currentName: '', providerName: '', effortLabel: '', efforts: [], providers: [] };
     if (slug === '' || gate !== '1') return none;
     const [m, p] = await Promise.all([call(store, `/api/bots/${encodeURIComponent(slug)}/model`), call(store, '/api/providers')]);
@@ -674,12 +720,13 @@ const sources: Sources = {
   setDefaultModel: async ([instanceId, model, effort], store) => reply(await call(store, '/api/settings', {
     method: 'PUT', body: JSON.stringify({ defaultModel: { instanceId, model, ...(effort !== '' ? { effort } : {}) } }),
   })),
-  loadRoutines: async ([slug, gate], store): Promise<Result<'loadRoutines'>> => {
+  loadRoutines: async ([slug, gate, locale], store): Promise<Result<'loadRoutines'>> => {
+    noteLocale(locale);
     if (slug === '' || gate !== '1') return { ok: true, tasks: [], error: '' };
     const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/routines`);
     if (!r.ok) {
       if (r.error.includes('no conversation') || r.error.includes('getting set up')) {
-        return { ok: true, tasks: [], error: 'This Bot is still getting set up.' };
+        return { ok: true, tasks: [], error: say('error.settingUp') };
       }
       return { ok: false, tasks: [], error: explain(r.error, 'routines') };
     }
@@ -698,7 +745,8 @@ const sources: Sources = {
       })),
     };
   },
-  loadLineage: async ([slug, gate], store): Promise<Result<'loadLineage'>> => {
+  loadLineage: async ([slug, gate, locale], store): Promise<Result<'loadLineage'>> => {
+    noteLocale(locale);
     if (slug === '' || gate !== '1') return { ok: true, rows: [], error: '' };
     if (slug === 'fixture') {
       return {
@@ -712,7 +760,7 @@ const sources: Sources = {
     const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/lineage`);
     if (!r.ok) {
       if (r.error.includes('no conversation') || r.error.includes('getting set up')) {
-        return { ok: true, rows: [], error: 'This Bot is still getting set up.' };
+        return { ok: true, rows: [], error: say('error.settingUp') };
       }
       return { ok: false, rows: [], error: explain(r.error, 'what this Bot is doing') };
     }
@@ -737,14 +785,15 @@ const sources: Sources = {
     const list = (k: string) => ((body[k] ?? []) as any[]).map(item);
     return { ok: true, total: Number(body.counts?.pictures ?? 0) + Number(body.counts?.files ?? 0) + Number(body.counts?.links ?? 0), pictures: list('pictures'), files: list('files'), links: list('links') };
   },
-  loadComputer: async ([slug, gate], store): Promise<Result<'loadComputer'>> => {
+  loadComputer: async ([slug, gate, locale], store): Promise<Result<'loadComputer'>> => {
+    noteLocale(locale);
     if (slug === '' || gate !== '1') return { ok: true, tabs: [], image: '', error: '' };
     const kept = frames[slug] ?? '';
     const [tag, image] = kept === '' ? ['', ''] : [kept.slice(0, kept.indexOf(':')), kept.slice(kept.indexOf(':') + 1)];
     const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/computer${tag !== '' ? `?since=${encodeURIComponent(tag)}` : ''}`);
     if (!r.ok) {
       if (r.error.includes('no conversation') || r.error.includes('getting set up')) {
-        return { ok: true, tabs: [], image: '', error: 'This Bot is still getting set up.' };
+        return { ok: true, tabs: [], image: '', error: say('error.settingUp') };
       }
       throw new Error(r.error);
     }
@@ -759,7 +808,8 @@ const sources: Sources = {
       tabs: tabs.map((t: any) => ({ id: String(t.id ?? ''), title: String(t.title ?? ''), url: String(t.url ?? '') })),
     };
   },
-  loadUsageReport: async ([slug, period, gate], store): Promise<Result<'loadUsageReport'>> => {
+  loadUsageReport: async ([slug, period, gate, locale], store): Promise<Result<'loadUsageReport'>> => {
+    noteLocale(locale);
     if (gate !== '1') return emptyReport('');
     const now = lastNow;
     const offset = now > 0 ? -new Date(now).getTimezoneOffset() : 0;
