@@ -34,11 +34,13 @@ pub fn transcript(projection: &Value) -> Value {
         match kind {
             "user_message" | "assistant_message" => {
                 let text = item["text"].as_str().unwrap_or("").trim().to_string();
-                if text.is_empty() && !live {
+                let attachments = item["attachments"].as_array().cloned().unwrap_or_default();
+                if text.is_empty() && attachments.is_empty() && !live {
                     continue;
                 }
                 messages.push(json!({
                     "id": item["id"], "role": if kind == "user_message" { "user" } else { "bot" }, "text": text,
+                    "attachments": attachments,
                     "at": item["startedAt"].as_str().or(item["updatedAt"].as_str()).unwrap_or(""), "streaming": live,
                 }));
             }
@@ -61,11 +63,12 @@ pub fn transcript(projection: &Value) -> Value {
 }
 
 /// The command a phone send dispatches; same fields as hbots `sendMessage`.
-pub fn send_command(thread: &str, text: &str) -> Value {
+/// `attachments` is the gateway's file records (`attachments::command_part`).
+pub fn send_command(thread: &str, text: &str, attachments: &[Value]) -> Value {
     let id = uuid::Uuid::new_v4().to_string();
     json!({
         "commandId": id, "type": "message.dispatch", "threadId": thread, "messageId": id, "text": text,
-        "attachments": [], "createdBy": "user", "creationSource": "web",
+        "attachments": attachments, "createdBy": "user", "creationSource": "web",
         "deliveryIntent": "steer", "dispatchMode": { "type": "start_immediately" },
     })
 }
@@ -93,5 +96,24 @@ mod tests {
             (t["working"].as_bool(), t["activeRunId"].as_str()),
             (Some(true), Some("r1"))
         );
+    }
+
+    #[test]
+    fn an_attachment_with_no_text_is_still_a_message() {
+        let p = json!({
+            "turnItems": [{
+                "id": "1", "type": "user_message", "text": "", "status": "completed",
+                "attachments": [{ "type": "file", "name": "notes.txt" }],
+            }],
+        });
+        let t = transcript(&p);
+        assert_eq!(t["messages"][0]["attachments"][0]["name"], "notes.txt");
+        let command = send_command(
+            "thread",
+            "",
+            &t["messages"][0]["attachments"].as_array().cloned().unwrap(),
+        );
+        assert_eq!(command["attachments"][0]["name"], "notes.txt");
+        assert_eq!(command["text"], "");
     }
 }

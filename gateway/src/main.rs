@@ -6,6 +6,7 @@
 //! gateway can run against the same home.
 mod access; // T4: Cloudflare Access JWTs.
 mod approvals; // T5: answering a pending request.
+mod attachments; // Chat files stored on the Bot.
 mod auth;
 mod bots;
 mod chat;
@@ -264,6 +265,16 @@ fn build(state: Arc<AppState>, tailscale: bool) -> Router {
         )
         .route("/api/bots/{slug}/chat", get(read_chat).post(send_chat))
         .route("/api/bots/{slug}/stop", post(stop_chat))
+        .route(
+            "/api/bots/{slug}/attachments",
+            get(attachments::list)
+                .post(attachments::create)
+                .layer(axum::extract::DefaultBodyLimit::max(12 << 20)),
+        )
+        .route(
+            "/api/bots/{slug}/attachments/{id}",
+            get(attachments::download).delete(attachments::remove),
+        )
         .route(
             "/api/bots/{slug}/requests/{id}/respond",
             post(respond_request),
@@ -847,12 +858,14 @@ async fn send_chat(
     body: Bytes,
 ) -> ApiResult<Json<Value>> {
     require_json(&h)?;
-    let text = parse(&body)?["text"]
+    let body = parse(&body)?;
+    let text = body["text"]
         .as_str()
         .map(str::trim)
         .unwrap_or("")
         .to_string();
-    if text.is_empty() {
+    let files = attachments::for_send(&s.cfg.bots_root, &slug, &body).await?;
+    if text.is_empty() && files.is_empty() {
         return Err(ApiError::bad_request("Write a message first."));
     }
     let thread = main_thread(&s, &slug).await?;
@@ -860,7 +873,7 @@ async fn send_chat(
         s.t3.rpc()
             .await
             .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
-    let command = chat::send_command(&thread, &text);
+    let command = chat::send_command(&thread, &text, &files);
     rpc.call("orchestration.dispatchCommand", command.clone())
         .await
         .map_err(|e| ApiError::new(502, e.to_string()))?;
