@@ -146,6 +146,23 @@ fn request_for(item: &Value) -> Value {
     }
 }
 
+/// Drops what a group put into this thread: a message framed `[Group "…"`, and everything the
+/// Bot did in answer, up to the next message from the person. A group has its own threads, so
+/// this only hides what an earlier version, or a stray dispatch, left in a one-to-one chat.
+pub fn without_group_turns(items: Vec<Value>) -> Vec<Value> {
+    let mut hidden = false;
+    items
+        .into_iter()
+        .filter(|raw| {
+            let item = if raw["item"].is_object() { &raw["item"] } else { raw };
+            if item["type"] == "user_message" {
+                hidden = item["text"].as_str().is_some_and(|t| t.starts_with("[Group \""));
+            }
+            !hidden
+        })
+        .collect()
+}
+
 /// The bubbles and cards of a thread projection, oldest first.
 pub fn transcript(projection: &Value) -> Value {
     transcript_for(projection, &Peers::new())
@@ -154,11 +171,13 @@ pub fn transcript(projection: &Value) -> Value {
 /// Like [`transcript`], with the lines between messages (`events`) and each message's files.
 /// `ordinal` orders messages and events together.
 pub fn transcript_for(projection: &Value, peers: &Peers) -> Value {
-    let items = projection["turnItems"]
-        .as_array()
-        .or_else(|| projection["visibleTurnItems"].as_array())
-        .cloned()
-        .unwrap_or_default();
+    let items = without_group_turns(
+        projection["turnItems"]
+            .as_array()
+            .or_else(|| projection["visibleTurnItems"].as_array())
+            .cloned()
+            .unwrap_or_default(),
+    );
     let mut messages = Vec::new();
     let mut events = Vec::new();
     let mut requests = Vec::new();
@@ -616,5 +635,22 @@ mod tests {
             .as_array()
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn a_groups_turns_stay_out_of_the_one_to_one_chat() {
+        let p = json!({ "turnItems": [
+            { "id": "1", "type": "user_message", "text": "hi", "status": "completed" },
+            { "id": "2", "type": "assistant_message", "text": "hello", "status": "completed" },
+            { "id": "3", "type": "user_message", "text": "[Group \"Duo\": Ada (@ada). You wrote:]\nask @tester", "status": "completed" },
+            { "id": "4", "type": "assistant_message", "text": "@tester what is 2+2?", "status": "completed" },
+            { "id": "5", "type": "dynamic_tool", "toolName": "t3_thread_send", "status": "completed" },
+            { "id": "6", "type": "user_message", "text": "thanks", "status": "completed" },
+            { "id": "7", "type": "assistant_message", "text": "welcome", "status": "completed" },
+        ]});
+        let t = transcript(&p);
+        let texts: Vec<&str> = t["messages"].as_array().unwrap().iter().map(|m| m["text"].as_str().unwrap()).collect();
+        assert_eq!(texts, vec!["hi", "hello", "thanks", "welcome"]);
+        assert!(t["events"].as_array().unwrap().is_empty(), "the Bot's messaging inside the group is hidden too");
     }
 }

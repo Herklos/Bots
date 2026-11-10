@@ -15,14 +15,17 @@ use std::path::PathBuf;
 use tokio::sync::Mutex;
 
 /// Bot-to-Bot wake-ups one message from the person can set off.
-pub const MAX_HOPS: u64 = 4;
+pub const MAX_HOPS: u64 = 2;
 
 #[derive(Clone, Debug)]
 pub struct Member {
     pub slug: String,
     pub title: String,
+    /// The member's thread for this group, empty until the first send creates it.
     pub thread_id: String,
     pub working: bool,
+    /// The Bot is set up (it has a main thread), so a group thread can be made for it.
+    pub provisioned: bool,
 }
 
 /// One message to send into a member's main thread.
@@ -86,6 +89,7 @@ impl Rooms {
             "members": slugs,
             "messages": [],
             "anchors": {},
+            "threads": {},
             "hops": 0,
         });
         push_room(&mut doc, room.clone())?;
@@ -133,6 +137,18 @@ impl Rooms {
         let stored = room.clone();
         write_doc(&self.path, &doc).await?;
         Ok(stored)
+    }
+
+    /// Remembers the thread made for one member of the group.
+    pub async fn set_thread(&self, room_id: &str, slug: &str, thread: &str) -> ApiResult<()> {
+        let _g = self.lock.lock().await;
+        let mut doc = read_doc(&self.path).await?;
+        let room = room_mut(&mut doc, room_id)?;
+        if !room["threads"].is_object() {
+            room["threads"] = json!({});
+        }
+        room["threads"][slug] = json!(thread);
+        write_doc(&self.path, &doc).await
     }
 
     pub async fn delete(&self, room_id: &str) -> ApiResult<()> {
@@ -228,8 +244,11 @@ impl Rooms {
             let Some(anchor) = room["anchors"][&member.slug].as_str().map(str::to_string) else {
                 continue;
             };
-            let Some(position) = messages.iter().position(|m| m["id"].as_str() == Some(&anchor))
-            else {
+            // T3 names a thread item `turn-item:message:<id>` after the id the command gave it.
+            let suffix = format!(":{anchor}");
+            let Some(position) = messages.iter().position(|m| {
+                m["id"].as_str().is_some_and(|id| id == anchor || id.ends_with(&suffix))
+            }) else {
                 continue;
             };
             for reply in &messages[position + 1..] {
@@ -309,7 +328,10 @@ fn distinct(slugs: &[String]) -> Vec<String> {
 fn clean_color(raw: &str) -> String {
     let raw = raw.trim();
     let avatar = &hbots_design::tokens().avatar;
-    if avatar.picker.iter().any(|c| c == raw) {
+    let name = raw.strip_prefix("brand.").unwrap_or(raw);
+    let named = avatar.picker.iter().any(|c| c == name) || (raw == "brand.default");
+    let hex = raw.len() == 7 && raw.starts_with('#') && raw[1..].chars().all(|c| c.is_ascii_hexdigit());
+    if named || hex {
         raw.to_string()
     } else {
         avatar.default.to_string()
@@ -372,7 +394,7 @@ fn frame(
             thread_id,
             message_id: uuid::Uuid::new_v4().to_string(),
             text: format!(
-                "[Group \"{title}\": {names}. {from} wrote:]\n{text}\n\n[Your reply is shared with the group. Write @slug to bring one member in.]"
+                "[Group \"{title}\": {names}. {from} wrote:]\n{text}\n\n[Your reply is shared with the group. Write @slug only when you need something from that member; never to thank or acknowledge.]"
             ),
         })
         .collect()
@@ -466,15 +488,15 @@ pub fn member_row(member: &Member) -> Value {
     json!({
         "slug": member.slug,
         "name": member.title,
-        "working": !member.thread_id.is_empty() && member.working,
-        "ready": !member.thread_id.is_empty(),
+        "working": member.provisioned && member.working,
+        "ready": member.provisioned,
         "state": face_state(member),
         "line": status_line(member),
     })
 }
 
 pub fn face_state(member: &Member) -> &'static str {
-    if member.thread_id.is_empty() {
+    if !member.provisioned {
         "asleep"
     } else if member.working {
         "working"
@@ -484,7 +506,7 @@ pub fn face_state(member: &Member) -> &'static str {
 }
 
 pub fn status_line(member: &Member) -> &'static str {
-    if member.thread_id.is_empty() {
+    if !member.provisioned {
         "Getting set up…"
     } else if member.working {
         "Working"
@@ -613,12 +635,14 @@ mod tests {
                 title: "Ada".into(),
                 thread_id: "thread-ada".into(),
                 working: true,
+                provisioned: true,
             },
             Member {
                 slug: "bea".into(),
                 title: "Bea".into(),
                 thread_id: "thread-bea".into(),
                 working: false,
+                provisioned: true,
             },
         ]
     }
@@ -711,12 +735,14 @@ mod tests {
                 title: "Ada".into(),
                 thread_id: "thread-ada".into(),
                 working: true,
+                provisioned: true,
             },
             Member {
                 slug: "bea".into(),
                 title: "Bea".into(),
                 thread_id: String::new(),
                 working: false,
+                provisioned: false,
             },
         ];
         let (_, dispatches) = rooms
@@ -762,6 +788,7 @@ mod tests {
             title: "Cy Park".into(),
             thread_id: "thread-cy".into(),
             working: false,
+            provisioned: true,
         });
         m
     }
@@ -796,6 +823,11 @@ mod tests {
             .unwrap();
         assert_eq!(odd["color"], hbots_design::tokens().avatar.default.as_str());
         assert_eq!(odd["shape"], "ball", "an unknown shape falls back to the ball");
+        let app = rooms
+            .create("App", "", "brand.violet", "egg", &["ada".into(), "bea".into()])
+            .await
+            .unwrap();
+        assert_eq!(app["color"], "brand.violet", "the app's own colour names are kept");
 
         let view = present(&room, &trio());
         assert_eq!(view["description"], "Plans the week");
@@ -937,6 +969,28 @@ mod tests {
         let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
         assert_eq!(room["messages"].as_array().unwrap().len(), 1, "only the person's message");
         assert!(wake.is_empty());
+    }
+
+    #[tokio::test]
+    async fn the_anchor_matches_the_item_id_t3_gives_a_dispatched_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = trio_room(&rooms).await;
+        let (_, woken) = rooms.send(&id, &trio(), "@ada hello", "m1", "t1").await.unwrap();
+        let anchor = format!("turn-item:message:{}", woken[0].message_id);
+        let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
+        threads.insert(
+            "ada".into(),
+            vec![
+                json!({ "id": "turn-item:message:older", "role": "user", "text": "earlier", "streaming": false }),
+                json!({ "id": "turn-item:provider:x:old", "role": "bot", "text": "old reply", "streaming": false }),
+                json!({ "id": anchor, "role": "user", "text": "framed", "streaming": false }),
+                json!({ "id": "turn-item:provider:x:new", "role": "bot", "text": "fresh reply", "streaming": false, "at": "a2" }),
+            ],
+        );
+        let (room, _) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        let texts: Vec<&str> = room["messages"].as_array().unwrap().iter().map(|m| m["text"].as_str().unwrap()).collect();
+        assert_eq!(texts, vec!["@ada hello", "fresh reply"], "only what follows our message is imported");
     }
 
     #[tokio::test]

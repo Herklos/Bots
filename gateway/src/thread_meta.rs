@@ -109,11 +109,13 @@ fn parsed(value: &Value) -> Value {
 /// The newest thing a person would recognize in this conversation, or None when it has none.
 /// `names` maps a thread to its Bot's name, for "Messaged <Bot>: ..." lines.
 pub fn latest_preview(projection: &Value, names: &HashMap<String, String>) -> Option<Value> {
-    let rows = projection["visibleTurnItems"]
-        .as_array()
-        .or_else(|| projection["turnItems"].as_array())
-        .cloned()
-        .unwrap_or_default();
+    let rows = crate::chat::without_group_turns(
+        projection["visibleTurnItems"]
+            .as_array()
+            .or_else(|| projection["turnItems"].as_array())
+            .cloned()
+            .unwrap_or_default(),
+    );
     let mut items: Vec<Value> = rows
         .into_iter()
         .map(|row| {

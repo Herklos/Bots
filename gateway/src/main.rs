@@ -696,13 +696,13 @@ async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
             &slugs,
         )
         .await?;
-    let (members, _) = room_snapshot(&s, &room).await?;
+    let (members, _) = room_snapshot(&s, &room, true).await?;
     Ok(Json(rooms::present(&room, &members)))
 }
 
 async fn room_get(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>> {
     let room = s.rooms.get(&id).await?;
-    let (members, threads) = room_snapshot(&s, &room).await?;
+    let (members, threads) = room_snapshot(&s, &room, false).await?;
     // Replies the members have finished since the last read join the room here, and a reply that
     // mentions another member wakes that member.
     let (room, wake) = s.rooms.sync(&id, &members, &threads).await?;
@@ -724,7 +724,7 @@ async fn room_update(
         known_bots(&s, &string_list(&body["members"])).await?;
     }
     let room = s.rooms.update(&id, &body).await?;
-    let (members, _) = room_snapshot(&s, &room).await?;
+    let (members, _) = room_snapshot(&s, &room, false).await?;
     Ok(Json(rooms::present(&room, &members)))
 }
 
@@ -743,7 +743,7 @@ async fn room_send(
     let body = parse(&body)?;
     let text = body["text"].as_str().unwrap_or("").trim().to_string();
     let room = s.rooms.get(&id).await?;
-    let (members, _) = room_snapshot(&s, &room).await?;
+    let (members, _) = room_snapshot(&s, &room, true).await?;
     let (stored, dispatches) = s
         .rooms
         .send(
@@ -781,20 +781,54 @@ async fn dispatch_room(s: &AppState, dispatches: &[rooms::Dispatch]) -> ApiResul
     Ok(sent)
 }
 
-/// Member rows for a room, with each Bot's working flag, and each member's thread messages.
+/// Member rows for a room, with each member's working flag, and each member's group thread messages.
+/// With `ensure`, a member who is set up but has no thread for this group gets one now. A group
+/// talks in its own threads, so nothing it says lands in a Bot's one-to-one conversation.
 async fn room_snapshot(
     s: &AppState,
     room: &Value,
+    ensure: bool,
 ) -> ApiResult<(Vec<rooms::Member>, std::collections::HashMap<String, Vec<Value>>)> {
     let bots = s.bots.list().await?;
     let rpc = s.t3.rpc().await.ok();
+    let room_id = room["id"].as_str().unwrap_or("").to_string();
+    let settings = s.settings().await;
     let mut members = Vec::new();
     let mut threads = std::collections::HashMap::new();
     for slug in string_list(&room["members"]) {
         let Some(bot) = bots.iter().find(|bot| bot["slug"].as_str() == Some(slug.as_str())) else {
             continue;
         };
-        let thread = bot["mainThreadId"].as_str().unwrap_or("").to_string();
+        let provisioned = bot["mainThreadId"].as_str().is_some_and(|t| !t.is_empty());
+        let mut thread = room["threads"][&slug].as_str().unwrap_or("").to_string();
+        if thread.is_empty() && ensure && provisioned {
+            if let (Some(rpc), Some(project)) = (&rpc, bot["projectId"].as_str()) {
+                let model = [&bot["model"], &settings["defaultModel"]]
+                    .into_iter()
+                    .find(|m| m.is_object())
+                    .cloned()
+                    .unwrap_or_else(provisioner::default_model);
+                let id = uuid::Uuid::new_v4().to_string();
+                let launched = rpc
+                    .call(
+                        "orchestration.launchThread",
+                        json!({
+                            "commandId": uuid::Uuid::new_v4().to_string(), "threadId": id, "projectId": project,
+                            "title": room["title"], "modelSelection": model,
+                            "runtimeMode": if settings["autoReview"] == false { "full-access" } else { "auto" },
+                            "interactionMode": "default", "workspaceStrategy": { "type": "root" },
+                        }),
+                    )
+                    .await;
+                match launched {
+                    Ok(_) => {
+                        s.rooms.set_thread(&room_id, &slug, &id).await?;
+                        thread = id;
+                    }
+                    Err(err) => tracing::warn!("group thread for {slug} failed: {err}"),
+                }
+            }
+        }
         let mut working = false;
         if !thread.is_empty() {
             if let Some(rpc) = &rpc {
@@ -819,6 +853,7 @@ async fn room_snapshot(
             title: bot["name"].as_str().unwrap_or("Bot").to_string(),
             thread_id: thread,
             working,
+            provisioned,
         });
     }
     Ok((members, threads))
