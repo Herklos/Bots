@@ -424,6 +424,35 @@ test "a group shows who said what and its mention chips"
   expect text "room-hint" == "Only the Bots you mention are woken."
   expect enabled "room-send"
 
+test "typing @ in a group offers bot slug completions"
+  size 1200x800
+  at "/group/fixture"
+  clock data
+  expect tree missing "mention-menu"
+  type "room-composer" "@"
+  expect tree has "mention-menu"
+  expect tree has "mention-opt-all"
+  expect tree has "mention-opt-ada"
+  expect tree has "mention-opt-bea"
+  type "room-composer" "@a"
+  expect tree has "mention-opt-ada"
+  expect tree has "mention-opt-all"
+  expect tree missing "mention-opt-bea"
+  tap "mention-opt-ada"
+  expect tree missing "mention-menu"
+  expect text "room-hint" == "Only the Bots you mention are woken."
+  expect enabled "room-send"
+
+test "typing @ in a bot chat offers bot slug completions"
+  size 1200x800
+  at "/bot/fixture"
+  clock data
+  type "composer" "@"
+  expect tree has "mention-menu"
+  expect tree has "mention-opt-fixture"
+  tap "mention-opt-fixture"
+  expect tree missing "mention-menu"
+
 test "a group has a details panel like a Bot, and deleting lives inside it"
   size 1200x800
   at "/group/fixture"
