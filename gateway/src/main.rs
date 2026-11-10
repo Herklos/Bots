@@ -1100,6 +1100,16 @@ async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
             checked_selection(&s, &patch["defaultModel"], &current["defaultModel"]).await?;
         patch["defaultModel"] = chosen;
     }
+    if let Some(mode) = patch.get("defaultRuntimeMode") {
+        if !matches!(
+            mode.as_str(),
+            Some("approval-required" | "auto" | "full-access")
+        ) {
+            return Err(ApiError::bad_request(
+                "defaultRuntimeMode must be approval-required, auto, or full-access",
+            ));
+        }
+    }
     let mut next = store::merge(&current, &patch);
     if let Some(beta) = patch.get("beta") {
         let beta = beta

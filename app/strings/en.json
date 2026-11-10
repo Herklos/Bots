@@ -210,6 +210,8 @@
   "settings.appearance": "Appearance",
   "settings.change": "Change",
   "settings.connected": "Connected",
+  "settings.defaultAccess": "Default approval",
+  "settings.defaultAccessNote": "Applies to new threads for Bots without their own approval setting.",
   "settings.defaultModel": "New Bots start with",
   "settings.disconnected": "Not connected",
   "settings.domainAccess": "Access",

@@ -210,6 +210,8 @@
   "settings.appearance": "Apparence",
   "settings.change": "Changer",
   "settings.connected": "Connecté",
+  "settings.defaultAccess": "Approbation par défaut",
+  "settings.defaultAccessNote": "S’applique aux nouveaux fils des Bots sans réglage d’approbation propre.",
   "settings.defaultModel": "Les nouveaux Bots commencent avec",
   "settings.disconnected": "Non connecté",
   "settings.domainAccess": "Accès",

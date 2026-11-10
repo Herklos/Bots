@@ -49,6 +49,7 @@
 //   sendMessage: (args: [string, string, string, string, string, string]) => Reply
 //   sendRoom: (args: [string, string]) => Reply
 //   sendVoice: (args: [string, number, string, string]) => Reply
+//   setDefaultMode: (args: [string]) => Reply
 //   setDefaultModel: (args: [string, string, string]) => Reply
 //   setModel: (args: [string, string, string, string, string]) => Reply
 //   setPassword: (args: [string]) => Reply
@@ -78,7 +79,7 @@
 //   FaceBit = { shape: string; color: string; state: string }
 //   Convo = { kind: string; key: string; id: string; name: string; color: string; shape: string; faces: FaceBit[]; line: string; time: string; at: string; unread: boolean; working: boolean; ready: boolean }
 //   Made = { ok: boolean; id: string; error: string }
-//   Prefs = { userName: string; theme: string; defaultInstance: string; defaultModel: string; defaultEffort: string }
+//   Prefs = { userName: string; theme: string; defaultInstance: string; defaultModel: string; defaultEffort: string; defaultRuntimeMode: string }
 //   Attached = { ok: boolean; id: string; name: string; error: string }
 //   VoiceHeld = { ok: boolean; id: string; name: string; url: string; seconds: number; error: string }
 //   Login = { id: string; title: string; website: string; username: string; hasPassword: boolean; hints: string; icon: string }
@@ -353,7 +354,7 @@ type T22 = { "shape": T1; "color": T1; "state": T1; };
 type T23 = T22[];
 type T24 = { "kind": T1; "key": T1; "id": T1; "name": T1; "color": T1; "shape": T1; "faces": T23; "line": T1; "time": T1; "at": T1; "unread": T0; "working": T0; "ready": T0; };
 type T25 = { "ok": T0; "id": T1; "error": T1; };
-type T26 = { "userName": T1; "theme": T1; "defaultInstance": T1; "defaultModel": T1; "defaultEffort": T1; };
+type T26 = { "userName": T1; "theme": T1; "defaultInstance": T1; "defaultModel": T1; "defaultEffort": T1; "defaultRuntimeMode": T1; };
 type T27 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
 type T28 = number;
 type T29 = { "ok": T0; "id": T1; "name": T1; "url": T1; "seconds": T28; "error": T1; };
@@ -543,7 +544,7 @@ type T212 = { "offsetX": T28; "offsetY": T28; "deltaX": T28; "deltaY": T28; "del
 type T213 = { "target": T1; "relatedTarget": T74; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultMode" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "computerControl": { args: [T1, T1, T1]; result: T2 };
@@ -591,6 +592,7 @@ export interface SourceMap {
   "sendMessage": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "sendRoom": { args: [T1, T1]; result: T2 };
   "sendVoice": { args: [T1, T28, T1, T1]; result: T2 };
+  "setDefaultMode": { args: [T1]; result: T2 };
   "setDefaultModel": { args: [T1, T1, T1]; result: T2 };
   "setModel": { args: [T1, T1, T1, T1, T1]; result: T2 };
   "setPassword": { args: [T1]; result: T2 };

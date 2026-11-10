@@ -243,7 +243,7 @@ function savedEffort(body: any): string {
   const model = body?.defaultModel;
   if (!model || typeof model !== 'object') return '';
   if (typeof model.effort === 'string' && model.effort !== '') return model.effort;
-  const option = Array.isArray(model.options) ? model.options.find((row: any) => row && row.id === 'effort') : undefined;
+  const option = Array.isArray(model.options) ? model.options.find((row: any) => row && (row.id === 'effort' || row.id === 'reasoningEffort')) : undefined;
   return typeof option?.value === 'string' ? option.value : '';
 }
 
@@ -650,9 +650,11 @@ const sources: Sources = {
       defaultInstance: String(body.defaultModel?.instanceId ?? ''),
       defaultModel: String(body.defaultModel?.model ?? ''),
       defaultEffort: savedEffort(body),
+      defaultRuntimeMode: String(body.defaultRuntimeMode ?? (body.autoReview === false ? "full-access" : "auto")),
     };
   },
   setUserName: async ([userName], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ userName }) })),
+  setDefaultMode: async ([defaultRuntimeMode], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ defaultRuntimeMode }) })),
   setTheme: async ([theme], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ theme }) })),
   setPassword: async ([password], store) => reply(await call(store, '/api/access/password', { method: 'PUT', body: JSON.stringify({ password }) })),
   loadVault: async (_args, store): Promise<Result<'loadVault'>> => {

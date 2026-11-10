@@ -521,6 +521,7 @@ shape Prefs
   defaultInstance: string
   defaultModel: string
   defaultEffort: string
+  defaultRuntimeMode: string
 
 // Result of uploading one chat attachment to the gateway.
 shape Attached
@@ -1545,6 +1546,9 @@ component Bots
   action afterModel
     if modelError == ""
       toast = t("toast.modelSaved")
+  action doDefaultMode(mode: string)
+    if not pending(prefsSaved)
+      send prefsSaved = setDefaultMode(mode)
   action doMakeDefault(instanceId: string, model: string, effort: string)
     if not pending(defaultSaved)
       send defaultSaved = setDefaultModel(instanceId, model, effort)
@@ -1916,7 +1920,7 @@ component Bots
                       button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="send"
                         Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), showComputerLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, openBrowser=doOpenBrowser, opening=openingBrowser, openError=openError, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
+                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), showComputerLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, openBrowser=doOpenBrowser, opening=openingBrowser, openError=openError, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
           else if e.name == "group"
             column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="room-header"
@@ -2034,6 +2038,16 @@ component Bots
                           text t("settings.noProvider") color="ink.muted" font="-exact-subheadline" padding="space.sm"
                         else
                           ModelPicker(providers=providers, instanceId=prefs.defaultInstance, model=prefs.defaultModel, effort=prefs.defaultEffort, prefix="default", pick=doMakeDefault)
+                    column gap="space.sm"
+                      text t("settings.defaultAccess") class=SectionLabel
+                      column class=GroupCard padding="space.md" gap="space.sm"
+                        row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("settings.defaultAccess")
+                          for mode in ["approval-required", "auto", "full-access"] key=mode
+                            button class=Segment appearance="none" role="radio" aria-checked=(prefs.defaultRuntimeMode == mode) press=doDefaultMode(mode) testId=`default-access-${mode}` border="1px solid surface.line" background-color=(prefs.defaultRuntimeMode == mode ? "surface.raised" : "transparent")
+                              text (mode == "approval-required" ? t("model.ask") : mode == "auto" ? t("model.auto") : t("model.fullAccess"))
+                        text t("settings.defaultAccessNote") color="ink.muted" font="-exact-footnote"
+                        if prefsError != ""
+                          text prefsError color="-exact-system-red" font="-exact-footnote"
                   else if settingsDomain == "access"
                     column gap="space.sm"
                       text t("settings.private") class=SectionLabel
@@ -2667,8 +2681,6 @@ component BotPanel
     models: ModelList
     modelsDown: bool
     pickModel: action
-    makeDefault: action
-    isDefault: bool
     modelError: string
     routines: RoutineList
     routinesDown: bool
@@ -2751,7 +2763,7 @@ component BotPanel
             Glyph(name="close", size=20)
       if page == "model"
         scroll flex=1 min-height=0
-          ModelPage(models=models, down=modelsDown, bot=bot, pick=pickModel, makeDefault=makeDefault, isDefault=isDefault, error=modelError)
+          ModelPage(models=models, down=modelsDown, bot=bot, pick=pickModel, error=modelError)
       else if page == "usage"
         scroll flex=1 min-height=0
           UsageView(report=report, down=reportDown, period=period, view=usageView, pickPeriod=pickPeriod, pickView=pickView, showBots=false)
@@ -2789,7 +2801,7 @@ component BotPanel
             if subSlug != ""
               text t("panel.model") class=SectionLabel
               for c in children.filter(c => c.slug == subSlug) key=c.slug
-                ModelPage(models=childModels, down=childModelsDown, bot=c, pick=pickModel, makeDefault=makeDefault, isDefault=isDefault, error=modelError)
+                ModelPage(models=childModels, down=childModelsDown, bot=c, pick=pickModel, error=modelError)
             if subError != ""
               text subError color="-exact-system-red" testId="subagent-error"
             if subSlug == ""
@@ -2945,8 +2957,6 @@ component ModelPage
     down: bool
     bot: Bot
     pick: action
-    makeDefault: action
-    isDefault: bool
     error: string
   action choose(i: string, m: string, e: string)
     pick(bot.slug, i, m, e, "")
@@ -2971,13 +2981,6 @@ component ModelPage
             button class=Segment appearance="none" role="radio" aria-checked=(models.runtimeMode == "full-access") press=chooseMode("full-access") testId="access-full" border="1px solid surface.line" background-color=(models.runtimeMode == "full-access" ? "surface.raised" : "transparent")
               text t("model.fullAccess")
           text t("model.nextThread") color="ink.muted" font="-exact-footnote" padding="0 space.xs"
-        row align-items="center" gap="space.md" padding="space.xs 0" border-top="1px solid surface.line"
-          column flex=1 gap="2px"
-            text t("model.useDefault") font-weight=500 font="-exact-subheadline"
-            text t("model.defaultNote") color="ink.muted" font="-exact-footnote"
-          button class=ToggleControl appearance="none" role="switch" aria-checked=isDefault press=makeDefault(models.instanceId, models.current, models.effort) aria-label=t("model.useDefault") testId="default-model"
-            row width=36 height=22 border-radius="radius.full" background-color=(isDefault ? "AccentColor" : "surface.line") align-items="center" justify-content=(isDefault ? "flex-end" : "flex-start")
-              column width=16 height=16 margin="0 3px" border-radius="radius.full" background-color="ink.light"
         if error != ""
           text error color="-exact-system-red" font="-exact-footnote" testId="model-save-error"
 
