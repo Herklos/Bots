@@ -189,6 +189,60 @@ type ChatRow = any;
 // A room the contract runner just created. Null keeps the built-in Design room.
 let fixtureMade: { title: string; description: string; color: string; shape: string; slugs: string[] } | null = null;
 
+// The model page's fixture: five levels in the order a provider would send them.
+const FIXTURE_EFFORTS = [
+  { id: 'low', label: 'Low' },
+  { id: 'medium', label: 'Medium' },
+  { id: 'high', label: 'High' },
+  { id: 'xhigh', label: 'Extra high' },
+  { id: 'max', label: 'Max' },
+];
+
+let fixtureChoice = { instanceId: 'claudeAgent', model: 'haiku', effort: 'high' };
+
+function fixtureProviders() {
+  const efforts = () => FIXTURE_EFFORTS.map((level) => ({ ...level }));
+  return [{
+    instanceId: 'claudeAgent',
+    name: 'Claude',
+    account: '',
+    models: [
+      { slug: 'haiku', name: 'Haiku', recommended: true, effort: 'medium', efforts: efforts() },
+      { slug: 'sonnet', name: 'Sonnet', recommended: false, effort: 'medium', efforts: efforts() },
+    ],
+  }];
+}
+
+function fixtureModelList() {
+  const providers = fixtureProviders();
+  const prov = providers.find((p) => p.instanceId === fixtureChoice.instanceId) ?? providers[0]!;
+  const mod = prov.models.find((m) => m.slug === fixtureChoice.model) ?? prov.models[0]!;
+  const effort = mod.efforts.some((level) => level.id === fixtureChoice.effort) ? fixtureChoice.effort : '';
+  return {
+    ok: true, error: '', current: mod.slug, instanceId: prov.instanceId, effort,
+    currentName: mod.name, providerName: prov.name,
+    effortLabel: mod.efforts.find((level) => level.id === effort)?.label ?? '',
+    efforts: mod.efforts, providers,
+  };
+}
+
+function rememberFixtureModel(instanceId: string, model: string, effort: string): { ok: boolean; error: string } {
+  const prov = fixtureProviders().find((p) => p.instanceId === instanceId);
+  const mod = prov?.models.find((row) => row.slug === model);
+  if (!prov || !mod) return { ok: false, error: 'That model is not available.' };
+  fixtureChoice = { instanceId, model, effort: mod.efforts.some((level) => level.id === effort) ? effort : '' };
+  return { ok: true, error: '' };
+}
+
+function savedEffort(body: any): string {
+  if (typeof body?.effort === 'string' && body.effort !== '') return body.effort;
+  const model = body?.defaultModel;
+  if (!model || typeof model !== 'object') return '';
+  if (typeof model.effort === 'string' && model.effort !== '') return model.effort;
+  const option = Array.isArray(model.options) ? model.options.find((row: any) => row && row.id === 'effort') : undefined;
+  return typeof option?.value === 'string' ? option.value : '';
+}
+
 const fixturePins: Record<string, PinRow[]> = {
   'fixture-thread': [
     { id: 'm1', text: 'Hello', missing: false },
@@ -586,7 +640,13 @@ const sources: Sources = {
   deleteBot: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'DELETE' })),
   loadPrefs: async (_args, store): Promise<Result<'loadPrefs'>> => {
     const body = await read(store, '/api/settings');
-    return { userName: String(body.userName ?? ''), theme: String(body.theme ?? 'system'), defaultInstance: String(body.defaultModel?.instanceId ?? ''), defaultModel: String(body.defaultModel?.model ?? '') };
+    return {
+      userName: String(body.userName ?? ''),
+      theme: String(body.theme ?? 'system'),
+      defaultInstance: String(body.defaultModel?.instanceId ?? ''),
+      defaultModel: String(body.defaultModel?.model ?? ''),
+      defaultEffort: savedEffort(body),
+    };
   },
   setUserName: async ([userName], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ userName }) })),
   setTheme: async ([theme], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ theme }) })),
@@ -805,6 +865,7 @@ const sources: Sources = {
     noteLocale(locale);
     const none = { ok: true, error: '', current: '', instanceId: '', effort: '', currentName: '', providerName: '', effortLabel: '', efforts: [], providers: [] };
     if (slug === '' || gate !== '1') return none;
+    if (slug === 'fixture') return fixtureModelList();
     const [m, p] = await Promise.all([call(store, `/api/bots/${encodeURIComponent(slug)}/model`), call(store, '/api/providers')]);
     if (!m.ok) return { ...none, ok: false, error: explain(m.error, 'models') };
     const providers = (p.ok && Array.isArray(p.body.providers) ? p.body.providers : []).map((x: any) => ({
@@ -825,9 +886,12 @@ const sources: Sources = {
       effortLabel: mod?.efforts.find((e: any) => e.id === effort)?.label ?? '', efforts: mod?.efforts ?? [], providers,
     };
   },
-  setModel: async ([slug, instanceId, model, effort], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/model`, {
-    method: 'PUT', body: JSON.stringify({ instanceId, model, ...(effort !== '' ? { effort } : {}) }),
-  })),
+  setModel: async ([slug, instanceId, model, effort], store) => {
+    if (slug === 'fixture') return rememberFixtureModel(instanceId, model, effort);
+    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/model`, {
+      method: 'PUT', body: JSON.stringify({ instanceId, model, ...(effort !== '' ? { effort } : {}) }),
+    }));
+  },
   setDefaultModel: async ([instanceId, model, effort], store) => reply(await call(store, '/api/settings', {
     method: 'PUT', body: JSON.stringify({ defaultModel: { instanceId, model, ...(effort !== '' ? { effort } : {}) } }),
   })),

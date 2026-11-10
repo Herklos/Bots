@@ -511,3 +511,22 @@ test "a subagent stays out of the inbox, Hidden, search, and group pickers"
   expect tree missing "group-edit-member-ada-junior-1"
   expect tree has "group-edit-member-fixture"
   expect tree has "group-edit-member-bea"
+
+test "the model page shows five effort levels and keeps the current one"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  tap "model-row"
+  clock data
+  expect tree has "model-page"
+  expect tree has "effort-low"
+  expect tree has "effort-medium"
+  expect tree has "effort-high"
+  expect tree has "effort-xhigh"
+  expect tree has "effort-max"
+  expect checked "effort-high"
+  tap "model-sonnet"
+  clock data
+  expect checked "model-sonnet"
+  expect checked "effort-high"

@@ -76,7 +76,7 @@
 //   FaceBit = { shape: string; color: string; state: string }
 //   Convo = { kind: string; key: string; id: string; name: string; color: string; shape: string; faces: FaceBit[]; line: string; time: string; at: string; unread: boolean; working: boolean; ready: boolean }
 //   Made = { ok: boolean; id: string; error: string }
-//   Prefs = { userName: string; theme: string; defaultInstance: string; defaultModel: string }
+//   Prefs = { userName: string; theme: string; defaultInstance: string; defaultModel: string; defaultEffort: string }
 //   Attached = { ok: boolean; id: string; name: string; error: string }
 //   VoiceHeld = { ok: boolean; id: string; name: string; url: string; seconds: number; error: string }
 //   Login = { id: string; title: string; website: string; username: string; hasPassword: boolean; hints: string; icon: string }
@@ -351,7 +351,7 @@ type T21 = { "shape": T1; "color": T1; "state": T1; };
 type T22 = T21[];
 type T23 = { "kind": T1; "key": T1; "id": T1; "name": T1; "color": T1; "shape": T1; "faces": T22; "line": T1; "time": T1; "at": T1; "unread": T0; "working": T0; "ready": T0; };
 type T24 = { "ok": T0; "id": T1; "error": T1; };
-type T25 = { "userName": T1; "theme": T1; "defaultInstance": T1; "defaultModel": T1; };
+type T25 = { "userName": T1; "theme": T1; "defaultInstance": T1; "defaultModel": T1; "defaultEffort": T1; };
 type T26 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
 type T27 = number;
 type T28 = { "ok": T0; "id": T1; "name": T1; "url": T1; "seconds": T27; "error": T1; };
