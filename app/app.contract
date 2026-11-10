@@ -1905,30 +1905,31 @@ component Bots
                     text t("group.emptyTitle") class=HeroTitle text-align="center"
                     text t("group.emptyBody") color="ink.muted" text-align="center" max-width="24rem"
                 else
-                  list id="room-log" appearance="none" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" flex=1 min-height=0 padding="space.sm space.lg space.xl" virtualized=true scroll-start="end" scrollFollowEnd=true testId="room-log"
-                    for msg in room.messages key=msg.id
-                      row justify-content=(msg.from == "user" ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="2px 0" testId=`room-msg-${msg.id}`
-                        if msg.from != "user"
-                          Face(shape=shapeOf(bots, msg.from), color=faceColor(colorOf(bots, msg.from)), state="idle", size=28, still=true)
-                        column gap="2px" max-width="82%" align-items=(msg.from == "user" ? "flex-end" : "flex-start")
+                  column flex=1 min-height=0 justify-content="flex-end" position="relative"
+                    list id="room-log" appearance="none" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" flex=1 min-height=0 padding="space.sm space.lg space.xl" virtualized=true scroll-start="end" scrollFollowEnd=true testId="room-log"
+                      for msg in room.messages key=msg.id
+                        row justify-content=(msg.from == "user" ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="2px 0" testId=`room-msg-${msg.id}`
                           if msg.from != "user"
-                            text msg.name font="-exact-footnote" font-weight=600 color="ink.muted" testId=`room-from-${msg.id}`
-                          if msg.from == "user"
-                            text msg.text class=Bubble testId=`room-text-${msg.id}`
-                              background-color="brand.default"
-                              color="ink.dark"
-                              border-radius="radius.lg"
-                              border-bottom-right-radius="radius.sm"
-                          else
-                            text msg.text markup="markdown" class=Bubble white-space="normal" testId=`room-text-${msg.id}`
-                              background-color="surface.bubble"
-                              color="-exact-label"
-                              border-radius="radius.lg"
-                              border-bottom-left-radius="radius.sm"
-                column width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.sm" flex-shrink=0
+                            Face(shape=shapeOf(bots, msg.from), color=faceColor(colorOf(bots, msg.from)), state="idle", size=28, still=true)
+                          column gap="2px" max-width="82%" align-items=(msg.from == "user" ? "flex-end" : "flex-start")
+                            if msg.from != "user"
+                              text msg.name font="-exact-footnote" font-weight=600 color="ink.muted" testId=`room-from-${msg.id}`
+                            if msg.from == "user"
+                              text msg.text class=Bubble testId=`room-text-${msg.id}`
+                                background-color="brand.default"
+                                color="ink.dark"
+                                border-radius="radius.lg"
+                                border-bottom-right-radius="radius.sm"
+                            else
+                              text msg.text markup="markdown" class=Bubble white-space="normal" testId=`room-text-${msg.id}`
+                                background-color="surface.bubble"
+                                color="-exact-label"
+                                border-radius="radius.lg"
+                                border-bottom-left-radius="radius.sm"
+                column width="calc(100% - 32px)" max-width="44rem" min-width=0 align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.sm" flex-shrink=0
                   if roomError != "" and not pending(roomSent)
                     text roomError color="-exact-system-red" font="-exact-footnote" testId="room-send-error"
-                  row gap="space.xs" flex-wrap="wrap" testId="mention-chips"
+                  row gap="space.xs" flex-wrap="wrap" width="100%" min-width=0 box-sizing="border-box" testId="mention-chips"
                     for m in room.members key=m.slug
                       button appearance="none" press=mention(m.slug) aria-label=t("group.mention", name=m.name) title=t("group.mention", name=m.name) testId=`mention-${m.slug}` min-height=32 padding="0 space.md 0 4px" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes(`@${m.slug}`) ? "surface.soft" : "surface.card") color="-exact-label"
                         row gap="space.xs" align-items="center"
