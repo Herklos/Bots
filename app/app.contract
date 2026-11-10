@@ -212,6 +212,9 @@ style ToggleControl
     opacity=0.4
 
 style SwatchControl
+  display="flex"
+  align-items="center"
+  justify-content="center"
   width=44
   height=44
   box-sizing="border-box"
