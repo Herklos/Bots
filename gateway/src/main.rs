@@ -19,6 +19,7 @@ mod icons; // Site icons cached under HBOTS_HOME/icons.
 mod library; // Files and records through the workspace adapter.
 mod lineage; // Subagents and delegated threads of one Bot.
 mod mcp;
+mod memory_tools;
 mod projects;
 mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-origin check.
 mod providers; // The providers and models T3 Code offers.

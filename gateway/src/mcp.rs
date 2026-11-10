@@ -16,6 +16,7 @@ fn tools(projects_on: bool) -> Value {
     })];
     list.extend(crate::vault_tools::tool_defs()); // T1 hook: vault_fill_*, vault_save_*, vault_secret_file
     list.extend(crate::subagent_tools::tool_defs());
+    list.extend(crate::memory_tools::tool_defs());
     // PROJECTS-HOOK (T3): the Projects tools are defined in projects_tools.rs.
     if projects_on {
         list.extend(crate::projects_tools::tools());
@@ -41,6 +42,9 @@ async fn call_tool(state: &AppState, name: &str, args: &Value) -> Result<Value, 
     }
     if crate::subagent_tools::is_subagent_tool(name) {
         return crate::subagent_tools::call(state, name, args).await;
+    }
+    if crate::memory_tools::is_memory_tool(name) {
+        return crate::memory_tools::call(state, name, args).await;
     }
     let projects_on = state.settings().await["beta"]["projects"] == true;
     if name.starts_with("projects_") && !projects_on {
