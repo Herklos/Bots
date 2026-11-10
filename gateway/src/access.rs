@@ -17,7 +17,7 @@ use std::{
 
 const KEY_TTL: Duration = Duration::from_secs(60 * 60);
 const FORCE_MIN_GAP: Duration = Duration::from_secs(30);
-/// Seconds of clock skew allowed on `exp` and `nbf`, as in Threebot.
+/// Seconds of clock skew allowed on `exp` and `nbf`.
 const SKEW_SECS: i64 = 30;
 const MAX_TOKEN_LEN: usize = 8192;
 
@@ -38,7 +38,7 @@ struct Keys {
 
 impl Access {
     /// Cloudflare Access from `CF_ACCESS_TEAM_DOMAIN`, `CF_ACCESS_AUD` and `CF_ACCESS_EMAILS`.
-    /// Off unless all three are set, as in Threebot.
+    /// Off unless all three are set.
     pub fn from_env(team_domain: &str, aud: &str, emails: &str) -> Option<Self> {
         let emails: Vec<String> = emails
             .split(',')

@@ -392,7 +392,7 @@ fn bearer(h: &HeaderMap) -> Option<&str> {
         .strip_prefix("Bearer ")
 }
 
-/// Who may use the app on this listener, as in Threebot: the signed-in Tailscale user on the tailnet
+/// Who may use the app on this listener: the signed-in Tailscale user on the tailnet
 /// listener; elsewhere a valid Cloudflare Access token, or a session when a password is set; with
 /// neither, open only when Cloudflare Access isn't configured either.
 async fn authed(s: &AppState, h: &HeaderMap, surface: exposure::Surface) -> bool {
@@ -536,7 +536,7 @@ async fn access_password(
 ) -> Result<Response, remote_access::AccessError> {
     let body =
         access_body(&body).map_err(|e| remote_access::AccessError::bad_request(e.message))?;
-    // A missing or null password removes it, as Threebot's `password ?? null` does.
+    // A missing or null password removes it, like `password ?? null` in the Node gateway.
     let password = match &body["password"] {
         Value::Null => None,
         Value::String(p) => Some(p.clone()),

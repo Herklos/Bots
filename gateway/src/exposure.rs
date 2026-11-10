@@ -189,7 +189,7 @@ async fn public_guard(State(s): State<Arc<AppState>>, mut req: Request, next: Ne
     req.extensions_mut().insert(Surface::Public);
     let path = req.uri().path().to_string();
     let read = matches!(*req.method(), Method::GET | Method::HEAD);
-    // The updater and `threebot up` wait on this in every mode.
+    // The updater and `hbots up` wait on this in every mode.
     if path == "/api/health" && *req.method() == Method::GET {
         return next.run(req).await;
     }
@@ -541,7 +541,7 @@ mod tests {
     async fn the_normal_public_port_needs_a_session_when_cloudflare_access_is_configured() {
         let dir = tempfile::tempdir().unwrap();
         let mut s = state(dir.path(), Exposure::default());
-        // Cloudflare Access on: a request without a valid token or session is refused, as in Threebot.
+        // Cloudflare Access on: a request without a valid token or session is refused.
         let access = crate::access::Access::new(
             "https://fixture.invalid".into(),
             "http://127.0.0.1:1/certs".into(),
