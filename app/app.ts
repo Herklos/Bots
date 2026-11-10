@@ -9,7 +9,7 @@ const HBOTS_URL = import.meta.env.HBOTS_URL ?? 'http://hbots-origin.invalid';
 const API: string = HBOTS_URL.replace(/\/$/, '');
 // Any gateway the person runs: their machine, a Tailscale address or a tunnel. Plain `http:` to a host
 // name on Apple also needs `appTransportSecurity.allowsArbitraryLoads` in app.json.
-export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session\nfs.read app:/tmp\nfs.write app:/tmp\ndevice.microphone purpose.microphone';
+export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session\nsecret.keep drafts\nfs.read app:/tmp\nfs.write app:/tmp\ndevice.microphone purpose.microphone';
 
 // The avatar palette: the names a Bot may carry, and the app tokens they map to. Its values
 // come from design/tokens.json: change them there.
@@ -230,7 +230,7 @@ function usageReport(b: any) {
 }
 
 // What the gateway last said the time was, and each Bot's last computer frame. A data module may keep
-// values like these between reads; the store only keeps the session.
+// values like these between reads. The session token and the draft map live in the secret store.
 let lastNow = 0;
 const frames: Record<string, string> = {};
 const threads: Record<string, string> = {};
@@ -323,6 +323,82 @@ async function storeUpload(store: any, storage: Storage, slug: string, path: str
   }
 }
 
+// Drafts live in the session store under `drafts`: one record per Bot, and one per child
+// (`slug/thread`). Text is capped at 8000. A room is never a key.
+const DRAFT_SEP = '\u001f';
+const FILE_SEP = '\\t';
+type DraftFile = { id: string; name: string };
+type DraftVoice = { hold: string; id: string; preview: string; seconds: number };
+type DraftEntry = { text: string; files: DraftFile[]; voice?: DraftVoice };
+
+function draftEntry(map: Record<string, DraftEntry>, key: string): DraftEntry {
+  return (map[key] ??= { text: '', files: [] });
+}
+
+function draftMap(texts: string[], files: string[], voices: string[]): Record<string, DraftEntry> {
+  const map: Record<string, DraftEntry> = {};
+  for (const row of texts) {
+    const cut = row.indexOf(DRAFT_SEP);
+    if (cut <= 0) continue;
+    draftEntry(map, row.slice(0, cut)).text = row.slice(cut + 1).slice(0, 8000);
+  }
+  for (const row of files) {
+    const cut = row.indexOf(DRAFT_SEP);
+    if (cut <= 0) continue;
+    const body = row.slice(cut + 1);
+    const nameAt = body.indexOf(FILE_SEP);
+    const id = (nameAt < 0 ? body : body.slice(0, nameAt)).trim();
+    if (!id) continue;
+    draftEntry(map, row.slice(0, cut)).files.push({ id, name: nameAt < 0 ? '' : body.slice(nameAt + FILE_SEP.length) });
+  }
+  for (const row of voices) {
+    const parts = row.split(DRAFT_SEP);
+    const key = parts[0] ?? '';
+    if (!key) continue;
+    const hold = parts[1] ?? '';
+    const id = parts[2] ?? '';
+    if (!hold && !id) continue;
+    const seconds = Number(parts[4] ?? 0);
+    draftEntry(map, key).voice = { hold, id, preview: parts[3] ?? '', seconds: Number.isFinite(seconds) ? seconds : 0 };
+  }
+  for (const key of Object.keys(map)) {
+    const entry = map[key]!;
+    if (entry.text === '' && entry.files.length === 0 && !entry.voice) delete map[key];
+  }
+  return map;
+}
+
+function draftRows(raw: string | null): { stamp: string; texts: string[]; files: string[]; voices: string[] } {
+  const texts: string[] = [];
+  const files: string[] = [];
+  const voices: string[] = [];
+  if (!raw) return { stamp: '', texts, files, voices };
+  let map: Record<string, DraftEntry> = {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return { stamp: '', texts, files, voices };
+    map = parsed as Record<string, DraftEntry>;
+  } catch {
+    return { stamp: '', texts, files, voices };
+  }
+  for (const [key, value] of Object.entries(map)) {
+    if (!key || !value || typeof value !== 'object') continue;
+    const text = typeof value.text === 'string' ? value.text.slice(0, 8000) : '';
+    if (text) texts.push(`${key}${DRAFT_SEP}${text}`);
+    for (const file of Array.isArray(value.files) ? value.files : []) {
+      const id = String(file?.id ?? '').trim();
+      if (!id) continue;
+      files.push(`${key}${DRAFT_SEP}${id}${FILE_SEP}${String(file?.name ?? '')}`);
+    }
+    const voice = value.voice;
+    if (voice && (voice.hold || voice.id)) {
+      const seconds = Number(voice.seconds);
+      voices.push(`${key}${DRAFT_SEP}${voice.hold ?? ''}${DRAFT_SEP}${voice.id ?? ''}${DRAFT_SEP}${voice.preview ?? ''}${DRAFT_SEP}${Number.isFinite(seconds) ? seconds : 0}`);
+    }
+  }
+  return { stamp: raw, texts, files, voices };
+}
+
 const sources: Sources = {
   loadSession: async (_args, store): Promise<Result<'loadSession'>> => {
     const r = await call(store, '/api/session');
@@ -336,8 +412,9 @@ const sources: Sources = {
   },
   signOut: async (_args, store) => { store.set('session', ''); return { ok: true, error: '' }; },
   loadBots: async ([focus], store): Promise<Result<'loadBots'>> => {
-    // Reserved slug for the contract runner, which has no gateway. A real inbox still fetches.
-    if (focus === 'fixture') {
+    // Reserved slugs for the contract runner, which has no gateway. A real inbox still fetches.
+    // `bea` is the second fixture Bot, so a draft test can open her and come back without a gateway.
+    if (focus === 'fixture' || focus === 'bea') {
       return [
         { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '' },
         { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true, shape: 'ball', pinned: false, working: false, line: 'Getting set up…', time: '' },
@@ -407,10 +484,10 @@ const sources: Sources = {
   },
   deleteLogin: async ([id], store) => reply(await call(store, `/api/vault/${encodeURIComponent(id)}`, { method: 'DELETE' })),
   loadConvos: async ([query, focus, room], store): Promise<Result<'loadConvos'>> => {
-    if (focus === 'fixture' || room === 'fixture') {
+    if (focus === 'fixture' || focus === 'bea' || room === 'fixture') {
       return [
-        { kind: 'bot', key: 'bot-fixture', id: 'fixture', name: 'Ada', color: fill('brand.default'), shape: 'ball', line: 'Ready to chat', time: '', at: '', unread: true, working: false, ready: true },
-        { kind: 'group', key: 'group-fixture', id: 'fixture', name: 'Design', color: 'brand.blue', shape: 'hex', line: 'Ada: On it', time: '', at: '', unread: false, working: false, ready: true },
+        { kind: 'bot', key: 'bot-fixture', id: 'fixture', name: 'Ada', color: fill('brand.default'), shape: 'ball', faces: [], line: 'Ready to chat', time: '', at: '', unread: true, working: false, ready: true },
+        { kind: 'group', key: 'group-fixture', id: 'fixture', name: 'Design', color: 'brand.blue', shape: 'hex', faces: [], line: 'Ada: On it', time: '', at: '', unread: false, working: false, ready: true },
       ];
     }
     const body = await botsBody(store);
@@ -420,7 +497,7 @@ const sources: Sources = {
     const bots = (body.bots as any[])
       .filter((b) => b.hidden !== true && (query !== '' || !(b.primary === true || b.pinned === true)) && match(String(b.name), String(b.label ?? '')))
       .map((b) => ({
-        kind: 'bot', key: `bot-${String(b.slug)}`, id: String(b.slug), name: String(b.name), color: fill(b.color), shape: String(b.shape ?? 'ball'),
+        kind: 'bot', key: `bot-${String(b.slug)}`, id: String(b.slug), name: String(b.name), color: fill(b.color), shape: String(b.shape ?? 'ball'), faces: [] as { shape: string; color: string; state: string }[],
         line: lineOf(b), time: when(b.preview?.at, now), at: at(b), unread: b.unread === true, working: b.working === true,
         ready: typeof b.mainThreadId === 'string',
       }));
@@ -432,6 +509,7 @@ const sources: Sources = {
         const said = typeof g.last?.at === 'string' ? g.last.at : '';
         return {
           kind: 'group', key: `group-${String(g.id)}`, id: String(g.id), name: String(g.title ?? ''), color: String(g.color ?? 'brand.default'), shape: String(g.shape ?? 'ball'),
+          faces: [] as { shape: string; color: string; state: string }[],
           line: last !== '' ? last : String(g.description ?? ''), time: when(said, now), at: said, unread: false, working: false, ready: true,
         };
       });
@@ -473,6 +551,7 @@ const sources: Sources = {
   loadChat: async ([slug, child], store): Promise<Result<'loadChat'>> => {
     if (slug === '') return blankChat('');
     if (slug === 'fixture') return fixtureChat(child);
+    if (slug === 'bea') return blankChat('bea');
     const query = child !== '' ? `?child=${encodeURIComponent(child)}` : '';
     const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat${query}`);
     const threadId = String(body.threadId ?? '');
@@ -710,6 +789,21 @@ const sources: Sources = {
       })),
       messages: messages.map((m: any) => ({ id: String(m.id ?? ''), name: String(m.name ?? ''), text: String(m.text ?? ''), from: String(m.from ?? '') })),
     };
+  },
+  loadDrafts: async (_args, store) => {
+    try {
+      return draftRows(store.get('drafts'));
+    } catch {
+      return { stamp: '', texts: [], files: [], voices: [] };
+    }
+  },
+  saveDrafts: async ([texts, files, voices], store) => {
+    try {
+      store.set('drafts', JSON.stringify(draftMap(texts, files, voices)));
+    } catch {
+      // The screen still holds the draft when the secret store is missing.
+    }
+    return { ok: true, error: '' };
   },
 };
 export const answer: Answer = (source, args, store, storage, native) => sources[source](args, store, storage, native);
