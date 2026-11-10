@@ -102,6 +102,15 @@ The gateway talks to a **harness**: the process that actually runs the agent. Th
 | [T3 Code](https://github.com/pingdotgg/t3code) | Wired today: RPC client, `/t3/*` proxy, provisioning, chat, routines. See `gateway/src/t3.rs`. |
 | Others | Designed for, not written. A backend is a module beside `t3.rs`. See [docs/architecture.md](docs/architecture.md). |
 
+Storage is a second seam, separate from the harness: where a Bot's folder (`AGENTS.md`, `memory/`, `.mcp.json`) lives.
+
+| Storage | State |
+|---|---|
+| Local disk (`~/.hbots/bots/<slug>/`) | Wired today. The harness reads the same folder as its workspace. |
+| Anything else (another machine, a container) | Planned. It needs a `Workspace` trait, and a remote harness needs a reachable `HBOTS_MCP_URL`. |
+
+The plan, in seven phases, is in [docs/backends.md](docs/backends.md). The brand and design guidelines are in [design/](design/README.md).
+
 ## Features
 
 | | |
