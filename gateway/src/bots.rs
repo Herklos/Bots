@@ -73,7 +73,7 @@ fn obj(v: &Value) -> Map<String, Value> {
     v.as_object().cloned().unwrap_or_default()
 }
 
-fn is_subagent(bot: &Value) -> bool {
+pub(crate) fn is_subagent(bot: &Value) -> bool {
     bot["role"] == "subagent" || bot["hideFromSidebar"] == true
 }
 

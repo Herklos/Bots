@@ -67,6 +67,7 @@ impl Rooms {
         color: &str,
         shape: &str,
         slugs: &[String],
+        bots: &[Value],
     ) -> ApiResult<Value> {
         let title = title.trim();
         if title.is_empty() {
@@ -81,6 +82,8 @@ impl Rooms {
                 return Err(ApiError::bad_request("Pick Bots that already exist."));
             }
         }
+        // `bots` is the list `Bots::list` already loaded. A subagent is not a second store.
+        refuse_subagent(&slugs, bots)?;
         let _g = self.lock.lock().await;
         let mut doc = read_doc(&self.path).await?;
         let room = json!({
@@ -101,10 +104,33 @@ impl Rooms {
     }
 
     /// Changes the fields present in `patch`. Messages stay.
-    pub async fn update(&self, room_id: &str, patch: &Value) -> ApiResult<Value> {
+    /// `bots` is the list `Bots::list` already loaded, used when `members` is replaced.
+    pub async fn update(&self, room_id: &str, patch: &Value, bots: &[Value]) -> ApiResult<Value> {
         let _g = self.lock.lock().await;
         let mut doc = read_doc(&self.path).await?;
         let room = room_mut(&mut doc, room_id)?;
+        let replacement = if let Some(members) = patch.get("members") {
+            let list: Vec<String> = members
+                .as_array()
+                .map(|l| {
+                    l.iter()
+                        .filter_map(|v| v.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let list = distinct(&list);
+            if list.len() < 2 {
+                return Err(ApiError::bad_request("A group needs two Bots."));
+            }
+            if list.iter().any(|slug| !crate::bots::valid_slug(slug)) {
+                return Err(ApiError::bad_request("Pick Bots that already exist."));
+            }
+            // A list that includes a subagent is refused before the file is written.
+            refuse_subagent(&list, bots)?;
+            Some(list)
+        } else {
+            None
+        };
         if let Some(title) = patch.get("title") {
             let title = title.as_str().unwrap_or("").trim();
             if title.is_empty() {
@@ -122,22 +148,7 @@ impl Rooms {
             room["shape"] = json!(crate::bots::shape_name(shape.as_str().unwrap_or(""))
                 .unwrap_or_else(|| "ball".into()));
         }
-        if let Some(members) = patch.get("members") {
-            let list: Vec<String> = members
-                .as_array()
-                .map(|l| {
-                    l.iter()
-                        .filter_map(|v| v.as_str().map(str::to_string))
-                        .collect()
-                })
-                .unwrap_or_default();
-            let list = distinct(&list);
-            if list.len() < 2 {
-                return Err(ApiError::bad_request("A group needs two Bots."));
-            }
-            if list.iter().any(|slug| !crate::bots::valid_slug(slug)) {
-                return Err(ApiError::bad_request("Pick Bots that already exist."));
-            }
+        if let Some(list) = replacement {
             room["members"] = json!(list);
         }
         let stored = room.clone();
@@ -639,6 +650,22 @@ fn message(id: &str, at: &str, from: &str, name: &str, text: &str) -> Value {
     json!({ "id": id, "at": at, "from": from, "name": name, "text": text })
 }
 
+/// A Bot with `role` subagent, or `hideFromSidebar`, cannot take a seat in a group.
+fn refuse_subagent(slugs: &[String], bots: &[Value]) -> ApiResult<()> {
+    for slug in slugs {
+        let Some(bot) = bots
+            .iter()
+            .find(|bot| bot["slug"].as_str() == Some(slug.as_str()))
+        else {
+            continue;
+        };
+        if crate::bots::is_subagent(bot) {
+            return Err(ApiError::new(409, "A subagent can't join a group."));
+        }
+    }
+    Ok(())
+}
+
 fn member_slugs(room: &Value) -> Vec<String> {
     room["members"]
         .as_array()
@@ -749,7 +776,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let created = rooms
-            .create("Design", "", "", "", &["ada".into(), "bea".into()])
+            .create("Design", "", "", "", &["ada".into(), "bea".into()], &[])
             .await
             .unwrap();
         let id = created["id"].as_str().unwrap().to_string();
@@ -785,7 +812,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = rooms
-            .create("Design", "", "", "", &["ada".into(), "bea".into()])
+            .create("Design", "", "", "", &["ada".into(), "bea".into()], &[])
             .await
             .unwrap()["id"]
             .as_str()
@@ -820,7 +847,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = rooms
-            .create("Design", "", "", "", &["ada".into(), "bea".into()])
+            .create("Design", "", "", "", &["ada".into(), "bea".into()], &[])
             .await
             .unwrap()["id"]
             .as_str()
@@ -898,6 +925,7 @@ mod tests {
                 "blue",
                 "hex",
                 &["ada".into(), "bea".into(), "cy".into()],
+                &[],
             )
             .await
             .unwrap()["id"]
@@ -927,6 +955,7 @@ mod tests {
                 "not-a-colour",
                 "not-a-shape",
                 &["ada".into(), "bea".into()],
+                &[],
             )
             .await
             .unwrap();
@@ -942,6 +971,7 @@ mod tests {
                 "brand.violet",
                 "egg",
                 &["ada".into(), "bea".into()],
+                &[],
             )
             .await
             .unwrap();
@@ -967,12 +997,15 @@ mod tests {
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let ada = vec!["ada".to_string()];
         assert!(rooms
-            .create(" ", "", "", "", &["ada".into(), "bea".into()])
+            .create(" ", "", "", "", &["ada".into(), "bea".into()], &[])
             .await
             .is_err());
-        assert!(rooms.create("Solo", "", "", "", &ada).await.is_err());
+        assert!(rooms.create("Solo", "", "", "", &ada, &[]).await.is_err());
         let twice = vec!["ada".to_string(), "ada".to_string()];
-        let err = rooms.create("Twin", "", "", "", &twice).await.unwrap_err();
+        let err = rooms
+            .create("Twin", "", "", "", &twice, &[])
+            .await
+            .unwrap_err();
         assert_eq!(
             err.message, "A group needs two Bots.",
             "a duplicate is not a second Bot"
@@ -986,7 +1019,7 @@ mod tests {
         let id = trio_room(&rooms).await;
         rooms.send(&id, &trio(), "hello", "m1", "t1").await.unwrap();
         let updated = rooms
-            .update(&id, &json!({ "title": "Crew", "description": "", "color": "red", "members": ["ada", "cy"] }))
+            .update(&id, &json!({ "title": "Crew", "description": "", "color": "red", "members": ["ada", "cy"] }), &[])
             .await
             .unwrap();
         assert_eq!(updated["title"], "Crew");
@@ -996,14 +1029,122 @@ mod tests {
         assert_eq!(updated["members"], json!(["ada", "cy"]));
         assert_eq!(updated["messages"].as_array().unwrap().len(), 1);
         assert!(rooms
-            .update(&id, &json!({ "members": ["ada"] }))
+            .update(&id, &json!({ "members": ["ada"] }), &[])
             .await
             .is_err());
-        assert!(rooms.update(&id, &json!({ "title": "  " })).await.is_err());
         assert!(rooms
-            .update("missing", &json!({ "title": "x" }))
+            .update(&id, &json!({ "title": "  " }), &[])
             .await
             .is_err());
+        assert!(rooms
+            .update("missing", &json!({ "title": "x" }), &[])
+            .await
+            .is_err());
+    }
+
+    async fn patch_bot(root: &std::path::Path, slug: &str, patch: Value) {
+        let path = root.join(slug).join(".bot").join("bot.json");
+        let text = tokio::fs::read_to_string(&path).await.unwrap();
+        let mut meta: Value = serde_json::from_str(&text).unwrap();
+        for (key, value) in patch.as_object().unwrap() {
+            meta[key] = value.clone();
+        }
+        tokio::fs::write(&path, serde_json::to_vec(&meta).unwrap())
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_subagent_cannot_take_a_seat_in_a_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("bots");
+        let bots = crate::bots::Bots::new(root.clone(), String::new(), String::new());
+        let ada = bots.create(&json!({ "name": "Ada" })).await.unwrap();
+        let bea = bots.create(&json!({ "name": "Bea" })).await.unwrap();
+        let ada_slug = ada["slug"].as_str().unwrap().to_string();
+        let bea_slug = bea["slug"].as_str().unwrap().to_string();
+        let kid = bots
+            .create(&json!({ "name": "Kid", "parentSlug": ada_slug }))
+            .await
+            .unwrap();
+        let kid_slug = kid["slug"].as_str().unwrap().to_string();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+
+        let loaded = bots.list().await.unwrap();
+        let err = rooms
+            .create(
+                "Design",
+                "",
+                "",
+                "",
+                &[ada_slug.clone(), kid_slug.clone()],
+                &loaded,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(err.status, 409);
+        assert!(rooms.list().await.unwrap().is_empty());
+
+        patch_bot(&root, &bea_slug, json!({ "hideFromSidebar": true })).await;
+        let loaded = bots.list().await.unwrap();
+        let err = rooms
+            .create(
+                "Design",
+                "",
+                "",
+                "",
+                &[ada_slug.clone(), bea_slug.clone()],
+                &loaded,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(err.status, 409);
+
+        patch_bot(
+            &root,
+            &bea_slug,
+            json!({ "hideFromSidebar": false, "role": "bot" }),
+        )
+        .await;
+        let loaded = bots.list().await.unwrap();
+        let created = rooms
+            .create(
+                "Design",
+                "",
+                "",
+                "",
+                &[ada_slug.clone(), bea_slug.clone()],
+                &loaded,
+            )
+            .await
+            .unwrap();
+        let id = created["id"].as_str().unwrap().to_string();
+
+        // A seat taken while Bea was a normal Bot stays until a member list is saved.
+        patch_bot(&root, &bea_slug, json!({ "role": "subagent" })).await;
+        let before = rooms.get(&id).await.unwrap();
+        let loaded = bots.list().await.unwrap();
+        let err = rooms
+            .update(
+                &id,
+                &json!({ "title": "Nope", "members": [ada_slug, kid_slug] }),
+                &loaded,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(err.status, 409);
+        let after = rooms.get(&id).await.unwrap();
+        assert_eq!(after["title"], before["title"]);
+        assert_eq!(after["members"], before["members"]);
+
+        let cy = bots.create(&json!({ "name": "Cy" })).await.unwrap();
+        let cy_slug = cy["slug"].as_str().unwrap().to_string();
+        let loaded = bots.list().await.unwrap();
+        let updated = rooms
+            .update(&id, &json!({ "members": [ada_slug, cy_slug] }), &loaded)
+            .await
+            .unwrap();
+        assert_eq!(updated["members"], json!([ada_slug, cy_slug]));
     }
 
     #[tokio::test]
@@ -1276,7 +1417,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = rooms
-            .create("Pair", "", "", "", &["ada".into(), "bea".into()])
+            .create("Pair", "", "", "", &["ada".into(), "bea".into()], &[])
             .await
             .unwrap()["id"]
             .as_str()
