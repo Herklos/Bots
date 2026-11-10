@@ -270,6 +270,7 @@ routes nav
     chat "/bot/:slug"
       library "/bot/:slug/library"
       computer "/bot/:slug/computer"
+    group "/group/:id"
     create "/new"
     settings "/settings"
       vault "/vault"
@@ -293,6 +294,7 @@ shape Bot
   main: bool
   hidden: bool
   ready: bool
+  unread: bool
 
 // One row of the transcript: a message, a card the Bot is waiting on, or the working line.
 // `head`/`tail` mark a run of same-sender messages, for the bubble corners and spacing.
@@ -304,11 +306,42 @@ shape Row
   files: string
   head: bool
   tail: bool
+  marks: string
+  quote: string
+  tokens: string
+
+shape Pin
+  id: string
+  text: string
+  missing: bool
 
 shape Chat
   slug: string
   rows: Row[]
   working: bool
+  partial: bool
+  readOnly: bool
+  pins: Pin[]
+  threadId: string
+
+shape RoomMember
+  slug: string
+  name: string
+  line: string
+  state: string
+  ready: bool
+  working: bool
+
+shape RoomMessage
+  id: string
+  name: string
+  text: string
+
+shape Room
+  id: string
+  title: string
+  members: RoomMember[]
+  messages: RoomMessage[]
 
 shape Prefs
   userName: string
@@ -466,6 +499,8 @@ fn attachmentName(entry: string): string = match entry.split("\\t").at(-1) { cas
 fn themeLabel(t: string): string = t == "system" ? "System" : t == "dark" ? "Dark" : "Light"
 // Face colours are plain names; Bot colours are brand.* tokens from the design package.
 fn faceColor(c: string): string = c == "brand.default" ? "teal" : c == "brand.blue" ? "blue" : c == "brand.violet" ? "violet" : c == "brand.pink" ? "pink" : c == "brand.orange" ? "orange" : c == "brand.green" ? "green" : c == "brand.black" ? "black" : c == "brand.white" ? "white" : c == "brand.brown" ? "brown" : c == "brand.red" ? "red" : c == "brand.amber" ? "amber" : c == "brand.yellow" ? "yellow" : c == "brand.cyan" ? "cyan" : c == "brand.purple" ? "purple" : c == "brand.magenta" ? "magenta" : c == "brand.gray" ? "gray" : "teal"
+// The open chat is clear. A hidden Bot keeps the mark until that chat is the open one.
+fn showUnread(unread: bool, open: bool, hidden: bool): bool = unread and not open and (hidden or not hidden)
 
 component Bots
   state password = ""
@@ -477,6 +512,10 @@ component Bots
   state newPassword = ""
   state botQuery = ""
   state vaultQuery = ""
+  state messageQuery = ""
+  state marksOn = true
+  state voiceHold = ""
+  state childThread = ""
   // Wide windows show the Bot's panel beside the chat, like Threebot's desktop.
   state wide = false
   // The right panel (the Bot's settings) opens and closes from the chat header's
@@ -489,8 +528,9 @@ component Bots
   state wantHold = false
   state heldTab = ""
   resource session = loadSession() as shape Session else empty()
-  resource bots = loadBots() as shape Bot[] else empty()
-  resource chat = loadChat(slug) as shape Chat else empty()
+  resource bots = loadBots(slug) as shape Bot[] else empty()
+  resource chat = loadChat(slug, childThread) as shape Chat else empty()
+  resource room = loadRoom(roomId) as shape Room else empty()
   resource prefs = loadPrefs() as shape Prefs else empty()
   resource vault = loadVault() as shape Login[] else empty()
   resource board = loadProjects() as shape Project[] else empty()
@@ -534,6 +574,10 @@ component Bots
   derive lastId = match chat.rows.at(-1) { case some(m) => m.id, case none => "" }
   derive locked = session.passwordRequired and not session.authenticated
   derive query = botQuery.trim().toLowerCase()
+  derive roomId = match stack(nav).filter(e => e.name == "group").at(-1) { case some(e) => e.params.id, case none => "" }
+  derive qtext = messageQuery.trim().toLowerCase()
+  derive shownRows = chat.rows.filter(m => m.kind != "message" or qtext == "" or m.text.toLowerCase().includes(qtext))
+  derive searchNote = qtext != "" and chat.partial ? "Search covers the loaded conversation." : ""
   derive visibleBots = bots.filter(b => not b.hidden and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
   derive hiddenBots = bots.filter(b => b.hidden and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
   derive vquery = vaultQuery.trim().toLowerCase()
@@ -614,6 +658,8 @@ component Bots
   action pull
     refresh bots
     refresh chat
+    if top(nav).name == "group"
+      refresh room
     if top(nav).name == "settings"
       refresh usage
     if onLibrary
@@ -638,9 +684,20 @@ component Bots
   // A wide window shows the list beside the open chat. Opening another Bot
   // replaces that chat, so the conversation swaps instead of stacking.
   action open(url: string)
+    childThread = ""
     nav = top(nav).name == "chat" and url.startsWith("/bot/") and not url.includes("/library") and not url.includes("/computer") ? replace(nav, url) : go(nav, url)
   action back
+    childThread = ""
     nav = back(nav)
+  action editChatQuery(v: string)
+    messageQuery = v
+  action toggleShownMark
+    let next = not marksOn
+    marksOn = next
+  action holdVoice
+    voiceHold = "voice.m4a"
+  action openChild(threadId: string)
+    childThread = threadId
   action openNew
     newName = ""
     newColor = "brand.default"
@@ -856,6 +913,8 @@ component Bots
                             if b.main
                               column color="AccentColor"
                                 Glyph(name="star", size=12)
+                            if showUnread(b.unread, slug == b.slug, b.hidden)
+                              text "New" color="AccentColor" font="-exact-footnote" font-weight=600 testId=`unread-${b.slug}`
                           text (b.ready ? (b.label != "" ? b.label : "Ready to chat") : "Getting set up…") color="ink.muted" font="-exact-footnote" overflow-wrap="break-word"
                   if hiddenBots.length > 0
                     text "Hidden Bots" padding="space.lg space.md space.xs" font="-exact-footnote" color="ink.muted"
@@ -864,6 +923,8 @@ component Bots
                         row gap="space.md" align-items="center"
                           Face(shape="ball", color=faceColor(b.color), state="asleep", size=32, still=true)
                           text b.name flex=1 color="ink.muted"
+                          if showUnread(b.unread, slug == b.slug, b.hidden)
+                            text "New" color="AccentColor" font="-exact-footnote" font-weight=600 testId=`unread-${b.slug}`
               row padding="space.sm space.md" border-top="1px solid surface.line"
                 link href="/settings" aria-label="Settings" title="Settings" testId="open-settings" color="-exact-label" text-decoration="none" flex=1 min-width=0
                   row align-items="center" gap="space.md"
@@ -910,12 +971,19 @@ component Bots
                       text "See what we can do together"
               else
                 column flex=1 min-height=0 justify-content="flex-end"
-                  list id="transcript" testId="transcript" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="space.xl 0" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true max-height="100%" min-height=0 flex-shrink=1
-                    for m in chat.rows key=m.id
+                  input type="search" class=SearchField value=messageQuery input=editChatQuery placeholder="Search this conversation" aria-label="Search this conversation" testId="chat-search" width="100%" max-width="46rem" align-self="center" box-sizing="border-box"
+                  if searchNote != ""
+                    text searchNote color="ink.muted" font="-exact-footnote" testId="search-note" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
+                  for p in chat.pins key=p.id
+                    text p.text color="ink.muted" font="-exact-footnote" testId=`pin-${p.id}` width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
+                  list id="transcript" testId=(chat.readOnly ? "child-transcript" : "transcript") width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="space.xl 0" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true max-height="100%" min-height=0 flex-shrink=1
+                    for m in shownRows key=m.id
                       column
                         if m.kind == "message"
                           row justify-content=(m.mine ? "flex-end" : "flex-start") padding=(m.head ? "space.sm space.lg" : "2px space.lg")
                             column gap="space.xs" max-width="82%" align-items=(m.mine ? "flex-end" : "flex-start")
+                              if m.quote != ""
+                                text m.quote color="ink.muted" font="-exact-footnote" testId=`quote-${m.id}`
                               if m.text != ""
                                 text m.text class=Bubble testId=`message-${m.id}`
                                   background-color=(m.mine ? "brand.default" : "surface.bubble")
@@ -929,6 +997,11 @@ component Bots
                                   background-color=(m.mine ? "brand.default" : "surface.card")
                                   color=(m.mine ? "ink.dark" : "-exact-secondary-label")
                                   border=(m.mine ? "none" : "1px solid surface.line")
+                              if m.tokens != ""
+                                text m.tokens color="ink.muted" font="-exact-footnote" testId=`tokens-${m.id}`
+                              if m.marks != "" and marksOn
+                                button class=QuietButton appearance="none" press=toggleShownMark aria-label="Reaction" testId=`react-${m.id}`
+                                  text m.marks
                         else if m.kind == "request"
                           row padding=(m.head ? "space.sm space.md" : "2px space.md")
                             column gap="space.xs" padding="space.md space.lg" border-radius="radius.lg" background-color="surface.card" border="1px solid surface.line" flex=1 testId=`request-${m.id}`
@@ -941,36 +1014,64 @@ component Bots
                           row padding="space.sm space.lg" gap="space.sm" align-items="center" testId="working"
                             Face(shape="ball", color=faceColor(colorOf(bots, e.params.slug)), state="working", size=24, still=false)
                             text "Working…" class=Bubble background-color="surface.bubble" color="-exact-secondary-label" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg"
-              if sendError != "" and not pending(sent)
-                text sendError color="-exact-system-red" padding="0 space.lg" testId="send-error"
-              if attachError != "" and not pending(attached)
-                text attachError color="-exact-system-red" padding="0 space.lg" testId="attach-error"
-              if pendingAttaches.length > 0
-                row gap="space.sm" flex-wrap="wrap" padding="0 space.md space.xs" testId="pending-files"
-                  for entry in pendingAttaches key=entry
-                    row gap="space.xs" align-items="center" padding="4px 6px 4px space.sm" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" max-width="100%" box-sizing="border-box"
-                      column color="ink.muted"
-                        Glyph(name="attach", size=14)
-                      text attachmentName(entry) font="-exact-footnote" color="-exact-label" overflow-wrap="anywhere" flex=1 min-width=0
-                      button class=IconControl appearance="none" press=dropPending(entry) aria-label=`Remove ${attachmentName(entry)}` title="Remove attachment" testId="pending-file" width=28 height=28
-                        Glyph(name="close", size=14)
-              row align-items="flex-end" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.md space.lg space.xl" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line"
-                button class=IconControl press=pickFiles disabled=(slug == "" or pending(attached) or pendingAttaches.length >= 8) appearance="none" aria-label="Attach a file" testId="attach" width=36 height=36 border-radius="radius.full"
-                  Glyph(name="attach", size=20)
-                input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
-                textarea id="composer" value=draft input=edit rows=1 field-sizing="content" max-height=140 placeholder="Write a message…" aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
-                if chat.working and not canSend
-                  button class=StopControl appearance="none" press=stop margin="2px 0" aria-label="Stop" testId="stop"
-                    Glyph(name="stop", size=16)
-                else
-                  button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label="Send" testId="send"
-                    Glyph(name="send", size=18)
+              if chat.readOnly
+                text "This thread is read only." color="ink.muted" padding="space.md space.lg space.xl" testId="child-readonly"
+              else
+                if sendError != "" and not pending(sent)
+                  text sendError color="-exact-system-red" padding="0 space.lg" testId="send-error"
+                if attachError != "" and not pending(attached)
+                  text attachError color="-exact-system-red" padding="0 space.lg" testId="attach-error"
+                if pendingAttaches.length > 0
+                  row gap="space.sm" flex-wrap="wrap" padding="0 space.md space.xs" testId="pending-files"
+                    for entry in pendingAttaches key=entry
+                      row gap="space.xs" align-items="center" padding="4px 6px 4px space.sm" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" max-width="100%" box-sizing="border-box"
+                        column color="ink.muted"
+                          Glyph(name="attach", size=14)
+                        text attachmentName(entry) font="-exact-footnote" color="-exact-label" overflow-wrap="anywhere" flex=1 min-width=0
+                        button class=IconControl appearance="none" press=dropPending(entry) aria-label=`Remove ${attachmentName(entry)}` title="Remove attachment" testId="pending-file" width=28 height=28
+                          Glyph(name="close", size=14)
+                row align-items="flex-end" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.md space.lg space.xl" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line"
+                  button class=IconControl press=pickFiles disabled=(slug == "" or pending(attached) or pendingAttaches.length >= 8) appearance="none" aria-label="Attach a file" testId="attach" width=36 height=36 border-radius="radius.full"
+                    Glyph(name="attach", size=20)
+                  button class=QuietButton appearance="none" press=holdVoice aria-label="Record a voice clip" testId="voice-record"
+                    text "Voice"
+                  if voiceHold != ""
+                    text voiceHold font="-exact-footnote" color="ink.muted" testId="voice-hold"
+                  input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
+                  textarea id="composer" value=draft input=edit rows=1 field-sizing="content" max-height=140 placeholder="Write a message…" aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
+                  if chat.working and not canSend
+                    button class=StopControl appearance="none" press=stop margin="2px 0" aria-label="Stop" testId="stop"
+                      Glyph(name="stop", size=16)
+                  else
+                    button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label="Send" testId="send"
+                      Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, pickTab=pickPanelTab, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, hide=doHide, makeMain=doMain, drop=doDropBot, go=open, models=models, modelsDown=failed(models), routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), modelError=modelError, routineSaveError=routineSaveError, routineChangeError=routineChangeError, pickModel=doPickModel, addRoutine=doAddRoutine, toggleRoutine=doToggleRoutine, runRoutine=doRunRoutine, dropRoutine=doDropRoutine, botUsage=botUsage, usageDown=failed(botUsage), retryDetails=retryDetails, library=library, libraryDown=failed(library), itemError=libError, removeError=libRemoveError, connectorSaveError=connectorSaveError, connectorRemoveError=connectorRemoveError, saveItem=doSaveLibrary, dropItem=doDropLibrary, saveConnector=doSaveConnector, dropConnector=doDropConnector, computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease)
+                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, pickTab=pickPanelTab, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, hide=doHide, makeMain=doMain, drop=doDropBot, go=open, models=models, modelsDown=failed(models), routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), modelError=modelError, routineSaveError=routineSaveError, routineChangeError=routineChangeError, pickModel=doPickModel, addRoutine=doAddRoutine, toggleRoutine=doToggleRoutine, runRoutine=doRunRoutine, dropRoutine=doDropRoutine, botUsage=botUsage, usageDown=failed(botUsage), retryDetails=retryDetails, library=library, libraryDown=failed(library), itemError=libError, removeError=libRemoveError, connectorSaveError=connectorSaveError, connectorRemoveError=connectorRemoveError, saveItem=doSaveLibrary, dropItem=doDropLibrary, saveConnector=doSaveConnector, dropConnector=doDropConnector, computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease, openChild=openChild)
           else if e.name == "library"
             LibraryScreen(route=e.id, slug=e.params.slug, name=nameOf(bots, e.params.slug), color=colorOf(bots, e.params.slug), library=library, down=failed(library), itemError=libError, removeError=libRemoveError, connectorSaveError=connectorSaveError, connectorRemoveError=connectorRemoveError, saveItem=doSaveLibrary, dropItem=doDropLibrary, saveConnector=doSaveConnector, dropConnector=doDropConnector)
           else if e.name == "computer"
             ComputerScreen(route=e.id, slug=e.params.slug, name=nameOf(bots, e.params.slug), color=colorOf(bots, e.params.slug), computer=computer, down=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease)
+          else if e.name == "group"
+            column class=Screen navigationKey=`${e.id}` position="absolute" inset=0
+              header class=PageHeader
+                button id="back" class=IconControl appearance="none" press=back aria-label="Back" title="Back"
+                  column rotate="180deg"
+                    Glyph(name="chevron", size=20)
+                text (room.title != "" ? room.title : "Room") role="heading" aria-level=1 class=PageTitle flex=1 testId="room-title"
+              if failed(room)
+                text "Can’t load this room. Check that hbots is running, then try again." color="-exact-system-red" padding="space.lg" testId="room-error"
+              else
+                column flex=1 min-height=0 padding="space.lg" gap="space.lg" max-width="46rem" width="100%" align-self="center" box-sizing="border-box"
+                  for m in room.members key=m.slug
+                    row gap="space.md" align-items="center" min-height=52
+                      Face(shape="ball", color="teal", state=m.state, size=40, still=(m.state != "working"))
+                      column gap="2px" flex=1 min-width=0
+                        text m.name font-weight=600 testId=`member-${m.slug}-name`
+                        text m.line color="ink.muted" font="-exact-footnote" testId=`member-${m.slug}-state`
+                  for msg in room.messages key=msg.id
+                    row gap="space.sm" align-items="center" min-height=44
+                      text msg.name font-weight=600
+                      text msg.text flex=1 min-width=0
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader
@@ -1118,6 +1219,7 @@ component BotEditor
     botUsage: BotUsage
     usageDown: bool
     retryDetails: action
+    openChild: action
   state name = bot.name
   state routineTitle = ""
   state routineKind = "hour"
@@ -1273,7 +1375,10 @@ component BotEditor
             row align-items="center" gap="space.md" min-height=52 border-top="1px solid surface.line" testId=`line-${line.id}`
               column flex=1 gap="space.xs" min-width=0
                 text line.title font="-exact-subheadline" font-weight=600 overflow-wrap="anywhere"
-                text (line.remote ? "On another machine" : line.threadId != "" ? "On this machine" : "") color="ink.muted" font="-exact-footnote"
+                text (line.remote ? "On another machine" : line.threadId != "" ? "On this machine" : "") color="ink.muted" font="-exact-footnote" testId=`where-${line.id}`
+              if not line.remote and line.threadId != ""
+                button class=QuietButton appearance="none" press=openChild(line.threadId) min-height=44 testId=`open-${line.id}`
+                  text "Open"
               row class=Chip
                 text line.status
       if bot.main
@@ -1333,6 +1438,7 @@ component BotPanel
     botUsage: BotUsage
     usageDown: bool
     retryDetails: action
+    openChild: action
     library: Library
     libraryDown: bool
     itemError: string
@@ -1368,7 +1474,7 @@ component BotPanel
       column id="bot-tab-details" role="tabpanel" aria-label="Details" display=(tab == "details" ? "flex" : "none") flex=1 min-height=0
         scroll id=`panel-${bot.slug}` flex=1 min-height=0
           column width="100%" box-sizing="border-box" padding="space.lg"
-            BotEditor(bot=bot, error=error, rename=rename, recolour=recolour, hide=hide, makeMain=makeMain, drop=drop, go=go, models=models, modelsDown=modelsDown, routines=routines, routinesDown=routinesDown, lineage=lineage, lineageDown=lineageDown, modelError=modelError, routineSaveError=routineSaveError, routineChangeError=routineChangeError, pickModel=pickModel, addRoutine=addRoutine, toggleRoutine=toggleRoutine, runRoutine=runRoutine, dropRoutine=dropRoutine, botUsage=botUsage, usageDown=usageDown, retryDetails=retryDetails)
+            BotEditor(bot=bot, error=error, rename=rename, recolour=recolour, hide=hide, makeMain=makeMain, drop=drop, go=go, models=models, modelsDown=modelsDown, routines=routines, routinesDown=routinesDown, lineage=lineage, lineageDown=lineageDown, modelError=modelError, routineSaveError=routineSaveError, routineChangeError=routineChangeError, pickModel=pickModel, addRoutine=addRoutine, toggleRoutine=toggleRoutine, runRoutine=runRoutine, dropRoutine=dropRoutine, botUsage=botUsage, usageDown=usageDown, retryDetails=retryDetails, openChild=openChild)
       column id="bot-tab-library" role="tabpanel" aria-label="Library" display=(tab == "library" ? "flex" : "none") flex=1 min-height=0
         LibraryContent(inPanel=true, slug=bot.slug, name=bot.name, color=bot.color, library=library, down=libraryDown, itemError=itemError, removeError=removeError, connectorSaveError=connectorSaveError, connectorRemoveError=connectorRemoveError, saveItem=saveItem, dropItem=dropItem, saveConnector=saveConnector, dropConnector=dropConnector)
       column id="bot-tab-computer" role="tabpanel" aria-label="Computer" display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0

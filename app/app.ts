@@ -63,6 +63,51 @@ const reply = (r: Answered) => (r.ok ? { ok: true, error: '' } : { ok: false, er
 
 // The screen says what failed. A stopped gateway, an old hbots, a signed-out
 // session, and a quiet T3 are not the same problem.
+const NOT_IN_VIEW = 'This message is not in view.';
+
+function tokenText(tokens: unknown): string {
+  if (!tokens || typeof tokens !== 'object') return '';
+  const n = (key: string): number => {
+    const value = (tokens as Record<string, unknown>)[key];
+    return typeof value === 'number' ? value : 0;
+  };
+  return `${n('inputTokens')} in, ${n('outputTokens')} out, ${n('cachedInputTokens')} read from cache, ${n('cacheCreationTokens')} written to cache.`;
+}
+
+function marksOf(reactions: unknown, id: string): string {
+  if (!reactions || typeof reactions !== 'object') return '';
+  const list = (reactions as Record<string, unknown>)[id];
+  if (!Array.isArray(list)) return '';
+  return list.map((mark) => String(mark)).filter(Boolean).join('');
+}
+
+function quoteOf(replyTo: unknown, id: string): string {
+  if (!replyTo || typeof replyTo !== 'object') return '';
+  const entry = (replyTo as Record<string, unknown>)[id];
+  if (!entry || typeof entry !== 'object') return '';
+  return String((entry as { text?: unknown }).text ?? '');
+}
+
+function blankChat(slug: string) {
+  return { slug, rows: [] as ChatRow[], working: false, partial: false, readOnly: false, pins: [] as PinRow[], threadId: '' };
+}
+
+type ChatRow = {
+  id: string; kind: string; mine: boolean; text: string; files: string;
+  head: boolean; tail: boolean; marks: string; quote: string; tokens: string;
+};
+type PinRow = { id: string; text: string; missing: boolean };
+
+function withRuns(raw: Omit<ChatRow, 'head' | 'tail'>[]): ChatRow[] {
+  return raw.map((row, i) => {
+    const prev = raw[i - 1];
+    const next = raw[i + 1];
+    const samePrev = !!prev && prev.kind === 'message' && row.kind === 'message' && prev.mine === row.mine;
+    const sameNext = !!next && next.kind === 'message' && row.kind === 'message' && next.mine === row.mine;
+    return { ...row, head: !samePrev, tail: !sameNext };
+  });
+}
+
 function explain(error: string, what: string): string {
   const e = error.toLowerCase();
   if (e.includes('reach the gateway')) return `Can’t load ${what}. Check that hbots is running, then try again.`;
@@ -106,11 +151,33 @@ const sources: Sources = {
     return reply(r);
   },
   signOut: async (_args, store) => { store.set('session', ''); return { ok: true, error: '' }; },
-  loadBots: async (_args, store): Promise<Result<'loadBots'>> => {
+  loadBots: async ([focus], store): Promise<Result<'loadBots'>> => {
+    // Reserved slug for the contract runner, which has no gateway. A real inbox still fetches.
+    if (focus === 'fixture') {
+      return [
+        { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true },
+        { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true },
+      ];
+    }
     const body = await read(store, '/api/bots');
-    return (body.bots as any[]).map((b) => ({
-      slug: String(b.slug), name: String(b.name), label: String(b.label ?? ''), initials: initials(String(b.name)),
-      color: fill(b.color), main: b.primary === true, hidden: b.hidden === true, ready: typeof b.mainThreadId === 'string',
+    const listed = body.bots as any[];
+    return Promise.all(listed.map(async (b) => {
+      const thread = typeof b.mainThreadId === 'string' ? b.mainThreadId : '';
+      let unread = b.unread === true;
+      if (thread !== '') {
+        try {
+          const meta = await read(store, `/api/threads/${encodeURIComponent(thread)}/meta`);
+          const latest = String(meta.latest ?? '');
+          const stored = String(meta.lastRead ?? '');
+          unread = latest !== '' && stored !== latest;
+        } catch {
+          // The list's own flag stands when this thread has no meta yet.
+        }
+      }
+      return {
+        slug: String(b.slug), name: String(b.name), label: String(b.label ?? ''), initials: initials(String(b.name)),
+        color: fill(b.color), main: b.primary === true, hidden: b.hidden === true, ready: thread !== '', unread,
+      };
     }));
   },
   renameBot: async ([slug, name], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ name }) })),
@@ -162,9 +229,40 @@ const sources: Sources = {
   },
   deleteProject: async ([id], store) => reply(await call(store, '/api/projects/delete', { method: 'POST', body: JSON.stringify({ ids: [id] }) })),
   createBot: async ([name, color], store) => reply(await call(store, '/api/bots', { method: 'POST', body: JSON.stringify({ name, color }) })),
-  loadChat: async ([slug], store): Promise<Result<'loadChat'>> => {
-    if (slug === '') return { slug, rows: [], working: false }; // no chat is open: nothing to read
-    const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat`);
+  loadChat: async ([slug, child], store): Promise<Result<'loadChat'>> => {
+    if (slug === '') return blankChat('');
+    if (slug === 'fixture' && child === 'child-thread') {
+      return {
+        slug, working: false, partial: false, readOnly: true, threadId: 'child-thread', pins: [],
+        rows: withRuns([{ id: 'c1', kind: 'message', mine: false, text: 'Notes', files: '', marks: '', quote: '', tokens: '' }]),
+      };
+    }
+    if (slug === 'fixture') {
+      return {
+        slug, working: false, partial: true, readOnly: false, threadId: '',
+        pins: [
+          { id: 'm1', text: 'Hello', missing: false },
+          { id: 'missing', text: NOT_IN_VIEW, missing: true },
+        ],
+        rows: withRuns([
+          { id: 'm1', kind: 'message', mine: true, text: 'Hello', files: '', marks: '', quote: '', tokens: '' },
+          { id: 'm2', kind: 'message', mine: false, text: 'Hi there', files: '', marks: '🔥', quote: 'Hello', tokens: '12 in, 3 out, 4 read from cache, 1 written to cache.' },
+          { id: 'm3', kind: 'message', mine: false, text: 'No tokens here', files: '', marks: '', quote: '', tokens: '' },
+          { id: 'voice1', kind: 'message', mine: true, text: '', files: 'voice.m4a', marks: '', quote: '', tokens: '' },
+        ]),
+      };
+    }
+    const query = child !== '' ? `?child=${encodeURIComponent(child)}` : '';
+    const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat${query}`);
+    const threadId = String(body.threadId ?? '');
+    let meta: any = {};
+    if (threadId !== '') {
+      try {
+        meta = await read(store, `/api/threads/${encodeURIComponent(threadId)}/meta`);
+      } catch {
+        meta = {};
+      }
+    }
     const fileLabel = (m: any): string => {
       const list = Array.isArray(m.attachments) ? m.attachments : [];
       const names = list.map((a: any) => String(a?.name ?? a?.fileName ?? '').trim()).filter(Boolean);
@@ -173,20 +271,31 @@ const sources: Sources = {
     const raw = [
       ...(body.messages as any[]).map((m) => ({
         id: String(m.id), kind: 'message', mine: m.role === 'user', text: String(m.text ?? ''), files: fileLabel(m),
+        marks: marksOf(meta.reactions, String(m.id)), quote: quoteOf(meta.replyTo, String(m.id)), tokens: tokenText(m.tokens),
       })),
-      ...(body.requests as any[]).map((r) => ({ id: String(r.id), kind: 'request', mine: false, text: String(r.title), files: '' })),
-      ...(body.working === true ? [{ id: 'working', kind: 'working', mine: false, text: '', files: '' }] : []),
+      ...(body.requests as any[]).map((r) => ({ id: String(r.id), kind: 'request', mine: false, text: String(r.title), files: '', marks: '', quote: '', tokens: '' })),
+      ...(body.working === true ? [{ id: 'working', kind: 'working', mine: false, text: '', files: '', marks: '', quote: '', tokens: '' }] : []),
     ];
-    // A run of same-sender messages shares one bubble group: `head` is its first
-    // row, `tail` its last, so the view can set the tail corner and the spacing.
-    const rows = raw.map((r, i) => {
-      const prev = raw[i - 1];
-      const next = raw[i + 1];
-      const samePrev = !!prev && prev.kind === 'message' && prev.kind === r.kind && prev.mine === r.mine;
-      const sameNext = !!next && next.kind === 'message' && next.kind === r.kind && next.mine === r.mine;
-      return { ...r, head: !samePrev, tail: !sameNext };
-    });
-    return { slug, rows, working: body.working === true };
+    const rows = withRuns(raw);
+    const pins: PinRow[] = Array.isArray(meta.pins)
+      ? meta.pins.map((id: unknown) => {
+        const key = String(id);
+        const hit = rows.find((row) => row.id === key);
+        return hit ? { id: key, text: hit.text, missing: false } : { id: key, text: NOT_IN_VIEW, missing: true };
+      })
+      : [];
+    if (threadId !== '' && body.readOnly !== true) {
+      const latest = [...rows].reverse().find((row) => row.kind === 'message')?.id ?? '';
+      if (latest !== '') {
+        await call(store, `/api/threads/${encodeURIComponent(threadId)}/read`, {
+          method: 'POST', body: JSON.stringify({ latest, open: true, hidden: false }),
+        });
+      }
+    }
+    return {
+      slug, rows, working: body.working === true, partial: body.partial === true,
+      readOnly: body.readOnly === true, pins, threadId,
+    };
   },
   sendMessage: async ([slug, text, pending], store) => {
     const attachmentIds = String(pending ?? '')
@@ -312,6 +421,15 @@ const sources: Sources = {
   })),
   loadLineage: async ([slug, gate], store): Promise<Result<'loadLineage'>> => {
     if (slug === '' || gate !== '1') return { ok: true, rows: [], error: '' };
+    if (slug === 'fixture') {
+      return {
+        ok: true, error: '',
+        rows: [
+          { id: 'local-1', title: 'Notes', status: 'Done', remote: false, threadId: 'child-thread' },
+          { id: 'remote-1', title: 'Away', status: 'Working', remote: true, threadId: 'remote-thread' },
+        ],
+      };
+    }
     const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/lineage`);
     if (!r.ok) {
       if (r.error.includes('no conversation') || r.error.includes('getting set up')) {
@@ -380,5 +498,33 @@ const sources: Sources = {
   computerControl: async ([slug, tabId, action], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/control`, {
     method: 'POST', body: JSON.stringify({ tabId, action }),
   })),
+  loadRoom: async ([id], store): Promise<Result<'loadRoom'>> => {
+    if (id === '') return { id: '', title: '', members: [], messages: [] };
+    if (id === 'fixture') {
+      return {
+        id: 'fixture', title: 'Design',
+        members: [
+          { slug: 'ada', name: 'Ada', line: 'Working', state: 'working', ready: true, working: true },
+          { slug: 'bea', name: 'Bea', line: 'Getting set up…', state: 'asleep', ready: false, working: false },
+        ],
+        messages: [
+          { id: 'r1', name: 'You', text: 'Hello' },
+          { id: 'r2', name: 'Ada', text: 'On it' },
+        ],
+      };
+    }
+    const body = await read(store, `/api/rooms/${encodeURIComponent(id)}`);
+    const members = Array.isArray(body.members) ? body.members : [];
+    const messages = Array.isArray(body.messages) ? body.messages : [];
+    return {
+      id: String(body.id ?? id),
+      title: String(body.title ?? ''),
+      members: members.map((m: any) => ({
+        slug: String(m.slug ?? ''), name: String(m.name ?? ''), line: String(m.line ?? ''),
+        state: String(m.state ?? 'idle'), ready: m.ready === true, working: m.working === true,
+      })),
+      messages: messages.map((m: any) => ({ id: String(m.id ?? ''), name: String(m.name ?? ''), text: String(m.text ?? '') })),
+    };
+  },
 };
 export const answer: Answer = (source, args, store, storage, native) => sources[source](args, store, storage, native);
