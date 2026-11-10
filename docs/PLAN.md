@@ -109,4 +109,18 @@ Done when: a runnable `tests/compat/run.sh` prints a pass/fail line per check, a
 Run on 2026-11-09: `tests/compat/run.sh` exits 0 (30 passed, 0 failed) on one `HBOTS_HOME`. The Node gateway checkout is not on this machine, so that side was not run. Both `bot_session` sides are hbots processes sharing `bots/.botapp/session-secret`. The script's INFO lines are the differences.
 
 ## Later (not scheduled)
-Executor (connected apps), usage telemetry, site icons, voice, attachments, the avatar drawing flow, a desktop shell.
+
+Gateway parts that do not need `contract` or the Node checkout, landed on main on 2026-11-10:
+
+- Site icons. `GET /api/icons/{host}` fetches a public favicon and caches it under `HBOTS_HOME/icons`. Private and loopback addresses are refused.
+- Attachments. Files live in `bots/<slug>/.bot/attachments`. A chat send can name them. The bytes stay on disk; `message.dispatch` carries the file record. The T3 contracts checkout is not here, so that record is the gateway's shape, not a verified T3 schema.
+- Usage. `GET /api/usage` reads `bots/.botapp/usage.json` (messages, attachments, vault writes, icon fetches, by UTC day). Nothing is sent off the machine.
+- Connected apps. `GET`/`PUT /api/apps` stores an https list in `bots/.botapp/apps.json`. `HBOTS_EXECUTOR_URL`, when it is an http(s) URL, is `executorUrl` on `GET /api/config`.
+
+Skipped, because they still need `contract` or the Node server checkout (neither was searched for again; `contract` is not on `PATH`, and the Node checkout at the path in the working agreement is absent):
+
+- Executor protocol. How the gateway drives a connected-app process is in that Node checkout. The list and the URL above are the part that does not need it.
+- Remote usage telemetry. A destination and event schema are not in this repo. The local count is what the gateway can do.
+- Voice capture and playback. The call log already shipped in T5 (`POST /api/threads/{thread}/voice`). Microphone, streaming and playback need the Exact client.
+- Avatar drawing flow. `avatarDrawingModel` is already a settings field. The prompt, the model call and the saved image are the Node server's flow.
+- Desktop shell. It is the Exact host that starts `hbots serve`. The design is in `docs/native.md`. `contract` is required to build it.
