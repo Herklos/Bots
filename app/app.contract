@@ -785,6 +785,10 @@ component Bots
   task fit mount
     every(200, fitView)
 
+  // The saved theme is applied once it has loaded; picking one applies it at once.
+  task scheme when prefs.theme != ""
+    after(1, applyScheme)
+
   task letGo when holding and not onComputer
     after(1, releaseHeld)
 
@@ -1008,7 +1012,10 @@ component Bots
     nameEditing = false
     if v.trim() != "" and v.trim() != prefs.userName
       send prefsSaved = setUserName(v.trim())
+  action applyScheme
+    setScheme(prefs.theme)
   action doPickTheme(t: string)
+    setScheme(t)
     send prefsSaved = setTheme(t)
   action editNewPassword(v: string)
     newPassword = v
@@ -1473,20 +1480,19 @@ component Bots
                 column flex=1 min-height=0 align-items="center" justify-content="center" padding="space.xl" testId="no-vault-match"
                   EmptyState(symbol="symbol:search", title=`No logins match “${vaultQuery.trim()}”`, message="Check the spelling, or clear the search to see every login.")
               else
-                list id="vault-list" class=FormList appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
-                  section
-                    for v in shownVault key=v.id
-                      link href=path("vaultEdit", v.id) testId=`login-${v.id}`
-                        row class=BotRow
-                          column class=IconTile color="AccentColor" overflow="hidden"
-                            if v.icon != ""
-                              image v.icon aria-label="" width=24 height=24 border-radius="radius.sm"
-                            else
-                              Glyph(name="lock", size=18)
-                          column flex=1 min-width=0 gap="space.xs"
-                            text v.title font-weight=600
-                            text (v.username != "" ? v.username : v.website) color="ink.muted" font="-exact-footnote"
-                          Glyph(name="chevron", size=20)
+                list id="vault-list" appearance="none" width="100%" box-sizing="border-box" flex=1 min-height=0 gap="space.sm" padding="space.md max(space.lg, calc((100% - 40rem) / 2))"
+                  for v in shownVault key=v.id
+                    link href=path("vaultEdit", v.id) testId=`login-${v.id}`
+                      row class=BotRow background-color="surface.card" border="1px solid surface.line" border-radius="radius.md" padding="space.md"
+                        column class=IconTile color="AccentColor" overflow="hidden"
+                          if v.icon != ""
+                            image v.icon aria-label="" width=24 height=24 border-radius="radius.sm"
+                          else
+                            Glyph(name="lock", size=18)
+                        column flex=1 min-width=0 gap="space.xs"
+                          text v.title font-weight=600
+                          text (v.username != "" ? v.username : v.website) color="ink.muted" font="-exact-footnote"
+                        Glyph(name="chevron", size=20)
           else if e.name == "vaultAdd"
             LoginSheet(route=e.id, item=Login(id="", title="", website="", username="", hasPassword=false, hints="", icon=""), revealedFor=revealedFor, revealedText=revealedText, error=loginError, save=doCommitLogin, reveal=doReveal, hide=doHideReveal, drop=doDropLogin, cancel=doCloseLogin)
           else if e.name == "vaultEdit"
@@ -1499,9 +1505,9 @@ component Bots
                   Glyph(name="close", size=20)
                 text "New Bot" role="heading" aria-level=1 class=PageTitle flex=1
               scroll id="new-form" flex=1 min-height=0
-                column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.xl" gap="space.xl"
-                  column align-items="center" gap="space.md" padding="space.lg 0 0"
-                    Avatar(shape=newShape, color=faceColor(newColor), state="idle", size=120, still=false, presence="")
+                column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.lg" gap="space.lg"
+                  column align-items="center" gap="space.md"
+                    Avatar(shape=newShape, color=faceColor(newColor), state="idle", size=96, still=false, presence="")
                     row gap="space.xs" flex-wrap="wrap" justify-content="center"
                       for c in pickerColours() key=c
                         button class=SwatchControl press=pick(c) appearance="none" aria-label=`Colour ${faceColor(c)}` aria-pressed=(newColor == c) testId=`colour-${c}` width=36 height=36 padding=0
