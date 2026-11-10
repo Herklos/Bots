@@ -59,6 +59,7 @@ style Disc
 style TileLink
   display="flex"
   justify-content="center"
+  box-sizing="border-box"
   padding="space.sm space.xs"
   border-radius="radius.lg"
   color="-exact-label"
@@ -943,6 +944,11 @@ component Bots
       send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"))
       edit("")
     focus("composer")
+  action composerKey(k: string, event: KeyboardEvent)
+    if k == "Enter" and not event.shiftKey and not event.isComposing
+      preventDefault()
+      if not event.repeat
+        post()
   action afterSend
     if sendError == ""
       pendingAttaches = []
@@ -1134,7 +1140,7 @@ component Bots
                   row gap="space.xs" padding="0 space.sm space.sm" testId="bot-tiles"
                     for b in tiles key=b.slug
                       link class=TileLink href=path("chat", b.slug) testId=`bot-${b.slug}` aria-label=b.name width=84 flex-shrink=0 background-color=(slug == b.slug ? "surface.raised" : "transparent")
-                        column align-items="center" gap="space.xs" min-width=0 max-width="100%"
+                        column align-items="center" gap="space.xs" width="100%" min-width=0 max-width="100%"
                           Avatar(shape=b.shape, color=faceColor(b.color), state=(b.ready ? (b.working ? "working" : "idle") : "asleep"), size=64, still=(not b.working), presence=(b.unread ? "unread" : b.working ? "online" : ""))
                           text b.name font="-exact-footnote" font-weight=600 max-width="100%" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" text-align="center"
                 list id="bots-list" appearance="none" flex=1 min-height=0 padding="0 space.sm" gap="2px"
@@ -1364,7 +1370,7 @@ component Bots
                   if voiceHold != ""
                     text voiceHold font="-exact-footnote" color="ink.muted" testId="voice-hold"
                   input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
-                  textarea id="composer" value=draft input=edit paste=pasted outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(bots, e.params.slug) != "" ? `Message ${nameOf(bots, e.params.slug)}` : "Write a message…") aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
+                  textarea id="composer" value=draft input=edit key=composerKey paste=pasted outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(bots, e.params.slug) != "" ? `Message ${nameOf(bots, e.params.slug)}` : "Write a message…") aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
                   if chat.working and not canSend
                     button class=StopControl appearance="none" press=stop margin="2px 0" aria-label="Stop" testId="stop"
                       Glyph(name="stop", size=16)
