@@ -1,11 +1,11 @@
-//! The Projects board, reading and writing hbots `bots/.botapp/projects.json`
-//! (`{version, seq, items: {id: Item}, activity: []}`). A port of `server/projects.mts`:
+//! The Projects board, reading and writing `bots/.botapp/projects.json`
+//! (`{version, seq, items: {id: Item}, activity: []}`):
 //! per-kind statuses, field cleaners, link cleaning and de-duplication, `ref:` batches,
 //! archive/restore/complete activity, `order`, children moving up on delete, and the
 //! query views the Bots use (`overview`, `find`, `detail`). A save is all or nothing, and
 //! every change is stamped with who made it and broadcast to open pages.
 //!
-//! Items stay as JSON objects, so fields this port does not know about survive a re-save.
+//! Items stay as JSON objects, so fields this module does not know about survive a re-save.
 use crate::{
     error::{ApiError, ApiResult},
     store::write_atomic,
@@ -1787,7 +1787,7 @@ mod tests {
         assert!(clean_link(&json!({ "type": "nope" })).is_err());
     }
 
-    /// A projects.json written by hbots Node code (see tests/fixtures/make-node-projects.mts).
+    /// A projects.json from `tests/fixtures/node-projects.json`.
     #[tokio::test]
     async fn a_board_written_by_hbots_loads_and_resaves_without_losing_fields() {
         let fixture = include_str!("../tests/fixtures/node-projects.json");

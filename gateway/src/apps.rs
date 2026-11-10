@@ -2,8 +2,7 @@
 //!
 //! The gateway stores which apps are connected and where an executor is
 //! (`HBOTS_EXECUTOR_URL`, returned as `executorUrl` on `GET /api/config`). It does not
-//! speak the executor protocol: that lives in the Node server checkout, which is not
-//! on this machine.
+//! speak the executor protocol. That protocol is not in this repo.
 
 use crate::error::{ApiError, ApiResult};
 use crate::{parse, require_json, AppState};

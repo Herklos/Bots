@@ -1,6 +1,7 @@
-// hbots: the messaging app for T3 Code, written once in Contract. The Rust gateway
-// (`hbots`, in ../gateway) keeps the Bots, the Vault and the Projects board and talks to T3 Code;
-// this app is the same screen on the web, macOS, iOS and Linux.
+// hbots: the messaging app, written once in Contract. The Rust gateway
+// (`hbots`, in ../gateway) keeps the Bots, the Vault and the Projects board and talks to a
+// harness. T3 Code is the harness wired today; other backends may be added.
+// This app is the same screen on the web, macOS, iOS and Linux.
 use EmptyState from "exact:content"
 
 routes nav

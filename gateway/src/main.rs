@@ -1,9 +1,9 @@
 //! `hbots`: the gateway as one Rust binary.
 //!
-//! It sits between the Bots app (the Exact app in `app/`, on the web, macOS, iOS and Linux) and
-//! T3 Code, and keeps what T3 doesn't: Bot folders, settings, the Vault, the Projects board and
-//! the Bots' own MCP tool server. Its on-disk layout is hbots (`~/.hbots`), so either
-//! gateway can run against the same home.
+//! It sits between the Exact app (`app/`) and a harness backend. T3 Code is the backend
+//! wired today (`mod t3`); other backends may be added. The gateway keeps Bot folders,
+//! settings, the Vault, the Projects board and the Bots' own MCP tool server. Home is
+//! `~/.hbots`.
 mod access; // T4: Cloudflare Access JWTs.
 mod approvals; // T5: answering a pending request.
 mod apps; // Connected apps and the executor URL.
@@ -157,7 +157,7 @@ async fn main() -> anyhow::Result<()> {
     let cfg = config::Config::from_env()?;
     let app_dir = cfg.app_dir();
     std::fs::create_dir_all(&app_dir)?;
-    // The Bots' tool-server bearer: HBOTS_MCP_TOKEN, or a random one next to the vault key (as hbots).
+    // The Bots' tool-server bearer: HBOTS_MCP_TOKEN, or a random one next to the vault key.
     let token_path = cfg
         .vault_key_file
         .parent()

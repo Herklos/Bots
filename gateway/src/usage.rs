@@ -1,8 +1,8 @@
 //! Local usage counts in `bots/.botapp/usage.json`.
 //!
 //! The gateway counts what it did (messages, attachments, vault writes, icon fetches) and
-//! keeps that on disk. Nothing is sent anywhere. A remote telemetry destination would come
-//! from the Node server checkout, which is not on this machine.
+//! keeps that on disk. Nothing is sent anywhere. A remote telemetry destination is not
+//! in this repo.
 
 use crate::error::{ApiError, ApiResult};
 use crate::AppState;

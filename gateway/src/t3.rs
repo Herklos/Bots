@@ -1,7 +1,8 @@
-//! T3 Code, the backend hbots runs on (https://github.com/pingdotgg/t3code).
+//! T3 Code, one harness backend (https://github.com/pingdotgg/t3code).
+//! Other backends may be added beside this module.
 //!
 //! - [`T3Client`]: a minimal client for T3's Effect RPC over WebSocket (orchestration protocol 2,
-//!   JSON, one message per frame), ported from hbots `server/t3rpc.mts`.
+//!   JSON, one message per frame).
 //! - [`proxy_http`] and [`proxy_ws`]: the `/t3/*` passthrough the browser uses, which adds the
 //!   bearer so T3's token never reaches a client.
 use anyhow::{anyhow, Context};

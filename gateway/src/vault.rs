@@ -1,4 +1,4 @@
-//! The Vault, file-compatible with hbots `server/vault.mts`:
+//! The Vault on disk:
 //! `{"format":"bot-vault","version":1,"cipher":"aes-256-gcm","iv","tag","data"}` (base64),
 //! AAD `bot-vault:v1`, a 32-byte raw key in its own file (mode 600), plaintext `{items, updatedAt}`.
 //! Passwords never leave here except through `get(id, reveal = true)`.
@@ -302,7 +302,7 @@ impl Vault {
                 },
             )
             .expect("AES-GCM encrypts");
-        // aes-gcm appends the 16-byte tag; Node keeps it in its own field.
+        // aes-gcm appends the 16-byte tag; this envelope keeps the tag in its own field.
         let tag = sealed.split_off(sealed.len() - 16);
         json!({ "format": FORMAT, "version": 1, "cipher": "aes-256-gcm", "iv": B64.encode(iv), "tag": B64.encode(tag), "data": B64.encode(sealed) })
     }
@@ -451,7 +451,7 @@ mod tests {
 
     #[test]
     fn decrypts_a_vault_written_by_node() {
-        // Made by hbots own encrypt() in Node (key = 32 bytes of 0x07); see tests/fixtures.
+        // Fixture ciphertext. Key is 32 bytes of 0x07. See tests/fixtures/node-vault.json.
         let envelope: Value =
             serde_json::from_str(include_str!("../tests/fixtures/node-vault.json")).unwrap();
         let payload = Vault::decrypt(&[7u8; 32], &envelope).unwrap();

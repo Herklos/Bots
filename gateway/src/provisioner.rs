@@ -1,5 +1,5 @@
-//! Keeps T3 in step with the Bot folders, with no client open (port of `server/provisioner.mts`):
-//! a Bot with no T3 project gets one and a main thread, and its brief becomes its first message.
+//! With no client open, gives a new Bot a project and a main thread on the harness, then
+//! sends its brief. T3 Code is the harness wired today; other backends may be added.
 use crate::AppState;
 use serde_json::{json, Value};
 use std::{sync::Arc, time::Duration};

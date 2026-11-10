@@ -1,4 +1,5 @@
-//! Routines are T3 scheduled tasks.
+//! Routines are scheduled tasks on the harness. T3 Code is the one wired today
+//! (`scheduledTasks.*`); other backends may be added.
 //!
 //! Tags, from `packages/contracts/src/rpc.ts` (`WS_METHODS`, the `scheduledTasks*` entries):
 //! `scheduledTasks.subscribe`, `scheduledTasks.upsert`, `scheduledTasks.setEnabled`,

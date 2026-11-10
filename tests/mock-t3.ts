@@ -1,4 +1,4 @@
-// A stand-in for T3 Code's server, just enough of its HTTP API and Effect-RPC WebSocket
+// A stand-in for T3 Code, the harness backend wired today. Just enough of its HTTP API and Effect-RPC WebSocket
 // (orchestration protocol 2) to run the gateway and the app end to end without T3 installed.
 //   bun tests/mock-t3.ts [port]   (default 3773)
 const TOKEN = process.env.T3_TOKEN ?? 'test-token';

@@ -1,10 +1,7 @@
-//! Vault CSV import and export, ported from hbots: the parser from `web/src/lib/vaultCsv.ts`
-//! (the browser parses there; the gateway accepts raw CSV too, so a thin client needn't),
-//! `toCsv` / `exportCsv` / `importItems` from `server/vault.mts`, and the routes from
-//! `server/gateway.mts` (`vaultRoutes`).
+//! Vault CSV import and export. The gateway accepts raw CSV, so a thin client need not parse it.
 //!
 //! Import and export use the Vault's public API (`list`, `get`, `create`, `update`). The Vault file
-//! is therefore rewritten once per saved item, and an import is not one atomic write as in Node.
+//! is rewritten once per saved item.
 use crate::error::{ApiError, ApiResult};
 use crate::vault::{site_domain, Vault};
 use crate::{parse, require_json, AppState};

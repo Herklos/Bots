@@ -1,7 +1,7 @@
 //! The remote password, stored as scrypt in `access.json`.
 //!
-//! The file is the same shape a Node `crypto.scryptSync` call writes: base64 salt and hash,
-//! `n` / `r` / `p` / `keyLen`. `exposure` is `off`, `landing` or `full`.
+//! The file stores base64 salt and hash, `n` / `r` / `p` / `keyLen`.
+//! `exposure` is `off`, `landing` or `full`.
 use crate::exposure::Exposure;
 use base64::engine::general_purpose::STANDARD;
 use base64::Engine;

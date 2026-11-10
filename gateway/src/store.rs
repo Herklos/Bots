@@ -1,5 +1,4 @@
-//! Small JSON files on disk, written the way hbots writes them (temp file, then rename),
-//! so the Node gateway and this binary can take turns on the same `HBOTS_HOME`.
+//! Small JSON files on disk, written via a temp file and then rename.
 use serde_json::Value;
 use std::path::Path;
 

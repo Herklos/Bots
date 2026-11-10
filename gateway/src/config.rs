@@ -1,12 +1,12 @@
-//! Configuration, read from the same environment variables and `.env` file as hbots
-//! Node gateway (`server/gateway.mts`), so an existing `~/.hbots` keeps working.
+//! Configuration from the environment and `.env`. An existing `~/.hbots` keeps working.
 use std::path::PathBuf;
 
 #[derive(Clone, Debug)]
 pub struct Config {
     pub host: String,
     pub port: u16,
-    /// T3 Code server, e.g. `http://127.0.0.1:3773`.
+    /// T3 Code, the harness backend wired today, e.g. `http://127.0.0.1:3773`.
+    /// Other backends may be added later.
     pub t3_url: String,
     pub t3_token: String,
     pub data_root: PathBuf,
@@ -43,7 +43,7 @@ impl Config {
         let data_root = env("HBOTS_HOME")
             .map(PathBuf::from)
             .unwrap_or_else(|| home().join(".hbots"));
-        // Same order as hbots: the checkout's .env, then HBOTS_HOME/.env. Real env wins.
+        // The checkout's .env, then HBOTS_HOME/.env. Real env wins.
         let _ = dotenvy::from_filename(".env");
         let _ = dotenvy::from_path(data_root.join(".env"));
         let port: u16 = env("PORT").and_then(|p| p.parse().ok()).unwrap_or(3780);

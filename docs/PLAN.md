@@ -6,6 +6,10 @@ The product, the crate (`hbots`), the binary (`hbots`), configuration, and these
 Home defaults to `~/.hbots`. Environment: `HBOTS_HOME`, `HBOTS_PASSWORD`, `HBOTS_ROOT`, `HBOTS_MCP_URL`,
 `HBOTS_MCP_TOKEN`. The Exact client reads `HBOTS_URL` at build time. Do not introduce another product name.
 
+## Shape
+
+See [vision](vision.md) and [architecture](architecture.md). T3 Code is one harness backend, the one wired today (`gateway/src/t3.rs`). The gateway can grow other backends later. The tasks below still name T3 where they touch that backend's protocol.
+
 Goal: the `hbots` Rust binary (`gateway/`) plus the Exact app (`app/`), shipped as a web
 app, a desktop app (macOS, Linux) and a mobile app (iOS). What exists today is in the README's Status section.
 Eleven tasks follow. **They are independent**: each owns its own files, so they can run at the same time. The only
@@ -16,8 +20,8 @@ clearly marked hook there and keeps the rest of its code in its own module. The 
 
 - You work in your own git worktree of this repository. Commit on your branch. **Do not push, open a pull request, or touch GitHub.**
 - Sources to port are read-only clones in `/tmp/claude-0/-home-user-Bots/0044585a-cb11-55a6-921c-f38153a8540a/scratchpad/src/`:
-  `hbots/` (the behaviour to match), `exact/` (the client toolchain and docs), `t3code/` (the backend's protocol), `akeru-bot/` (context only).
-- Match hbots behaviour and file formats exactly where you port. Port its tests (`hbots/server/*.test.mts`) as Rust tests.
+  `hbots/` (an earlier checkout of this app), `exact/` (the client toolchain and docs), `t3code/` (T3 Code, one harness backend; other backends may be added), `akeru-bot/` (context only).
+- Match file formats where a task says the on-disk bytes must stay readable. Port tests as Rust tests.
 - Rust: `cargo fmt --all`, `cargo clippy --all-targets` (no warnings) and `cargo test` pass before you commit.
   Add unit tests for every function with logic; use `tempfile` for disk. Do not add a dependency without a reason you can state in one line.
 - Exact app (`app/`): the compiler was `/tmp/claude-0/-home-user-Bots/0044585a-cb11-55a6-921c-f38153a8540a/scratchpad/src/exact/target/release/contract`.
@@ -50,14 +54,14 @@ Files: `gateway/src/projects.rs`, `gateway/src/projects_tools.rs` (new, the MCP 
 `projects.rs` is a deliberately smaller port. Bring it to full parity with `hbots/server/projects.mts` (586 lines), `projects-mcp.mts` and `projects-routes.mts`:
 per-kind status lists, field cleaners (`url path host port branch due priority owner tags`), link cleaning and de-duplication, `ref:`/`"ref:<name>"` batches, archive/restore/complete activity,
 `order`, `projects_find`, children moving up on delete, the 404 when the beta is off (already done), Origin check on writes. Port `projects.test.mts`.
-Done when: the hbots test cases pass in Rust, and a `projects.json` written by hbots Node code loads and re-saves without losing fields (add a fixture made with Node).
+Done when: the fixture cases pass in Rust, and a `projects.json` from the fixture loads and re-saves without losing fields.
 
 ### T4: Remote access, exposure and Cloudflare Access
 Files: `gateway/src/access.rs`, `remote_access.rs`, `exposure.rs` (new), hook in `main.rs`.
 Port `access.mts` (Cloudflare Access JWT, RS256, JWKS cache, audience/issuer/expiry/email checks), `exposure.mts` (Tailscale listener on `PORT+1`, `Tailscale-User-Login`, landing-only mode),
-`remote-access.mts` (password stored as scrypt in `access.json`, same format as hbots; `tailscale serve`; the `cloudflared` quick tunnel), and the routes `GET /api/access`, `PUT /api/access/password`,
+`remote-access.mts` (password stored as scrypt in `access.json`; `tailscale serve`; the `cloudflared` quick tunnel), and the routes `GET /api/access`, `PUT /api/access/password`,
 `POST /api/access/tailscale`, `POST /api/access/tunnel`. Password changes rotate the session secret and drop open sockets (`Auth::rotate` exists).
-Done when: ported tests (`access.test.mts`, `exposure.test.mts`, `remote-access.test.mts`) pass; a JWT test signs with a generated RSA key and a fake JWKS; an `access.json` written by hbots verifies in Rust (fixture made with Node).
+Done when: the access, exposure, and remote-access cases pass; a JWT test signs with a generated RSA key and a fake JWKS; an `access.json` fixture verifies in Rust.
 
 ### T5: Routines, thread metadata and answering approvals
 Files: `gateway/src/routines.rs`, `thread_meta.rs`, `approvals.rs` (new), hook in `main.rs`; `tests/mock-t3.ts` (add `scheduledTasks.*`, `runtime-request.respond`).
@@ -89,7 +93,7 @@ The screen source arrived with the merge of `claude/sleepy-cannon-a2zlm8` (2026-
 
 ### T8: Exact app: the Bot's face
 Files: `app/face.contract` (new), a screenshot script under `tests/`.
-Port the look of hbots avatars as a Contract component `Face(shape, color, state, size)`: the ball with eyes and the "weather" states (idle, working, storm, asleep), and the object avatars from `hbots/server/object-avatars.json` + `avatar-eyes.mts` + `avatar-color.mts` (contrast outline rule). Read `hbots/web/src/components/{Avatar,ObjectAvatar,ActivityAvatar,avatarPlayer}.*`.
+Draw the Bot face as a Contract component `Face(shape, color, state, size)`: the ball with eyes and the "weather" states (idle, working, storm, asleep), and the object avatars from `hbots/server/object-avatars.json` + `avatar-eyes.mts` + `avatar-color.mts` (a fill that would vanish gets an outline). Read `hbots/web/src/components/{Avatar,ObjectAvatar,ActivityAvatar,avatarPlayer}.*`.
 Use SVG and CSS keyframes (`exact/docs/recipes/motion.md`). Reduced motion must be respected. Do not edit `app.contract`; T7 will `use` your component.
 Done when: it builds into a small test app, every state has a screenshot you looked at, and light and dark both read.
 
@@ -105,7 +109,7 @@ Not run (2026-11-09). `contract` is not on `PATH`, so the Exact web host and the
 
 ### T10: Home-directory compatibility harness
 Files: `tests/compat/` (new; a script and fixtures).
-We claim the Rust gateway can run against a `~/.hbots` that hbots Node gateway used, and the reverse. Prove or disprove it. Install hbots server deps in a scratch copy (`npm ci` in `hbots/server`), run both gateways in turn against one home, and check: `bot.json` read/write, `main-bot.json` selection, `projects.json`, `vault.enc` + `.vault-key`, `settings.json`, and that a `bot_session` cookie issued by one is accepted by the other when they share `session-secret`.
+We claim two hbots processes can share one `~/.hbots`. Prove or disprove it. When the earlier server checkout at `hbots/server` is present, run it against that same home too. Check: `bot.json` read/write, `main-bot.json` selection, `projects.json`, `vault.enc` + `.vault-key`, `settings.json`, and that a `bot_session` cookie issued by one is accepted by the other when they share `session-secret`.
 Done when: a runnable `tests/compat/run.sh` prints a pass/fail line per check, and the report lists every difference you found (even harmless ones) with the file and line on each side.
 
 Run on 2026-11-09: `tests/compat/run.sh` exits 0 (30 passed, 0 failed) on one `HBOTS_HOME`. The Node gateway checkout is not on this machine, so that side was not run. Both `bot_session` sides are hbots processes sharing `bots/.botapp/session-secret`. The script's INFO lines are the differences.

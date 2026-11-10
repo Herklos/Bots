@@ -1,6 +1,7 @@
-//! A small REST face on a Bot's main T3 thread for clients that don't speak T3's Effect RPC,
+//! A small REST face on a Bot's main thread for clients that don't speak the harness RPC,
 //! such as the Exact app's `app.ts`: read the conversation, send a message, stop a run, answer
-//! an approval. Everything else stays reachable through the `/t3/*` passthrough.
+//! an approval. T3 Code is the harness wired today; other backends may be added. The `/t3/*`
+//! passthrough is that backend's door.
 use serde_json::{json, Value};
 
 const LIVE: &[&str] = &[
@@ -62,7 +63,7 @@ pub fn transcript(projection: &Value) -> Value {
     json!({ "messages": messages, "requests": requests, "working": working || active.is_some(), "activeRunId": active })
 }
 
-/// The command a phone send dispatches; same fields as hbots `sendMessage`.
+/// The command a phone send dispatches.
 /// `attachments` is the gateway's file records (`attachments::command_part`).
 pub fn send_command(thread: &str, text: &str, attachments: &[Value]) -> Value {
     let id = uuid::Uuid::new_v4().to_string();

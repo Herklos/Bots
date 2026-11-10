@@ -88,6 +88,7 @@ hbots — the gateway for the Exact client
 This binary is the server. The client is the Exact app in app/.
 A VPS runs `hbots serve` alone. A desktop app starts that command as a child.
 A phone or a browser runs the client only and reaches the gateway with HBOTS_URL.
+The harness wired today is T3 Code. Other backends may be added later.
 "
 }
 

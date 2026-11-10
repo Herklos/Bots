@@ -1,6 +1,5 @@
-//! Bots on disk, as hbots keeps them: `bots/<slug>/.bot/bot.json` per Bot, the main-Bot
+//! Bots on disk: `bots/<slug>/.bot/bot.json` per Bot, the main-Bot
 //! choice in `bots/.botapp/main-bot.json`, deleted Bots under `bots/.botapp/trash`.
-//! Port of `server/main-bot.mts` plus `createBot`/`writeMcpConfig`/`writeAgentsMd` from the gateway.
 use crate::{
     error::{ApiError, ApiResult},
     store::{read_json, write_json},
@@ -22,7 +21,7 @@ pub fn valid_slug(slug: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
 }
 
-/// "Ada Lovelace" → "ada-lovelace", as hbots slugify.
+/// "Ada Lovelace" → "ada-lovelace".
 pub fn slugify(name: &str) -> String {
     use unicode_normalization::UnicodeNormalization;
     let lowered: String = name
@@ -396,6 +395,7 @@ async fn write_if_missing(path: &Path, text: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The brief names T3 Code because that is the harness wired today. Other backends may be added.
 pub fn render_agents_md(bot: &Value, root: &Path) -> String {
     let name = bot["name"].as_str().unwrap_or("Bot");
     let label = bot["label"]

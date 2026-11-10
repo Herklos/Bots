@@ -1,6 +1,6 @@
-//! Thread metadata hbots keeps beside T3's conversations (port of `server/thread-meta.mts`):
-//! reactions on messages, the voice-call log, and the roster previews, which T3's wire projection
-//! doesn't carry. Stored as `thread-meta.json` in the app directory, in hbots format.
+//! Reactions, the voice-call log, and roster previews kept beside the harness conversation.
+//! T3 Code is the harness wired today; its wire projection doesn't carry these. Other backends
+//! may be added. Stored as `thread-meta.json` in the app directory.
 use crate::{
     error::{ApiError, ApiResult},
     store,
@@ -20,7 +20,7 @@ static THREAD_ID: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_:%.\-]{1,300}$").unwrap());
 static ITEM_ID: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9_:%.\-]{1,600}$").unwrap());
-// hbots EMOJI: 1 to 16 emoji code points, with at least one pictographic or regional
+// Emoji: 1 to 16 emoji code points, with at least one pictographic or regional
 // indicator (so "1", "#" and "*" alone are refused).
 static EMOJI: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[\p{Extended_Pictographic}\p{Regional_Indicator}\p{Emoji_Component}\x{200D}\x{FE0F}]{1,16}$").unwrap()
@@ -211,7 +211,7 @@ async fn save(file: &Path, state: &Map<String, Value>) -> ApiResult<()> {
 }
 
 /// What the client sees for one thread: its reactions and its voice calls of at least ten seconds.
-/// Short failed calls are hidden on read and kept in the file, as hbots does.
+/// Short failed calls are hidden on read and kept in the file.
 fn view(state: &Map<String, Value>, thread: &str) -> Value {
     let entry = state.get(thread).and_then(Value::as_object);
     let reactions = entry

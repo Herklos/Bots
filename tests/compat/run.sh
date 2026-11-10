@@ -6,11 +6,11 @@
 # .vault-key. Each process logs in, and the other's bot_session cookie must still be accepted
 # because both read the same session-secret.
 #
-# The Node gateway checkout is not on this machine, so both sides of the cookie check are
-# hbots processes. The script says so. It does not invent a Node result.
+# An earlier server checkout is not on this machine, so both sides of the cookie check are
+# hbots processes. The script says so. It does not invent a result for that checkout.
 #
 # Usage: tests/compat/run.sh
-# Env:   HBOTS_SRC     Node gateway checkout (default: the scratchpad clone)
+# Env:   HBOTS_SRC     earlier server checkout (default: the scratchpad clone)
 #        HBOTS_BIN     hbots binary (default: cargo build of gateway/)
 #        COMPAT_WORK   scratch directory (default: a new mktemp directory)
 #        COMPAT_PORT   port (default 37810)

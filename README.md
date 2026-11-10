@@ -1,34 +1,34 @@
 # hbots
 
-hbots is one Rust binary and an Exact app. Your Bot is a T3 Code thread; this is the messaging
-app and the small server that sits between that app and T3 Code.
+hbots is one Rust binary and an Exact app. This is the messaging app and the small server
+in front of a harness. T3 Code is the harness wired today. The gateway can grow other
+backends later. See [docs/vision.md](docs/vision.md) and [docs/architecture.md](docs/architecture.md).
 
 The name hbots is the product, the crate, the binary, and the configuration prefix (`HBOTS_HOME`,
 `HBOTS_PASSWORD`, `HBOTS_ROOT`, `HBOTS_MCP_URL`, `HBOTS_MCP_TOKEN`, `HBOTS_URL`).
 
 | Piece | What it is |
 |---|---|
-| `gateway/` → the `hbots` binary | Rust (axum). Sign-in, the T3 Code proxy, Bot folders, the encrypted Vault, the Projects board, the Bots' MCP tool server, and the web app's static files. |
+| `gateway/` → the `hbots` binary | Rust (axum). Sign-in, the harness proxy (T3 Code today), Bot folders, the encrypted Vault, the Projects board, the Bots' MCP tool server, and the web app's static files. |
 | `app/` | The client, written once in [Exact](https://github.com/expo/exact)'s Contract: web today; macOS, iOS and Linux are the same source (not built yet, see below). |
 | `tests/` | A mock T3 Code and an end-to-end browser test. |
 
 On-disk layout is `~/.hbots`: `bots/<slug>/.bot/bot.json`, `vault.enc` + `.vault-key`,
-`bots/.botapp/projects.json`. A vault written by the Node gateway decrypts in Rust
+`bots/.botapp/projects.json`. A `bot-vault` envelope decrypts in Rust
 (checked by `gateway/tests/fixtures/node-vault.json`).
 
 ## Does it still need a server?
 
-**Yes, but only one small process, on the machine that runs T3 Code. Not a separate web backend.**
+**Yes. One small process, on the machine that runs the harness. T3 Code is that harness today. Another backend can be added later, beside it.**
 The client can't do these jobs by itself:
 
-1. **T3 Code is the real backend** (the agent runtime, your provider logins). It runs on a machine, not in a phone or browser.
-2. **T3's token must stay off the client.** T3 authenticates with a bearer token that grants full control of your agents. Browsers can't set `Authorization` on a WebSocket, so T3 offers a ticket flow, but the long-lived token still has to be somewhere. In hbots it lives only in the gateway; a client that held it would hand every device (and every XSS) a 30-day key. The gateway holds it and gives clients a password-gated session instead.
+1. **The harness** is the agent runtime and your provider logins. It runs on a machine, not in a phone or browser. T3 Code is the one this gateway speaks to now.
+2. **The harness token stays off the client.** T3 Code, the backend wired today, authenticates with a bearer token that grants full control of your agents. Browsers can't set `Authorization` on a WebSocket, so T3 offers a ticket flow, but the long-lived token still has to be somewhere. In hbots it lives only in the gateway; a client that held it would hand every device (and every XSS) a 30-day key. The gateway holds it and gives clients a password-gated session instead.
 3. **Bots live on the machine's disk.** A Bot is a folder (`AGENTS.md`, `memory/`, `.mcp.json`) that the agent process reads. A client can't write there.
 4. **The Bots' tools are an HTTP server.** Agents call `POST /mcp/bot` (Vault, Projects) from that machine. Something must listen.
-5. **Work that happens with no client open:** giving a new Bot its T3 project and thread, delivering its brief.
+5. **Work that happens with no client open:** giving a new Bot its project and thread on the harness (T3 Code today), delivering its brief.
 
-What the client does alone: everything on screen, drafts, theme, and notifications. What got simpler: no Node, no
-separate static server, one binary that also serves the web app. A desktop build could start the gateway as a
+What the client does alone: everything on screen, drafts, theme, and notifications. One binary also serves the web app. A desktop build could start the gateway as a
 child process so it feels like one app (not built yet).
 
 ## Run it
@@ -64,7 +64,7 @@ tests/e2e.sh                # mock T3 + gateway + Chromium: create a Bot, chat, 
 
 Ported and tested: sign-in and lockout, same-origin checks, Bot folders and the main-Bot rule, AGENTS.md and
 MCP config for Claude and Codex, the Vault (encrypted file, list/create/update/delete), the Projects board (API,
-live stream, MCP tools), a T3 RPC client, the `/t3/*` proxy, provisioning, chat read/send/stop, and an Exact app
+live stream, MCP tools), a T3 RPC client (the harness wired today; other backends may be added), the `/t3/*` proxy, provisioning, chat read/send/stop, and an Exact app
 with the inbox, chat, New Bot and sign-in. **Not ported yet** is listed with owners in [docs/PLAN.md](docs/PLAN.md):
 the Vault's browser-fill tools, remote access (Tailscale, Cloudflare), Settings, routines, answering approvals,
 the avatar system, installer and updater, native builds.

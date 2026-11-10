@@ -2,9 +2,10 @@
 //!
 //! The bytes live in `bots/<slug>/.bot/attachments/<id>.bin` (mode 600) with a small JSON
 //! sidecar. `message.dispatch` already has an `attachments` array; each entry names the file
-//! the gateway stored. The T3 contracts checkout is not on this machine, so the entry is this
-//! gateway's record (`type`, `attachmentId`, `name`, `mediaType`, `bytes`) and not a verified
-//! T3 schema. The bytes themselves are not copied into the command.
+//! the gateway stored. T3 Code is the harness wired today; other backends may be added. The
+//! T3 contracts checkout is not on this machine, so the entry is this gateway's record
+//! (`type`, `attachmentId`, `name`, `mediaType`, `bytes`) and not a verified T3 schema.
+//! The bytes themselves are not copied into the command.
 
 use crate::error::{ApiError, ApiResult};
 use crate::vault::now_iso;

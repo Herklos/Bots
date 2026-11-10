@@ -1,6 +1,5 @@
-// The Bot's face: hbots ball with two eyes, in four "weather" states. Ported from
-// hbots/server/character.mts (POSES, eyes) and avatar-config.json (palette). Geometry is
-// scaled from hbots 229-unit canvas to this 100-unit viewBox (factor 0.4025 for lengths).
+// The Bot's face: a ball with two eyes, in four "weather" states. Geometry is
+// scaled from a 229-unit canvas to this 100-unit viewBox (factor 0.4025 for lengths).
 // Eyes are cut-outs: they take the page's background colour, so they read in both themes.
 
 keyframes faceBreathe
@@ -22,7 +21,7 @@ keyframes faceBlink
 
 fn faceHex(color: string): string = color.startsWith("#") ? color : color == "black" ? "light-dark(#000000, #FFFFFF)" : color == "white" ? "#f2f2f0" : color == "brown" ? "#936439" : color == "red" ? "#FF263C" : color == "orange" ? "#FF6700" : color == "amber" ? "#FFAF38" : color == "yellow" ? "#FF9800" : color == "green" ? "#00C972" : color == "cyan" ? "#00BCA6" : color == "blue" ? "#1084FE" : color == "purple" ? "#A97EFE" : color == "violet" ? "#9159FE" : color == "pink" ? "#FF5EB1" : color == "magenta" ? "#FF309B" : color == "gray" ? "#777777" : "#1CC3B0"
 
-// A fill that would vanish into the page gets an outline (hbots contrast rule). Only white
+// A fill that would vanish into the page gets an outline. Only white
 // does: it sits close to the light canvas, so it takes a grey edge there. Black is white in dark mode.
 fn faceEdge(color: string): string = color == "white" ? "light-dark(#8f8da0, #f2f2f0)" : "none"
 
@@ -30,7 +29,7 @@ fn eyeGap(state: string): number = state == "working" ? 12.9 : state == "storm" 
 fn eyeWidth(state: string): number = state == "asleep" ? 18.5 : state == "working" ? 8.1 : state == "storm" ? 8.9 : 9
 fn eyeLength(state: string): number = state == "asleep" ? 2.8 : state == "working" ? 21.7 : state == "storm" ? 25 : 24.2
 fn eyeY(state: string): number = state == "asleep" ? 57.2 : state == "working" ? 49.2 : state == "storm" ? 53.2 : 46.8
-// hbots leans each eye by side * lean: left and right tilt apart (working) or together (storm).
+// Each eye leans by side * lean: left and right tilt apart (working) or together (storm).
 fn eyeTilt(state: string, side: number): number = state == "working" ? -side * 18 : state == "storm" ? side * 28 : 0
 
 // The first component is the file's root, so it takes no props: a gallery of every state.

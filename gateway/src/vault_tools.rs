@@ -1,5 +1,5 @@
-//! The Vault tools of the Bots' own tool server (`POST /mcp/bot`), ported from hbots
-//! `server/vault-mcp.mts` and the browser helpers of `server/gateway.mts`:
+//! The Vault tools of the Bots' own tool server (`POST /mcp/bot`).
+//! Browser fill uses the T3 preview stream, the harness wired today. Other backends may be added.
 //!
 //! - `vault_fill_password` / `vault_fill_username`: type a saved login into the focused field of
 //!   the Bot's browser tab, through T3's preview stream (take control, type, probe, release).
@@ -24,7 +24,7 @@ use tokio_tungstenite::tungstenite::{
     client::IntoClientRequest, http::HeaderValue, Error as WsError, Message,
 };
 
-/// hbots limit for a file T3 wrote for `request_secret`.
+/// Limit for a file T3 wrote for `request_secret`.
 const MAX_SECRET_BYTES: u64 = 16 * 1024;
 /// How long a token file lives (`vault_secret_file`).
 const SECRET_FILE_TTL: Duration = Duration::from_secs(60 * 60);
@@ -381,7 +381,7 @@ pub enum Step {
     Fail(&'static str),
 }
 
-/// What one frame from T3's preview stream means at this stage (hbots `typeIntoTab`).
+/// What one frame from T3's preview stream means at this stage.
 pub fn step(stage: Stage, msg: &Value) -> Step {
     match msg["type"].as_str() {
         Some("control") => {

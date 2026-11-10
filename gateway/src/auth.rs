@@ -1,5 +1,4 @@
-//! Sign-in, ported from `server/gateway.mts`: an HMAC-signed `bot_session` cookie in the same
-//! `v1.<exp>.<sig>` format (so sessions survive switching between the two gateways), a login
+//! Sign-in: an HMAC-signed `bot_session` cookie in the `v1.<exp>.<sig>` format, a login
 //! lockout after five failures, and the same-origin check for anything that changes state.
 use axum::http::{HeaderMap, Method};
 use hmac::{Hmac, Mac};
@@ -115,7 +114,7 @@ impl Auth {
 
     pub fn authed(&self, headers: &HeaderMap) -> bool {
         if !self.password_required() {
-            // Same as hbots without a password or Cloudflare Access: an open, local-only setup.
+            // No password and no Cloudflare Access: an open, local-only setup.
             return true;
         }
         cookie(headers, COOKIE).is_some_and(|c| self.valid_session(&c))

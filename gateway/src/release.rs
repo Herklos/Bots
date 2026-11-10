@@ -32,7 +32,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-/// The release repository, as hbots. Override the list with HBOTS_RELEASES_URL.
+/// GitHub releases for this repository. Override the list with HBOTS_RELEASES_URL.
 pub const REPO: &str = "Herklos/Bots";
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 const USER_AGENT_NAME: &str = "hbots-updater";
@@ -47,7 +47,7 @@ pub const MAX_WAIT_MS: u64 = 24 * 60 * 60 * 1000;
 
 // ---------- paths ----------
 
-/// `HBOTS_HOME`, or `~/.hbots`, as the Node gateway and the Rust gateway both read it.
+/// `HBOTS_HOME`, or `~/.hbots`.
 #[allow(dead_code)]
 pub fn home_dir() -> PathBuf {
     match std::env::var("HBOTS_HOME") {
@@ -1169,9 +1169,9 @@ pub async fn start(state: Arc<AppState>) {
     }
 }
 
-/// Bot threads a restart would interrupt. Reading T3's thread list (`orchestration.subscribeShell`,
-/// a stream) isn't ported to the Rust T3 client yet, so this is an error and nothing installs
-/// automatically until it is.
+/// Bot threads a restart would interrupt. T3 Code is the harness wired today; other backends
+/// may be added. Reading T3's thread list (`orchestration.subscribeShell`, a stream) is not
+/// in this client yet, so this is an error and nothing installs automatically until it is.
 async fn busy_threads(_state: &AppState) -> Result<usize> {
     bail!("reading T3's thread list (orchestration.subscribeShell) isn't ported yet")
 }
