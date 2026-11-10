@@ -477,6 +477,58 @@ impl Library {
     }
 }
 
+const SHELF_CAP: usize = 60;
+
+fn is_picture(title: &str, detail: &str) -> bool {
+    detail.starts_with("image/")
+        || matches!(
+            title.rsplit('.').next().unwrap_or("").to_ascii_lowercase().as_str(),
+            "png" | "jpg" | "jpeg" | "gif" | "webp"
+        )
+}
+
+/// A Bot's shelf for the panel: pictures, files and links, newest first, nothing else. Records
+/// kept by the person or the Bot (notes, tasks, plans and the rest) and connectors stay out.
+/// `url` is a gateway path the app prefixes with its address (or a link's own address).
+pub fn shelf_from(slug: &str, view: &Value) -> Value {
+    let (mut pictures, mut files, mut links) = (Vec::new(), Vec::new(), Vec::new());
+    for e in view["entries"].as_array().into_iter().flatten() {
+        let id = e["id"].as_str().unwrap_or("");
+        let (title, detail) = (e["title"].as_str().unwrap_or(""), e["detail"].as_str().unwrap_or(""));
+        let url = if let Some(path) = id.strip_prefix(&format!("file:{slug}/")) {
+            format!("/api/bots/{slug}/library/file?path={}", encode_query(path))
+        } else if let Some(att) = id.strip_prefix("attachment:") {
+            format!("/api/bots/{slug}/attachments/{att}")
+        } else if id.starts_with("http://") || id.starts_with("https://") {
+            id.to_string()
+        } else {
+            continue;
+        };
+        let item = json!({ "id": id, "title": title, "detail": detail, "url": url, "group": e["group"] });
+        match e["kind"].as_str().unwrap_or("") {
+            "media" if is_picture(title, detail) => pictures.push(item),
+            "media" | "file" | "page" => files.push(item),
+            "link" => links.push(item),
+            _ => {}
+        }
+    }
+    let counts = json!({ "pictures": pictures.len(), "files": files.len(), "links": links.len() });
+    pictures.truncate(SHELF_CAP);
+    files.truncate(SHELF_CAP);
+    links.truncate(SHELF_CAP);
+    json!({ "ok": true, "counts": counts, "pictures": pictures, "files": files, "links": links })
+}
+
+/// A path as a query value: the characters a path uses stay, the rest are percent-encoded.
+fn encode_query(path: &str) -> String {
+    path.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'/' | b'~' => (b as char).to_string(),
+            other => format!("%{other:02X}"),
+        })
+        .collect()
+}
+
 fn file_entry(slug: &str, entry: DirEntry, today: &str, week: &str) -> Value {
     let day = if entry.modified == 0 {
         String::new()
@@ -1022,4 +1074,25 @@ mod tests {
         assert_eq!(claude["enableAllProjectMcpServers"], true);
         assert_eq!(claude["disabledMcpjsonServers"], json!(["notes"]));
     }
+
+    #[test]
+    fn the_shelf_keeps_pictures_files_and_links_and_drops_records_and_connectors() {
+        let view = json!({ "entries": [
+            { "id": "attachment:a1", "kind": "media", "title": "chart.png", "detail": "image/png", "group": "Today" },
+            { "id": "attachment:a2", "kind": "media", "title": "clip.mp4", "detail": "video/mp4", "group": "Today" },
+            { "id": "file:ada/library/Notes today.html", "kind": "page", "title": "Notes today.html", "detail": "Private", "group": "Today" },
+            { "id": "file:ada/library/plan.pdf", "kind": "file", "title": "plan.pdf", "detail": "Workspace file", "group": "Older" },
+            { "id": "https://example.com/a", "kind": "link", "title": "example.com", "detail": "https://example.com/a", "group": "Today" },
+            { "id": "abc123", "kind": "task", "title": "Ship it", "detail": "doing", "group": "Today" },
+            { "id": "xyz", "kind": "note", "title": "A note", "detail": "", "group": "Today" },
+        ], "connectors": [{ "name": "notes" }] });
+        let shelf = shelf_from("ada", &view);
+        assert_eq!(shelf["counts"], json!({ "pictures": 1, "files": 3, "links": 1 }));
+        assert_eq!(shelf["pictures"][0]["url"], "/api/bots/ada/attachments/a1");
+        assert_eq!(shelf["files"][1]["url"], "/api/bots/ada/library/file?path=library/Notes%20today.html");
+        assert_eq!(shelf["links"][0]["url"], "https://example.com/a");
+        assert!(shelf.get("connectors").is_none());
+        assert!(!shelf.to_string().contains("Ship it"));
+    }
+
 }

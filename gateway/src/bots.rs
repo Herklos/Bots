@@ -471,7 +471,7 @@ pub fn render_agents_md(bot: &Value, root: &Path) -> String {
 You are {name}, a personal Bot. You run as a long-lived T3 Code thread; the person talks to you from the Bots app on their phone, desktop or browser.\n\n\
 ## Memory\n\n- Your notes: `memory/MEMORY.md`. Keep durable facts there, short and current.\n- Your work log: `memory/log.md`.\n- Facts shared by every Bot: `{}`.\n- Files you keep for the person: `library/`.\n\n\
 ## Tools\n\nThe `bot` MCP server gives you the Vault (`vault_list`) and the Projects board (`projects_*`). Never read the vault files on disk.\n\n\
-## Asking first\n\nAsk before anything that leaves this machine or can't be undone.\n{MANAGED_END}\n",
+## Routines\n\nTo run something on a schedule, use your `schedule_task` tool. Weekdays count from 0 for Sunday to 6 for Saturday, and times are local. The person sees your routines in the app but can't change them there, so say what you set up.\n\n## Other Bots\n\nTo message another Bot, use `t3_thread_send`. Say who you are and what you need.\n\n## Asking first\n\nAsk before anything that leaves this machine or can't be undone.\n{MANAGED_END}\n",
         shared.display()
     )
 }
@@ -593,6 +593,13 @@ mod tests {
             .unwrap();
         assert!(ada["lastSeenAt"].as_str().is_some_and(|t| !t.is_empty()));
         assert_eq!(ada["firstMessage"], "Plan my day.");
+    }
+
+    #[test]
+    fn the_managed_block_tells_a_bot_about_routines_and_other_bots() {
+        let text = render_agents_md(&json!({ "name": "Ada" }), std::path::Path::new("/bots"));
+        assert!(text.contains("schedule_task") && text.contains("t3_thread_send"));
+        assert!(text.contains("Sunday") && text.starts_with(MANAGED_START));
     }
 
     #[test]

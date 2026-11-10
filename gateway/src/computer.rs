@@ -17,6 +17,14 @@ pub fn control_message(action: &str) -> Result<Value, &'static str> {
     }
 }
 
+/// A short fingerprint of a frame, so a poll that finds the same page need not carry it again.
+pub fn etag(image: &str) -> String {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    image.hash(&mut h);
+    format!("{:x}", h.finish())
+}
+
 /// Tabs the watch screen may show. Other runtimes are left out.
 pub fn tabs_for_screen(list: &Value) -> Vec<Value> {
     server_tabs(list)
@@ -161,5 +169,17 @@ mod tests {
         assert_eq!(listed[0]["title"], "Page");
         assert_eq!(listed[1]["title"], "not a url");
         assert_eq!(listed[1]["url"], "not a url");
+    }
+}
+
+#[cfg(test)]
+mod etag_tests {
+    use super::etag;
+
+    #[test]
+    fn the_same_frame_has_the_same_etag_and_another_frame_does_not() {
+        assert_eq!(etag("AAAA"), etag("AAAA"));
+        assert_ne!(etag("AAAA"), etag("AAAB"));
+        assert!(!etag("").is_empty());
     }
 }

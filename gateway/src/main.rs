@@ -312,6 +312,7 @@ pub fn app(state: Arc<AppState>) -> Router {
             delete(library_delete),
         )
         .route("/api/bots/{slug}/library/file", get(library_file))
+        .route("/api/bots/{slug}/shelf", get(shelf_get))
         .route(
             "/api/bots/{slug}/connectors",
             post(connector_save).delete(connector_delete),
@@ -1029,6 +1030,14 @@ async fn library_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Va
     Ok(Json(s.library.view(&slug, &messages, unix_now()).await?))
 }
 
+/// What the panel's Library shows: pictures, files and links, read only.
+async fn shelf_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+    require_bot(&s, &slug).await?;
+    let messages = library_messages(&s, &slug).await;
+    let view = s.library.view(&slug, &messages, unix_now()).await?;
+    Ok(Json(library::shelf_from(&slug, &view)))
+}
+
 async fn library_messages(s: &AppState, slug: &str) -> Vec<Value> {
     let Ok(thread) = main_thread(s, slug).await else {
         return Vec::new();
@@ -1434,7 +1443,11 @@ async fn lineage_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Va
     ))
 }
 
-async fn computer_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+async fn computer_get(
+    State(s): S,
+    Path(slug): Path<String>,
+    Query(q): Query<HashMap<String, String>>,
+) -> ApiResult<Json<Value>> {
     let thread = main_thread(&s, &slug).await?;
     let rpc =
         s.t3.rpc()
@@ -1453,10 +1466,15 @@ async fn computer_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<V
             Err(reason) => error = reason,
         }
     }
+    // A frame the app already has is not sent again.
+    let tag = computer::etag(&image);
+    let unchanged = !image.is_empty() && q.get("since").is_some_and(|s| *s == tag);
     Ok(Json(json!({
         "ok": true,
         "tabs": tabs,
-        "image": image,
+        "image": if unchanged { String::new() } else { image },
+        "etag": tag,
+        "unchanged": unchanged,
         "error": error,
     })))
 }
