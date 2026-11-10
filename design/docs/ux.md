@@ -1,6 +1,6 @@
 # User experience
 
-How hbots feels and how a person moves through it. The screens are in `app/app.contract`; the wording below is what the app says today.
+How hbots feels and how a person moves through it. The screens are in `app/app.contract`. On-screen wording lives in `app/strings/en.json` and `app/strings/fr.json`: the host locale picks the table (`fr` uses French, anything else uses English). The names hbots and T3 Code stay as written. The sentences below describe the flows; the tables are what the app shows.
 
 ## Principles
 
