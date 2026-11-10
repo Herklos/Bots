@@ -32,7 +32,18 @@ pub fn status_label(raw: &str, pending_request: bool, settled: bool) -> &'static
     }
 }
 
+/// Same live statuses the transcript uses for a turn that is still going.
+const LIVE: &[&str] = &[
+    "running",
+    "in_progress",
+    "pending",
+    "queued",
+    "streaming",
+    "starting",
+];
+
 /// Rows for the Bot details sheet. Remote delegates stay remote.
+/// With no subagent, the latest live turn is one Working row and not an Open target.
 pub fn rows(projection: &Value) -> Vec<Value> {
     if is_project_enrichment(projection) {
         return Vec::new();
@@ -67,7 +78,51 @@ pub fn rows(projection: &Value) -> Vec<Value> {
             }
         }
     }
+    if out.is_empty() {
+        if let Some(items) = items {
+            if let Some(row) = live_turn(items) {
+                out.push(row);
+            }
+        }
+    }
     out
+}
+
+fn item_of(raw: &Value) -> &Value {
+    if raw["item"].is_object() {
+        &raw["item"]
+    } else {
+        raw
+    }
+}
+
+fn tool_segment(name: &str) -> &str {
+    name.rsplit("__").next().unwrap_or(name)
+}
+
+/// The latest live item that is not a user message, as one row.
+fn live_turn(items: &[Value]) -> Option<Value> {
+    let item = items.iter().rev().map(item_of).find(|item| {
+        let kind = item["type"].as_str().unwrap_or("");
+        let status = item["status"].as_str().unwrap_or("");
+        let live = LIVE.contains(&status) || item["streaming"] == true;
+        live && kind != "user_message" && item["id"].as_str().is_some_and(|id| !id.is_empty())
+    })?;
+    let tool = item["toolName"]
+        .as_str()
+        .map(tool_segment)
+        .filter(|s| !s.is_empty());
+    let title = tool
+        .or_else(|| item["label"].as_str().filter(|s| !s.is_empty()))
+        .or_else(|| item["title"].as_str().filter(|s| !s.is_empty()))
+        .unwrap_or("Working");
+    Some(json!({
+        "id": item["id"].as_str().unwrap_or(""),
+        "title": title,
+        "status": "Working",
+        "remote": false,
+        "threadId": "",
+    }))
 }
 
 fn one(agent: &Value) -> Option<Value> {
@@ -123,7 +178,11 @@ pub fn open_child(row: &Value, parent: &str) -> Option<String> {
 /// The thread a send, stop, voice clip, or request answer uses.
 /// No child means the parent. A local child is that thread. A remote child, or the parent id
 /// passed as the child, is refused. This writes nothing.
-pub fn thread_for(rows: &[Value], parent: &str, asked: Option<&str>) -> Result<String, &'static str> {
+pub fn thread_for(
+    rows: &[Value],
+    parent: &str,
+    asked: Option<&str>,
+) -> Result<String, &'static str> {
     let Some(child) = asked.map(str::trim).filter(|id| !id.is_empty()) else {
         return Ok(parent.to_string());
     };
@@ -177,7 +236,8 @@ mod tests {
     fn a_project_enrichment_snapshot_adds_no_rows() {
         let item = json!({
             "resolvedRepositoryIdentityRoots": ["r"],
-            "snapshot": { "threads": [], "archivedThreads": [] }
+            "snapshot": { "threads": [], "archivedThreads": [] },
+            "turnItems": [{ "id": "live", "type": "tool_call", "status": "running", "toolName": "read_file" }]
         });
         assert!(is_project_enrichment(&item));
         assert!(rows(&item).is_empty());
@@ -250,6 +310,35 @@ mod tests {
     }
 
     #[test]
+    fn a_running_tool_with_no_subagent_is_one_working_row() {
+        let listed = rows(&json!({
+            "turnItems": [
+                { "id": "old", "type": "tool_call", "status": "completed", "toolName": "mcp__x__gone" },
+                { "id": "user", "type": "user_message", "status": "running", "text": "hi" },
+                { "id": "live", "type": "tool_call", "status": "running", "toolName": "mcp__t3-code__read_file" }
+            ]
+        }));
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0]["id"], "live");
+        assert_eq!(listed[0]["title"], "read_file");
+        assert_eq!(listed[0]["status"], "Working");
+        assert_eq!(listed[0]["remote"], false);
+        assert_eq!(listed[0]["threadId"], "");
+        assert_eq!(open_child(&listed[0], "parent"), None);
+    }
+
+    #[test]
+    fn an_idle_projection_with_no_subagent_adds_no_row() {
+        assert!(rows(&json!({
+            "turnItems": [
+                { "id": "done", "type": "tool_call", "status": "completed", "toolName": "read_file" },
+                { "id": "note", "type": "assistant_message", "status": "idle", "text": "ok" }
+            ]
+        }))
+        .is_empty());
+    }
+
+    #[test]
     fn a_local_child_opens_and_a_remote_child_does_not_become_the_parent() {
         let projection = json!({
             "turnItems": [{
@@ -270,10 +359,22 @@ mod tests {
         let listed = rows(&projection);
         let remote = listed.iter().find(|row| row["remote"] == true).unwrap();
         let local = listed.iter().find(|row| row["remote"] == false).unwrap();
-        assert_eq!(open_child(local, "parent-thread").as_deref(), Some("child-thread"));
+        assert_eq!(
+            open_child(local, "parent-thread").as_deref(),
+            Some("child-thread")
+        );
         assert_eq!(open_child(remote, "parent-thread"), None);
-        assert_ne!(open_child(remote, "parent-thread").as_deref(), Some("parent-thread"));
-        assert_eq!(open_child(&json!({ "remote": false, "threadId": "parent-thread" }), "parent-thread"), None);
+        assert_ne!(
+            open_child(remote, "parent-thread").as_deref(),
+            Some("parent-thread")
+        );
+        assert_eq!(
+            open_child(
+                &json!({ "remote": false, "threadId": "parent-thread" }),
+                "parent-thread"
+            ),
+            None
+        );
     }
 
     fn family() -> Value {
@@ -303,8 +404,14 @@ mod tests {
             thread_for(&rows, "parent-thread", Some("child-thread")).as_deref(),
             Ok("child-thread")
         );
-        assert_eq!(thread_for(&rows, "parent-thread", None).as_deref(), Ok("parent-thread"));
-        assert_eq!(thread_for(&rows, "parent-thread", Some("  ")).as_deref(), Ok("parent-thread"));
+        assert_eq!(
+            thread_for(&rows, "parent-thread", None).as_deref(),
+            Ok("parent-thread")
+        );
+        assert_eq!(
+            thread_for(&rows, "parent-thread", Some("  ")).as_deref(),
+            Ok("parent-thread")
+        );
         assert!(thread_for(&rows, "parent-thread", Some("remote-1")).is_err());
         assert!(thread_for(&rows, "parent-thread", Some("parent-thread")).is_err());
         assert_ne!(
