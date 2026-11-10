@@ -148,7 +148,15 @@ impl Bots {
     /// Exactly one main Bot: the saved choice, else a legacy `primary`, else the first visible.
     async fn reconcile(&self) -> ApiResult<Vec<Value>> {
         let mut bots = self.load().await?;
-        let selection = read_json(&self.selection_file()).await;
+        // A missing file is no choice yet; an unreadable one is an error, so this can't overwrite it.
+        let selection = match tokio::fs::read_to_string(self.selection_file()).await {
+            Ok(text) => Some(
+                serde_json::from_str::<Value>(&text)
+                    .map_err(|_| ApiError::new(500, "The main Bot choice file can't be read."))?,
+            ),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e.into()),
+        };
         let chosen = selection
             .as_ref()
             .and_then(|s| s["slug"].as_str().map(String::from));
@@ -482,5 +490,20 @@ mod tests {
             mcp["mcpServers"]["bot"]["headers"]["Authorization"],
             "Bearer tok"
         );
+    }
+
+    #[tokio::test]
+    async fn an_unreadable_main_bot_choice_is_an_error_and_is_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(
+            dir.path().to_path_buf(),
+            "http://127.0.0.1:3780/mcp/bot".into(),
+            "tok".into(),
+        );
+        bots.create(&json!({ "name": "Ada" })).await.unwrap();
+        let choice = dir.path().join(".botapp/main-bot.json");
+        std::fs::write(&choice, "{not json").unwrap();
+        assert!(bots.list().await.is_err());
+        assert_eq!(std::fs::read_to_string(&choice).unwrap(), "{not json");
     }
 }

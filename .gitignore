@@ -3,4 +3,7 @@
 /app/.exact
 node_modules
 .env
+.exact-path
 /.claude/worktrees
+/tests/face/out
+/dist

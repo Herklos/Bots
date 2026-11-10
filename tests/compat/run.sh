@@ -146,8 +146,12 @@ VAULT_ID=$(jv "$WORK/last.body" 'j.id')
 expect R7b "vault.enc is a bot-vault envelope" \
   "$(jv "$HOME_DIR/vault.enc" 'j.format + " " + j.version + " " + j.cipher')" "bot-vault 1 aes-256-gcm"
 expect R7c "vault.enc holds no plaintext password" "$(leaks "$HOME_DIR/vault.enc" rust-pw-ABC)" no
+file_mode() {
+  # GNU: stat -c %a; BSD/macOS: stat -f %Lp
+  if stat -c %a "$1" >/dev/null 2>&1; then stat -c %a "$1"; else stat -f %Lp "$1"; fi
+}
 expect R7d "the vault key is 32 bytes, mode 600" \
-  "$(wc -c < "$HOME_DIR/.vault-key" | tr -d ' ')|$(stat -c %a "$HOME_DIR/.vault-key")" "32|600"
+  "$(wc -c < "$HOME_DIR/.vault-key" | tr -d ' ')|$(file_mode "$HOME_DIR/.vault-key")" "32|600"
 c=$(code GET "/api/vault/$VAULT_ID?reveal=1" "$WORK/rust.jar" ""); expect R7e "reveal returns the password" \
   "$(jv "$WORK/last.body" 'j.password')" "rust-pw-ABC"
 c=$(code GET /api/vault "$WORK/rust.jar" ""); expect R7f "the list does not include the password" \
@@ -165,7 +169,7 @@ expect R8d "a partial save keeps createdAt" \
 info R8 "projects.json item keys: $(jv "$APP/projects.json" 'Object.keys(j.items[Object.keys(j.items)[0]]).sort().join(",")')"
 info R8 "projects.json top-level keys: $(jv "$APP/projects.json" 'Object.keys(j).sort().join(",")')"
 c=$(code GET /api/projects "$WORK/rust.jar" "")
-info R8 "difference: the file stores items as an object keyed by id; GET /api/projects returns items as $(jv "$WORK/last.body" 'Array.isArray(j.items) ? "an array" : typeof j.items') (gateway/src/projects.rs board). The file is compact JSON, mode $(stat -c %a "$APP/projects.json")."
+info R8 "difference: the file stores items as an object keyed by id; GET /api/projects returns items as $(jv "$WORK/last.body" 'Array.isArray(j.items) ? "an array" : typeof j.items') (gateway/src/projects.rs board). The file is compact JSON, mode $(file_mode "$APP/projects.json")."
 
 c=$(code GET /api/session "$WORK/rust.jar" ""); expect R9 "side A is signed in" \
   "$(jv "$WORK/last.body" 'j.authenticated')" true

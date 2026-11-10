@@ -4,7 +4,8 @@
 
 The product, the crate (`hbots`), the binary (`hbots`), configuration, and these docs use the name hbots.
 Home defaults to `~/.hbots`. Environment: `HBOTS_HOME`, `HBOTS_PASSWORD`, `HBOTS_ROOT`, `HBOTS_MCP_URL`,
-`HBOTS_MCP_TOKEN`. The Exact client reads `HBOTS_URL` at build time. Do not introduce another product name.
+`HBOTS_MCP_TOKEN`, `HBOTS_EXECUTOR_URL`, `HBOTS_TAILSCALE_PATH` (legacy `TAILSCALE_PATH` still accepted).
+The Exact client reads `HBOTS_URL` at build time. Do not introduce another product name.
 
 ## Shape
 
@@ -19,14 +20,14 @@ clearly marked hook there and keeps the rest of its code in its own module. The 
 ## Working agreement (every task)
 
 - You work in your own git worktree of this repository. Commit on your branch. **Do not push, open a pull request, or touch GitHub.**
-- Sources to port are read-only clones in `/tmp/claude-0/-home-user-Bots/0044585a-cb11-55a6-921c-f38153a8540a/scratchpad/src/`:
-  `hbots/` (an earlier checkout of this app), `exact/` (the client toolchain and docs), `t3code/` (T3 Code, one harness backend; other backends may be added), `akeru-bot/` (context only).
+- Sources to port are read-only clones when present under a scratchpad; Exact for this Mac lives outside the repo.
+  Path: gitignored `.exact-path` (`EXACT_DIR` / `EXACT_DIR_REL`, typically `../../contrib/exact` → `/Users/user/Documents/dev/Contrib/exact`). See `AGENTS.md`.
 - Match file formats where a task says the on-disk bytes must stay readable. Port tests as Rust tests.
 - Rust: `cargo fmt --all`, `cargo clippy --all-targets` (no warnings) and `cargo test` pass before you commit.
   Add unit tests for every function with logic; use `tempfile` for disk. Do not add a dependency without a reason you can state in one line.
-- Exact app (`app/`): the compiler was `/tmp/claude-0/-home-user-Bots/0044585a-cb11-55a6-921c-f38153a8540a/scratchpad/src/exact/target/release/contract`.
-  On 2026-11-09 that binary is not on this machine, and `exact` / `contract` are not on `PATH`, so a native or web Exact build cannot be run here. Do not stop the later tasks for that. When the compiler is present, `contract build app.contract` must exit 0 with no new warnings; read `exact/docs/start-here.md` first. Full web build:
-  `cd <exact> && EXACT_APP_DIR=<your worktree>/app bun host/web/build.mjs hbots-web`, then `tests/e2e.sh` (needs `NODE_PATH=$(npm root -g)`).
+- Exact app (`app/`): build with the checkout from `.exact-path`. `contract build` / web:
+  `set -a; source .exact-path; set +a` then `EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/web/build.mjs" bots-web` (writes `app/target/web-dist`).
+  Then `tests/e2e.sh` when Chromium/Chrome is available (`CHROME=…` if Playwright Chromium is missing).
 - A claim in your report must have been run. Say what you ran and what it printed. If you could not verify something, say "not verified" and why.
   Never mark something done because the code looks right. If part of the task turns out impossible, stop that part and report it.
 - Do not edit files outside your task's list, except the marked hook in `main.rs` / `mcp.rs`. If you need a change elsewhere, describe it in your report.
@@ -87,9 +88,7 @@ Bot details (rename, colour, hide, make main, delete with confirmation); Setting
 Projects board (list by kind, add, edit, delete, live via polling `/api/projects`). Use routes, sheets and lists as `exact/docs/start-here.md` says. Add an `app.test.contract` and run it (`bun exact.mjs test web`) if the setup allows; otherwise extend `tests/e2e.cjs`.
 Done when: `contract build` exits 0, the web build passes, `tests/e2e.sh` passes with your new screens covered, and you looked at a screenshot of each new screen.
 
-Not built (2026-11-09). The Exact compiler is not available here: the path above is absent, and neither `exact` nor `contract` is on `PATH`. This is a skip, not a stop; T10 still runs.
-
-The screen source arrived with the merge of `claude/sleepy-cannon-a2zlm8` (2026-11-10): `app/app.contract`, `app/app.ts` and `app/app.test.contract`. Names in that source are hbots. `contract build` was not run.
+Built on this Mac (2026-11-10): Exact via `.exact-path`, `bots-web` → `app/target/web-dist`, Settings/Vault UI driven in T3 preview (password, reveal, edit). Colour tokens moved to `app.tamber` (`scheme=fixed`). `contract build` clean of the prior lower-colour-one-scheme warnings.
 
 ### T8: Exact app: the Bot's face
 Files: `app/face.contract` (new), a screenshot script under `tests/`.
@@ -97,7 +96,7 @@ Draw the Bot face as a Contract component `Face(shape, color, state, size)`: the
 Use SVG and CSS keyframes (`exact/docs/recipes/motion.md`). Reduced motion must be respected. Do not edit `app.contract`; T7 will `use` your component.
 Done when: it builds into a small test app, every state has a screenshot you looked at, and light and dark both read.
 
-Not built (2026-11-09). `contract` is not on `PATH`, so `app/face.contract` was not compiled and no state was screenshotted. Same skip as T7; T10 still runs.
+Face screenshots on this Mac (2026-11-10): `tests/face/screenshot.sh` with system Chrome (`CHROME=…`); outputs under `tests/face/out/` (gitignored).
 
 ### T9: Desktop and mobile builds
 Files: `docs/native.md`, `app/app.json` (host section only), `app/linux/` or whatever `exact new` generates, `scripts/` helpers.
@@ -112,7 +111,7 @@ Files: `tests/compat/` (new; a script and fixtures).
 We claim two hbots processes can share one `~/.hbots`. Prove or disprove it. When the earlier server checkout at `hbots/server` is present, run it against that same home too. Check: `bot.json` read/write, `main-bot.json` selection, `projects.json`, `vault.enc` + `.vault-key`, `settings.json`, and that a `bot_session` cookie issued by one is accepted by the other when they share `session-secret`.
 Done when: a runnable `tests/compat/run.sh` prints a pass/fail line per check, and the report lists every difference you found (even harmless ones) with the file and line on each side.
 
-Run on 2026-11-09: `tests/compat/run.sh` exits 0 (30 passed, 0 failed) on one `HBOTS_HOME`. The Node gateway checkout is not on this machine, so that side was not run. Both `bot_session` sides are hbots processes sharing `bots/.botapp/session-secret`. The script's INFO lines are the differences.
+Run on 2026-11-09 and again 2026-11-10 (macOS): `tests/compat/run.sh` exits 0 (30 passed, 0 failed) on one `HBOTS_HOME`. Portable `file_mode` covers GNU and BSD `stat`. The Node gateway checkout is not on this machine, so that side was not run. Both `bot_session` sides are hbots processes sharing `bots/.botapp/session-secret`. The script's INFO lines are the differences.
 
 ## Later (not scheduled)
 

@@ -45,7 +45,7 @@ Prefer a terminal-only run? `hbots up --no-service`, then `hbots serve`.
 
 The T3 Code desktop app doesn't always put its command line on your `PATH`. Try, in order (none of these are verified against every T3 Code version):
 
-1. `npx t3 auth session issue --ttl 30d --label hbots --token-only`, if Node is installed. Save the output in `~/.hbots/t3-token`.
+1. `npx t3 auth session issue --ttl 365d --label hbots --token-only`, if Node is installed. Save the output in `~/.hbots/t3-token`.
 2. Look for a `t3` the app carries: `mdfind -name t3 | grep -i t3`, or `/Applications/T3 Code.app/Contents/Resources`. Run it by full path.
 3. Install the command line from the T3 Code README.
 
@@ -54,10 +54,11 @@ The T3 Code desktop app doesn't always put its command line on your `PATH`. Try,
 
 ### The web app
 
-The gateway serves the built client. Build it once (needs an [Exact](https://github.com/expo/exact) checkout, see its README for `bun scripts/exact.mjs setup`):
+The gateway serves the built client. Build it once (needs an [Exact](https://github.com/expo/exact) checkout; local path is in gitignored `.exact-path`, see `AGENTS.md`):
 
 ```sh
-EXACT_APP_DIR=$PWD/app bun <exact>/host/web/build.mjs hbots-web     # → app/target/web-dist
+set -a; source .exact-path; set +a
+EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/web/build.mjs" bots-web   # → app/target/web-dist
 STATIC_DIR=$PWD/app/target/web-dist hbots serve
 ```
 
@@ -144,12 +145,11 @@ tests/e2e.sh        # mock T3 + gateway + Chromium: create a Bot, chat, see the 
 
 ## Status
 
-**Early.** The gateway is ported and tested against a mock T3 Code. These have not been run yet:
+**Early.** Gateway unit tests and the shared-home compat harness pass. Verified on a Mac checkout with a real T3 Code + Exact web build + Settings/Vault UI. Still open:
 
-- a real T3 Code end to end
-- the Exact screens and the Bot's face (not compiled here)
-- macOS, iOS and Linux native builds
+- macOS, iOS and Linux native Exact hosts (tools ready; full apple build not finished here)
 - the release workflow on GitHub Actions
+- pin Exact with the `EXACT_REF` repo variable (defaults to `main`)
 
 Everything else, and what comes later (connected apps, voice, the full avatar system), is tracked in [docs/PLAN.md](docs/PLAN.md).
 

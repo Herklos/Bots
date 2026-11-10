@@ -8,10 +8,10 @@ keys: the Exact clone's `README.md` (quick start, section 3 "Run it natively"), 
 
 | Platform | What was run | Result | Remaining |
 |---|---|---|---|
-| Web | Lead-reported, not run by this task: `contract build app/app.contract` and the web build (`EXACT_APP_DIR=<worktree>/app bun host/web/build.mjs bots-web`) and `tests/e2e.sh` per `docs/PLAN.md` (T7). | Not verified by this task. | Re-run to confirm on this branch. |
-| Linux | `cargo build --profile host-dev -p caltrain-linux` in the Exact clone (sample app, to learn the toolchain). Hermes install for `x86_64-unknown-linux-gnu`. | Build: still compiling dependencies when the run ended; no result. Hermes: `cannot download pinned Hermes bundle https://github.com/expo/ibex/releases/download/hermes-vanilla-d412d3bd8512-v5/hermes-vanilla-x86_64-unknown-linux-gnu.tar.gz: io: invalid peer certificate: UnknownIssuer`, exit 1. | Linux native with app.ts: BLOCKED. The installer rejects the sandbox proxy CA. No Bots linux crate exists yet. `"linux": {}` added to `app/app.json`. |
-| macOS | Not run. Needs Xcode on a Mac: `bun host/apple/build.mjs --run` (Exact README, section 3). | Not run: no macOS here. | Build and run on a Mac. `app.json` `host.macos` already has `minimumOS` and window size. |
-| iOS | Not run. `bun host/apple/build.mjs --ios --run` (Simulator) or `--device --run`. | Not run: no Xcode here. | Needs a booted Simulator or device. `host.ios` has `minimumOS 17.0`. App Transport Security (below) must be handled for `http:`. |
+| Web | 2026-11-10 on this Mac: Exact from `.exact-path`, `EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/web/build.mjs" bots-web` → `app/target/web-dist`; gateway serves it on :3780. Face screenshots via `tests/face/screenshot.sh` + system Chrome. | OK | Keep rebuilding after Contract changes. |
+| Linux | Earlier: Hermes install for `x86_64-unknown-linux-gnu` failed (`UnknownIssuer`). No Bots linux crate under `app/linux/`. | BLOCKED here | Needs a Linux host with Hermes; `"linux": {}` is in `app/app.json`. |
+| macOS | Xcode present (`/Applications/Xcode.app`). Command: `EXACT_APP_DIR=<hbots>/app bun "$EXACT_DIR/host/apple/build.mjs" --run`. Full native build not finished in this handoff (long first compile). | Tools ready; build not verified | Run the apple host build; `host.macos` has `minimumOS` 14.0 and window size. |
+| iOS | Same apple host script with `--ios --run` (Simulator) or `--device --run`. | Not run | Needs Simulator/device. `host.ios` `minimumOS` 17.0; ATS for `http:` as below. |
 
 ## Requirements (from the Exact docs)
 

@@ -1,0 +1,11 @@
+// Brand colours that stay the same in light and dark (avatar fills + white ink on them).
+tamber hbots
+
+theme
+  brand.default = #1cc3b0  scheme=fixed
+  brand.blue = #1084fe  scheme=fixed
+  brand.violet = #9159fe  scheme=fixed
+  brand.pink = #ff5eb1  scheme=fixed
+  brand.orange = #ff6700  scheme=fixed
+  brand.green = #00c972  scheme=fixed
+  ink.on-avatar = #ffffff  scheme=fixed

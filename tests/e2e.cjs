@@ -11,7 +11,7 @@ const { chromium } = require('playwright');
   await p.click('[data-testid="new-bot"]');
   await p.waitForSelector('[data-testid="new-name"]');
   await p.fill('[data-testid="new-name"]', 'Ada');
-  await p.click('[data-testid="colour-#9159fe"]');
+  await p.click('[data-testid="colour-brand.violet"]');
   await p.mouse.move(5, 700); await p.waitForTimeout(400);
   await p.screenshot({ path: S + '/2-new.png' });
   await p.click('[data-testid="create"]');

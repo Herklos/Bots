@@ -320,14 +320,13 @@ pub fn tailnet_url(dns_name: &str, port: u16) -> String {
     }
 }
 
-/// The `tailscale` to run: `TAILSCALE_PATH`, else one on the PATH, else the macOS app's binary.
+/// The `tailscale` to run: `HBOTS_TAILSCALE_PATH` (or legacy `TAILSCALE_PATH`), else PATH, else the macOS app binary.
 pub fn find_tailscale() -> Option<String> {
     const MAC_APP: &str = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
-    if let Some(path) = std::env::var("TAILSCALE_PATH")
-        .ok()
-        .filter(|p| !p.is_empty())
-    {
-        return Some(path);
+    for key in ["HBOTS_TAILSCALE_PATH", "TAILSCALE_PATH"] {
+        if let Some(path) = std::env::var(key).ok().filter(|p| !p.is_empty()) {
+            return Some(path);
+        }
     }
     if let Some(path) = find_on_path("tailscale") {
         return Some(path.to_string_lossy().into_owned());

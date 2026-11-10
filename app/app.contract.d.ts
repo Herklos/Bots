@@ -65,7 +65,7 @@ export interface FileSystem {
   rename(from: string, to: string): Promise<void>;
   copyFile(from: string, to: string): Promise<void>;
   realpath(path: string): Promise<string>;
-  /** Exact patch 24: `stat` of a link itself. */
+  /** Exact patch 24 (exact2 LLP 1133.007 D6a): `stat` of a link itself. */
   lstat(path: string): Promise<FileStat>;
   /** A symbolic link's target. Needs `fs.read`. */
   readlink(path: string): Promise<string>;
@@ -81,10 +81,10 @@ export interface FileSystem {
   /** An exclusive advisory lock (POSIX `flock`), made if absent and left on
    * disk, waiting up to `timeout` ms: held until `unlock()`. Needs `fs.write`. */
   flock(path: string, options?: { timeout?: number }): Promise<{ unlock(): Promise<void> }>;
-  /** Exact patch 9, the app interface: decode the
+  /** Exact patch 9 (exact2 LLP 1069.002 A1), the app interface: decode the
    * image at `from`, scale it to fit `maxDimension` and encode a JPEG of at
    * most `maxBytes` at `to`, searching quality as Bluesky's composer does;
-   * or, with `type: "image/png"`, a PNG that keeps alpha, shrunk by
+   * or, with `type: "image/png"` (A1.11), a PNG that keeps alpha, shrunk by
    * 0.8 up to four times until it fits. Orientation is applied and no
    * metadata is written. Needs `fs.read` on
    * `from` and `fs.write` on `to`, both `app:/` paths. Rejects with a
@@ -92,11 +92,11 @@ export interface FileSystem {
    * on this host), `undecodable`, `too-large` (over 64 MiB, 64 Mi pixels,
    * or more decoding memory than the host allows), `unfit` (nothing fits) or
    * `timeout` (20 s), or a filesystem code. With `rotate`, `flip` or `crop`
-   * the edit is made first, in `transformImage`'s
+   * (exact2 LLP 1133.019 D15) the edit is made first, in `transformImage`'s
    * order, and the search runs on the edited picture; a crop that misses it
    * rejects with `code` `outside`. */
   compressImage(from: string, to: string, options: CompressImageOptions): Promise<CompressedImage>;
-  /** Exact patch 9a, the app interface: decode
+  /** Exact patch 9a (exact2 LLP 1133.019 D14), the app interface: decode
    * the image at `from` once, turn it upright, then `rotate` it about its
    * centre (degrees clockwise; a free angle takes the bounding box, clear
    * where the type keeps alpha and white otherwise), `flip` it in the
@@ -111,13 +111,13 @@ export interface FileSystem {
    * this host does not write), `undecodable`, `too-large`, `outside` (the
    * crop misses the picture) or `timeout`, or a filesystem code. */
   transformImage(from: string, to: string, options?: TransformImageOptions): Promise<TransformedImage>;
-  /** Exact patch 14, the app interface: this
+  /** Exact patch 14 (exact2 LLP 1069.010.000 D1), the app interface: this
    * answer depends on the `doc:/` path, and the host asks it again when the
    * file, a folder's own entries or, with `recursive`, its subtree change on
    * disk, by any process. Call it inside an answer; it carries no value, so
    * the answer reads again. Needs `fs.read` on the path. */
   watch(path: string, options?: WatchOptions): void;
-  /** Exact patch 15, the app interface: the
+  /** Exact patch 15 (exact2 LLP 1069.010.000 D5), the app interface: the
    * documents the host keeps for this app across launches, most recent
    * first, without reading them. `watch("doc:/")` asks the answer again when
    * the list changes. Needs the `doc.keep` grant; a host that keeps nothing
@@ -147,7 +147,7 @@ export interface WatchOptions {
 }
 
 export interface WriteOptions {
-  /** Exact patch 14: on a `doc:/` path, the
+  /** Exact patch 14 (exact2 LLP 1069.010.000 D2a): on a `doc:/` path, the
    * stat last read. The write is refused with `code` `ECHANGED`, writing
    * nothing, when the file's `modifiedMs` or `size` is no longer this. */
   readonly expect?: Pick<FileStat, "modifiedMs" | "size">;
@@ -160,7 +160,7 @@ export interface CompressImageOptions {
   readonly maxBytes: number;
   /** What to write; `"image/jpeg"` when absent. */
   readonly type?: "image/jpeg" | "image/png";
-  /** Exact patch 9a: `transformImage`'s edit. */
+  /** Exact patch 9a (exact2 LLP 1133.019 D15): `transformImage`'s edit. */
   readonly rotate?: number;
   readonly flip?: "horizontal" | "vertical";
   readonly crop?: ImageCrop;
@@ -331,7 +331,7 @@ export type ArgsOf<O> = O extends { readonly __args?: infer A } ? A : never;
 * `type Recipe = Result<'recipe'>` (a list's element: `Result<'recipes'>[number]`). */
 export type Result<S extends Source> = SourceMap[S]['result'];
 export interface Store {
-/** The value kept under `name`; throws `InvalidAccessError` for a locked presence secret, read with `unlock`. */
+/** The value kept under `name`; throws `InvalidAccessError` for a locked presence secret, read with `unlock` (LLP 1133.010). */
 get(name: string): string | null;
 /** Throws `NotSupportedError` when the name would be kept locked and this device keeps no locked secret. */
 set(name: string, value: string): void;
@@ -346,26 +346,26 @@ unlock(name: string, options?: { reason?: string }): Promise<string | null>;
 protect(name: string): Promise<void>;
 /** After the person's check, unlock an `optional` presence name for good. */
 unprotect(name: string, options?: { reason?: string }): Promise<void>;
-/** Keep a P-256 pair under the `secret.keep <name>` grant. */
+/** Keep a P-256 pair under the `secret.keep <name>` grant (LLP 1069.005 D1b). */
 keepKey(name: string, pair: CryptoKeyPair): Promise<void>;
 /** The pair kept under `name`, its private key non-extractable. */
 key(name: string): Promise<CryptoKeyPair | null>;
 }
 declare global {
-/** Sign in through the system browser: the callback URL, or a rejection whose `status` is 499 cancelled, 403, 409, 428, 501 or 502. `message` is the sentence a loopback callback's page shows in place of "You can close this tab.". */
+/** Sign in through the system browser (LLP 1069.006): the callback URL, or a rejection whose `status` is 499 cancelled, 403, 409, 428, 501 or 502. `message` is the sentence a loopback callback's page shows in place of "You can close this tab." (LLP 1133.005 D9). */
 function openAuthSession(url: string, options: { callback: string; state: string; ephemeral?: boolean; message?: string }): Promise<string>;
-/** This carrier's auth callback, known before PAR. */
+/** This carrier's auth callback, known before PAR (LLP 1069.006 D2). */
 function authCallback(): string;
 }
 export interface NativeModule { readonly available: boolean; call(request: Record<string, unknown>): Record<string, unknown>; later(request: Record<string, unknown>): Promise<Record<string, unknown>>; watch(topic: string): void }
-/** A resource-owned WebSocket, for TypeScript on the web JS target and native hosts. Methods are synchronous-mutation-only; refresh or disposal invalidates it. */
+/** A resource-owned WebSocket, for TypeScript on the web JS target and native hosts (LLP 1016.000 D7). Methods are synchronous-mutation-only; refresh or disposal invalidates it. */
 export interface StreamSocket { readonly readyState: number; readonly bufferedAmount: number; send(data: string | ArrayBuffer | ArrayBufferView): void; close(code?: number, reason?: string): void }
-/** A local listener's connection: `send` writes a line and a `\n` (a line with a `\n` throws `SyntaxError`); `end()` closes it once what was sent is written. `readyState` is 1 while open, 3 after its `end`. The same rules as `StreamSocket`'s, by connection: its listener's mapper sends on the connection it is handed. */
+/** A local listener's connection (LLP 1133.005 D1): `send` writes a line and a `\n` (a line with a `\n` throws `SyntaxError`); `end()` closes it once what was sent is written. `readyState` is 1 while open, 3 after its `end`. The same rules as `StreamSocket`'s, by connection: its listener's mapper sends on the connection it is handed. */
 export interface ListenConnection { readonly readyState: number; send(line: string): void; end(): void }
 /** A local listener's event: `listening` (`address`, `port`: 0 for `unix:`), then each `connection`, `message` (one line, without its terminator) and `end` (`reason` `peer`, `app`, `timeout` or `overflow`), by connection `id`; `error` ends it (`kind` `Refused`, `AddressInUse`, `Unsupported` or `Network`). */
 export type ListenEvent = { readonly type: "listening"; readonly address: string; readonly port: number } | { readonly type: "connection"; readonly id: number } | { readonly type: "message"; readonly id: number; readonly data: string } | { readonly type: "end"; readonly id: number; readonly reason: "peer" | "app" | "timeout" | "overflow" } | { readonly type: "error"; readonly kind: string; readonly message: string };
 declare global {
-/** A local listener, a resource's answer as `fetch(url, {exactStream})` is: listening while the resource holds it, on `unix:<absolute path>` under a `net.listen` grant. Defined on desktop hosts only: test `"exactListen" in globalThis`. A mutation that calls it throws `InvalidStateError`. */
+/** A local listener (LLP 1133.005), a resource's answer as `fetch(url, {exactStream})` is: listening while the resource holds it, on `unix:<absolute path>` under a `net.listen` grant. Defined on desktop hosts only: test `"exactListen" in globalThis`. A mutation that calls it throws `InvalidStateError`. */
 function exactListen<T>(address: string, options: { exactStream: (event: ListenEvent, connection?: ListenConnection) => T; /** Newest wins: take the address over from a live listener. */ takeover?: boolean; /** ms, 1 to 600000: a connection whose first line has not arrived ends `timeout`. */ firstLineTimeout?: number; /** 1 to 1048576, 65536 by default. */ maxLineBytes?: number; /** 1 to 64, 16 by default. */ maxConnections?: number }): Promise<T>;
 }
 export interface StreamEvent { readonly type: string; readonly data: string | ArrayBuffer; readonly lastEventId: string; readonly coalesced: number; readonly kind?: string; readonly message?: string; readonly status?: number; readonly code?: number; readonly reason?: string; readonly wasClean?: boolean; /** An upload's `progress`: the body's bytes sent so far, of `total`. */ readonly loaded?: number; readonly total?: number; readonly lengthComputable?: boolean }
@@ -382,3 +382,5 @@ export type Answer = <S extends Source>(source: S, args: Args<S>, store: Store, 
 export type Write = { [S in Source]: { readonly id: number; readonly mutation: string; readonly source: S; readonly args: Args<S>; readonly reply?: Result<S>; readonly answered: boolean; keep(): void } }[Source];
 /** What a resource shows while writes affect it: its answer with them laid over it. Synchronous, with no effects; `undefined` shows the answer and stops showing every answered write. */
 export type Overlay = <S extends Source>(source: S, args: Args<S>, answer: Result<S>, writes: readonly Write[]) => Result<S> | undefined;
+/** A colour token of the app's design, by its name (LLP 1121 D12). */
+export type ColorToken = "brand.default" | "brand.blue" | "brand.violet" | "brand.pink" | "brand.orange" | "brand.green" | "ink.on-avatar";

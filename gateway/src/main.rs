@@ -77,16 +77,20 @@ impl AppState {
         self.cfg.app_dir().join("settings.json")
     }
 
+    pub fn settings_defaults() -> Value {
+        json!({
+            "userName": "", "theme": "dark", "palette": "amoled", "accent": "bot", "timezone": "", "autoReview": true,
+            "rules": { "alwaysAsk": [], "allowWithoutAsking": [] }, "sections": [], "defaultModel": null, "avatarDrawingModel": null,
+            "beta": { "projects": false },
+        })
+    }
+
     /// `settings.json` with hbots defaults filled in.
     pub async fn settings(&self) -> Value {
         let saved = store::read_json(&self.settings_path())
             .await
             .unwrap_or_else(|| json!({}));
-        let defaults = json!({
-            "userName": "", "theme": "dark", "palette": "amoled", "accent": "bot", "timezone": "", "autoReview": true,
-            "rules": { "alwaysAsk": [], "allowWithoutAsking": [] }, "sections": [], "defaultModel": null, "avatarDrawingModel": null,
-        });
-        let mut out = store::merge(&defaults, &saved);
+        let mut out = store::merge(&Self::settings_defaults(), &saved);
         out["beta"] = json!({ "projects": saved["beta"]["projects"] == true });
         out
     }
@@ -171,6 +175,14 @@ async fn main() -> anyhow::Result<()> {
         provision_now: tokio::sync::Notify::new(),
         cfg,
     });
+    // Write the defaults once; an existing file, even an unreadable one, is left alone.
+    if !state.settings_path().exists() {
+        if let Err(e) =
+            store::write_json(&state.settings_path(), &AppState::settings_defaults()).await
+        {
+            tracing::warn!("writing settings.json: {e}");
+        }
+    }
     // Instructions may have changed with this version.
     for bot in state
         .bots
@@ -216,6 +228,12 @@ async fn main() -> anyhow::Result<()> {
         state.cfg.t3_url,
         state.cfg.bots_root.display()
     );
+    if !state.cfg.static_dir.join("index.html").is_file() {
+        tracing::warn!(
+            "{WEB_APP_MISSING} (looked in {})",
+            state.cfg.static_dir.display()
+        );
+    }
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(
         listener,
@@ -985,8 +1003,13 @@ async fn projects_on(s: &AppState) -> ApiResult<()> {
 }
 
 async fn projects_board(State(s): S) -> ApiResult<Json<Value>> {
-    projects_on(&s).await?;
-    Ok(Json(s.projects.board().await))
+    // With the beta off, an empty board that says so, not a 404 the browser logs as an error.
+    if s.settings().await["beta"]["projects"] != true {
+        return Ok(Json(
+            json!({ "beta": false, "version": 0, "items": [], "activity": [] }),
+        ));
+    }
+    Ok(Json(s.projects.try_board().await?))
 }
 
 async fn projects_save(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
@@ -1145,7 +1168,7 @@ async fn static_files(State(s): S, uri: Uri, req: Request) -> Response {
         candidate
     };
     if !target.is_file() {
-        return (StatusCode::NOT_FOUND, "The Bots web app isn't built. Run `bun exact.mjs web --build` in app/, or set STATIC_DIR.").into_response();
+        return (StatusCode::NOT_FOUND, WEB_APP_MISSING).into_response();
     }
     // The web build is made with a placeholder gateway address (see app/app.ts); serve it with the
     // address this request came in on, so one build works wherever the gateway is reached.
@@ -1175,6 +1198,9 @@ async fn static_files(State(s): S, uri: Uri, req: Request) -> Response {
 
 /// What the built web app uses for the gateway's address until it is served (see `app/app.ts`).
 const ORIGIN_PLACEHOLDER: &str = "http://hbots-origin.invalid";
+
+/// `index.html` is missing from `STATIC_DIR`. `cargo run` does not build the Exact web app.
+const WEB_APP_MISSING: &str = "The Bots web app isn't built. Exact is a separate checkout (https://github.com/expo/exact), not a script in this repo. From that directory: EXACT_APP_DIR=<hbots>/app bun host/web/build.mjs bots-web (writes app/target/web-dist). An installed release looks for web/ next to the binary. Or set STATIC_DIR.";
 
 /// The address a request was made to, `scheme://host[:port]`, as the browser sees it behind a proxy.
 fn request_origin(h: &HeaderMap) -> String {

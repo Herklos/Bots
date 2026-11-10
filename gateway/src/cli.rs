@@ -257,7 +257,7 @@ async fn up(flags: &Flags) -> Result<()> {
         || settings.contains_key("T3_TOKEN")
         || std::fs::read_to_string(&token_file).is_ok_and(|t| !t.trim().is_empty());
     if !have_token {
-        let t3 = find_t3().ok_or_else(|| anyhow!("No `t3` command found on your PATH or in ~/.t3/bin. Get a token another way (try `npx t3 auth session issue --ttl 30d --label hbots --token-only`), put it in T3_TOKEN in ~/.hbots/.env, then run `hbots up` again."))?;
+        let t3 = find_t3().ok_or_else(|| anyhow!("No `t3` command found on your PATH or in ~/.t3/bin. Get a token another way (try `npx t3 auth session issue --ttl 365d --label hbots --token-only`), put it in T3_TOKEN in ~/.hbots/.env, then run `hbots up` again."))?;
         print_line("Asking T3 Code for a token");
         let out = std::process::Command::new(&t3)
             .args([
@@ -329,7 +329,7 @@ async fn up(flags: &Flags) -> Result<()> {
     Ok(())
 }
 
-/// The `t3` command: on PATH, or in ~/.t3/bin.
+/// The `t3` command: on PATH, in ~/.t3/bin, or inside a T3 Code.app bundle (macOS).
 fn find_t3() -> Option<PathBuf> {
     for dir in std::env::var("PATH").unwrap_or_default().split(':') {
         let candidate = Path::new(dir).join("t3");
@@ -337,8 +337,24 @@ fn find_t3() -> Option<PathBuf> {
             return Some(candidate);
         }
     }
-    let own = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".t3/bin/t3");
-    own.is_file().then_some(own)
+    let home = PathBuf::from(std::env::var("HOME").unwrap_or_default());
+    let own = home.join(".t3/bin/t3");
+    if own.is_file() {
+        return Some(own);
+    }
+    // Desktop app installs the CLI under Resources (Nightly or stable).
+    for app in [
+        "/Applications/T3 Code (Nightly).app/Contents/Resources/t3",
+        "/Applications/T3 Code.app/Contents/Resources/t3",
+        "/Applications/T3 Code (Nightly).app/Contents/MacOS/t3",
+        "/Applications/T3 Code.app/Contents/MacOS/t3",
+    ] {
+        let candidate = PathBuf::from(app);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    None
 }
 
 fn status(flags: &Flags) -> Result<()> {

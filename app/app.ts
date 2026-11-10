@@ -11,14 +11,17 @@ const API: string = HBOTS_URL.replace(/\/$/, '');
 // name on Apple also needs `appTransportSecurity.allowsArbitraryLoads` in app.json.
 export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session';
 
-// hbots avatar palette (server/avatar-config.json), so a Bot looks the same in both apps.
-const COLORS: Record<string, string> = {
-  black: '#000000', white: '#f2f2f0', brown: '#936439', red: '#ff263c', orange: '#ff6700', amber: '#ffaf38',
-  yellow: '#ff9800', green: '#00c972', teal: '#1cc3b0', cyan: '#00bca6', blue: '#1084fe', purple: '#a97efe',
-  violet: '#9159fe', pink: '#ff5eb1', magenta: '#ff309b', gray: '#777777',
+// Avatar palette → app.tamber tokens (scheme=fixed). Hex and old name aliases still resolve.
+const BRAND: Record<string, string> = {
+  teal: 'brand.default', '#1cc3b0': 'brand.default', 'brand.default': 'brand.default',
+  blue: 'brand.blue', '#1084fe': 'brand.blue', 'brand.blue': 'brand.blue',
+  violet: 'brand.violet', '#9159fe': 'brand.violet', 'brand.violet': 'brand.violet',
+  pink: 'brand.pink', '#ff5eb1': 'brand.pink', 'brand.pink': 'brand.pink',
+  orange: 'brand.orange', '#ff6700': 'brand.orange', 'brand.orange': 'brand.orange',
+  green: 'brand.green', '#00c972': 'brand.green', 'brand.green': 'brand.green',
 };
-export const SWATCHES = ['teal', 'blue', 'violet', 'pink', 'orange', 'green'];
-const fill = (c: unknown): string => (typeof c === 'string' ? (COLORS[c] ?? (/^#[0-9a-f]{6}$/i.test(c) ? c : COLORS.teal)) : COLORS.teal);
+export const SWATCHES = ['brand.default', 'brand.blue', 'brand.violet', 'brand.pink', 'brand.orange', 'brand.green'];
+const fill = (c: unknown): string => (typeof c === 'string' ? (BRAND[c] ?? (/^#[0-9a-f]{6}$/i.test(c) ? c : 'brand.default')) : 'brand.default');
 const initials = (name: string): string => name.trim().split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('') || '?';
 
 type Answered = { ok: true; body: any } | { ok: false; error: string };
@@ -99,6 +102,8 @@ const sources: Sources = {
   deleteLogin: async ([id], store) => reply(await call(store, `/api/vault/${encodeURIComponent(id)}`, { method: 'DELETE' })),
   loadProjects: async (_args, store): Promise<Result<'loadProjects'>> => {
     const body = await read(store, '/api/projects');
+    // The gateway answers an empty board with beta false while the Projects beta is off; the page shows that as its off state.
+    if (body.beta === false) throw new Error('Projects beta is off');
     return (body.items as any[]).map((p) => ({
       id: String(p.id), kind: String(p.kind), title: String(p.title ?? ''), status: String(p.status ?? ''),
       area: String(p.area ?? ''), body: String(p.body ?? ''),

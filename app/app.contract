@@ -77,7 +77,7 @@ shape Project
   body: string
 
 fn nameOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.name, case none => "" }
-fn colorOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.color, case none => "#1cc3b0" }
+fn colorOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.color, case none => "brand.default" }
 fn kindTitle(k: string): string = k == "project" ? "Projects" : k == "task" ? "Tasks" : k == "machine" ? "Machines" : k == "service" ? "Services" : k == "repo" ? "Repos" : k == "note" ? "Notes" : "Links"
 fn themeLabel(t: string): string = t == "system" ? "System" : t == "dark" ? "Dark" : "Light"
 
@@ -85,7 +85,7 @@ component Bots
   state password = ""
   state draft = ""
   state newName = ""
-  state newColor = "#1cc3b0"
+  state newColor = "brand.default"
   state nameDraft = ""
   state nameEditing = false
   state newPassword = ""
@@ -158,7 +158,7 @@ component Bots
     nav = back(nav)
   action openNew
     newName = ""
-    newColor = "#1cc3b0"
+    newColor = "brand.default"
     nav = push(nav, "/new")
   action editName(v: string)
     newName = v
@@ -257,7 +257,7 @@ component Bots
     main navigationKey=`${top(nav).id}` navigationBack="back" navigate=open interactive-widget="resizes-content" width="100%" height="100%" testId="app"
       if locked
         column flex=1 justify-content="center" align-items="center" gap=12 padding=24 testId="sign-in"
-          Avatar(initials="B", color="#1cc3b0", size=72)
+          Avatar(initials="B", color="brand.default", size=72)
           text "Bots" role="heading" aria-level=1
           text "Enter the password you set in Settings → Remote access." color="-exact-secondary-label" text-align="center"
           input type="password" value=password input=editPassword submit=login placeholder="Password" aria-label="Password" testId="password" width="100%" max-width="20rem"
@@ -449,7 +449,7 @@ component Bots
                   header
                     text "Colour"
                   row gap=12
-                    for c in ["#1cc3b0", "#1084fe", "#9159fe", "#ff5eb1", "#ff6700", "#00c972"] key=c
+                    for c in ["brand.default", "brand.blue", "brand.violet", "brand.pink", "brand.orange", "brand.green"] key=c
                       button press=pick(c) appearance="none" aria-label=`Colour ${c}` aria-pressed=(newColor == c) testId=`colour-${c}`
                         column width=42 height=42 border-radius=21 background-color=c border=(newColor == c ? "3px solid -exact-label" : "3px solid transparent")
                 section
@@ -465,7 +465,7 @@ component Avatar
     size: number
   view
     column width=size height=size border-radius=(size / 2) background-color=color align-items="center" justify-content="center" flex-shrink=0
-      text initials font-size=(size * 0.4) font-weight=600 color="#ffffff"
+      text initials font-size=(size * 0.4) font-weight=600 color="ink.on-avatar"
 
 // A Bot's own page, pushed from its chat or the inbox's Hidden section.
 component BotDetails
@@ -497,7 +497,7 @@ component BotDetails
           header
             text "Colour"
           row gap=12
-            for c in ["#1cc3b0", "#1084fe", "#9159fe", "#ff5eb1", "#ff6700", "#00c972"] key=c
+            for c in ["brand.default", "brand.blue", "brand.violet", "brand.pink", "brand.orange", "brand.green"] key=c
               button press=recolour(bot.slug, c) appearance="none" aria-label=`Colour ${c}` aria-pressed=(bot.color == c) testId=`colour-${c}`
                 column width=42 height=42 border-radius=21 background-color=c border=(bot.color == c ? "3px solid -exact-label" : "3px solid transparent")
         section

@@ -960,13 +960,6 @@ impl Projects {
         Ok(json!({ "version": s["version"], "items": items, "activity": tail }))
     }
 
-    /// `try_board`, or an empty board when the file can't be read (saves still refuse in that case).
-    pub async fn board(&self) -> Value {
-        self.try_board()
-            .await
-            .unwrap_or_else(|_| json!({ "version": 0, "items": [], "activity": [] }))
-    }
-
     /// Every item, for the query views.
     pub async fn items(&self) -> ApiResult<Vec<Value>> {
         let mut g = self.state.lock().await;

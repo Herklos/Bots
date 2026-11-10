@@ -5,7 +5,7 @@ use serde_json::{json, Value};
 use std::{sync::Arc, time::Duration};
 
 pub fn default_model() -> Value {
-    json!({ "instanceId": "claudeAgent", "model": "claude-opus-5-5", "options": [{ "id": "effort", "value": "medium" }] })
+    json!({ "instanceId": "claudeAgent", "model": "claude-haiku-5-5", "options": [{ "id": "effort", "value": "medium" }] })
 }
 
 pub fn start(state: Arc<AppState>) {

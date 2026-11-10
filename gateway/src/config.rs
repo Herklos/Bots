@@ -11,7 +11,8 @@ pub struct Config {
     pub t3_token: String,
     pub data_root: PathBuf,
     pub bots_root: PathBuf,
-    /// The built Exact web app (`app/` built with `exact.mjs web --build`), served at `/`.
+    /// The built Exact web app, served at `/`. An installed release uses `web/` next to the binary.
+    /// A checkout uses `app/target/web-dist`.
     pub static_dir: PathBuf,
     pub password: String,
     pub vault_file: PathBuf,
@@ -39,13 +40,13 @@ fn home() -> PathBuf {
 }
 
 /// The web app an installed release carries: `web/` next to the binary. A checkout falls back to
-/// `app/dist`.
+/// the Exact build at `app/target/web-dist`.
 fn default_static_dir() -> PathBuf {
     std::env::current_exe()
         .ok()
         .and_then(|exe| exe.parent().map(|d| d.join("web")))
         .filter(|d| d.join("index.html").is_file())
-        .unwrap_or_else(|| PathBuf::from("app/dist"))
+        .unwrap_or_else(|| PathBuf::from("app/target/web-dist"))
 }
 
 impl Config {
@@ -69,7 +70,7 @@ impl Config {
         .trim()
         .to_string();
         if t3_token.is_empty() {
-            anyhow::bail!("No T3 token: set T3_TOKEN or T3_TOKEN_FILE (t3 auth session issue --ttl 30d --label hbots --token-only)");
+            anyhow::bail!("No T3 token: set T3_TOKEN or T3_TOKEN_FILE (t3 auth session issue --ttl 365d --label hbots --token-only)");
         }
         let bots_root = env("HBOTS_ROOT")
             .map(PathBuf::from)

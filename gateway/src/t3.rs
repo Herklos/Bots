@@ -296,6 +296,10 @@ pub async fn proxy_ws(
     token: String,
     close_sockets: std::sync::Arc<tokio::sync::Notify>,
 ) {
+    // Registered before the upstream connects, so a password change during that wait still closes this socket.
+    let closed = close_sockets.notified();
+    tokio::pin!(closed);
+    closed.as_mut().enable();
     let upstream = match bearer_request(&upstream_url, &token) {
         Ok(req) => tokio_tungstenite::connect_async(req).await,
         Err(e) => {
@@ -344,7 +348,7 @@ pub async fn proxy_ws(
         _ = to_upstream => {},
         _ = to_client => {},
         // A new remote password signs everyone out, including sockets already open.
-        _ = close_sockets.notified() => {},
+        _ = closed.as_mut() => {},
     }
 }
 
