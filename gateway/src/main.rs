@@ -672,8 +672,8 @@ fn string_list(value: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Refuses a slug that is not a Bot on this machine.
-async fn known_bots(s: &AppState, slugs: &[String]) -> ApiResult<()> {
+/// Refuses a slug that is not a Bot on this machine. The list is the one `Bots::list` loaded.
+async fn known_bots(s: &AppState, slugs: &[String]) -> ApiResult<Vec<Value>> {
     let known = s.bots.list().await?;
     if slugs.iter().any(|slug| {
         !known
@@ -682,14 +682,14 @@ async fn known_bots(s: &AppState, slugs: &[String]) -> ApiResult<()> {
     }) {
         return Err(ApiError::bad_request("Pick Bots that already exist."));
     }
-    Ok(())
+    Ok(known)
 }
 
 async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
     require_json(&h)?;
     let body = parse(&body)?;
     let slugs = string_list(&body["members"]);
-    known_bots(&s, &slugs).await?;
+    let known = known_bots(&s, &slugs).await?;
     let room = s
         .rooms
         .create(
@@ -698,6 +698,7 @@ async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
             body["color"].as_str().unwrap_or(""),
             body["shape"].as_str().unwrap_or(""),
             &slugs,
+            &known,
         )
         .await?;
     let (members, _) = room_snapshot(&s, &room, true).await?;
@@ -724,10 +725,12 @@ async fn room_update(
 ) -> ApiResult<Json<Value>> {
     require_json(&h)?;
     let body = parse(&body)?;
-    if body.get("members").is_some() {
-        known_bots(&s, &string_list(&body["members"])).await?;
-    }
-    let room = s.rooms.update(&id, &body).await?;
+    let known = if body.get("members").is_some() {
+        known_bots(&s, &string_list(&body["members"])).await?
+    } else {
+        Vec::new()
+    };
+    let room = s.rooms.update(&id, &body, &known).await?;
     let (members, _) = room_snapshot(&s, &room, false).await?;
     Ok(Json(rooms::present(&room, &members)))
 }
