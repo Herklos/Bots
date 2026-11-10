@@ -54,8 +54,11 @@ Lists (`/api/bots`, rooms, vault) are filtered through the same function. The 64
 
 Each step is one commit with tests passing.
 
+## Decided
+
+- **Shared workspace files.** A shared Bot's workspace files are common to everyone who can use it. The Sharing page says so.
+- **Deleting a person.** Deleting a user deletes what they own: their Vault, their private Bots and rooms, and their per-user threads. The admin confirms first, and the dialog lists the Bots that will go. Shared Bots they own are deleted as well, after the same confirmation, so nothing is left without an owner. An admin can move a Bot to another owner beforehand.
+
 ## Open points
 
-- A Bot's workspace files are shared between everyone who can use it. Say so on the Sharing page.
-- A deleted user's private Bots go to the admin. Their Vault is deleted.
 - `HBOTS_PASSWORD` stays as the admin password on a fresh install, so scripts keep working.
