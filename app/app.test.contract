@@ -459,3 +459,34 @@ test "two server tabs are listed and the second can be chosen"
   tap "tab-two"
   clock data
   expect text "computer-tab-title" == "Two"
+
+test "a subagent stays out of the inbox, Hidden, search, and group pickers"
+  size 1200x800
+  at "/bot/fixture"
+  clock data
+  expect tree missing "bot-ada-junior-1"
+  expect tree has "bot-fixture"
+  tap "hidden-toggle"
+  expect tree has "hidden-bea"
+  expect tree missing "hidden-ada-junior-1"
+  tap "search-open"
+  type "bot-search" "junior"
+  expect tree has "no-bot-match"
+  expect tree missing "bot-ada-junior-1"
+  expect tree missing "hidden-ada-junior-1"
+  expect tree missing "hidden-bea"
+  tap "search-cancel"
+  tap "new-bot"
+  tap "new-group-option"
+  clock settle
+  expect tree missing "pick-bot-ada-junior-1"
+  expect tree has "pick-bot-fixture"
+  expect tree has "pick-bot-bea"
+  back
+  at "/group/fixture"
+  clock data
+  tap "group-toggle"
+  tap "group-edit"
+  expect tree missing "group-edit-member-ada-junior-1"
+  expect tree has "group-edit-member-fixture"
+  expect tree has "group-edit-member-bea"

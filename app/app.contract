@@ -387,6 +387,8 @@ shape Bot
   working: bool
   unread: bool
   parentSlug: string
+  hideFromSidebar: bool
+  subagent: bool
   prompt: string
   inheritParentPrompt: bool
 
@@ -896,10 +898,11 @@ component Bots
   derive qtext = messageQuery.trim().toLowerCase()
   derive shownRows = chat.rows.filter(m => m.kind != "message" or qtext == "" or m.text.toLowerCase().includes(qtext))
   derive searchNote = qtext != "" and chat.partial ? t("chat.searchPartial") : ""
-  derive visibleBots = bots.filter(b => not b.hidden and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
+  derive visibleBots = bots.filter(b => not b.hidden and not b.hideFromSidebar and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
   derive tiles = visibleBots.filter(b => query == "" and (b.main or b.pinned))
   derive openUnread = bots.filter(b => b.slug == slug and b.unread).length > 0
-  derive hiddenBots = bots.filter(b => b.hidden and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
+  derive hiddenBots = bots.filter(b => b.hidden and not b.hideFromSidebar and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
+  derive pickableBots = bots.filter(b => not b.hideFromSidebar)
   derive vquery = vaultQuery.trim().toLowerCase()
   derive shownVault = vault.filter(v => vquery == "" or v.title.toLowerCase().includes(vquery) or v.username.toLowerCase().includes(vquery) or v.website.toLowerCase().includes(vquery))
   derive renameError = match renamed { case some(r) => r.error, case none => "" }
@@ -2031,7 +2034,7 @@ component Bots
                       text t("common.bots") font="-exact-subheadline" font-weight=600 flex=1
                       text (groupMembers.length < 2 ? t("group.pickMore", n=groupMembers.length) : t("group.picked", n=groupMembers.length)) color="ink.muted" font="-exact-footnote" testId="group-count"
                     column gap="space.xs"
-                      for b in bots key=b.slug
+                      for b in pickableBots key=b.slug
                         button appearance="none" press=toggleGroupMember(b.slug) role="checkbox" aria-checked=groupMembers.includes(b.slug) aria-label=b.name testId=`pick-bot-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border=(groupMembers.includes(b.slug) ? "2px solid AccentColor" : "2px solid surface.line") border-radius="radius.md" background-color="surface.card" color="-exact-label"
                           row gap="space.md" align-items="center" width="100%"
                             Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=36, still=true, presence="")
@@ -2358,6 +2361,7 @@ component GroupPanel
   state title = room.title
   state about = room.description
   derive picked = room.members.map(m => m.slug)
+  derive pickable = bots.filter(b => not b.hideFromSidebar)
   action editTitle(v: string)
     title = v
   action editAbout(v: string)
@@ -2387,7 +2391,7 @@ component GroupPanel
               input appearance="none" class=Field value=about input=editAbout change=patch("description") placeholder=t("group.aboutPlaceholderShort") aria-label=t("common.description") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-edit-about"
             column gap="space.sm"
               text t("common.bots") class=SectionLabel
-              for b in bots key=b.slug
+              for b in pickable key=b.slug
                 button appearance="none" press=toggleMember(b.slug) role="checkbox" aria-checked=picked.includes(b.slug) aria-label=b.name testId=`group-edit-member-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border=(picked.includes(b.slug) ? "2px solid AccentColor" : "2px solid surface.line") border-radius="radius.md" background-color="surface.card" color="-exact-label"
                   row gap="space.md" align-items="center" width="100%"
                     Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=32, still=true, presence="")

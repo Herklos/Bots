@@ -483,10 +483,11 @@ async function closeNotice(slug: string): Promise<void> {
 }
 
 // One local notice per hidden unread Bot. The open chat is closed instead.
+// A subagent (hideFromSidebar) is not in Hidden, so it never gets this notice.
 // Nothing is posted until the person has allowed notifications, so a poll never asks.
 async function noteHidden(bots: any[], openSlug: string): Promise<void> {
   if (FIXTURE_SLUG(openSlug)) return;
-  const hidden = bots.filter((b) => b && b.hidden === true && b.notifications !== false && !FIXTURE_SLUG(String(b.slug ?? '')));
+  const hidden = bots.filter((b) => b && b.hidden === true && b.hideFromSidebar !== true && b.notifications !== false && !FIXTURE_SLUG(String(b.slug ?? '')));
   if (hidden.length === 0) return;
   if (!(await noticeGranted())) return;
   for (const bot of hidden) {
@@ -522,14 +523,14 @@ const sources: Sources = {
       const slug = focus === 'frame' ? 'frame' : 'tabs';
       const name = focus === 'frame' ? 'Frame' : 'Tabs';
       return [
-        { slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', prompt: '', inheritParentPrompt: false },
+        { slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false },
       ];
     }
     if (focus === 'fixture' || focus === 'bea') {
       return [
-        { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', prompt: '', inheritParentPrompt: false },
-        { slug: 'ada-junior-1', name: 'Ada junior 1', label: '', initials: 'AJ', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: 'fixture', prompt: 'Look things up.', inheritParentPrompt: true },
-        { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true, shape: 'ball', pinned: false, working: false, line: 'Getting set up…', time: '', parentSlug: '', prompt: '', inheritParentPrompt: false },
+        { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false },
+        { slug: 'ada-junior-1', name: 'Ada junior 1', label: '', initials: 'AJ', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: 'fixture', hideFromSidebar: true, subagent: true, prompt: 'Look things up.', inheritParentPrompt: true },
+        { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true, shape: 'ball', pinned: false, working: false, line: 'Getting set up…', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false },
       ];
     }
     const body = await botsBody(store);
@@ -548,6 +549,8 @@ const sources: Sources = {
       ready: typeof b.mainThreadId === 'string', working: b.working === true, unread: b.unread === true,
       line: lineOf(b), time: when(b.preview?.at, Number(body.now)),
       parentSlug: typeof b.parentSlug === 'string' ? b.parentSlug : '',
+      hideFromSidebar: b.hideFromSidebar === true,
+      subagent: b.role === 'subagent' || b.hideFromSidebar === true,
       prompt: typeof b.subagent?.prompt === 'string' ? b.subagent.prompt : '',
       inheritParentPrompt: b.subagent?.inheritParentPrompt === true,
     }));
@@ -621,7 +624,7 @@ const sources: Sources = {
     const at = (b: any): string => (typeof b.preview?.at === 'string' ? b.preview.at : '');
     const match = (...names: string[]): boolean => query === '' || names.some((n) => n.toLowerCase().includes(query));
     const bots = directory
-      .filter((b) => b.hidden !== true && (query !== '' || !(b.primary === true || b.pinned === true)) && match(String(b.name), String(b.label ?? '')))
+      .filter((b) => b.hidden !== true && b.hideFromSidebar !== true && (query !== '' || !(b.primary === true || b.pinned === true)) && match(String(b.name), String(b.label ?? '')))
       .map((b) => ({
         kind: 'bot', key: `bot-${String(b.slug)}`, id: String(b.slug), name: String(b.name), color: fill(b.color), shape: String(b.shape ?? 'ball'), faces: [] as { shape: string; color: string; state: string }[],
         line: lineOf(b), time: when(b.preview?.at, now), at: at(b), unread: b.unread === true, working: b.working === true,
