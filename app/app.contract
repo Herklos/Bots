@@ -1546,7 +1546,7 @@ component Bots
                   EmptyState(symbol="symbol:search", title=t("inbox.noMatch", query=botQuery.trim()), message=t("inbox.searchHint"))
               else
                 if tiles.length > 0
-                  row gap="space.xs" padding="0 space.sm space.sm" testId="bot-tiles"
+                  row gap="space.xs" padding="space.sm" testId="bot-tiles"
                     for b in tiles key=b.slug
                       link class=TileLink href=path("chat", b.slug) testId=`bot-${b.slug}` aria-label=b.name width=84 flex-shrink=0 background-color=(slug == b.slug ? "surface.raised" : "transparent")
                         column align-items="center" gap="space.xs" width="100%" min-width=0 max-width="100%"
