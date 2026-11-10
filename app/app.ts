@@ -36,6 +36,28 @@ export const SWATCHES = ['brand.brown', 'brand.red', 'brand.orange', 'brand.ambe
 const DEFAULT_COLOUR = 'brand.default';
 const fill = (c: unknown): string => (typeof c === 'string' ? (BRAND[c] ?? (/^#[0-9a-f]{6}$/i.test(c) ? c : DEFAULT_COLOUR)) : DEFAULT_COLOUR);
 // design:end palette
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const clock = (d: Date): string => `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${d.getHours() < 12 ? 'AM' : 'PM'}`;
+const dayStart = (t: number): number => new Date(t).setHours(0, 0, 0, 0);
+// A time as a list shows it: the clock today, then Yesterday, the weekday for a week, then the date.
+function when(at: unknown, now: number): string {
+  if (typeof at !== 'string' || at === '' || !(now > 0)) return '';
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return '';
+  const days = Math.round((dayStart(now) - dayStart(d.getTime())) / 86_400_000);
+  if (days <= 0) return clock(d);
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return DAYS[d.getDay()]!;
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+}
+// The one line under a Bot's name in the inbox.
+function lineOf(b: any): string {
+  if (b.working === true) return 'Working…';
+  const p = b.preview;
+  if (p && typeof p.text === 'string' && p.text !== '') return p.role === 'user' ? `You: ${p.text}` : p.text;
+  return typeof b.mainThreadId === 'string' ? 'Ready to chat' : 'Getting set up…';
+}
 const initials = (name: string): string => name.trim().split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('') || '?';
 
 type Answered = { ok: true; body: any } | { ok: false; error: string };
@@ -106,11 +128,16 @@ const sources: Sources = {
     return reply(r);
   },
   signOut: async (_args, store) => { store.set('session', ''); return { ok: true, error: '' }; },
-  loadBots: async (_args, store): Promise<Result<'loadBots'>> => {
+  loadBots: async ([now], store): Promise<Result<'loadBots'>> => {
     const body = await read(store, '/api/bots');
-    return (body.bots as any[]).map((b) => ({
+    const at = (b: any): string => (typeof b.preview?.at === 'string' ? b.preview.at : '');
+    // The main Bot first, then the most recent conversation; a Bot with none goes last.
+    const sorted = [...(body.bots as any[])].sort((a, b) => (b.primary === true ? 1 : 0) - (a.primary === true ? 1 : 0) || at(b).localeCompare(at(a)));
+    return sorted.map((b) => ({
       slug: String(b.slug), name: String(b.name), label: String(b.label ?? ''), initials: initials(String(b.name)),
-      color: fill(b.color), main: b.primary === true, hidden: b.hidden === true, ready: typeof b.mainThreadId === 'string',
+      color: fill(b.color), shape: String(b.shape ?? 'ball'), main: b.primary === true, pinned: b.pinned === true, hidden: b.hidden === true,
+      ready: typeof b.mainThreadId === 'string', working: b.working === true, unread: b.unread === true,
+      line: lineOf(b), time: when(b.preview?.at, now),
     }));
   },
   renameBot: async ([slug, name], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ name }) })),
@@ -162,6 +189,7 @@ const sources: Sources = {
   },
   deleteProject: async ([id], store) => reply(await call(store, '/api/projects/delete', { method: 'POST', body: JSON.stringify({ ids: [id] }) })),
   createBot: async ([name, color], store) => reply(await call(store, '/api/bots', { method: 'POST', body: JSON.stringify({ name, color }) })),
+  markSeen: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/seen`, { method: 'POST', body: '{}' })),
   loadChat: async ([slug], store): Promise<Result<'loadChat'>> => {
     if (slug === '') return { slug, rows: [], working: false }; // no chat is open: nothing to read
     const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat`);

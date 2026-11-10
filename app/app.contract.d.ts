@@ -14,7 +14,7 @@
 //   deleteRoutine: (args: [string, string]) => Reply
 //   hideBot: (args: [string, boolean]) => Reply
 //   loadBotUsage: (args: [string, string]) => BotUsage
-//   loadBots: (args: []) => Bot[]
+//   loadBots: (args: [number]) => Bot[]
 //   loadChat: (args: [string]) => Chat
 //   loadComputer: (args: [string, string]) => Computer
 //   loadLibrary: (args: [string, string]) => Library
@@ -27,6 +27,7 @@
 //   loadUsage: (args: [string]) => Usage
 //   loadVault: (args: []) => Login[]
 //   makeMainBot: (args: [string]) => Reply
+//   markSeen: (args: [string]) => Reply
 //   recolourBot: (args: [string, string]) => Reply
 //   renameBot: (args: [string, string]) => Reply
 //   revealPassword: (args: [string]) => Revealed
@@ -50,7 +51,7 @@
 // The shapes. None is exported: name one by its source, `type Reply = Result<'computerControl'>`.
 //   Reply = { ok: boolean; error: string }
 //   Session = { authenticated: boolean; passwordRequired: boolean }
-//   Bot = { slug: string; name: string; label: string; initials: string; color: string; main: boolean; hidden: boolean; ready: boolean }
+//   Bot = { slug: string; name: string; label: string; line: string; time: string; initials: string; color: string; shape: string; main: boolean; pinned: boolean; hidden: boolean; ready: boolean; working: boolean; unread: boolean }
 //   Row = { id: string; kind: string; mine: boolean; text: string; files: string; head: boolean; tail: boolean }
 //   Chat = { slug: string; rows: Row[]; working: boolean }
 //   Prefs = { userName: string; theme: string; projects: boolean }
@@ -297,106 +298,108 @@ export interface Statement {
   close(): Promise<void>;
 }
 
-type T0 = boolean;
-type T1 = string;
-type T2 = { "ok": T0; "error": T1; };
-type T3 = { "authenticated": T0; "passwordRequired": T0; };
-type T4 = { "slug": T1; "name": T1; "label": T1; "initials": T1; "color": T1; "main": T0; "hidden": T0; "ready": T0; };
-type T5 = { "id": T1; "kind": T1; "mine": T0; "text": T1; "files": T1; "head": T0; "tail": T0; };
-type T6 = T5[];
-type T7 = { "slug": T1; "rows": T6; "working": T0; };
-type T8 = { "userName": T1; "theme": T1; "projects": T0; };
-type T9 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
-type T10 = { "id": T1; "title": T1; "website": T1; "username": T1; "hasPassword": T0; "hints": T1; };
-type T11 = { "ok": T0; "id": T1; "password": T1; "error": T1; };
-type T12 = { "id": T1; "kind": T1; "title": T1; "status": T1; "area": T1; "body": T1; };
-type T13 = number;
-type T14 = { "ok": T0; "error": T1; "messages": T13; "attachments": T13; "vaultWrites": T13; "iconFetches": T13; };
-type T15 = { "ok": T0; "error": T1; "messages": T13; "attachments": T13; "turns": T13; "inputTokens": T13; "outputTokens": T13; "cachedInputTokens": T13; "cacheCreationTokens": T13; "tokensKnown": T0; };
-type T16 = { "instanceId": T1; "model": T1; "label": T1; };
-type T17 = T16[];
-type T18 = { "ok": T0; "error": T1; "current": T1; "instanceId": T1; "choices": T17; };
-type T19 = { "id": T1; "title": T1; "enabled": T0; "schedule": T1; };
-type T20 = T19[];
-type T21 = { "ok": T0; "tasks": T20; "error": T1; };
-type T22 = { "id": T1; "title": T1; "status": T1; "remote": T0; "threadId": T1; };
-type T23 = T22[];
-type T24 = { "ok": T0; "rows": T23; "error": T1; };
-type T25 = { "id": T1; "kind": T1; "title": T1; "detail": T1; "group": T1; "status": T1; "body": T1; "path": T1; "open": T1; };
-type T26 = { "name": T1; "url": T1; "enabled": T0; "locked": T0; "hasSecret": T0; };
-type T27 = T25[];
+type T0 = number;
+type T1 = { "epochAtZero": T0; };
+type T2 = boolean;
+type T3 = string;
+type T4 = { "ok": T2; "error": T3; };
+type T5 = { "authenticated": T2; "passwordRequired": T2; };
+type T6 = { "slug": T3; "name": T3; "label": T3; "line": T3; "time": T3; "initials": T3; "color": T3; "shape": T3; "main": T2; "pinned": T2; "hidden": T2; "ready": T2; "working": T2; "unread": T2; };
+type T7 = { "id": T3; "kind": T3; "mine": T2; "text": T3; "files": T3; "head": T2; "tail": T2; };
+type T8 = T7[];
+type T9 = { "slug": T3; "rows": T8; "working": T2; };
+type T10 = { "userName": T3; "theme": T3; "projects": T2; };
+type T11 = { "ok": T2; "id": T3; "name": T3; "error": T3; };
+type T12 = { "id": T3; "title": T3; "website": T3; "username": T3; "hasPassword": T2; "hints": T3; };
+type T13 = { "ok": T2; "id": T3; "password": T3; "error": T3; };
+type T14 = { "id": T3; "kind": T3; "title": T3; "status": T3; "area": T3; "body": T3; };
+type T15 = { "ok": T2; "error": T3; "messages": T0; "attachments": T0; "vaultWrites": T0; "iconFetches": T0; };
+type T16 = { "ok": T2; "error": T3; "messages": T0; "attachments": T0; "turns": T0; "inputTokens": T0; "outputTokens": T0; "cachedInputTokens": T0; "cacheCreationTokens": T0; "tokensKnown": T2; };
+type T17 = { "instanceId": T3; "model": T3; "label": T3; };
+type T18 = T17[];
+type T19 = { "ok": T2; "error": T3; "current": T3; "instanceId": T3; "choices": T18; };
+type T20 = { "id": T3; "title": T3; "enabled": T2; "schedule": T3; };
+type T21 = T20[];
+type T22 = { "ok": T2; "tasks": T21; "error": T3; };
+type T23 = { "id": T3; "title": T3; "status": T3; "remote": T2; "threadId": T3; };
+type T24 = T23[];
+type T25 = { "ok": T2; "rows": T24; "error": T3; };
+type T26 = { "id": T3; "kind": T3; "title": T3; "detail": T3; "group": T3; "status": T3; "body": T3; "path": T3; "open": T3; };
+type T27 = { "name": T3; "url": T3; "enabled": T2; "locked": T2; "hasSecret": T2; };
 type T28 = T26[];
-type T29 = { "ok": T0; "entries": T27; "connectors": T28; };
-type T30 = { "id": T1; "title": T1; "url": T1; };
-type T31 = T30[];
-type T32 = { "ok": T0; "tabs": T31; "image": T1; "error": T1; };
-type T33 = { "accessibilityTextSize": T0; };
-type T34 = { "prefersContrast": T1; };
-type T35 = { "slug": T1; "id": T1; };
-type T36 = { "id": T13; "name": T1; "url": T1; "tab": T1; "params": T35; "fragment": T1; };
-type T37 = T36[];
-type T38 = { "name": T1; "stack": T37; };
-type T39 = T38[];
-type T40 = { "tab": T1; "tabs": T39; "next": T13; };
-type T41 = T1[];
-type T42 = T4[];
-type T43 = T10[];
+type T29 = T27[];
+type T30 = { "ok": T2; "entries": T28; "connectors": T29; };
+type T31 = { "id": T3; "title": T3; "url": T3; };
+type T32 = T31[];
+type T33 = { "ok": T2; "tabs": T32; "image": T3; "error": T3; };
+type T34 = { "accessibilityTextSize": T2; };
+type T35 = { "prefersContrast": T3; };
+type T36 = { "slug": T3; "id": T3; };
+type T37 = { "id": T0; "name": T3; "url": T3; "tab": T3; "params": T36; "fragment": T3; };
+type T38 = T37[];
+type T39 = { "name": T3; "stack": T38; };
+type T40 = T39[];
+type T41 = { "tab": T3; "tabs": T40; "next": T0; };
+type T42 = T3[];
+type T43 = T6[];
 type T44 = T12[];
-type T45 = T2 | null;
-type T46 = T11 | null;
-type T47 = T9 | null;
-type T48 = T13 | null;
-type T49 = { "path": T1; "name": T1; "type": T1; "size": T13; "width": T48; "height": T48; "duration": T48; };
-type T50 = T49[];
-type T51 = { "key": T1; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; "code": T1; "repeat": T0; "isComposing": T0; };
+type T45 = T14[];
+type T46 = T4 | null;
+type T47 = T13 | null;
+type T48 = T11 | null;
+type T49 = T0 | null;
+type T50 = { "path": T3; "name": T3; "type": T3; "size": T0; "width": T49; "height": T49; "duration": T49; };
+type T51 = T50[];
+type T52 = { "key": T3; "shiftKey": T2; "ctrlKey": T2; "altKey": T2; "metaKey": T2; "code": T3; "repeat": T2; "isComposing": T2; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "computerControl" | "createBot" | "deleteBot" | "deleteConnector" | "deleteLibraryItem" | "deleteLogin" | "deleteProject" | "deleteRoutine" | "hideBot" | "makeMainBot" | "recolourBot" | "renameBot" | "revealPassword" | "runRoutine" | "saveConnector" | "saveLibraryItem" | "saveLogin" | "saveProject" | "saveRoutine" | "sendMessage" | "setModel" | "setPassword" | "setProjects" | "setRoutineEnabled" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";
+export type MutationSource = "computerControl" | "createBot" | "deleteBot" | "deleteConnector" | "deleteLibraryItem" | "deleteLogin" | "deleteProject" | "deleteRoutine" | "hideBot" | "makeMainBot" | "markSeen" | "recolourBot" | "renameBot" | "revealPassword" | "runRoutine" | "saveConnector" | "saveLibraryItem" | "saveLogin" | "saveProject" | "saveRoutine" | "sendMessage" | "setModel" | "setPassword" | "setProjects" | "setRoutineEnabled" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";
 
 export interface SourceMap {
-  "computerControl": { args: [T1, T1, T1]; result: T2 };
-  "createBot": { args: [T1, T1]; result: T2 };
-  "deleteBot": { args: [T1]; result: T2 };
-  "deleteConnector": { args: [T1, T1]; result: T2 };
-  "deleteLibraryItem": { args: [T1, T1]; result: T2 };
-  "deleteLogin": { args: [T1]; result: T2 };
-  "deleteProject": { args: [T1]; result: T2 };
-  "deleteRoutine": { args: [T1, T1]; result: T2 };
-  "hideBot": { args: [T1, T0]; result: T2 };
-  "loadBotUsage": { args: [T1, T1]; result: T15 };
-  "loadBots": { args: []; result: T42 };
-  "loadChat": { args: [T1]; result: T7 };
-  "loadComputer": { args: [T1, T1]; result: T32 };
-  "loadLibrary": { args: [T1, T1]; result: T29 };
-  "loadLineage": { args: [T1, T1]; result: T24 };
-  "loadModels": { args: [T1, T1]; result: T18 };
-  "loadPrefs": { args: []; result: T8 };
-  "loadProjects": { args: []; result: T44 };
-  "loadRoutines": { args: [T1, T1]; result: T21 };
-  "loadSession": { args: []; result: T3 };
-  "loadUsage": { args: [T1]; result: T14 };
-  "loadVault": { args: []; result: T43 };
-  "makeMainBot": { args: [T1]; result: T2 };
-  "recolourBot": { args: [T1, T1]; result: T2 };
-  "renameBot": { args: [T1, T1]; result: T2 };
-  "revealPassword": { args: [T1]; result: T11 };
-  "runRoutine": { args: [T1, T1]; result: T2 };
-  "saveConnector": { args: [T1, T1, T1, T0, T1]; result: T2 };
-  "saveLibraryItem": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
-  "saveLogin": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
-  "saveProject": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
-  "saveRoutine": { args: [T1, T1, T1]; result: T2 };
-  "sendMessage": { args: [T1, T1, T1]; result: T2 };
-  "setModel": { args: [T1, T1, T1]; result: T2 };
-  "setPassword": { args: [T1]; result: T2 };
-  "setProjects": { args: [T0]; result: T2 };
-  "setRoutineEnabled": { args: [T1, T1, T0]; result: T2 };
-  "setTheme": { args: [T1]; result: T2 };
-  "setUserName": { args: [T1]; result: T2 };
-  "signIn": { args: [T1]; result: T2 };
-  "signOut": { args: []; result: T2 };
-  "stopRun": { args: [T1]; result: T2 };
-  "uploadAttachment": { args: [T1, T1, T1, T1]; result: T9 };
+  "computerControl": { args: [T3, T3, T3]; result: T4 };
+  "createBot": { args: [T3, T3]; result: T4 };
+  "deleteBot": { args: [T3]; result: T4 };
+  "deleteConnector": { args: [T3, T3]; result: T4 };
+  "deleteLibraryItem": { args: [T3, T3]; result: T4 };
+  "deleteLogin": { args: [T3]; result: T4 };
+  "deleteProject": { args: [T3]; result: T4 };
+  "deleteRoutine": { args: [T3, T3]; result: T4 };
+  "hideBot": { args: [T3, T2]; result: T4 };
+  "loadBotUsage": { args: [T3, T3]; result: T16 };
+  "loadBots": { args: [T0]; result: T43 };
+  "loadChat": { args: [T3]; result: T9 };
+  "loadComputer": { args: [T3, T3]; result: T33 };
+  "loadLibrary": { args: [T3, T3]; result: T30 };
+  "loadLineage": { args: [T3, T3]; result: T25 };
+  "loadModels": { args: [T3, T3]; result: T19 };
+  "loadPrefs": { args: []; result: T10 };
+  "loadProjects": { args: []; result: T45 };
+  "loadRoutines": { args: [T3, T3]; result: T22 };
+  "loadSession": { args: []; result: T5 };
+  "loadUsage": { args: [T3]; result: T15 };
+  "loadVault": { args: []; result: T44 };
+  "makeMainBot": { args: [T3]; result: T4 };
+  "markSeen": { args: [T3]; result: T4 };
+  "recolourBot": { args: [T3, T3]; result: T4 };
+  "renameBot": { args: [T3, T3]; result: T4 };
+  "revealPassword": { args: [T3]; result: T13 };
+  "runRoutine": { args: [T3, T3]; result: T4 };
+  "saveConnector": { args: [T3, T3, T3, T2, T3]; result: T4 };
+  "saveLibraryItem": { args: [T3, T3, T3, T3, T3, T3]; result: T4 };
+  "saveLogin": { args: [T3, T3, T3, T3, T3, T3]; result: T4 };
+  "saveProject": { args: [T3, T3, T3, T3, T3, T3]; result: T4 };
+  "saveRoutine": { args: [T3, T3, T3]; result: T4 };
+  "sendMessage": { args: [T3, T3, T3]; result: T4 };
+  "setModel": { args: [T3, T3, T3]; result: T4 };
+  "setPassword": { args: [T3]; result: T4 };
+  "setProjects": { args: [T2]; result: T4 };
+  "setRoutineEnabled": { args: [T3, T3, T2]; result: T4 };
+  "setTheme": { args: [T3]; result: T4 };
+  "setUserName": { args: [T3]; result: T4 };
+  "signIn": { args: [T3]; result: T4 };
+  "signOut": { args: []; result: T4 };
+  "stopRun": { args: [T3]; result: T4 };
+  "uploadAttachment": { args: [T3, T3, T3, T3]; result: T11 };
 }
 
 export type Source = keyof SourceMap;

@@ -4,6 +4,7 @@
 // This app is the same screen on the web, macOS, iOS and Linux.
 use EmptyState from "exact:content"
 use Face from "./face.contract"
+use Avatar from "./face.contract"
 use Glyph from "./glyph.contract"
 
 // Shared screen rhythm. Colours are generated from design/tokens.json.
@@ -30,6 +31,41 @@ style PageHeader
   box-sizing="border-box"
   background-color="surface.canvas"
   border-bottom="1px solid surface.line"
+
+// The sidebar's top bar: search and New Bot as two quiet circles.
+style SidebarBar
+  display="flex"
+  align-items="center"
+  gap="space.xs"
+  padding="space.sm space.md space.xs space.lg"
+  min-height=56
+  box-sizing="border-box"
+  background-color="surface.sidebar"
+
+// A 36 point disc inside a 44 point control, like the circles in the sidebar bar.
+style Disc
+  display="flex"
+  align-items="center"
+  justify-content="center"
+  width=36
+  height=36
+  box-sizing="border-box"
+  border-radius="radius.full"
+  border="1px solid surface.line"
+  background-color="surface.card"
+
+// A pinned Bot: its Face over its name, on a raised tile when it is open.
+style TileLink
+  display="flex"
+  justify-content="center"
+  padding="space.sm space.xs"
+  border-radius="radius.lg"
+  color="-exact-label"
+  text-decoration="none"
+  :hover
+    background-color="surface.raised"
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
 
 style QuietButton
   min-width=44
@@ -163,7 +199,7 @@ style ConversationLink
   padding="space.md"
   border-radius="radius.md"
   :hover
-    background-color="surface.card"
+    background-color="surface.raised"
   :focus-visible
     box-shadow="0 0 0 2px AccentColor"
 
@@ -276,6 +312,10 @@ routes nav
         vaultAdd "/vault/new"
         vaultEdit "/vault/:id"
 
+// The clock: the Unix time at launch, so `epochAtZero + performanceNow()` is now.
+shape Clock
+  epochAtZero: number
+
 shape Reply
   ok: bool
   error: string
@@ -288,11 +328,17 @@ shape Bot
   slug: string
   name: string
   label: string
+  line: string
+  time: string
   initials: string
   color: string
+  shape: string
   main: bool
+  pinned: bool
   hidden: bool
   ready: bool
+  working: bool
+  unread: bool
 
 // One row of the transcript: a message, a card the Bot is waiting on, or the working line.
 // `head`/`tail` mark a run of same-sender messages, for the bubble corners and spacing.
@@ -448,6 +494,7 @@ fn botCountLabel(n: number): string = n == 1 ? "1 Bot" : `${n} Bots`
 fn pickerColours(): string[] = ["brand.brown", "brand.red", "brand.orange", "brand.amber", "brand.green", "brand.default", "brand.blue", "brand.violet", "brand.pink", "brand.gray"]
 fn avatarInk(c: string): string = c == "brand.black" || c == "brand.brown" || c == "brand.gray" ? "ink.light" : "ink.dark"
 // design:end colours
+fn shapeOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.shape, case none => "ball" }
 fn colorOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.color, case none => "brand.default" }
 fn kindTitle(k: string): string = k == "project" ? "Projects" : k == "task" ? "Tasks" : k == "plan" ? "Plans" : k == "machine" ? "Machines" : k == "service" ? "Services" : k == "repo" ? "Repos" : k == "note" ? "Notes" : "Links"
 fn nText(n: number, one: string, many: string): string = n == 1 ? `1 ${one}` : `${n} ${many}`
@@ -476,6 +523,9 @@ component Bots
   state nameEditing = false
   state newPassword = ""
   state botQuery = ""
+  state searching = false
+  state nowMs = 0
+  state hiddenOpen = false
   state vaultQuery = ""
   // Wide windows show the Bot's panel beside the chat, like Threebot's desktop.
   state wide = false
@@ -489,7 +539,8 @@ component Bots
   state wantHold = false
   state heldTab = ""
   resource session = loadSession() as shape Session else empty()
-  resource bots = loadBots() as shape Bot[] else empty()
+  resource time = exactTime() as shape Clock else empty()
+  resource bots = loadBots(stamp) as shape Bot[] else empty()
   resource chat = loadChat(slug) as shape Chat else empty()
   resource prefs = loadPrefs() as shape Prefs else empty()
   resource vault = loadVault() as shape Login[] else empty()
@@ -504,6 +555,7 @@ component Bots
   mutation signedIn as shape Reply refreshes session, bots
   mutation signedOut as shape Reply refreshes session, bots
   mutation created as shape Reply refreshes bots then afterCreate
+  mutation seen as shape Reply refreshes bots
   mutation sent as shape Reply refreshes chat then afterSend
   mutation stopped as shape Reply refreshes chat
   mutation renamed as shape Reply refreshes bots
@@ -532,9 +584,13 @@ component Bots
   derive createError = match created { case some(r) => r.error, case none => "" }
   derive sendError = match sent { case some(r) => r.error, case none => "" }
   derive lastId = match chat.rows.at(-1) { case some(m) => m.id, case none => "" }
+  derive stamp = nowMs > 0 ? nowMs : time.epochAtZero + performanceNow()
   derive locked = session.passwordRequired and not session.authenticated
   derive query = botQuery.trim().toLowerCase()
   derive visibleBots = bots.filter(b => not b.hidden and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
+  derive tiles = visibleBots.filter(b => query == "" and (b.main or b.pinned))
+  derive rows = visibleBots.filter(b => query != "" or not (b.main or b.pinned))
+  derive openUnread = bots.filter(b => b.slug == slug and b.unread).length > 0
   derive hiddenBots = bots.filter(b => b.hidden and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
   derive vquery = vaultQuery.trim().toLowerCase()
   derive shownVault = vault.filter(v => vquery == "" or v.title.toLowerCase().includes(vquery) or v.username.toLowerCase().includes(vquery) or v.website.toLowerCase().includes(vquery))
@@ -612,8 +668,10 @@ component Bots
     nav = go(nav, path("chat", bslug))
 
   action pull
-    refresh bots
+    nowMs = time.epochAtZero + performanceNow()
     refresh chat
+    if top(nav).name == "chat" and openUnread and not pending(seen)
+      send seen = markSeen(slug)
     if top(nav).name == "settings"
       refresh usage
     if onLibrary
@@ -647,6 +705,14 @@ component Bots
     nav = push(nav, "/new")
   action editBotQuery(v: string)
     botQuery = v
+  action openSearch
+    searching = true
+    focus("bot-search")
+  action closeSearch
+    searching = false
+    botQuery = ""
+  action toggleHidden
+    hiddenOpen = not hiddenOpen
   action editVaultQuery(v: string)
     vaultQuery = v
   action editName(v: string)
@@ -819,11 +885,19 @@ component Bots
         for e in stack(nav) key=e.id
           if e.name == "inbox"
             column class=Screen background-color="surface.sidebar" navigationSplit="288" navigationKey=`${e.id}` navigationScroll="bots-list" position="absolute" inset=0
-              header class=PageHeader background-color="surface.sidebar" flex-wrap="wrap"
-                text "hbots" role="heading" aria-level=1 font-size=22 font-weight=700 letter-spacing="-0.6px" flex=1
-                button class=IconControl appearance="none" press=openNew aria-label="New Bot" title="New Bot" testId="new-bot" color="AccentColor" background-color="surface.soft"
-                  Glyph(name="add", size=20)
-                input type="search" class=SearchField value=botQuery input=editBotQuery placeholder="Search Bots" aria-label="Search Bots" testId="bot-search" width="100%"
+              header class=SidebarBar
+                if searching
+                  input type="search" class=SearchField value=botQuery input=editBotQuery placeholder="Search Bots" aria-label="Search Bots" testId="bot-search" flex=1 min-width=0
+                  button class=TextControl appearance="none" press=closeSearch testId="search-cancel"
+                    text "Cancel"
+                else
+                  column flex=1
+                  button class=IconControl appearance="none" press=openSearch aria-label="Search Bots" title="Search Bots" testId="search-open"
+                    column class=Disc
+                      Glyph(name="search", size=18)
+                  button class=IconControl appearance="none" press=openNew aria-label="New Bot" title="New Bot" testId="new-bot"
+                    column class=Disc
+                      Glyph(name="add", size=18)
               column navigationSplit="placeholder" flex=1 align-items="center" justify-content="center" gap="space.lg" padding="space.xl"
                 Face(shape="ball", color="teal", state="idle", size=72, still=false)
                 text "Your own Bots, in one place." class=HeroTitle text-align="center"
@@ -845,38 +919,54 @@ component Bots
                 column flex=1 min-height=0 align-items="center" justify-content="center" padding="space.xl" testId="no-bot-match"
                   EmptyState(symbol="symbol:search", title=`No Bots match “${botQuery.trim()}”`, message="Check the spelling, or clear the search to see every Bot.")
               else
-                list id="bots-list" appearance="none" flex=1 min-height=0 padding="space.xs space.sm" gap="space.xs"
-                  for b in visibleBots key=b.slug
-                    link class=ConversationLink href=path("chat", b.slug) testId=`bot-${b.slug}` background-color=(slug == b.slug ? "surface.card" : "transparent")
+                if tiles.length > 0
+                  row gap="space.xs" padding="0 space.sm space.sm" testId="bot-tiles"
+                    for b in tiles key=b.slug
+                      link class=TileLink href=path("chat", b.slug) testId=`bot-${b.slug}` aria-label=b.name flex=1 min-width=0 max-width=96 background-color=(slug == b.slug ? "surface.raised" : "transparent")
+                        column align-items="center" gap="space.xs" min-width=0 max-width="100%"
+                          Avatar(shape=b.shape, color=faceColor(b.color), state=(b.ready ? (b.working ? "working" : "idle") : "asleep"), size=64, still=(not b.working), presence=(b.unread ? "unread" : b.working ? "online" : ""))
+                          text b.name font="-exact-footnote" font-weight=600 max-width="100%" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" text-align="center"
+                list id="bots-list" appearance="none" flex=1 min-height=0 padding="0 space.sm" gap="2px"
+                  for b in rows key=b.slug
+                    link class=ConversationLink href=path("chat", b.slug) testId=`bot-${b.slug}` background-color=(slug == b.slug ? "surface.raised" : "transparent")
                       row gap="space.md" align-items="center"
-                        Face(shape="ball", color=faceColor(b.color), state=(b.ready ? "idle" : "asleep"), size=40, still=true)
+                        Avatar(shape=b.shape, color=faceColor(b.color), state=(b.ready ? (b.working ? "working" : "idle") : "asleep"), size=44, still=(not b.working), presence=(b.working ? "online" : ""))
                         column gap="2px" flex=1 min-width=0
-                          row gap="space.xs" align-items="center"
-                            text b.name font-weight=600 flex=1 min-width=0 overflow-wrap="break-word"
-                            if b.main
-                              column color="AccentColor"
-                                Glyph(name="star", size=12)
-                          text (b.ready ? (b.label != "" ? b.label : "Ready to chat") : "Getting set up…") color="ink.muted" font="-exact-footnote" overflow-wrap="break-word"
+                          row gap="space.sm" align-items="baseline"
+                            text b.name font-weight=(b.unread ? 700 : 600) flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                            text b.time font="-exact-footnote" color="ink.faint"
+                          row gap="space.sm" align-items="center"
+                            text b.line color=(b.unread ? "-exact-label" : "ink.muted") font="-exact-footnote" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                            if b.unread
+                              column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label="Unread"
                   if hiddenBots.length > 0
-                    text "Hidden Bots" padding="space.lg space.md space.xs" font="-exact-footnote" color="ink.muted"
-                    for b in hiddenBots key=b.slug
-                      button class=ConversationLink appearance="none" press=openHidden(b.slug) testId=`hidden-${b.slug}`
-                        row gap="space.md" align-items="center"
-                          Face(shape="ball", color=faceColor(b.color), state="asleep", size=32, still=true)
-                          text b.name flex=1 color="ink.muted"
-              row padding="space.sm space.md" border-top="1px solid surface.line"
-                link href="/settings" aria-label="Settings" title="Settings" testId="open-settings" color="-exact-label" text-decoration="none" flex=1 min-width=0
+                    button class=ConversationLink appearance="none" press=toggleHidden aria-expanded=hiddenOpen testId="hidden-toggle"
+                      row gap="space.sm" align-items="center"
+                        text `Hidden ${hiddenBots.length}` font="-exact-footnote" color="ink.muted" flex=1
+                        column color="ink.muted" rotate=(hiddenOpen ? "90deg" : "0deg")
+                          Glyph(name="chevron", size=14)
+                    if hiddenOpen
+                      for b in hiddenBots key=b.slug
+                        button class=ConversationLink appearance="none" press=openHidden(b.slug) testId=`hidden-${b.slug}`
+                          row gap="space.md" align-items="center"
+                            Avatar(shape=b.shape, color=faceColor(b.color), state="asleep", size=32, still=true, presence="")
+                            text b.name flex=1 color="ink.muted"
+              column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
+                link class=ConversationLink href="/vault" aria-label="Vault" testId="sidebar-vault" padding="space.sm space.md"
                   row align-items="center" gap="space.md"
-                    column width="2rem" height="2rem" border-radius="radius.full" background-color="surface.soft" color="AccentColor" align-items="center" justify-content="center"
+                    column color="ink.muted" width=32 align-items="center"
+                      Glyph(name="lock", size=20)
+                    text "Vault" font-weight=500
+                link class=ConversationLink href="/settings" aria-label="Settings" title="Settings" testId="open-settings" padding="space.sm space.md"
+                  row align-items="center" gap="space.md"
+                    column width=32 height=32 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
                       if initialsOf(prefs.userName) != ""
                         text initialsOf(prefs.userName) font="-exact-footnote" font-weight=600
                       else
                         Glyph(name="person", size=16)
                     column flex=1 min-width=0 gap="2px"
-                      text (prefs.userName != "" ? prefs.userName : "You") font-weight=600 overflow-wrap="break-word" testId="you-name"
+                      text (prefs.userName != "" ? prefs.userName : "You") font-weight=500 overflow-wrap="break-word" testId="you-name"
                       text botCountLabel(bots.length) color="ink.muted" font="-exact-footnote"
-                    column color="ink.muted"
-                      Glyph(name="settings", size=20)
           else if e.name == "chat"
             column class=Screen navigationKey=`${e.id}` navigationScroll="transcript" position="absolute" inset=0 padding-right=((wide and panelOpen) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="chat-header"
@@ -886,7 +976,7 @@ component Bots
                 button class=HeaderToggle appearance="none" press=togglePanel aria-label=(panelOpen ? "Hide Bot details" : "Show Bot details") aria-expanded=panelOpen aria-controls="bot-panel" title="Bot settings" testId="panel-toggle" position="absolute" left="50%" translate="-50% 0" gap="space.sm" padding="0 space.md" max-width="75%"
                   if nameOf(bots, e.params.slug) != ""
                     column testId="chat-avatar"
-                      Face(shape="ball", color=faceColor(colorOf(bots, e.params.slug)), state=(chat.working ? "working" : "idle"), size=28, still=true)
+                      Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state=(chat.working ? "working" : "idle"), size=28, still=true)
                   text nameOf(bots, e.params.slug) role="heading" aria-level=1 class=PageTitle overflow-wrap="anywhere" testId="chat-title" min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
               if failed(chat)
                 EmptyState(symbol="symbol:alert", title="Can’t Load This Conversation", message="Your messages haven’t loaded. Check the gateway, then try again.")
@@ -894,11 +984,11 @@ component Bots
                     text "Try Again"
               else if pending(chat) and chat.rows.length == 0
                 column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" aria-busy=true
-                  Face(shape="ball", color=faceColor(colorOf(bots, e.params.slug)), state="working", size=44, still=false)
+                  Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="working", size=44, still=false)
                   text "Loading your conversation…" color="ink.muted"
               else if chat.rows.length == 0 and not chat.working
                 column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="empty-chat"
-                  Face(shape="ball", color=faceColor(colorOf(bots, e.params.slug)), state="idle", size=72, still=false)
+                  Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="idle", size=72, still=false)
                   text nameOf(bots, e.params.slug) class=HeroTitle
                   text "A little help, a new idea, or just a hello." color="ink.muted" text-align="center"
                   column gap="space.sm" width="100%" max-width="24rem" margin-top="space.lg"
@@ -939,7 +1029,7 @@ component Bots
                               text "Answer this in T3 Code for now. It will show up here once the Bot can take your answer." color="-exact-secondary-label" font="-exact-footnote"
                         else
                           row padding="space.sm space.lg" gap="space.sm" align-items="center" testId="working"
-                            Face(shape="ball", color=faceColor(colorOf(bots, e.params.slug)), state="working", size=24, still=false)
+                            Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="working", size=24, still=false)
                             text "Working…" class=Bubble background-color="surface.bubble" color="-exact-secondary-label" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg"
               if sendError != "" and not pending(sent)
                 text sendError color="-exact-system-red" padding="0 space.lg" testId="send-error"
@@ -1358,7 +1448,7 @@ component BotPanel
   view
     column id="bot-panel" display=(shown ? "flex" : "none") position="absolute" top=(wide ? 0 : 72) right=0 bottom=0 width=(wide ? "20rem" : "100%") box-sizing="border-box" background-color="surface.canvas" border-left="1px solid surface.line" testId="bot-panel"
       column align-items="center" gap="space.xs" padding="space.lg"
-        Face(shape="ball", color=faceColor(bot.color), state=(bot.hidden ? "asleep" : working ? "working" : "idle"), size=64, still=(not working))
+        Face(shape=bot.shape, color=faceColor(bot.color), state=(bot.hidden ? "asleep" : working ? "working" : "idle"), size=64, still=(not working))
         text bot.name font="-exact-headline" font-weight=600 testId="details-name" text-align="center" overflow-wrap="anywhere"
         text (bot.hidden ? "Hidden from your inbox" : working ? "Working…" : bot.ready ? "Ready to chat" : "Getting set up…") color="ink.muted" font="-exact-footnote" testId="details-status"
       row role="tablist" appearance="none" background-color="surface.canvas" aria-label="Bot sidebar" padding="space.sm" gap="space.xs" border-bottom="1px solid surface.line"
