@@ -2508,10 +2508,8 @@ component BotPanel
                         text t("status.paused") color="ink.faint" font="-exact-footnote"
               if routines.error != "" and routines.tasks.length == 0
                 text routines.error color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="routine-setup"
-              text t("subagent.heading") class=SectionLabel
-              if children.length == 0
-                text t("subagent.empty") color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="subagent-empty"
-              else
+              if children.length > 0
+                text t("subagent.heading") class=SectionLabel testId="subagent-heading"
                 column gap="2px"
                   for c in children key=c.slug
                     row align-items="center" gap="space.sm" padding="space.xs space.md" testId=`subagent-row-${c.slug}`
@@ -2521,15 +2519,11 @@ component BotPanel
                           text c.name font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=`subagent-name-${c.slug}`
                       button class=QuietButton appearance="none" press=editSub(c.slug, c.name, c.shape, c.color, c.prompt, c.inheritParentPrompt) min-height=44 testId=`edit-subagent-${c.slug}`
                         text t("subagent.edit")
-              if bot.parentSlug == ""
-                button class=QuietButton appearance="none" press=openNewSub testId="new-subagent"
-                  text t("subagent.new")
-              text t("panel.workingOn") class=SectionLabel
               if lineageDown
+                text t("panel.workingOn") class=SectionLabel testId="lineage-heading"
                 text t("error.lineage") color="-exact-system-red" padding="0 space.md" testId="lineage-error"
-              else if lineage.rows.length == 0
-                text t("panel.noThreads") color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="lineage-empty"
-              else
+              else if lineage.rows.length > 0
+                text t("panel.workingOn") class=SectionLabel testId="lineage-heading"
                 column gap="2px"
                   for line in lineage.rows key=line.id
                     row align-items="center" gap="space.md" padding="space.sm space.md" testId=`line-${line.id}`
