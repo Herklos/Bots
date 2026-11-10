@@ -57,16 +57,24 @@ pub fn face_svg(shape: &str, color: &str) -> String {
     let left = num(50.0 - gap - width / 2.0);
     let right = num(50.0 + gap - width / 2.0);
     let rx = num(eye.corner);
+    let white = tokens.avatar.hex("white").expect("the palette has white");
+    let outline = if fill == white {
+        format!(
+            r#"<path d="{path}" fill="{fill}" stroke="{}" stroke-width="1.25"/>"#,
+            tokens.color.mist
+        )
+    } else {
+        format!(r#"<path d="{path}" fill="{fill}"/>"#)
+    };
     format!(
         concat!(
             r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">"#,
-            r#"<path d="{path}" fill="{fill}"/>"#,
+            "{outline}",
             r#"<rect x="{left}" y="{y}" width="{w}" height="{h}" rx="{rx}" fill="{ink}"/>"#,
             r#"<rect x="{right}" y="{y}" width="{w}" height="{h}" rx="{rx}" fill="{ink}"/>"#,
             "</svg>"
         ),
-        path = path,
-        fill = fill,
+        outline = outline,
         left = left,
         right = right,
         y = y,
@@ -160,6 +168,14 @@ mod tests {
             assert!(svg.contains(r#"xmlns="http://www.w3.org/2000/svg""#));
             assert!(!svg.contains("animate") && !svg.contains("circle"));
         }
+    }
+
+    #[test]
+    fn a_white_face_has_a_mist_edge() {
+        let mist = &hbots_design::tokens().color.mist;
+        let white = face_svg("ball", "white");
+        assert!(white.contains(&format!(r#"stroke="{mist}" stroke-width="1.25""#)));
+        assert!(!face_svg("ball", "teal").contains("stroke"));
     }
 
     #[test]
