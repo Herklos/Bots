@@ -1779,6 +1779,8 @@ component Bots
                             row gap="space.xs" align-items="center" padding="2px space.sm 2px 2px" border-radius="radius.full" background-color="surface.bubble" testId=`event-${m.id}`
                               Face(shape=(m.botSlug != "" ? m.botShape : shapeOf(bots, e.params.slug)), color=faceColor(m.botSlug != "" ? m.botColor : colorOf(bots, e.params.slug)), state="idle", size=18, still=true)
                               text eventVerb(m.variant, m.text) font="-exact-footnote" color="-exact-label" testId=`event-verb-${m.id}`
+                              if m.botName != ""
+                                text m.botName font="-exact-footnote" color="-exact-label" testId=`event-bot-${m.id}`
                               if m.title != ""
                                 text m.title font="-exact-footnote" color="-exact-label" testId=`event-title-${m.id}`
                         else if m.kind == "message"
