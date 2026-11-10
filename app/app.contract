@@ -183,8 +183,8 @@ style StopControl
   padding=0
   border="none"
   border-radius="radius.full"
-  background-color="-exact-system-red"
-  color="ink.light"
+  background-color="surface.raised"
+  color="-exact-label"
   :active
     opacity=0.7
   :focus-visible
@@ -767,7 +767,6 @@ component Bots
   derive onComputer = top(nav).name == "chat" and panelOpen and panelTab == "computer"
   derive detailGate = (onBot and slug != "") ? "1" : "0"
   derive reportGate = ((onBot and slug != "") or top(nav).name == "settings") ? "1" : "0"
-  derive defaultEfforts = match first(providers.filter(p => p.instanceId == prefs.defaultInstance)) { case some(p) => match first(p.models.filter(m => m.slug == prefs.defaultModel)) { case some(m) => m.efforts, case none => [] }, case none => [] }
   derive pickedModel = providers.filter(p => p.instanceId == prefs.defaultInstance).length > 0
   derive libraryGate = (onLibrary and slug != "") ? "1" : "0"
   derive computerGate = (onComputer and slug != "") ? "1" : "0"
@@ -1419,7 +1418,7 @@ component Bots
                       if providers.length == 0
                         text "No provider is ready in T3 Code yet." color="ink.muted" font="-exact-subheadline" padding="space.sm"
                       else
-                        ModelPicker(providers=providers, instanceId=prefs.defaultInstance, model=prefs.defaultModel, effort="", efforts=defaultEfforts, prefix="default", pick=doMakeDefault)
+                        ModelPicker(providers=providers, instanceId=prefs.defaultInstance, model=prefs.defaultModel, effort="", efforts=[], prefix="default", pick=doMakeDefault)
                   column gap="space.sm"
                     text "Usage" class=SectionLabel
                     column class=GroupCard padding="0"
@@ -1816,7 +1815,7 @@ component BotPanel
                         text line.title font-weight=500 overflow-wrap="anywhere"
                         text (line.remote ? "On another machine" : line.threadId != "" ? "On this machine" : "") color="ink.muted" font="-exact-footnote" testId=`where-${line.id}`
                       if not line.remote and line.threadId != ""
-                        button class=QuietButton appearance="none" press=openChild(line.threadId) min-height=44 testId=`open-${line.id}`
+                        button class=TextControl appearance="none" press=openChild(line.threadId) min-height=28 padding="0 space.sm" font="-exact-footnote" color="AccentColor" testId=`open-${line.id}`
                           text "Open"
                       row class=Chip
                         text line.status
