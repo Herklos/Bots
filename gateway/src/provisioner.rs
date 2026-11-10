@@ -181,7 +181,10 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
                 id
             }
         };
-        let workspace = bot["workspaceRoot"].as_str().unwrap_or_default().to_string();
+        let workspace = bot["workspaceRoot"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
         let shape = bot["shape"].as_str().unwrap_or("ball").to_string();
         let color = bot["color"].as_str().unwrap_or_default().to_string();
         let favicon = tokio::task::spawn_blocking(move || {
@@ -321,7 +324,9 @@ mod tests {
             assert_eq!(update["title"], "Ada");
             assert_eq!(update["faviconPath"], path);
             assert!(update["projectIcon"].is_null());
-            assert!(update["commandId"].as_str().is_some_and(|id| !id.is_empty()));
+            assert!(update["commandId"]
+                .as_str()
+                .is_some_and(|id| !id.is_empty()));
         }
         assert!(!face_in_sync(None, "Ada", path));
     }
