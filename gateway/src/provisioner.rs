@@ -4,6 +4,23 @@ use crate::AppState;
 use serde_json::{json, Value};
 use std::{sync::Arc, time::Duration};
 
+/// The mode `orchestration.launchThread` already accepts. A missing or unknown field keeps
+/// today's launch: `autoReview == false` is full access, otherwise auto. A stored choice wins.
+pub fn launch_runtime_mode(bot: &Value, settings: &Value) -> &'static str {
+    match bot.get("runtimeMode").and_then(Value::as_str) {
+        Some("approval-required") => "approval-required",
+        Some("auto") => "auto",
+        Some("full-access") => "full-access",
+        _ => {
+            if settings["autoReview"] == false {
+                "full-access"
+            } else {
+                "auto"
+            }
+        }
+    }
+}
+
 pub fn default_model() -> Value {
     json!({ "instanceId": "claudeAgent", "model": "claude-haiku-5-5", "options": [{ "id": "effort", "value": "medium" }] })
 }
@@ -211,7 +228,7 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
                 rpc.call("orchestration.launchThread", json!({
                     "commandId": uuid::Uuid::new_v4().to_string(), "threadId": thread, "projectId": project_id,
                     "title": bot["name"], "modelSelection": model,
-                    "runtimeMode": if settings["autoReview"] == false { "full-access" } else { "auto" },
+                    "runtimeMode": launch_runtime_mode(&bot, &settings),
                     "interactionMode": "default", "workspaceStrategy": { "type": "root" },
                 })).await?;
                 state
@@ -329,6 +346,30 @@ mod tests {
                 .is_some_and(|id| !id.is_empty()));
         }
         assert!(!face_in_sync(None, "Ada", path));
+    }
+
+    #[test]
+    fn a_missing_mode_follows_auto_review_and_a_stored_mode_wins() {
+        let review_on = json!({ "autoReview": true });
+        let review_off = json!({ "autoReview": false });
+        assert_eq!(launch_runtime_mode(&json!({}), &review_on), "auto");
+        assert_eq!(launch_runtime_mode(&json!({}), &review_off), "full-access");
+        assert_eq!(
+            launch_runtime_mode(&json!({ "runtimeMode": "approval-required" }), &review_off),
+            "approval-required"
+        );
+        assert_eq!(
+            launch_runtime_mode(&json!({ "runtimeMode": "auto" }), &review_off),
+            "auto"
+        );
+        assert_eq!(
+            launch_runtime_mode(&json!({ "runtimeMode": "full-access" }), &review_on),
+            "full-access"
+        );
+        assert_eq!(
+            launch_runtime_mode(&json!({ "runtimeMode": "ask" }), &review_on),
+            "auto"
+        );
     }
 
     #[test]

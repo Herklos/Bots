@@ -837,7 +837,7 @@ async fn room_snapshot(
                         json!({
                             "commandId": uuid::Uuid::new_v4().to_string(), "threadId": id, "projectId": project,
                             "title": room["title"], "modelSelection": model,
-                            "runtimeMode": if settings["autoReview"] == false { "full-access" } else { "auto" },
+                            "runtimeMode": provisioner::launch_runtime_mode(bot, &settings),
                             "interactionMode": "default", "workspaceStrategy": { "type": "root" },
                         }),
                     )
@@ -1331,6 +1331,7 @@ async fn model_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Valu
         "current": current["model"].as_str().unwrap_or(""),
         "instanceId": current["instanceId"].as_str().unwrap_or("claudeAgent"),
         "effort": providers::effort_of(&current),
+        "runtimeMode": provisioner::launch_runtime_mode(&bot, &settings),
         "choices": provisioner::model_choices(&bot["model"], &settings["defaultModel"]),
     })))
 }
@@ -1345,9 +1346,17 @@ async fn model_put(
     let bot = require_bot(&s, &slug).await?;
     let body = parse(&body)?;
     let selection = checked_selection(&s, &body, &bot["model"]).await?;
-    s.bots
-        .save(&slug, &json!({ "model": selection }), false)
-        .await?;
+    let mut patch = json!({ "model": selection });
+    if body.get("runtimeMode").is_some() {
+        let mode = body["runtimeMode"].as_str().unwrap_or("");
+        if !matches!(mode, "approval-required" | "auto" | "full-access") {
+            return Err(ApiError::bad_request(
+                "runtimeMode must be approval-required, auto, or full-access",
+            ));
+        }
+        patch["runtimeMode"] = json!(mode);
+    }
+    s.bots.save(&slug, &patch, false).await?;
     if let Ok(rpc) = s.t3.rpc().await {
         provisioner::push_model(&rpc, &bot, &selection)
             .await
