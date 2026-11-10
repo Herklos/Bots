@@ -1697,6 +1697,13 @@ component Bots
           if e.name == "inbox"
             column class=Screen background-color="surface.sidebar" navigationSplit="288" navigationKey=`${e.id}` navigationScroll="bots-list" position="absolute" inset=0
               header class=SidebarBar
+                if not wide
+                  button class=IconControl appearance="none" press=openSettings aria-label=t("settings.title") title=(prefs.userName != "" ? prefs.userName : t("settings.you")) testId="open-settings"
+                    column class=Disc
+                      if initialsOf(prefs.userName) != ""
+                        text initialsOf(prefs.userName) font="-exact-footnote" font-weight=600 testId="you-name"
+                      else
+                        Glyph(name="person", size=16)
                 if searching
                   input type="search" class=SearchField value=botQuery input=editBotQuery placeholder=t("inbox.search") aria-label=t("inbox.search") testId="bot-search" flex=1 min-width=0
                   button class=TextControl appearance="none" press=closeSearch testId="search-cancel"
@@ -1769,16 +1776,17 @@ component Bots
                               text b.name flex=1 color="ink.muted"
                               if showUnread(b.unread, slug == b.slug, b.hidden)
                                 column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${b.slug}`
-              column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
-                button class=ConversationLink appearance="none" press=openSettings aria-label=t("settings.title") title=t("settings.title") testId="open-settings" padding="space.sm space.md"
-                  row align-items="center" gap="space.md"
-                    column width=32 height=32 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
-                      if initialsOf(prefs.userName) != ""
-                        text initialsOf(prefs.userName) font="-exact-footnote" font-weight=600
-                      else
-                        Glyph(name="person", size=16)
-                    column flex=1 min-width=0 gap="2px"
-                      text (prefs.userName != "" ? prefs.userName : t("settings.you")) font-weight=500 overflow-wrap="break-word" testId="you-name"
+              if wide
+                column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
+                  button class=ConversationLink appearance="none" press=openSettings aria-label=t("settings.title") title=t("settings.title") testId="open-settings" padding="space.sm space.md"
+                    row align-items="center" gap="space.md"
+                      column width=32 height=32 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
+                        if initialsOf(prefs.userName) != ""
+                          text initialsOf(prefs.userName) font="-exact-footnote" font-weight=600
+                        else
+                          Glyph(name="person", size=16)
+                      column flex=1 min-width=0 gap="2px"
+                        text (prefs.userName != "" ? prefs.userName : t("settings.you")) font-weight=500 overflow-wrap="break-word" testId="you-name"
           else if e.name == "chat"
             column class=Screen navigationKey=`${e.id}` navigationScroll="transcript" drop=filesDropped position="absolute" inset=0 padding-right=((wide and panelOpen) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="chat-header"
@@ -2781,19 +2789,33 @@ component BotPanel
   action goEdit
     openPage("edit")
   view
-    column id="bot-panel" display=(shown ? "flex" : "none") position="absolute" top=(wide ? 0 : 72) right=0 bottom=0 width=(wide ? "20rem" : "100%") box-sizing="border-box" background-color="surface.canvas" border-left="1px solid surface.line" testId="bot-panel"
-      row align-items="center" gap="space.xs" padding="space.sm space.sm space.sm space.md" min-height=52 box-sizing="border-box"
-        if page != "root"
+    // On a narrow screen the panel is a full-height sheet with one identity
+    // row (close, face, edit). The large Face stays for the wide side panel.
+    column id="bot-panel" display=(shown ? "flex" : "none") position="absolute" top=0 right=0 bottom=0 width=(wide ? "20rem" : "100%") z-index=(wide ? 0 : 5) box-sizing="border-box" background-color="surface.canvas" border-left="1px solid surface.line" testId="bot-panel"
+      if page != "root"
+        row align-items="center" gap="space.xs" padding="space.sm space.sm space.sm space.md" min-height=52 box-sizing="border-box"
           button class=IconControl appearance="none" press=goRoot aria-label=t("common.back") title=t("common.back") testId="panel-back"
             column rotate="180deg"
               Glyph(name="chevron", size=20)
           text (page == "model" ? t("panel.model") : page == "usage" ? t("panel.usage") : page == "subagent" ? (subSlug != "" ? t("subagent.page") : t("subagent.new")) : t("panel.edit")) role="heading" aria-level=2 class=PageTitle flex=1 testId="panel-page-title"
-        else
+      else if wide
+        row align-items="center" gap="space.xs" padding="space.sm space.sm space.sm space.md" min-height=52 box-sizing="border-box"
           column flex=1
           button class=IconControl appearance="none" press=goEdit aria-label=t("panel.edit") title=t("panel.edit") testId="panel-edit"
             Glyph(name="settings", size=20)
           button class=IconControl appearance="none" press=closePanel aria-label=t("panel.close") title=t("panel.close") testId="panel-close"
             Glyph(name="close", size=20)
+      else
+        row align-items="center" gap="space.sm" padding="space.sm space.sm space.sm space.md" min-height=56 box-sizing="border-box" border-bottom="1px solid surface.line" testId="panel-compact-header"
+          button class=IconControl appearance="none" press=closePanel aria-label=t("panel.close") title=t("panel.close") testId="panel-close"
+            Glyph(name="close", size=20)
+          row align-items="center" gap="space.sm" flex=1 min-width=0
+            Avatar(shape=bot.shape, color=faceColor(bot.color), state=(bot.hidden ? "asleep" : working ? "working" : "idle"), size=36, still=(not working), presence="")
+            column flex=1 min-width=0 gap="1px"
+              text bot.name role="heading" aria-level=2 font="-exact-headline" font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="details-name"
+              text (bot.hidden ? t("panel.hiddenInbox") : working ? t("status.working") : bot.ready ? t("status.ready") : t("status.settingUp")) color="ink.muted" font="-exact-footnote" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="details-status"
+          button class=IconControl appearance="none" press=goEdit aria-label=t("panel.edit") title=t("panel.edit") testId="panel-edit"
+            Glyph(name="settings", size=20)
       if page == "model"
         scroll flex=1 min-height=0
           ModelPage(models=models, down=modelsDown, bot=bot, pick=pickModel, error=modelError)
@@ -2852,10 +2874,11 @@ component BotPanel
                 button commandfor=`drop-sub-${subSlug}` command="close" testId="drop-sub-cancel"
                   text t("common.cancel")
       else
-        column align-items="center" gap="space.xs" padding="0 space.lg space.md"
-          Avatar(shape=bot.shape, color=faceColor(bot.color), state=(bot.hidden ? "asleep" : working ? "working" : "idle"), size=72, still=(not working), presence="")
-          text bot.name font="-exact-title3" font-weight=700 letter-spacing="-0.3px" testId="details-name" text-align="center" overflow-wrap="anywhere"
-          text (bot.hidden ? t("panel.hiddenInbox") : working ? t("status.working") : bot.ready ? t("status.ready") : t("status.settingUp")) color="ink.muted" font="-exact-footnote" testId="details-status"
+        if wide
+          column align-items="center" gap="space.xs" padding="0 space.lg space.md"
+            Avatar(shape=bot.shape, color=faceColor(bot.color), state=(bot.hidden ? "asleep" : working ? "working" : "idle"), size=72, still=(not working), presence="")
+            text bot.name font="-exact-title3" font-weight=700 letter-spacing="-0.3px" testId="details-name" text-align="center" overflow-wrap="anywhere"
+            text (bot.hidden ? t("panel.hiddenInbox") : working ? t("status.working") : bot.ready ? t("status.ready") : t("status.settingUp")) color="ink.muted" font="-exact-footnote" testId="details-status"
         row role="tablist" appearance="none" background-color="surface.canvas" aria-label=t("panel.sidebar") justify-content="center" padding="space.xs space.md space.md" gap="space.xs"
           for t in ["details", "library", "computer"] key=t
             button id=`panel-tab-${t}` key=tabKey tabindex=(tab == t ? 0 : -1) class=Segment appearance="none" role="tab" aria-selected=(tab == t) aria-controls=`bot-tab-${t}` press=pickTab(t) min-height=36 padding="space.xs space.md" testId=`panel-tab-${t}` background-color=(tab == t ? "surface.raised" : "transparent") color=(tab == t ? "-exact-label" : "ink.muted")
