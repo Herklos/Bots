@@ -25,6 +25,7 @@ mod routines; // T5: T3 scheduled tasks.
 mod store;
 mod t3;
 mod thread_meta; // T5: reactions, voice calls, roster previews.
+mod usage; // Local usage counts. Nothing leaves the machine.
 mod vault;
 mod vault_csv; // T2: CSV import and export (hook)
 mod vault_tools; // T1 hook: the Vault tools of POST /mcp/bot
@@ -61,6 +62,7 @@ pub struct AppState {
     pub routine_history: routines::RoutineHistory,
     pub system: release::System,
     pub icons: icons::Icons,
+    pub usage: usage::Usage,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
 }
@@ -193,6 +195,7 @@ async fn main() -> anyhow::Result<()> {
         routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
         system: release::System::new(cfg.data_root.clone(), app_dir.clone()),
         icons: icons::Icons::new(cfg.data_root.join("icons")),
+        usage: usage::Usage::new(app_dir.join("usage.json")),
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
         cfg,
@@ -311,6 +314,7 @@ fn build(state: Arc<AppState>, tailscale: bool) -> Router {
         .route("/api/routines/delete", post(routines_delete))
         .route("/api/routines/run", post(routines_run))
         .route("/api/icons/{host}", get(icons::get_icon))
+        .route("/api/usage", get(usage::get_usage))
         .merge(release::routes())
         .route("/t3/{*rest}", any(t3_route))
         .layer(middleware::from_fn_with_state(state.clone(), require_login));
@@ -877,6 +881,7 @@ async fn send_chat(
     rpc.call("orchestration.dispatchCommand", command.clone())
         .await
         .map_err(|e| ApiError::new(502, e.to_string()))?;
+    s.usage.note(usage::Event::Message).await;
     Ok(Json(
         json!({ "ok": true, "messageId": command["messageId"] }),
     ))
@@ -925,7 +930,9 @@ async fn vault_get(
 
 async fn vault_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
     require_json(&h)?;
-    Ok(Json(s.vault.create(&parse(&body)?).await?))
+    let item = s.vault.create(&parse(&body)?).await?;
+    s.usage.note(usage::Event::VaultWrite).await;
+    Ok(Json(item))
 }
 
 async fn vault_update(
@@ -935,11 +942,14 @@ async fn vault_update(
     body: Bytes,
 ) -> ApiResult<Json<Value>> {
     require_json(&h)?;
-    Ok(Json(s.vault.update(&id, &parse(&body)?).await?))
+    let item = s.vault.update(&id, &parse(&body)?).await?;
+    s.usage.note(usage::Event::VaultWrite).await;
+    Ok(Json(item))
 }
 
 async fn vault_delete(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>> {
     s.vault.delete(&id).await?;
+    s.usage.note(usage::Event::VaultWrite).await;
     Ok(Json(json!({ "ok": true })))
 }
 

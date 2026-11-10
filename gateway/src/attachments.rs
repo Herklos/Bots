@@ -42,9 +42,9 @@ pub async fn create(
     require_json(&h)?;
     ensure_bot(&s, &slug).await?;
     let (name, media, bytes) = prepare(&parse(&body)?)?;
-    Ok(Json(
-        write_file(&s.cfg.bots_root, &slug, &name, &media, &bytes).await?,
-    ))
+    let saved = write_file(&s.cfg.bots_root, &slug, &name, &media, &bytes).await?;
+    s.usage.note(crate::usage::Event::Attachment).await;
+    Ok(Json(saved))
 }
 
 pub async fn download(

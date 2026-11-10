@@ -99,6 +99,7 @@ pub async fn get_icon(
     Path(host): Path<String>,
 ) -> ApiResult<Response> {
     let (bytes, ctype) = s.icons.fetch_public(&host).await?;
+    s.usage.note(crate::usage::Event::IconFetch).await;
     let value = HeaderValue::from_str(&ctype).map_err(|_| ApiError::new(500, "bad icon type"))?;
     Ok((
         StatusCode::OK,
