@@ -759,6 +759,8 @@ fn keptEffort(levels: Effort[], current: string): string = levels.filter(e => e.
 fn modelEfforts(providers: Provider[], instanceId: string, model: string): Effort[] = match first(providers.filter(p => p.instanceId == instanceId)) { case some(p) => match first(p.models.filter(m => m.slug == model)) { case some(m) => m.efforts, case none => [] }, case none => [] }
 // Face colours are plain names; Bot colours are brand.* tokens from the design package.
 fn faceColor(c: string): string = c == "brand.default" ? "teal" : c == "brand.blue" ? "blue" : c == "brand.violet" ? "violet" : c == "brand.pink" ? "pink" : c == "brand.orange" ? "orange" : c == "brand.green" ? "green" : c == "brand.black" ? "black" : c == "brand.white" ? "white" : c == "brand.brown" ? "brown" : c == "brand.red" ? "red" : c == "brand.amber" ? "amber" : c == "brand.yellow" ? "yellow" : c == "brand.cyan" ? "cyan" : c == "brand.purple" ? "purple" : c == "brand.magenta" ? "magenta" : c == "brand.gray" ? "gray" : "teal"
+// A tool line's verb. Known ids come from the string table. Anything else keeps the stored sentence.
+fn eventVerb(id: string, stored: string): string = id == "sent" ? t("event.sent") : id == "routine-created" ? t("event.routineCreated") : id == "routine-updated" ? t("event.routineUpdated") : id == "routine-deleted" ? t("event.routineDeleted") : id == "from" ? t("event.from") : id == "ran" ? t("event.ran") : id == "started" ? t("event.started") : stored
 // The open chat is clear. A hidden Bot keeps the mark until that chat is the open one.
 fn showUnread(unread: bool, open: bool, hidden: bool): bool = unread and not open and (hidden or not hidden)
 fn bitShape(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.shape, case none => "ball" }
@@ -1773,17 +1775,12 @@ component Bots
                         if m.kind == "day"
                           text m.text text-align="center" font="-exact-footnote" color="ink.faint" padding="space.lg space.lg space.xs" testId=`day-${m.id}`
                         else if m.kind == "event"
-                          row justify-content="center" align-items="center" gap="space.xs" flex-wrap="wrap" padding="space.sm space.lg" testId=`event-${m.id}`
-                            text m.text font="-exact-footnote" color="ink.faint"
-                            if m.botName != ""
-                              row gap="space.xs" align-items="center" padding="2px space.sm 2px 2px" border-radius="radius.full" background-color="surface.bubble"
-                                Avatar(shape=m.botShape, color=faceColor(m.botColor), state="idle", size=18, still=true, presence="")
-                                text m.botName font="-exact-footnote" color="-exact-label"
-                            if m.title != ""
-                              row gap="space.xs" align-items="center" padding="2px space.sm" border-radius="radius.full" background-color="surface.bubble"
-                                column color="ink.muted"
-                                  Glyph(name=(m.variant == "routine" ? "clock" : "check"), size=14)
-                                text m.title font="-exact-footnote" color="-exact-label"
+                          row justify-content="center" padding="space.sm space.lg"
+                            row gap="space.xs" align-items="center" padding="2px space.sm 2px 2px" border-radius="radius.full" background-color="surface.bubble" testId=`event-${m.id}`
+                              Face(shape=(m.botSlug != "" ? m.botShape : shapeOf(bots, e.params.slug)), color=faceColor(m.botSlug != "" ? m.botColor : colorOf(bots, e.params.slug)), state="idle", size=18, still=true)
+                              text eventVerb(m.variant, m.text) font="-exact-footnote" color="-exact-label" testId=`event-verb-${m.id}`
+                              if m.title != ""
+                                text m.title font="-exact-footnote" color="-exact-label" testId=`event-title-${m.id}`
                         else if m.kind == "message"
                           ChatMessage(row=m, canHover=(pointerFacts.hover == "hover"), picking=(reactFor == m.id), menuOpen=(messageMenu == m.id), react=doReact, openPicker=openReact, reply=startReply, pin=doPinMessage, openMenu=openMessageMenu, closeMenu=closeMessageMenu)
                         else if m.kind == "request"

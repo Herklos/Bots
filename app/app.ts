@@ -265,6 +265,7 @@ function fixtureChat(child: string) {
       row({ id: 'm2', time: '9:00 AM', text: 'Hi there', react: '🔥', quote: 'Hello', tokens: '12 in, 3 out, 4 read from cache, 1 written to cache.', head: true }),
       row({ id: 'm3', time: '9:01 AM', text: 'No tokens here', head: false }),
       row({ id: 'voice1', mine: true, files: [{ id: 'voice', name: 'voice.m4a', kind: 'audio', size: '1 KB', url: '/api/bots/fixture/attachments/voice' }] }),
+      { ...blank, id: 'e1', kind: 'event', mine: false, text: 'Created routine', title: 'Morning', head: true, tail: true, variant: 'routine-created' },
     ],
   };
 }
