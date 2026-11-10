@@ -744,102 +744,6 @@ fn pickedFaces(bots: Bot[], slugs: string[]): FaceBit[] = slugs.slice(0, 3).map(
 // does not close them on the way up; the next tap does. On a device that can
 // hover, the pointer leaving the message closes them too. Hidden chrome takes
 // no taps.
-component ChatMessage
-  props
-    row: Row
-    canHover: bool
-    picking: bool
-    react: action
-    openPicker: action
-    reply: action
-    pin: action
-  state over = false
-  state latched = false
-  state closeOnLift = false
-  state focused = false
-  derive showChrome = over or latched or focused
-  action setOver(on: bool)
-    over = on
-    if not on and canHover
-      latched = false
-      closeOnLift = false
-  action tapDown()
-    if latched
-      closeOnLift = true
-    else
-      latched = true
-      closeOnLift = false
-  action tapUp()
-    if closeOnLift
-      latched = false
-      closeOnLift = false
-  action chromeFocus(e: FocusEvent)
-    focused = e.target == `reply-${row.id}` or e.target == `pin-message-${row.id}`
-  action chromeBlur(e: FocusEvent)
-    match e.relatedTarget
-      case some(id)
-        focused = id == `reply-${row.id}` or id == `pin-message-${row.id}`
-      case none
-        focused = false
-  view
-    row justify-content=(row.mine ? "flex-end" : "flex-start") padding=(row.head ? "space.sm space.lg 2px" : "2px space.lg")
-      column gap="2px" max-width="82%" align-items=(row.mine ? "flex-end" : "flex-start") hover=setOver pointerdown=tapDown pointerup=tapUp focusin=chromeFocus focusout=chromeBlur
-        if row.quote != ""
-          text row.quote color="ink.muted" font="-exact-footnote" testId=`quote-${row.id}`
-        if row.text != "" and row.mine
-          text row.text class=Bubble testId=`message-${row.id}`
-            background-color="brand.default"
-            color="ink.dark"
-            border-top-left-radius="radius.lg"
-            border-top-right-radius="radius.lg"
-            border-bottom-left-radius="radius.lg"
-            border-bottom-right-radius=(row.tail ? "radius.sm" : "radius.lg")
-        else if row.text != ""
-          text row.text markup="markdown" class=Bubble white-space="normal" testId=`message-${row.id}`
-            background-color="surface.bubble"
-            color="-exact-label"
-            border-top-left-radius="radius.lg"
-            border-top-right-radius="radius.lg"
-            border-bottom-left-radius=(row.tail ? "radius.sm" : "radius.lg")
-            border-bottom-right-radius="radius.lg"
-        for f in row.files key=f.id
-          if f.kind == "image"
-            link href=f.url target="_blank" aria-label=t("common.openNamed", name=f.name) testId=`image-${f.id}`
-              image f.url aria-label=f.name max-width="20rem" width="100%" border-radius="radius.lg"
-          else if f.kind == "audio" and f.url != ""
-            audio f.url controls=true testId=`audio-${f.id}`
-          else
-            link class=FileCard href=f.url target="_blank" aria-label=t("chat.downloadNamed", name=f.name) testId=`file-${f.id}`
-              row gap="space.md" align-items="center"
-                column class=IconTile color="AccentColor"
-                  Glyph(name="file", size=18)
-                column gap="2px" flex=1 min-width=0
-                  text f.name font-weight=500 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
-                  text f.size font="-exact-footnote" color="ink.muted"
-                column color="ink.muted"
-                  Glyph(name="download", size=18)
-        if row.tokens != ""
-          text row.tokens color="ink.muted" font="-exact-footnote" testId=`tokens-${row.id}`
-        if row.tail and row.time != ""
-          row gap="space.xs" align-items="center" padding="0 space.xs"
-            row gap="space.xs" align-items="center" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none")
-              text row.time font="-exact-footnote" color="ink.faint"
-              button id=`reply-${row.id}` class=TextControl appearance="none" press=reply(row.id, row.text) aria-label=t("chat.reply") title=t("chat.reply") min-height=24 padding="0 space.xs" pointer-events=(showChrome ? "auto" : "none") testId=`reply-${row.id}`
-                text t("chat.reply") font="-exact-footnote"
-              button id=`pin-message-${row.id}` class=TextControl appearance="none" press=pin(row.id, row.text) aria-label=t("chat.pin") title=t("chat.pin") min-height=24 padding="0 space.xs" pointer-events=(showChrome ? "auto" : "none") testId=`pin-message-${row.id}`
-                text t("chat.pin") font="-exact-footnote"
-            if row.react != ""
-              button class=TextControl appearance="none" press=react(row.id, row.react) aria-label=t("chat.removeReaction") min-height=24 padding="0 space.xs" testId=`react-${row.id}`
-                text row.react font="-exact-footnote"
-            else if not row.mine
-              button class=TextControl appearance="none" press=openPicker(row.id) aria-label=t("chat.react") title=t("chat.react") min-height=24 padding="0 space.xs" testId=`add-react-${row.id}`
-                Glyph(name="smile", size=14)
-          if picking
-            row gap="2px" padding="space.xs" border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="react-picker"
-              for em in ["👍", "❤️", "😂", "😮", "🎉", "🙏"] key=em
-                button class=TextControl appearance="none" press=react(row.id, em) aria-label=t("chat.reactWith", emoji=em) width=36 height=36 min-height=36 padding=0 border-radius="radius.full" font="-exact-title3" testId=`pick-${em}`
-                  text em
-
 component Bots
   state password = ""
   state draftTexts: string[] = []
@@ -2119,6 +2023,102 @@ component Bots
           text toast font="-exact-subheadline" font-weight=500
 
 // A group's face is its members, at most three, overlapped. It has no colour or shape of its own.
+component ChatMessage
+  props
+    row: Row
+    canHover: bool
+    picking: bool
+    react: action
+    openPicker: action
+    reply: action
+    pin: action
+  state over = false
+  state latched = false
+  state closeOnLift = false
+  state focused = false
+  derive showChrome = over or latched or focused
+  action setOver(on: bool)
+    over = on
+    if not on and canHover
+      latched = false
+      closeOnLift = false
+  action tapDown()
+    if latched
+      closeOnLift = true
+    else
+      latched = true
+      closeOnLift = false
+  action tapUp()
+    if closeOnLift
+      latched = false
+      closeOnLift = false
+  action chromeFocus(e: FocusEvent)
+    focused = e.target == `reply-${row.id}` or e.target == `pin-message-${row.id}`
+  action chromeBlur(e: FocusEvent)
+    match e.relatedTarget
+      case some(id)
+        focused = id == `reply-${row.id}` or id == `pin-message-${row.id}`
+      case none
+        focused = false
+  view
+    row justify-content=(row.mine ? "flex-end" : "flex-start") padding=(row.head ? "space.sm space.lg 2px" : "2px space.lg")
+      column gap="2px" max-width="82%" align-items=(row.mine ? "flex-end" : "flex-start") hover=setOver pointerdown=tapDown pointerup=tapUp focusin=chromeFocus focusout=chromeBlur
+        if row.quote != ""
+          text row.quote color="ink.muted" font="-exact-footnote" testId=`quote-${row.id}`
+        if row.text != "" and row.mine
+          text row.text class=Bubble testId=`message-${row.id}`
+            background-color="brand.default"
+            color="ink.dark"
+            border-top-left-radius="radius.lg"
+            border-top-right-radius="radius.lg"
+            border-bottom-left-radius="radius.lg"
+            border-bottom-right-radius=(row.tail ? "radius.sm" : "radius.lg")
+        else if row.text != ""
+          text row.text markup="markdown" class=Bubble white-space="normal" testId=`message-${row.id}`
+            background-color="surface.bubble"
+            color="-exact-label"
+            border-top-left-radius="radius.lg"
+            border-top-right-radius="radius.lg"
+            border-bottom-left-radius=(row.tail ? "radius.sm" : "radius.lg")
+            border-bottom-right-radius="radius.lg"
+        for f in row.files key=f.id
+          if f.kind == "image"
+            link href=f.url target="_blank" aria-label=t("common.openNamed", name=f.name) testId=`image-${f.id}`
+              image f.url aria-label=f.name max-width="20rem" width="100%" border-radius="radius.lg"
+          else if f.kind == "audio" and f.url != ""
+            audio f.url controls=true testId=`audio-${f.id}`
+          else
+            link class=FileCard href=f.url target="_blank" aria-label=t("chat.downloadNamed", name=f.name) testId=`file-${f.id}`
+              row gap="space.md" align-items="center"
+                column class=IconTile color="AccentColor"
+                  Glyph(name="file", size=18)
+                column gap="2px" flex=1 min-width=0
+                  text f.name font-weight=500 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                  text f.size font="-exact-footnote" color="ink.muted"
+                column color="ink.muted"
+                  Glyph(name="download", size=18)
+        if row.tokens != ""
+          text row.tokens color="ink.muted" font="-exact-footnote" testId=`tokens-${row.id}`
+        if row.tail and row.time != ""
+          row gap="space.xs" align-items="center" padding="0 space.xs"
+            row gap="space.xs" align-items="center" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none")
+              text row.time font="-exact-footnote" color="ink.faint"
+              button id=`reply-${row.id}` class=TextControl appearance="none" press=reply(row.id, row.text) aria-label=t("chat.reply") title=t("chat.reply") min-height=24 padding="0 space.xs" pointer-events=(showChrome ? "auto" : "none") testId=`reply-${row.id}`
+                text t("chat.reply") font="-exact-footnote"
+              button id=`pin-message-${row.id}` class=TextControl appearance="none" press=pin(row.id, row.text) aria-label=t("chat.pin") title=t("chat.pin") min-height=24 padding="0 space.xs" pointer-events=(showChrome ? "auto" : "none") testId=`pin-message-${row.id}`
+                text t("chat.pin") font="-exact-footnote"
+            if row.react != ""
+              button class=TextControl appearance="none" press=react(row.id, row.react) aria-label=t("chat.removeReaction") min-height=24 padding="0 space.xs" testId=`react-${row.id}`
+                text row.react font="-exact-footnote"
+            else if not row.mine
+              button class=TextControl appearance="none" press=openPicker(row.id) aria-label=t("chat.react") title=t("chat.react") min-height=24 padding="0 space.xs" testId=`add-react-${row.id}`
+                Glyph(name="smile", size=14)
+          if picking
+            row gap="2px" padding="space.xs" border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="react-picker"
+              for em in ["👍", "❤️", "😂", "😮", "🎉", "🙏"] key=em
+                button class=TextControl appearance="none" press=react(row.id, em) aria-label=t("chat.reactWith", emoji=em) width=36 height=36 min-height=36 padding=0 border-radius="radius.full" font="-exact-title3" testId=`pick-${em}`
+                  text em
+
 component Faces
   props
     faces: FaceBit[]
