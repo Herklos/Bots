@@ -8,6 +8,7 @@ test "Settings owns the Vault and does not expose Projects"
   clock data
   expect tree has "user-name"
   expect tree missing "beta-projects"
+  tap "settings-domain-access"
   expect tree has "open-vault"
   expect tree has "new-password"
   expect disabled "save-password"
@@ -17,6 +18,8 @@ test "Settings owns the Vault and does not expose Projects"
 test "a login is reached through Settings and needs a title or website"
   tap "Settings"
   clock data
+  expect tree has "user-name"
+  tap "settings-domain-access"
   tap "open-vault"
   clock data
   expect tree has "new-login"
@@ -28,18 +31,21 @@ test "a login is reached through Settings and needs a title or website"
   expect enabled "login-save"
   back
   back
-  expect tree has "user-name"
   expect tree has "open-vault"
+  tap "settings-domain-user"
+  expect tree has "user-name"
 
 test "Settings counts usage and still hides Projects"
   tap "Settings"
   clock data
+  expect tree has "user-name"
+  tap "settings-domain-user"
   expect tree has "usage-error"
   expect text "usage-error" == "Can’t load usage. Check that hbots is running, then try again."
   expect tree missing "open-projects"
   expect tree missing "beta-projects"
+  tap "settings-domain-access"
   expect tree has "open-vault"
-  expect tree has "user-name"
 
 test "the library says when it cannot open"
   size 340x740
