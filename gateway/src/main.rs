@@ -13,6 +13,7 @@ mod cli;
 mod config;
 mod error;
 mod exposure; // T4: Tailscale listener and the publish commands.
+mod icons; // Site icons cached under HBOTS_HOME/icons.
 mod mcp;
 mod projects;
 mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-origin check.
@@ -58,6 +59,7 @@ pub struct AppState {
     pub threads: thread_meta::ThreadMeta,
     pub routine_history: routines::RoutineHistory,
     pub system: release::System,
+    pub icons: icons::Icons,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
 }
@@ -189,6 +191,7 @@ async fn main() -> anyhow::Result<()> {
         threads: thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
         routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
         system: release::System::new(cfg.data_root.clone(), app_dir.clone()),
+        icons: icons::Icons::new(cfg.data_root.join("icons")),
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
         cfg,
@@ -296,6 +299,7 @@ fn build(state: Arc<AppState>, tailscale: bool) -> Router {
         .route("/api/routines/enabled", post(routines_enabled))
         .route("/api/routines/delete", post(routines_delete))
         .route("/api/routines/run", post(routines_run))
+        .route("/api/icons/{host}", get(icons::get_icon))
         .merge(release::routes())
         .route("/t3/{*rest}", any(t3_route))
         .layer(middleware::from_fn_with_state(state.clone(), require_login));
