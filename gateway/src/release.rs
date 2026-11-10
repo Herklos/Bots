@@ -484,7 +484,7 @@ pub fn probe_health(port: u16, timeout: Duration) -> Option<Value> {
     serde_json::from_str(body).ok()
 }
 
-fn wait_until(timeout: Duration, mut check: impl FnMut() -> bool) -> bool {
+pub fn wait_until(timeout: Duration, mut check: impl FnMut() -> bool) -> bool {
     let end = Instant::now() + timeout;
     loop {
         if check() {

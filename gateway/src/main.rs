@@ -102,71 +102,8 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
     let args: Vec<String> = std::env::args().skip(1).collect();
-    match cli::parse(&args) {
-        Ok(cli::Command::Help) => {
-            println!("{}", cli::help_text());
-            return Ok(());
-        }
-        Ok(cli::Command::Version) => {
-            println!("hbots {}", env!("CARGO_PKG_VERSION"));
-            return Ok(());
-        }
-        Ok(cli::Command::Status) => {
-            println!("{}", cli::status_text(&cli::home_dir()));
-            return Ok(());
-        }
-        Ok(cli::Command::Systemd) => {
-            let bin = std::env::current_exe()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|_| "hbots".into());
-            println!("{}", cli::systemd_unit(&bin));
-            return Ok(());
-        }
-        Ok(cli::Command::Up) => {
-            release::System::command_up().map_err(|e| anyhow::anyhow!(e))?;
-            return Ok(());
-        }
-        Ok(cli::Command::Rollback) => {
-            release::System::command_rollback(&cli::home_dir()).map_err(|e| anyhow::anyhow!(e))?;
-            return Ok(());
-        }
-        Ok(cli::Command::Install) => {
-            let spec = service_spec();
-            let file = service::install(&spec, std::env::consts::OS)?;
-            println!("hbots service installed: {}", file.display());
-            return Ok(());
-        }
-        Ok(cli::Command::Uninstall) => {
-            service::uninstall(&service_spec(), std::env::consts::OS)?;
-            println!("hbots service removed. Settings and Bots are kept.");
-            return Ok(());
-        }
-        Ok(cli::Command::Restart) => {
-            release::System::command_restart().map_err(|e| anyhow::anyhow!(e))?;
-            return Ok(());
-        }
-        Ok(cli::Command::Update {
-            yes,
-            preview,
-            version,
-        }) => {
-            release::System::command_update(&cli::home_dir(), version.as_deref(), preview, yes)
-                .await
-                .map_err(|e| anyhow::anyhow!(e))?;
-            return Ok(());
-        }
-        Ok(cli::Command::Launchd) => {
-            let bin = std::env::current_exe()
-                .map(|p| p.display().to_string())
-                .unwrap_or_else(|_| "hbots".into());
-            println!("{}", cli::launchd_plist(&bin));
-            return Ok(());
-        }
-        Ok(cli::Command::Serve) => {}
-        Err(message) => {
-            eprintln!("{message}");
-            std::process::exit(2);
-        }
+    if let Some(code) = cli::run(&args).await {
+        std::process::exit(code);
     }
     let cfg = config::Config::from_env()?;
     let app_dir = cfg.app_dir();
@@ -289,18 +226,6 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The service for this install: the `current` link when there is one, else this binary.
-fn service_spec() -> service::ServiceSpec {
-    let home = cli::home_dir();
-    let linked = home.join("runtime/current/hbots");
-    let exe = if linked.exists() {
-        linked
-    } else {
-        std::env::current_exe().unwrap_or_else(|_| "hbots".into())
-    };
-    service::spec(exe, &home, &std::env::var("PATH").unwrap_or_default())
-}
-
 /// Ctrl-C or SIGTERM: the gateway stops its tunnel before it exits.
 async fn shutdown_signal() {
     #[cfg(unix)]
@@ -367,6 +292,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/access/password", put(access_password))
         .route("/api/access/tailscale", post(access_tailscale))
         .route("/api/access/tunnel", post(access_tunnel))
+        .route("/api/thread-previews", post(thread_previews))
         .route("/api/threads/{thread}/meta", get(thread_meta_get))
         .route("/api/threads/{thread}/reactions", post(thread_reaction))
         .route("/api/threads/{thread}/voice", post(thread_voice))
@@ -970,6 +896,43 @@ async fn stop_chat(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Valu
         .await
         .map_err(|e| ApiError::new(502, e.to_string()))?;
     Ok(Json(json!({ "ok": true, "stopped": true })))
+}
+
+async fn thread_previews(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Response> {
+    require_json(&h)?;
+    let b = parse(&body)?;
+    let names: HashMap<String, String> = s
+        .bots
+        .list()
+        .await?
+        .iter()
+        .filter_map(|bot| {
+            Some((
+                bot["mainThreadId"].as_str()?.to_string(),
+                bot["name"].as_str()?.to_string(),
+            ))
+        })
+        .collect();
+    let rpc = s.t3.rpc().await.ok();
+    let previews = s
+        .threads
+        .previews(b.get("stamps"), &names, |thread| {
+            let rpc = rpc.clone();
+            async move {
+                let rpc = rpc.ok_or_else(|| anyhow::anyhow!("T3 unavailable"))?;
+                rpc.call(
+                    "orchestration.getThreadProjection",
+                    json!({ "threadId": thread }),
+                )
+                .await
+            }
+        })
+        .await?;
+    Ok((
+        [(header::CACHE_CONTROL, "no-store")],
+        Json(json!({ "previews": previews })),
+    )
+        .into_response())
 }
 
 async fn vault_list(State(s): S) -> ApiResult<Json<Value>> {

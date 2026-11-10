@@ -233,6 +233,22 @@ pub fn uninstall(spec: &ServiceSpec, os: &str) -> Result<()> {
     Ok(())
 }
 
+/// Restart the running service.
+pub fn restart(spec: &ServiceSpec, os: &str) -> Result<()> {
+    match os {
+        "macos" => run(
+            "launchctl",
+            &["kickstart", "-k", &format!("gui/{}/{}", uid()?, spec.label)],
+        ),
+        "linux" => run("systemctl", &["--user", "restart", &spec.unit]),
+        _ => bail!("Background services are supported on macOS and Linux."),
+    }
+}
+
+pub fn installed(spec: &ServiceSpec, os: &str) -> bool {
+    service_file(spec, os).is_some_and(|f| f.exists())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -302,5 +318,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let s = spec(PathBuf::from("/x/hbots"), dir.path(), "/usr/bin");
         assert!(install(&s, "windows").is_err());
+        assert!(!installed(&s, "windows"));
     }
 }
