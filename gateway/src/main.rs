@@ -30,6 +30,7 @@ mod roster; // What an inbox row needs: preview, working, unread.
 mod routines; // T5: T3 scheduled tasks.
 mod service; // T6b: install and remove the background service.
 mod store;
+mod suggestions; // New Bot starting points.
 mod t3;
 mod thread_meta; // T5: reactions, voice calls, roster previews.
 mod usage; // Local usage counts. Nothing leaves the machine.
@@ -318,6 +319,7 @@ pub fn app(state: Arc<AppState>) -> Router {
             post(connector_save).delete(connector_delete),
         )
         .route("/api/providers", get(providers_get))
+        .route("/api/suggestions", get(suggestions_get))
         .route("/api/bots/{slug}/model", get(model_get).put(model_put))
         .route("/api/bots/{slug}/usage", get(bot_usage))
         .route(
@@ -1124,6 +1126,11 @@ async fn connector_delete(
     require_bot(&s, &slug).await?;
     let name = parse(&body)?["name"].as_str().unwrap_or("").to_string();
     Ok(Json(s.library.delete_connector(&slug, &name).await?))
+}
+
+/// Starting points for New Bot.
+async fn suggestions_get() -> Json<Value> {
+    Json(json!({ "suggestions": suggestions::all() }))
 }
 
 /// Every provider T3 Code has ready, with its models and effort levels.
