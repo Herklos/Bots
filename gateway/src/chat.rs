@@ -92,12 +92,9 @@ fn event_for(item: &Value, peers: &Peers, ordinal: i64) -> Option<Value> {
                     input["title"].as_str().unwrap_or(""),
                     Value::Null,
                 ),
-                "delete_scheduled_task" => line(
-                    "routine-deleted",
-                    "Deleted routine",
-                    "",
-                    Value::Null,
-                ),
+                "delete_scheduled_task" => {
+                    line("routine-deleted", "Deleted routine", "", Value::Null)
+                }
                 _ => None,
             }
         }
@@ -454,7 +451,11 @@ mod tests {
         let e = &t["events"][0];
         assert_eq!(
             (e["kind"].as_str(), e["text"].as_str(), e["title"].as_str()),
-            (Some("routine-created"), Some("Created routine"), Some("hbots test"))
+            (
+                Some("routine-created"),
+                Some("Created routine"),
+                Some("hbots test")
+            )
         );
         assert_eq!(e["ordinal"], 7);
         // An update carries the id of the routine it changes.
