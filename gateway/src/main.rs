@@ -1700,7 +1700,9 @@ async fn computer_steer(
     rpc.call("orchestration.dispatchCommand", command.clone())
         .await
         .map_err(|e| ApiError::new(502, e.to_string()))?;
-    Ok(Json(json!({ "ok": true, "messageId": command["messageId"] })))
+    Ok(Json(
+        json!({ "ok": true, "messageId": command["messageId"] }),
+    ))
 }
 
 async fn computer_control(

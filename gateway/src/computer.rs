@@ -632,10 +632,7 @@ mod tests {
         assert!(text.contains("https://www.google.com"));
         assert!(text.contains("where you left off") || text.contains("left off"));
         assert_eq!(text, OPEN_PROMPT);
-        assert_eq!(
-            command["commandId"].as_str(),
-            command["messageId"].as_str()
-        );
+        assert_eq!(command["commandId"].as_str(), command["messageId"].as_str());
         assert!(!command["messageId"].as_str().unwrap_or("").is_empty());
     }
 
