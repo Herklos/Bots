@@ -333,6 +333,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/bots/{slug}/routines/run", post(bot_routine_run))
         .route("/api/bots/{slug}/lineage", get(lineage_get))
         .route("/api/bots/{slug}/computer", get(computer_get))
+        .route("/api/bots/{slug}/computer/open", post(computer_open))
         .route("/api/bots/{slug}/computer/control", post(computer_control))
         .route("/api/bots/{slug}/computer/input", post(computer_input))
         .route("/api/main-bot", put(main_bot))
@@ -1662,6 +1663,20 @@ async fn computer_get(
         "selected": selected,
         "error": error,
     })))
+}
+
+/// Steers the Bot to open a server browser tab. Does not wait for the tab to appear.
+async fn computer_open(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+    let thread = main_thread(&s, &slug).await?;
+    let command = computer::open_command(&thread);
+    let rpc =
+        s.t3.rpc()
+            .await
+            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
+    rpc.call("orchestration.dispatchCommand", command.clone())
+        .await
+        .map_err(|e| ApiError::new(502, e.to_string()))?;
+    Ok(Json(json!({ "ok": true, "messageId": command["messageId"] })))
 }
 
 async fn computer_control(

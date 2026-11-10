@@ -34,6 +34,7 @@
 //   loadVault: (args: []) => Login[]
 //   makeMainBot: (args: [string]) => Reply
 //   markSeen: (args: [string]) => Reply
+//   openComputer: (args: [string]) => Reply
 //   pinBot: (args: [string, boolean]) => Reply
 //   pinMessage: (args: [string, string, string, string]) => Reply
 //   reactTo: (args: [string, string, string]) => Reply
@@ -542,7 +543,7 @@ type T212 = { "offsetX": T28; "offsetY": T28; "deltaX": T28; "deltaY": T28; "del
 type T213 = { "target": T1; "relatedTarget": T74; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "computerControl": { args: [T1, T1, T1]; result: T2 };
@@ -575,6 +576,7 @@ export interface SourceMap {
   "loadVault": { args: []; result: T191 };
   "makeMainBot": { args: [T1]; result: T2 };
   "markSeen": { args: [T1]; result: T2 };
+  "openComputer": { args: [T1]; result: T2 };
   "pinBot": { args: [T1, T0]; result: T2 };
   "pinMessage": { args: [T1, T1, T1, T1]; result: T2 };
   "reactTo": { args: [T1, T1, T1]; result: T2 };

@@ -826,7 +826,7 @@ pub fn render_agents_md(
 {intro}\n\n\
 ## Memory\n\n- Your notes: `memory/MEMORY.md`. Keep durable facts there, short and current.\n- Your work log: `memory/log.md`.\n{own_folders}- Facts shared by every Bot: {}.\n- Files you keep for the person: `library/`.\n{own_prompt}{inherited}\n\
 ## Tools\n\nThe `bot` MCP server gives you the Vault (`vault_list`) and the Projects board (`projects_*`). Never read the vault files on disk.\n\n\
-## Routines\n\nTo run something on a schedule, use your `schedule_task` tool. Weekdays count from 0 for Sunday to 6 for Saturday, and times are local. The person sees your routines in the app but can't change them there, so say what you set up.\n\n## Other Bots\n\nTo message another Bot, use `t3_thread_send`. Say who you are and what you need.\n{subagents}\n## Asking first\n\nAsk before anything that leaves this machine or can't be undone.\n{MANAGED_END}\n",
+## Routines\n\nTo run something on a schedule, use your `schedule_task` tool. Weekdays count from 0 for Sunday to 6 for Saturday, and times are local. The person sees your routines in the app but can't change them there, so say what you set up.\n\n## Computer\n\nThe person can open your browser from the Computer panel. A message framed `[Computer]` means open a page with your browser tools (resume where you left off, or https://www.google.com) without asking, and stay quiet in chat.\n\n## Other Bots\n\nTo message another Bot, use `t3_thread_send`. Say who you are and what you need.\n{subagents}\n## Asking first\n\nAsk before anything that leaves this machine or can't be undone.\n{MANAGED_END}\n",
         shared.display()
     )
 }
@@ -963,6 +963,8 @@ mod tests {
             &[],
         );
         assert!(text.contains("schedule_task") && text.contains("t3_thread_send"));
+        assert!(text.contains("## Computer") && text.contains("[Computer]"));
+        assert!(text.contains("https://www.google.com"));
         assert!(text.contains("Sunday") && text.starts_with(MANAGED_START));
     }
 

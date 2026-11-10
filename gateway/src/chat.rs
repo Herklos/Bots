@@ -155,9 +155,9 @@ fn request_for(item: &Value) -> Value {
     }
 }
 
-/// Drops what a group put into this thread: a message framed `[Group "…"`, and everything the
-/// Bot did in answer, up to the next message from the person. A group has its own threads, so
-/// this only hides what an earlier version, or a stray dispatch, left in a one-to-one chat.
+/// Drops framed turns from a one-to-one chat: a group dispatch (`[Group "…`) or a Computer
+/// open nudge (`[Computer]`), plus everything the Bot did in answer, up to the next ordinary
+/// message from the person. Group rooms use [`group_transcript`] and keep their own frames.
 pub fn without_group_turns(items: Vec<Value>) -> Vec<Value> {
     let mut hidden = false;
     items
@@ -169,17 +169,25 @@ pub fn without_group_turns(items: Vec<Value>) -> Vec<Value> {
                 raw
             };
             if item["type"] == "user_message" {
-                hidden = item["text"].as_str().is_some_and(is_group_prompt);
+                hidden = item["text"].as_str().is_some_and(is_framed_prompt);
             }
             !hidden
         })
         .collect()
 }
 
+fn is_framed_prompt(text: &str) -> bool {
+    is_group_prompt(text) || is_computer_prompt(text)
+}
+
 fn is_group_prompt(text: &str) -> bool {
     text.contains("[Group \"")
         || text.contains("Your reply is shared with the group")
         || text.contains("Write @slug only when")
+}
+
+fn is_computer_prompt(text: &str) -> bool {
+    text.contains("[Computer]")
 }
 
 fn turn_items(projection: &Value) -> Vec<Value> {
@@ -752,6 +760,31 @@ mod tests {
             .as_array()
             .unwrap()
             .is_empty());
+    }
+
+    #[test]
+    fn a_computer_open_turn_stays_out_of_the_one_to_one_chat() {
+        let p = json!({ "turnItems": [
+            { "id": "1", "type": "user_message", "text": "hi", "status": "completed" },
+            { "id": "2", "type": "assistant_message", "text": "hello", "status": "completed" },
+            { "id": "3", "type": "user_message", "text": crate::computer::OPEN_PROMPT, "status": "completed" },
+            { "id": "4", "type": "assistant_message", "text": "Opening Google.", "status": "completed" },
+            { "id": "5", "type": "dynamic_tool", "toolName": "preview_open", "status": "completed" },
+            { "id": "6", "type": "user_message", "text": "thanks", "status": "completed" },
+            { "id": "7", "type": "assistant_message", "text": "welcome", "status": "completed" },
+        ]});
+        let t = transcript(&p);
+        let texts: Vec<&str> = t["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["text"].as_str().unwrap())
+            .collect();
+        assert_eq!(texts, vec!["hi", "hello", "thanks", "welcome"]);
+        assert!(
+            t["events"].as_array().unwrap().is_empty(),
+            "computer-open tool use stays out of the one-to-one chat"
+        );
     }
 
     #[test]

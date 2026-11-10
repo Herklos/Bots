@@ -9,6 +9,28 @@ pub fn watch_message() -> Value {
     json!({ "type": "ack" })
 }
 
+/// Framed prompt the Computer empty-state button dispatches. Chat hides this turn.
+pub const OPEN_PROMPT: &str = "\
+[Computer]
+Open your browser where you left off if you still have that page. Otherwise open https://www.google.com with your browser tools. Do this without asking, and do not reply in chat.";
+
+/// `message.dispatch` that steers the Bot to open a server browser tab.
+pub fn open_command(thread: &str) -> Value {
+    let id = uuid::Uuid::new_v4().to_string();
+    json!({
+        "commandId": id,
+        "type": "message.dispatch",
+        "threadId": thread,
+        "messageId": id,
+        "text": OPEN_PROMPT,
+        "attachments": [],
+        "createdBy": "user",
+        "creationSource": "web",
+        "deliveryIntent": "steer",
+        "dispatchMode": { "type": "start_immediately" },
+    })
+}
+
 pub fn control_message(action: &str) -> Result<Value, &'static str> {
     match action {
         "take" => Ok(json!({ "type": "takeControl" })),
@@ -579,6 +601,28 @@ mod tests {
             "releaseControl"
         );
         assert!(control_message("steal").is_err());
+    }
+
+    #[test]
+    fn open_command_steers_with_the_computer_frame() {
+        let command = open_command("thread-ada");
+        assert_eq!(command["type"], "message.dispatch");
+        assert_eq!(command["threadId"], "thread-ada");
+        assert_eq!(command["createdBy"], "user");
+        assert_eq!(command["creationSource"], "web");
+        assert_eq!(command["deliveryIntent"], "steer");
+        assert_eq!(command["dispatchMode"]["type"], "start_immediately");
+        assert_eq!(command["attachments"], json!([]));
+        let text = command["text"].as_str().unwrap();
+        assert!(text.contains("[Computer]"));
+        assert!(text.contains("https://www.google.com"));
+        assert!(text.contains("where you left off") || text.contains("left off"));
+        assert_eq!(text, OPEN_PROMPT);
+        assert_eq!(
+            command["commandId"].as_str(),
+            command["messageId"].as_str()
+        );
+        assert!(!command["messageId"].as_str().unwrap_or("").is_empty());
     }
 
     #[test]

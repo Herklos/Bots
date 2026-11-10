@@ -836,6 +836,8 @@ component Bots
   // Empty follows the server's selected tab. A pick refetches that page.
   state computerTab = ""
   state computerEnlarged = false
+  // Set while a silent Open browser request is in flight or waiting for a tab.
+  state wantOpen = false
   resource hostTime = exactTime() as shape HostTime
   resource pointerFacts = exactViewport() as shape PointerFacts
   resource session = loadSession(hostTime.locale) as shape Session else empty()
@@ -900,6 +902,7 @@ component Bots
   mutation defaultSaved as shape Reply refreshes prefs, models
   mutation controlled as shape Reply refreshes computer then afterControl
   mutation driven as shape DriveReply refreshes computer then afterDrive
+  mutation openedBrowser as shape Reply refreshes computer then afterOpen
   derive slug = match stack(nav).filter(e => e.name == "chat").at(-1) { case some(e) => e.params.slug, case none => "" }
   derive signInError = match signedIn { case some(r) => r.error, case none => "" }
   derive createError = match created { case some(r) => r.error, case none => "" }
@@ -965,6 +968,8 @@ component Bots
   derive usageGate = top(nav).name == "settings" ? "1" : "0"
   derive modelError = match modelSaved { case some(r) => r.error, case none => "" }
   derive controlError = match controlled { case some(r) => r.error, case none => "" }
+  derive openError = match openedBrowser { case some(r) => r.error, case none => "" }
+  derive openingBrowser = wantOpen and computer.tabs.length == 0
   derive driveError = match driven { case some(r) => r.error, case none => "" }
   derive holding = wantHold and controlError == "" and not pending(controlled)
 
@@ -1069,6 +1074,7 @@ component Bots
   // replaces that chat, so the conversation swaps instead of stacking.
   action open(url: string)
     computerEnlarged = false
+    wantOpen = false
     childThread = ""
     panelPage = "root"
     computerTab = ""
@@ -1581,6 +1587,20 @@ component Bots
     if holding and heldTab != "" and kind != ""
       send driven = computerInput(slug, kind, x, y, boxW, boxH, delta, text)
 
+  action doOpenBrowser
+    if slug != "" and not pending(openedBrowser) and not wantOpen
+      wantOpen = true
+      send openedBrowser = openComputer(slug)
+  action afterOpen
+    match openedBrowser
+      case some(r)
+        if not r.ok
+          wantOpen = false
+      case none
+  task clearWantOpen when wantOpen and computer.tabs.length > 0
+    after(1, dropWantOpen)
+  action dropWantOpen
+    wantOpen = false
   action showComputerLarge
     computerEnlarged = true
   action focusComputerFrame
@@ -1890,7 +1910,7 @@ component Bots
                       button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="send"
                         Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), showComputerLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
+                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), showComputerLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, openBrowser=doOpenBrowser, opening=openingBrowser, openError=openError, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
           else if e.name == "group"
             column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="room-header"
@@ -2671,6 +2691,9 @@ component BotPanel
     release: action
     picked: string
     pick: action
+    openBrowser: action
+    opening: bool
+    openError: string
     bots: Bot[]
     subSlug: string
     subName: string
@@ -2871,7 +2894,7 @@ component BotPanel
             BotShelf(shelf=shelf, down=shelfDown, name=bot.name)
         column id="bot-tab-computer" role="tabpanel" aria-label=t("panel.computer") display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0
           scroll id="panel-computer-scroll" flex=1 min-height=0
-            ScreenCard(name=bot.name, computer=computer, down=computerDown, showLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=live, drive=drive, take=take, release=release, picked=picked, pick=pick)
+            ScreenCard(name=bot.name, computer=computer, down=computerDown, showLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=live, drive=drive, take=take, release=release, picked=picked, pick=pick, openBrowser=openBrowser, opening=opening, openError=openError)
 
 // Pick the provider, the model and how hard it thinks. Each choice applies to the Bot's next message.
 // Provider, model and effort as one picker. The Bot's panel and Settings both use it.
@@ -3113,6 +3136,9 @@ component ScreenCard
     release: action
     picked: string
     pick: action
+    openBrowser: action
+    opening: bool
+    openError: string
   derive current = tabId(computer.tabs, picked, computer.selected)
   view
     column gap="space.md" padding="0 space.lg space.xl" testId="screen"
@@ -3123,6 +3149,13 @@ component ScreenCard
           column color="ink.faint"
             Glyph(name="monitor", size=32)
           text t("computer.none", name=name) color="ink.muted" text-align="center" testId="computer-status"
+          if opening
+            text t("computer.opening", name=name) color="ink.muted" font="-exact-footnote" text-align="center" testId="computer-opening"
+          else
+            button class=PrimaryButton buttonStyle="bordered" press=openBrowser testId="computer-open"
+              text t("computer.open")
+          if openError != ""
+            text openError color="-exact-system-red" testId="computer-open-error"
       else
         column border-radius="radius.md" overflow="hidden" border="1px solid surface.line" background-color="surface.card"
           if computer.image != ""
