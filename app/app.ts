@@ -982,6 +982,18 @@ const sources: Sources = {
         ],
       };
     }
+    if (id === 'fixture-busy') {
+      return {
+        id: 'fixture-busy', title: 'Design', description: 'Where Ada and Bea trade drafts', color: 'brand.blue', shape: 'hex',
+        members: [
+          { slug: 'ada', name: 'Ada', line: 'Working', state: 'working', ready: true, working: true },
+          { slug: 'bea', name: 'Bea', line: 'Working', state: 'working', ready: true, working: true },
+        ],
+        messages: [
+          { id: 'r1', name: 'Ada', text: 'On it', from: 'ada' },
+        ],
+      };
+    }
     const body = await read(store, `/api/rooms/${encodeURIComponent(id)}`);
     const members = Array.isArray(body.members) ? body.members : [];
     const messages = Array.isArray(body.messages) ? body.messages : [];

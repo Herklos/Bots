@@ -737,6 +737,7 @@ fn bitColor(faces: FaceBit[], n: number): string = match faces.at(n) { case some
 fn bitState(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.state, case none => "idle" }
 fn memberFaces(bots: Bot[], members: RoomMember[]): FaceBit[] = members.slice(0, 3).map(m => FaceBit(shape=shapeOf(bots, m.slug), color=colorOf(bots, m.slug), state=m.state))
 fn pickedFaces(bots: Bot[], slugs: string[]): FaceBit[] = slugs.slice(0, 3).map(slug => FaceBit(shape=shapeOf(bots, slug), color=colorOf(bots, slug), state="idle"))
+fn withWorking(messages: RoomMessage[], working: bool): RoomMessage[] = working ? messages.concat([RoomMessage(id="working", name="", text="", from="")]) : messages
 
 // One transcript message. Time, reply and pin stay in the tree so the keyboard
 // can focus them. They paint while the pointer is over the message, while a tap
@@ -978,6 +979,8 @@ component Bots
   derive canMakeGroup = groupName.trim() != "" and groupMembers.length >= 2 and not pending(groupMade)
   derive roomError = match roomSent { case some(r) => r.error, case none => "" }
   derive roomId = match stack(nav).filter(e => e.name == "group").at(-1) { case some(e) => e.params.id, case none => "" }
+  derive workingMembers = room.members.filter(m => m.working)
+  derive roomRows = withWorking(room.messages, workingMembers.length > 0)
   derive qtext = messageQuery.trim().toLowerCase()
   derive shownRows = chat.rows.filter(m => m.kind != "message" or qtext == "" or m.text.toLowerCase().includes(qtext))
   derive searchNote = qtext != "" and chat.partial ? t("chat.searchPartial") : ""
@@ -1899,7 +1902,7 @@ component Bots
                       column
                         text m.name font="-exact-footnote" font-weight=600 testId=`member-${m.slug}-name`
                         text m.line color="ink.muted" font="-exact-caption2" testId=`member-${m.slug}-state`
-                if room.messages.length == 0
+                if room.messages.length == 0 and workingMembers.length == 0
                   column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="room-empty"
                     Faces(faces=memberFaces(bots, room.members), size=72, tuck=-28)
                     text t("group.emptyTitle") class=HeroTitle text-align="center"
@@ -1907,25 +1910,33 @@ component Bots
                 else
                   column flex=1 min-height=0 justify-content="flex-end" position="relative"
                     list id="room-log" appearance="none" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" flex=1 min-height=0 padding="space.sm space.lg space.xl" virtualized=true scroll-start="end" scrollFollowEnd=true testId="room-log"
-                      for msg in room.messages key=msg.id
-                        row justify-content=(msg.from == "user" ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="2px 0" testId=`room-msg-${msg.id}`
-                          if msg.from != "user"
-                            Face(shape=shapeOf(bots, msg.from), color=faceColor(colorOf(bots, msg.from)), state="idle", size=28, still=true)
-                          column gap="2px" max-width="82%" align-items=(msg.from == "user" ? "flex-end" : "flex-start")
+                      for msg in roomRows key=msg.id
+                        if msg.id == "working"
+                          row gap="space.sm" align-items="center" padding="2px 0" testId="room-working"
+                            for m in workingMembers key=m.slug
+                              Face(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state="working", size=24, still=false, testId=`room-working-${m.slug}`)
+                            row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working") testId="room-working-dots"
+                              for n in [0, 1, 2] key=n
+                                column width=7 height=7 border-radius="radius.full" background-color="ink.muted" opacity=0.6
+                        else
+                          row justify-content=(msg.from == "user" ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="2px 0" testId=`room-msg-${msg.id}`
                             if msg.from != "user"
-                              text msg.name font="-exact-footnote" font-weight=600 color="ink.muted" testId=`room-from-${msg.id}`
-                            if msg.from == "user"
-                              text msg.text class=Bubble testId=`room-text-${msg.id}`
-                                background-color="brand.default"
-                                color="ink.dark"
-                                border-radius="radius.lg"
-                                border-bottom-right-radius="radius.sm"
-                            else
-                              text msg.text markup="markdown" class=Bubble white-space="normal" testId=`room-text-${msg.id}`
-                                background-color="surface.bubble"
-                                color="-exact-label"
-                                border-radius="radius.lg"
-                                border-bottom-left-radius="radius.sm"
+                              Face(shape=shapeOf(bots, msg.from), color=faceColor(colorOf(bots, msg.from)), state="idle", size=28, still=true)
+                            column gap="2px" max-width="82%" align-items=(msg.from == "user" ? "flex-end" : "flex-start")
+                              if msg.from != "user"
+                                text msg.name font="-exact-footnote" font-weight=600 color="ink.muted" testId=`room-from-${msg.id}`
+                              if msg.from == "user"
+                                text msg.text class=Bubble testId=`room-text-${msg.id}`
+                                  background-color="brand.default"
+                                  color="ink.dark"
+                                  border-radius="radius.lg"
+                                  border-bottom-right-radius="radius.sm"
+                              else
+                                text msg.text markup="markdown" class=Bubble white-space="normal" testId=`room-text-${msg.id}`
+                                  background-color="surface.bubble"
+                                  color="-exact-label"
+                                  border-radius="radius.lg"
+                                  border-bottom-left-radius="radius.sm"
                 column width="calc(100% - 32px)" max-width="44rem" min-width=0 align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.sm" flex-shrink=0
                   if roomError != "" and not pending(roomSent)
                     text roomError color="-exact-system-red" font="-exact-footnote" testId="room-send-error"

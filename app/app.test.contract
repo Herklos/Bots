@@ -111,6 +111,21 @@ test "a room shows who is working and who is still getting set up"
   expect text "member-ada-state" == "Working"
   expect text "member-bea-name" == "Bea"
   expect text "member-bea-state" == "Getting set up…"
+  expect tree has "room-working"
+  expect tree has "room-working-dots"
+  expect tree has "room-working-ada"
+  expect tree missing "room-working-bea"
+  expect tree has "room-msg-r1"
+  expect tree has "room-msg-r2"
+
+test "a room shows one working mark when several members are working"
+  at "/group/fixture-busy"
+  clock data
+  expect tree has "room-working"
+  expect tree has "room-working-dots"
+  expect tree has "room-working-ada"
+  expect tree has "room-working-bea"
+  expect tree has "room-msg-r1"
 
 test "a message shows a reaction, a quote, and a pin that is not in view"
   at "/bot/fixture"
@@ -299,6 +314,7 @@ test "the plus button offers a Bot or a group, and a group needs a name and two 
   clock settle
   expect text "room-title" == "Crew"
   expect tree has "room-composer"
+  expect tree missing "room-working"
 
 test "groups sit in the same list as Bots, with no section of their own"
   size 1200x800
