@@ -341,3 +341,17 @@ test "the library says when it cannot open, in French"
   clock data
   expect tree has "library-error"
   expect text "library-error" == "Impossible d’ouvrir cette bibliothèque. Vérifiez qu’hbots tourne, puis réessayez."
+
+test "two server tabs are listed and the second can be chosen"
+  size 340x740
+  at "/bot/tabs"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-computer"
+  clock data
+  expect tree has "tab-one"
+  expect tree has "tab-two"
+  expect text "computer-tab-title" == "One"
+  tap "tab-two"
+  clock data
+  expect text "computer-tab-title" == "Two"

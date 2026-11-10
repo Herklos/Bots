@@ -15,7 +15,7 @@
 //   loadAbout: (args: []) => About
 //   loadBots: (args: [string]) => Bot[]
 //   loadChat: (args: [string, string]) => Chat
-//   loadComputer: (args: [string, string, string]) => Computer
+//   loadComputer: (args: [string, string, string, string]) => Computer
 //   loadConvos: (args: [string, string, string]) => Convo[]
 //   loadDrafts: (args: []) => DraftPack
 //   loadLineage: (args: [string, string, string]) => Lineage
@@ -94,7 +94,7 @@
 //   ShelfItem = { id: string; title: string; detail: string; url: string }
 //   Shelf = { ok: boolean; total: number; pictures: ShelfItem[]; files: ShelfItem[]; links: ShelfItem[] }
 //   PageTab = { id: string; title: string; url: string }
-//   Computer = { ok: boolean; tabs: PageTab[]; image: string; error: string }
+//   Computer = { ok: boolean; tabs: PageTab[]; image: string; error: string; selected: string }
 //   DraftPack = { stamp: string; texts: string[]; files: string[]; voices: string[] }
 
 /** Storage capabilities supplied by the host. Import these types; there are
@@ -379,7 +379,7 @@ type T53 = T52[];
 type T54 = { "ok": T0; "total": T27; "pictures": T53; "files": T53; "links": T53; };
 type T55 = { "id": T1; "title": T1; "url": T1; };
 type T56 = T55[];
-type T57 = { "ok": T0; "tabs": T56; "image": T1; "error": T1; };
+type T57 = { "ok": T0; "tabs": T56; "image": T1; "error": T1; "selected": T1; };
 type T58 = T1[];
 type T59 = { "stamp": T1; "texts": T58; "files": T58; "voices": T58; };
 type T60 = { "locale": T1; };
@@ -528,7 +528,7 @@ export interface SourceMap {
   "loadAbout": { args: []; result: T11 };
   "loadBots": { args: [T1]; result: T172 };
   "loadChat": { args: [T1, T1]; result: T15 };
-  "loadComputer": { args: [T1, T1, T1]; result: T57 };
+  "loadComputer": { args: [T1, T1, T1, T1]; result: T57 };
   "loadConvos": { args: [T1, T1, T1]; result: T174 };
   "loadDrafts": { args: []; result: T59 };
   "loadLineage": { args: [T1, T1, T1]; result: T44 };

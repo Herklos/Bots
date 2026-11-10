@@ -670,6 +670,11 @@ shape Computer
   tabs: PageTab[]
   image: string
   error: string
+  selected: string
+
+// The tab on screen: the one the person picked, else the server's choice, else the first.
+fn tabId(tabs: PageTab[], picked: string, selected: string): string = match first(tabs.filter(t => t.id == (picked != "" ? picked : selected))) { case some(t) => t.id, case none => match first(tabs) { case some(t) => t.id, case none => "" } }
+fn tabTitle(tabs: PageTab[], id: string): string = match first(tabs.filter(t => t.id == id)) { case some(t) => t.title, case none => "" }
 
 // One kept conversation: its text, the files waiting with it, and a held clip.
 shape DraftPack
@@ -772,6 +777,8 @@ component Bots
   // The page the person is driving. Cleared after Release, including when they leave.
   state wantHold = false
   state heldTab = ""
+  // Empty follows the server's selected tab. A pick refetches that page.
+  state computerTab = ""
   resource hostTime = exactTime() as shape HostTime
   resource session = loadSession(hostTime.locale) as shape Session else empty()
   resource keptDrafts = loadDrafts() as shape DraftPack else empty()
@@ -790,7 +797,7 @@ component Bots
   resource routines = loadRoutines(slug, detailGate, hostTime.locale) as shape RoutineList else empty()
   resource lineage = loadLineage(slug, detailGate, hostTime.locale) as shape Lineage else empty()
   resource shelf = loadShelf(slug, libraryGate) as shape Shelf else empty()
-  resource computer = loadComputer(slug, computerGate, hostTime.locale) as shape Computer else empty()
+  resource computer = loadComputer(slug, computerGate, hostTime.locale, computerTab) as shape Computer else empty()
   resource clipType = isTypeSupported(type="audio/mp4") as shape TypeSupport else empty()
   mutation signedIn as shape Reply refreshes session, bots
   mutation signedOut as shape Reply refreshes session, bots
@@ -988,6 +995,7 @@ component Bots
   action open(url: string)
     childThread = ""
     panelPage = "root"
+    computerTab = ""
     nav = top(nav).name == "chat" and url.startsWith("/bot/") ? replace(nav, url) : go(nav, url)
   action back
     if childThread != ""
@@ -1382,6 +1390,13 @@ component Bots
     wantHold = false
     if heldTab != ""
       send controlled = computerControl(slug, heldTab, "release")
+  // Choosing another page drops the one being driven. It does not take the new one.
+  action pickComputerTab(id: string)
+    if id != "" and id != computerTab
+      if heldTab != "" and heldTab != id
+        wantHold = false
+        send controlled = computerControl(slug, heldTab, "release")
+      computerTab = id
   action releaseHeld
     wantHold = false
     if heldTab != ""
@@ -1733,7 +1748,7 @@ component Bots
                       button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="send"
                         Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease)
+                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab)
           else if e.name == "group"
             column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="room-header"
@@ -2257,6 +2272,8 @@ component BotPanel
     controlError: string
     take: action
     release: action
+    picked: string
+    pick: action
   action tabKey(k: string, event: KeyboardEvent)
     if not event.isComposing and (k == "ArrowRight" or k == "ArrowLeft" or k == "Home" or k == "End")
       preventDefault()
@@ -2376,7 +2393,7 @@ component BotPanel
             BotShelf(shelf=shelf, down=shelfDown, name=bot.name)
         column id="bot-tab-computer" role="tabpanel" aria-label=t("panel.computer") display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0
           scroll id="panel-computer-scroll" flex=1 min-height=0
-            ScreenCard(name=bot.name, computer=computer, down=computerDown, heldTab=heldTab, controlError=controlError, take=take, release=release)
+            ScreenCard(name=bot.name, computer=computer, down=computerDown, heldTab=heldTab, controlError=controlError, take=take, release=release, picked=picked, pick=pick)
 
 // Pick the provider, the model and how hard it thinks. Each choice applies to the Bot's next message.
 // Provider, model and effort as one picker. The Bot's panel and Settings both use it.
@@ -2601,6 +2618,9 @@ component ScreenCard
     controlError: string
     take: action
     release: action
+    picked: string
+    pick: action
+  derive current = tabId(computer.tabs, picked, computer.selected)
   view
     column gap="space.md" padding="0 space.lg space.xl" testId="screen"
       if down or not computer.ok
@@ -2617,16 +2637,19 @@ component ScreenCard
           else
             column align-items="center" justify-content="center" height=140 color="ink.faint"
               Glyph(name="monitor", size=28)
-        for t in computer.tabs.slice(0, 1) key=t.id
-          column gap="space.xs" align-items="center"
-            text t("computer.screen", name=name) color="ink.muted" testId="computer-status"
-            text t.title font-weight=500 text-align="center" overflow-wrap="anywhere"
-          if heldTab == t.id
-            button class=PrimaryButton buttonStyle="filled" press=release testId="computer-release"
-              text t("computer.release")
-          else
-            button class=PrimaryButton buttonStyle="bordered" press=take(t.id) testId="computer-take"
-              text t("computer.take")
+        column gap="space.xs" align-items="center"
+          text t("computer.screen", name=name) color="ink.muted" testId="computer-status"
+          text tabTitle(computer.tabs, current) font-weight=500 text-align="center" overflow-wrap="anywhere" testId="computer-tab-title"
+        column gap="2px" width="100%"
+          for t in computer.tabs key=t.id
+            button appearance="none" press=pick(t.id) min-height=44 padding="0 space.md" aria-pressed=(t.id == current) testId=`tab-${t.id}`
+              text t.title font-weight=(t.id == current ? 600 : 400) overflow-wrap="anywhere"
+        if heldTab == current
+          button class=PrimaryButton buttonStyle="filled" press=release testId="computer-release"
+            text t("computer.release")
+        else
+          button class=PrimaryButton buttonStyle="bordered" press=take(current) testId="computer-take"
+            text t("computer.take")
         if heldTab != ""
           text t("computer.held") color="ink.muted" font="-exact-footnote" text-align="center"
         else
