@@ -49,7 +49,7 @@
 //   sendRoom: (args: [string, string]) => Reply
 //   sendVoice: (args: [string, number, string, string]) => Reply
 //   setDefaultModel: (args: [string, string, string]) => Reply
-//   setModel: (args: [string, string, string, string]) => Reply
+//   setModel: (args: [string, string, string, string, string]) => Reply
 //   setPassword: (args: [string]) => Reply
 //   setTheme: (args: [string]) => Reply
 //   setUserName: (args: [string]) => Reply
@@ -85,7 +85,7 @@
 //   Effort = { id: string; label: string }
 //   ModelOption = { slug: string; name: string; recommended: boolean; effort: string; efforts: Effort[] }
 //   Provider = { instanceId: string; name: string; account: string; models: ModelOption[] }
-//   ModelList = { ok: boolean; error: string; current: string; instanceId: string; effort: string; currentName: string; providerName: string; effortLabel: string; efforts: Effort[]; providers: Provider[] }
+//   ModelList = { ok: boolean; error: string; current: string; instanceId: string; effort: string; runtimeMode: string; currentName: string; providerName: string; effortLabel: string; efforts: Effort[]; providers: Provider[] }
 //   Routine = { id: string; title: string; paused: boolean; schedule: string; next: string; failed: boolean }
 //   RoutineList = { ok: boolean; tasks: Routine[]; error: string }
 //   LineRow = { id: string; title: string; status: string; remote: boolean; threadId: string }
@@ -364,7 +364,7 @@ type T34 = { "slug": T1; "name": T1; "recommended": T0; "effort": T1; "efforts":
 type T35 = T34[];
 type T36 = { "instanceId": T1; "name": T1; "account": T1; "models": T35; };
 type T37 = T36[];
-type T38 = { "ok": T0; "error": T1; "current": T1; "instanceId": T1; "effort": T1; "currentName": T1; "providerName": T1; "effortLabel": T1; "efforts": T33; "providers": T37; };
+type T38 = { "ok": T0; "error": T1; "current": T1; "instanceId": T1; "effort": T1; "runtimeMode": T1; "currentName": T1; "providerName": T1; "effortLabel": T1; "efforts": T33; "providers": T37; };
 type T39 = { "id": T1; "title": T1; "paused": T0; "schedule": T1; "next": T1; "failed": T0; };
 type T40 = T39[];
 type T41 = { "ok": T0; "tasks": T40; "error": T1; };
@@ -588,7 +588,7 @@ export interface SourceMap {
   "sendRoom": { args: [T1, T1]; result: T2 };
   "sendVoice": { args: [T1, T27, T1, T1]; result: T2 };
   "setDefaultModel": { args: [T1, T1, T1]; result: T2 };
-  "setModel": { args: [T1, T1, T1, T1]; result: T2 };
+  "setModel": { args: [T1, T1, T1, T1, T1]; result: T2 };
   "setPassword": { args: [T1]; result: T2 };
   "setTheme": { args: [T1]; result: T2 };
   "setUserName": { args: [T1]; result: T2 };

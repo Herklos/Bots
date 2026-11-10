@@ -66,6 +66,22 @@ test "the computer says when it cannot open"
   expect tree missing "computer-frame"
   expect tree missing "open-projects"
 
+test "the model page shows ask, auto, and full access"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  clock data
+  tap "model-row"
+  clock settle
+  expect tree has "model-page"
+  expect tree has "access-ask"
+  expect tree has "access-auto"
+  expect tree has "access-full"
+  expect text "access-ask" == "Ask"
+  expect text "access-auto" == "Auto"
+  expect text "access-full" == "Full access"
+
 test "a missing Bot has no model, routine, or library row"
   size 340x740
   at "/bot/ada"

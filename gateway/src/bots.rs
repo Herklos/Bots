@@ -325,6 +325,16 @@ impl Bots {
             if patch.get("prompt").is_some_and(|v| !v.is_string()) {
                 return Err(ApiError::bad_request("prompt must be a string"));
             }
+            if let Some(mode) = patch.get("runtimeMode") {
+                if !matches!(
+                    mode.as_str(),
+                    Some("approval-required" | "auto" | "full-access")
+                ) {
+                    return Err(ApiError::bad_request(
+                        "runtimeMode must be approval-required, auto, or full-access",
+                    ));
+                }
+            }
             if let Some(subagent) = patch.get("subagent") {
                 if subagent.is_null() {
                     if current.as_ref().is_some_and(is_subagent) {

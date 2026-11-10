@@ -198,7 +198,7 @@ const FIXTURE_EFFORTS = [
   { id: 'max', label: 'Max' },
 ];
 
-let fixtureChoice = { instanceId: 'claudeAgent', model: 'haiku', effort: 'high' };
+let fixtureChoice = { instanceId: 'claudeAgent', model: 'haiku', effort: 'high', runtimeMode: 'auto' };
 
 function fixtureProviders() {
   const efforts = () => FIXTURE_EFFORTS.map((level) => ({ ...level }));
@@ -219,18 +219,19 @@ function fixtureModelList() {
   const mod = prov.models.find((m) => m.slug === fixtureChoice.model) ?? prov.models[0]!;
   const effort = mod.efforts.some((level) => level.id === fixtureChoice.effort) ? fixtureChoice.effort : '';
   return {
-    ok: true, error: '', current: mod.slug, instanceId: prov.instanceId, effort,
+    ok: true, error: '', current: mod.slug, instanceId: prov.instanceId, effort, runtimeMode: fixtureChoice.runtimeMode,
     currentName: mod.name, providerName: prov.name,
     effortLabel: mod.efforts.find((level) => level.id === effort)?.label ?? '',
     efforts: mod.efforts, providers,
   };
 }
 
-function rememberFixtureModel(instanceId: string, model: string, effort: string): { ok: boolean; error: string } {
+function rememberFixtureModel(instanceId: string, model: string, effort: string, mode: string): { ok: boolean; error: string } {
   const prov = fixtureProviders().find((p) => p.instanceId === instanceId);
   const mod = prov?.models.find((row) => row.slug === model);
   if (!prov || !mod) return { ok: false, error: 'That model is not available.' };
-  fixtureChoice = { instanceId, model, effort: mod.efforts.some((level) => level.id === effort) ? effort : '' };
+  const runtimeMode = mode === 'approval-required' || mode === 'auto' || mode === 'full-access' ? mode : fixtureChoice.runtimeMode;
+  fixtureChoice = { instanceId, model, effort: mod.efforts.some((level) => level.id === effort) ? effort : '', runtimeMode };
   return { ok: true, error: '' };
 }
 
@@ -863,7 +864,7 @@ const sources: Sources = {
   },
   loadModels: async ([slug, gate, locale], store): Promise<Result<'loadModels'>> => {
     noteLocale(locale);
-    const none = { ok: true, error: '', current: '', instanceId: '', effort: '', currentName: '', providerName: '', effortLabel: '', efforts: [], providers: [] };
+    const none = { ok: true, error: '', current: '', instanceId: '', effort: '', runtimeMode: '', currentName: '', providerName: '', effortLabel: '', efforts: [], providers: [] };
     if (slug === '' || gate !== '1') return none;
     if (slug === 'fixture') return fixtureModelList();
     const [m, p] = await Promise.all([call(store, `/api/bots/${encodeURIComponent(slug)}/model`), call(store, '/api/providers')]);
@@ -878,18 +879,19 @@ const sources: Sources = {
     const instanceId = String(m.body.instanceId ?? '');
     const current = String(m.body.current ?? '');
     const effort = String(m.body.effort ?? '');
+    const runtimeMode = String(m.body.runtimeMode ?? '');
     const prov = providers.find((x: any) => x.instanceId === instanceId);
     const mod = prov?.models.find((o: any) => o.slug === current);
     return {
-      ok: true, error: p.ok ? '' : explain(p.error, 'providers'), current, instanceId, effort,
+      ok: true, error: p.ok ? '' : explain(p.error, 'providers'), current, instanceId, effort, runtimeMode,
       currentName: mod?.name ?? prettyModel(current), providerName: prov?.name ?? instanceId,
       effortLabel: mod?.efforts.find((e: any) => e.id === effort)?.label ?? '', efforts: mod?.efforts ?? [], providers,
     };
   },
-  setModel: async ([slug, instanceId, model, effort], store) => {
-    if (slug === 'fixture') return rememberFixtureModel(instanceId, model, effort);
+  setModel: async ([slug, instanceId, model, effort, mode], store) => {
+    if (slug === 'fixture') return rememberFixtureModel(instanceId, model, effort, mode);
     return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/model`, {
-      method: 'PUT', body: JSON.stringify({ instanceId, model, ...(effort !== '' ? { effort } : {}) }),
+      method: 'PUT', body: JSON.stringify({ instanceId, model, ...(effort !== '' ? { effort } : {}), ...(mode !== '' ? { runtimeMode: mode } : {}) }),
     }));
   },
   setDefaultModel: async ([instanceId, model, effort], store) => reply(await call(store, '/api/settings', {
