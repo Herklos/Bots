@@ -1348,8 +1348,8 @@ component Bots
   action openNewSub
     subSlug = ""
     subName = ""
-    subShape = "ball"
-    subColor = "brand.default"
+    subShape = shapeOf(bots, slug)
+    subColor = colorOf(bots, slug)
     subPrompt = ""
     subInherit = false
     panelPage = "subagent"
@@ -1380,7 +1380,7 @@ component Bots
       subSlug = ""
   action doSaveSub
     if subSlug != "" and not pending(subSaved)
-      send subSaved = saveSubagent(subSlug, subPrompt, subInherit)
+      send subSaved = saveSubagent(subSlug, subName.trim(), subShape, subColor, subPrompt, subInherit)
   action afterSubSave
     if subSaveError == ""
       panelPage = "root"
@@ -2384,7 +2384,7 @@ component BotPanel
           button class=IconControl appearance="none" press=goRoot aria-label=t("common.back") title=t("common.back") testId="panel-back"
             column rotate="180deg"
               Glyph(name="chevron", size=20)
-          text (page == "model" ? t("panel.model") : page == "usage" ? t("panel.usage") : page == "subagent" ? (subSlug != "" ? "Subagent" : "New subagent") : t("panel.edit")) role="heading" aria-level=2 class=PageTitle flex=1 testId="panel-page-title"
+          text (page == "model" ? t("panel.model") : page == "usage" ? t("panel.usage") : page == "subagent" ? (subSlug != "" ? t("subagent.page") : t("subagent.new")) : t("panel.edit")) role="heading" aria-level=2 class=PageTitle flex=1 testId="panel-page-title"
         else
           column flex=1
           button class=IconControl appearance="none" press=goEdit aria-label=t("panel.edit") title=t("panel.edit") testId="panel-edit"
@@ -2403,52 +2403,51 @@ component BotPanel
       else if page == "subagent"
         scroll flex=1 min-height=0
           column gap="space.lg" padding="space.sm space.lg space.xl" testId="subagent-page"
-            if subSlug == ""
-              column gap="space.sm"
-                text "Name" class=SectionLabel
-                input appearance="none" class=Field value=subName input=editSubName aria-label="Name" placeholder="Leave blank for a junior name" padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="subagent-name"
-              column gap="space.sm"
-                text "Colour" class=SectionLabel
-                row gap="space.xs" flex-wrap="wrap"
-                  for c in pickerColours() key=c
-                    button class=SwatchControl press=pickSubColor(c) appearance="none" aria-label=`Colour ${faceColor(c)}` aria-pressed=(subColor == c) testId=`sub-colour-${c}` width=40 height=40 padding=0
-                      column width=30 height=30 box-sizing="border-box" border-radius="radius.full" background-color=c border=(subColor == c ? "3px solid AccentColor" : "3px solid transparent")
-              column gap="space.sm"
-                text "Shape" class=SectionLabel
-                row gap="space.xs" flex-wrap="wrap"
-                  for s in shapeNames() key=s
-                    button class=SwatchControl press=pickSubShape(s) appearance="none" aria-label=`Shape ${s}` aria-pressed=(subShape == s) testId=`sub-shape-${s}` width=48 height=48 padding=0 border-radius="radius.md" background-color=(subShape == s ? "surface.raised" : "transparent")
-                      Avatar(shape=s, color=faceColor(subColor), state="idle", size=34, still=true, presence="")
             column gap="space.sm"
-              text "Prompt" class=SectionLabel
-              input appearance="none" class=Field value=subPrompt input=editSubPrompt aria-label="Prompt" placeholder="What this subagent does" padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="subagent-prompt"
+              text t("common.name") class=SectionLabel
+              input appearance="none" class=Field value=subName input=editSubName aria-label=t("common.name") placeholder=(subSlug == "" ? t("subagent.namePlaceholder") : "") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="subagent-name"
+            column gap="space.sm"
+              text t("edit.colour") class=SectionLabel
+              row gap="space.xs" flex-wrap="wrap"
+                for c in pickerColours() key=c
+                  button class=SwatchControl press=pickSubColor(c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(subColor == c) testId=`sub-colour-${c}` width=40 height=40 padding=0
+                    column width=30 height=30 box-sizing="border-box" border-radius="radius.full" background-color=c border=(subColor == c ? "3px solid AccentColor" : "3px solid transparent")
+            column gap="space.sm"
+              text t("edit.shape") class=SectionLabel
+              row gap="space.xs" flex-wrap="wrap"
+                for s in shapeNames() key=s
+                  button class=SwatchControl press=pickSubShape(s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(subShape == s) testId=`sub-shape-${s}` width=48 height=48 padding=0 border-radius="radius.md" background-color=(subShape == s ? "surface.raised" : "transparent")
+                    Avatar(shape=s, color=faceColor(subColor), state="idle", size=34, still=true, presence="")
+            column gap="space.sm"
+              text t("subagent.prompt") class=SectionLabel
+              input appearance="none" class=Field value=subPrompt input=editSubPrompt aria-label=t("subagent.prompt") placeholder=t("subagent.promptPlaceholder") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="subagent-prompt"
             row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
               column flex=1 gap="2px"
-                text "Use the parent’s prompt" font-weight=600
-                text "Added after this subagent’s own prompt." color="ink.muted" font="-exact-footnote"
-              button class=ToggleControl appearance="none" role="switch" aria-checked=subInherit press=toggleSubInherit aria-label="Use the parent’s prompt" testId="subagent-inherit"
+                text t("subagent.inherit") font-weight=600
+                text t("subagent.inheritNote") color="ink.muted" font="-exact-footnote"
+              button class=ToggleControl appearance="none" role="switch" aria-checked=subInherit press=toggleSubInherit aria-label=t("subagent.inherit") testId="subagent-inherit"
                 row width=44 height=26 border-radius="radius.full" background-color=(subInherit ? "AccentColor" : "surface.line") align-items="center" justify-content=(subInherit ? "flex-end" : "flex-start")
                   column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
             if subSlug != ""
-              text "Model" class=SectionLabel
+              text t("panel.model") class=SectionLabel
               for c in children.filter(c => c.slug == subSlug) key=c.slug
                 ModelPage(models=childModels, down=childModelsDown, bot=c, pick=pickModel, makeDefault=makeDefault, isDefault=isDefault, error=modelError)
             if subError != ""
               text subError color="-exact-system-red" testId="subagent-error"
             if subSlug == ""
               button class=PrimaryButton buttonStyle="filled" press=createSub disabled=creating testId="subagent-create"
-                text (creating ? "Creating…" : "Create subagent")
+                text (creating ? t("subagent.creating") : t("subagent.create"))
             else
               button class=PrimaryButton buttonStyle="filled" press=saveSub disabled=saving testId="subagent-save"
-                text (saving ? "Saving…" : "Save")
-              button class=IconControl appearance="none" commandfor=`drop-sub-${subSlug}` command="show-modal" aria-label="Delete subagent" title="Delete subagent" color="-exact-system-red" testId="delete-subagent"
+                text (saving ? t("subagent.saving") : t("common.save"))
+              button class=IconControl appearance="none" commandfor=`drop-sub-${subSlug}` command="show-modal" aria-label=t("subagent.delete") title=t("subagent.delete") color="-exact-system-red" testId="delete-subagent"
                 Glyph(name="trash", size=20)
-              dialog id=`drop-sub-${subSlug}` role="alertdialog" aria-label=`Delete ${subName}?`
-                text "Its folder moves to the trash. This can’t be undone from here."
+              dialog id=`drop-sub-${subSlug}` role="alertdialog" aria-label=t("subagent.deleteNamed", name=subName)
+                text t("subagent.deleteBody")
                 button press=dropChild(subSlug) destructive=true commandfor=`drop-sub-${subSlug}` command="close" testId="drop-sub-ok"
-                  text "Delete"
+                  text t("common.delete")
                 button commandfor=`drop-sub-${subSlug}` command="close" testId="drop-sub-cancel"
-                  text "Cancel"
+                  text t("common.cancel")
       else
         column align-items="center" gap="space.xs" padding="0 space.lg space.md"
           Avatar(shape=bot.shape, color=faceColor(bot.color), state=(bot.hidden ? "asleep" : working ? "working" : "idle"), size=72, still=(not working), presence="")
@@ -2507,9 +2506,9 @@ component BotPanel
                         text t("status.paused") color="ink.faint" font="-exact-footnote"
               if routines.error != "" and routines.tasks.length == 0
                 text routines.error color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="routine-setup"
-              text "Subagents" class=SectionLabel
+              text t("subagent.heading") class=SectionLabel
               if children.length == 0
-                text "No subagents yet." color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="subagent-empty"
+                text t("subagent.empty") color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="subagent-empty"
               else
                 column gap="2px"
                   for c in children key=c.slug
@@ -2519,10 +2518,10 @@ component BotPanel
                           Avatar(shape=c.shape, color=faceColor(c.color), state=(c.ready ? (c.working ? "working" : "idle") : "asleep"), size=32, still=(not c.working), presence="")
                           text c.name font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=`subagent-name-${c.slug}`
                       button class=QuietButton appearance="none" press=editSub(c.slug, c.name, c.shape, c.color, c.prompt, c.inheritParentPrompt) min-height=44 testId=`edit-subagent-${c.slug}`
-                        text "Edit"
+                        text t("subagent.edit")
               if bot.parentSlug == ""
                 button class=QuietButton appearance="none" press=openNewSub testId="new-subagent"
-                  text "New subagent"
+                  text t("subagent.new")
               text t("panel.workingOn") class=SectionLabel
               if lineageDown
                 text t("error.lineage") color="-exact-system-red" padding="0 space.md" testId="lineage-error"

@@ -671,9 +671,9 @@ const sources: Sources = {
       subagent: { prompt, inheritParentPrompt },
     }),
   })),
-  saveSubagent: async ([slug, prompt, inheritParentPrompt], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, {
+  saveSubagent: async ([slug, name, shape, color, prompt, inheritParentPrompt], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, {
     method: 'PUT',
-    body: JSON.stringify({ subagent: { prompt, inheritParentPrompt } }),
+    body: JSON.stringify({ name, shape, color, subagent: { prompt, inheritParentPrompt } }),
   })),
   loadProviders: async (_args, store): Promise<Result<'loadProviders'>> => {
     const p = await call(store, '/api/providers');
