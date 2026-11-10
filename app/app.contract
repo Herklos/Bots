@@ -2314,7 +2314,7 @@ component ChatMessage
         if row.quote != ""
           text row.quote color="ink.muted" font="-exact-footnote" testId=`quote-${row.id}`
         if row.text != "" or row.react != "" or not row.mine
-          row gap="space.xs" align-items="flex-end" max-width="100%"
+          row gap="space.xs" align-items="center" max-width="100%"
             column position="relative" padding-bottom="6px" max-width="100%"
               if row.text != "" and row.mine
                 text row.text class=Bubble testId=`message-${row.id}`
@@ -2377,9 +2377,9 @@ component ChatMessage
               button id=`menu-react-${row.id}` class=TextControl appearance="none" pointerdown=holdMenu press=chooseReact aria-label=(row.react != "" ? t("chat.removeReaction") : t("chat.react")) testId=`menu-react-${row.id}` width="100%" justify-content="flex-start"
                 text (row.react != "" ? t("chat.removeReaction") : t("chat.react"))
         if picking
-          row gap="2px" padding="space.xs" border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="react-picker"
+          row gap="2px" flex-wrap="wrap" max-width="100%" box-sizing="border-box" padding="space.xs" border-radius="radius.lg" background-color="surface.raised" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="react-picker"
             for em in ["👍", "❤️", "😂", "😮", "🎉", "🙏"] key=em
-              button class=TextControl appearance="none" press=react(row.id, em) aria-label=t("chat.reactWith", emoji=em) width=36 height=36 min-height=36 padding=0 border-radius="radius.full" font="-exact-title3" testId=`pick-${em}`
+              button class=TextControl appearance="none" press=react(row.id, em) aria-label=t("chat.reactWith", emoji=em) width=44 height=44 min-height=44 padding=0 border-radius="radius.md" font="-exact-title3" testId=`pick-${em}`
                 text em
 
 component Faces
