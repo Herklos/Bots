@@ -83,7 +83,9 @@ Bot details (rename, colour, hide, make main, delete with confirmation); Setting
 Projects board (list by kind, add, edit, delete, live via polling `/api/projects`). Use routes, sheets and lists as `exact/docs/start-here.md` says. Add an `app.test.contract` and run it (`bun exact.mjs test web`) if the setup allows; otherwise extend `tests/e2e.cjs`.
 Done when: `contract build` exits 0, the web build passes, `tests/e2e.sh` passes with your new screens covered, and you looked at a screenshot of each new screen.
 
-Not built (2026-11-09). The Exact compiler is not available here: the path above is absent, and neither `exact` nor `contract` is on `PATH`. `app/app.contract`, `app/app.ts` and `app/face.contract` are unchanged. This is a skip, not a stop; T10 still runs.
+Not built (2026-11-09). The Exact compiler is not available here: the path above is absent, and neither `exact` nor `contract` is on `PATH`. This is a skip, not a stop; T10 still runs.
+
+The screen source arrived with the merge of `claude/sleepy-cannon-a2zlm8` (2026-11-10): `app/app.contract`, `app/app.ts` and `app/app.test.contract`. Names in that source are hbots. `contract build` was not run.
 
 ### T8: Exact app: the Bot's face
 Files: `app/face.contract` (new), a screenshot script under `tests/`.

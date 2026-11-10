@@ -1,4 +1,4 @@
-// Bots: hbots messaging app for T3 Code, written once in Contract. The Rust gateway
+// hbots: the messaging app for T3 Code, written once in Contract. The Rust gateway
 // (`hbots`, in ../gateway) keeps the Bots, the Vault and the Projects board and talks to T3 Code;
 // this app is the same screen on the web, macOS, iOS and Linux.
 use EmptyState from "exact:content"
@@ -6,7 +6,15 @@ use EmptyState from "exact:content"
 routes nav
   inbox "/"
     chat "/bot/:slug"
+      details "/bot/:slug/details"
     create "/new"
+    settings "/settings"
+    vault "/vault"
+      vaultAdd "/vault/new"
+      vaultEdit "/vault/:id"
+    projects "/projects"
+      projectAdd "/projects/new"
+      projectEdit "/projects/:id"
 
 shape Reply
   ok: bool
@@ -23,6 +31,7 @@ shape Bot
   initials: string
   color: string
   main: bool
+  hidden: bool
   ready: bool
 
 // One row of the transcript: a message, a card the Bot is waiting on, or the working line.
@@ -37,28 +46,93 @@ shape Chat
   rows: Row[]
   working: bool
 
+shape Prefs
+  userName: string
+  theme: string
+  projects: bool
+
+// A Vault login, as the list may see it: the password is never in this shape.
+shape Login
+  id: string
+  title: string
+  website: string
+  username: string
+  hasPassword: bool
+  hints: string
+
+// The one password the person asked to see, for the login it names.
+shape Revealed
+  ok: bool
+  id: string
+  password: string
+  error: string
+
+shape Project
+  id: string
+  kind: string
+  title: string
+  status: string
+  area: string
+  body: string
+
 fn nameOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.name, case none => "" }
 fn colorOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.color, case none => "#1cc3b0" }
+fn kindTitle(k: string): string = k == "project" ? "Projects" : k == "task" ? "Tasks" : k == "machine" ? "Machines" : k == "service" ? "Services" : k == "repo" ? "Repos" : k == "note" ? "Notes" : "Links"
+fn themeLabel(t: string): string = t == "system" ? "System" : t == "dark" ? "Dark" : "Light"
 
 component Bots
   state password = ""
   state draft = ""
   state newName = ""
   state newColor = "#1cc3b0"
+  state nameDraft = ""
+  state nameEditing = false
+  state newPassword = ""
   resource session = loadSession() as shape Session else empty()
   resource bots = loadBots() as shape Bot[] else empty()
   resource chat = loadChat(slug) as shape Chat else empty()
+  resource prefs = loadPrefs() as shape Prefs else empty()
+  resource vault = loadVault() as shape Login[] else empty()
+  resource board = loadProjects() as shape Project[] else empty()
   mutation signedIn as shape Reply refreshes session, bots
   mutation signedOut as shape Reply refreshes session, bots
   mutation created as shape Reply refreshes bots then afterCreate
   mutation sent as shape Reply refreshes chat then toEnd
   mutation stopped as shape Reply refreshes chat
+  mutation renamed as shape Reply refreshes bots
+  mutation recoloured as shape Reply refreshes bots
+  mutation hidSaved as shape Reply refreshes bots
+  mutation mainSaved as shape Reply refreshes bots
+  mutation botRemoved as shape Reply refreshes bots then afterBotRemove
+  mutation prefsSaved as shape Reply refreshes prefs
+  mutation passwordSet as shape Reply refreshes session then afterPassword
+  mutation loginSaved as shape Reply refreshes vault then afterLoginSave
+  mutation loginRemoved as shape Reply refreshes vault then afterLoginRemove
+  mutation revealed as shape Revealed
+  mutation projectSaved as shape Reply refreshes board then afterProjectSave
+  mutation projectRemoved as shape Reply refreshes board then afterProjectRemove
   derive slug = match stack(nav).filter(e => e.name == "chat").at(-1) { case some(e) => e.params.slug, case none => "" }
   derive signInError = match signedIn { case some(r) => r.error, case none => "" }
   derive createError = match created { case some(r) => r.error, case none => "" }
   derive sendError = match sent { case some(r) => r.error, case none => "" }
   derive lastId = match chat.rows.at(-1) { case some(m) => m.id, case none => "" }
   derive locked = session.passwordRequired and not session.authenticated
+  derive visibleBots = bots.filter(b => not b.hidden)
+  derive hiddenBots = bots.filter(b => b.hidden)
+  derive renameError = match renamed { case some(r) => r.error, case none => "" }
+  derive colourError = match recoloured { case some(r) => r.error, case none => "" }
+  derive hideError = match hidSaved { case some(r) => r.error, case none => "" }
+  derive mainError = match mainSaved { case some(r) => r.error, case none => "" }
+  derive botError = renameError != "" ? renameError : colourError != "" ? colourError : hideError != "" ? hideError : mainError
+  derive botRemoveError = match botRemoved { case some(r) => r.error, case none => "" }
+  derive prefsError = match prefsSaved { case some(r) => r.error, case none => "" }
+  derive passwordError = match passwordSet { case some(r) => r.error, case none => "" }
+  derive loginError = match loginSaved { case some(r) => r.error, case none => "" }
+  derive loginRemoveError = match loginRemoved { case some(r) => r.error, case none => "" }
+  derive revealedFor = match revealed { case some(r) => r.id, case none => "" }
+  derive revealedText = match revealed { case some(r) => (r.ok ? r.password : ""), case none => "" }
+  derive projectError = match projectSaved { case some(r) => r.error, case none => "" }
+  derive projectRemoveError = match projectRemoved { case some(r) => r.error, case none => "" }
 
   // Chats are read while they are open; the inbox while it is.
   task poll mount
@@ -67,6 +141,8 @@ component Bots
   action pull
     refresh bots
     refresh chat
+    if top(nav).name == "projects"
+      refresh board
   action editPassword(v: string)
     password = v
   action login
@@ -105,6 +181,77 @@ component Bots
   action toEnd
     scrollIntoView("transcript", lastId, block="end")
 
+  // Bot details: a Bot's name, colour, visibility and main status, and its deletion.
+  action doRename(bslug: string, name: string)
+    if name.trim() != ""
+      send renamed = renameBot(bslug, name.trim())
+  action doRecolour(bslug: string, color: string)
+    send recoloured = recolourBot(bslug, color)
+  action doHide(bslug: string, on: bool)
+    send hidSaved = hideBot(bslug, on)
+  action doMain(bslug: string)
+    send mainSaved = makeMainBot(bslug)
+  action doDropBot(bslug: string)
+    send botRemoved = deleteBot(bslug)
+  action afterBotRemove
+    if botRemoveError == ""
+      nav = go(nav, "/")
+
+  // Settings: name, theme, the Projects beta and the remote-access password.
+  action doEditName(v: string)
+    nameDraft = v
+    nameEditing = true
+  action doSaveName(v: string)
+    nameEditing = false
+    if v.trim() != "" and v.trim() != prefs.userName
+      send prefsSaved = setUserName(v.trim())
+  action doPickTheme(t: string)
+    send prefsSaved = setTheme(t)
+  action doSetBeta(on: bool)
+    send prefsSaved = setProjects(on)
+  action editNewPassword(v: string)
+    newPassword = v
+  action doSavePassword
+    if newPassword != "" and not pending(passwordSet)
+      send passwordSet = setPassword(newPassword)
+  action afterPassword
+    if passwordError == ""
+      newPassword = ""
+
+  // Vault: a login is edited in a sheet. The password is kept unless a new one is typed.
+  action doCommitLogin(id: string, title: string, website: string, username: string, password: string, hints: string)
+    if (title.trim() != "" or website.trim() != "") and not pending(loginSaved)
+      send loginSaved = saveLogin(id, title.trim(), website.trim(), username.trim(), password, hints.trim())
+  action afterLoginSave
+    if loginError == ""
+      nav = back(nav)
+  action doDropLogin(id: string)
+    send loginRemoved = deleteLogin(id)
+  action afterLoginRemove
+    if loginRemoveError == ""
+      nav = back(nav)
+  action doReveal(id: string)
+    if not pending(revealed)
+      send revealed = revealPassword(id)
+  action doHideReveal
+    revealed = none
+  action doCloseLogin
+    revealed = none
+    nav = back(nav)
+
+  // Projects: a board of items by kind, edited in a sheet.
+  action doCommitProject(id: string, kind: string, title: string, status: string, area: string, body: string)
+    if title.trim() != "" and not pending(projectSaved)
+      send projectSaved = saveProject(id, kind, title.trim(), status.trim(), area.trim(), body)
+  action afterProjectSave
+    if projectError == ""
+      nav = back(nav)
+  action doDropProject(id: string)
+    send projectRemoved = deleteProject(id)
+  action afterProjectRemove
+    if projectRemoveError == ""
+      nav = back(nav)
+
   view
     main navigationKey=`${top(nav).id}` navigationBack="back" navigate=open interactive-widget="resizes-content" width="100%" height="100%" testId="app"
       if locked
@@ -123,6 +270,12 @@ component Bots
             column navigationKey=`${e.id}` navigationScroll="bots-list" position="absolute" inset=0
               header display="flex" align-items="center" padding="8px 16px"
                 text "Bots" role="heading" aria-level=1 flex=1
+                button press=open("/vault") aria-label="Vault" testId="open-vault"
+                  image "symbol:lock"
+                button press=open("/projects") aria-label="Projects" testId="open-projects"
+                  image "symbol:checkmark"
+                button press=open("/settings") aria-label="Settings" testId="open-settings"
+                  image "symbol:settings"
                 button press=openNew aria-label="New Bot" testId="new-bot"
                   image "symbol:add"
               if failed(bots) and bots.length == 0
@@ -136,22 +289,29 @@ component Bots
               else
                 list id="bots-list" appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
                   section
-                    for b in bots key=b.slug
+                    for b in visibleBots key=b.slug
                       link href=path("chat", b.slug) testId=`bot-${b.slug}`
                         row gap=12 align-items="center"
                           Avatar(initials=b.initials, color=b.color, size=44)
                           column flex=1 min-width=0
                             text b.name font-weight=600
                             text (b.ready ? (b.label != "" ? b.label : "Ready") : "Getting set up…") color="-exact-secondary-label" font="-exact-footnote"
-                  if session.passwordRequired
+                  if hiddenBots.length > 0
                     section
-                      button press=logout testId="sign-out"
-                        text "Sign Out"
+                      header
+                        text "Hidden"
+                      for b in hiddenBots key=b.slug
+                        link href=path("details", b.slug) testId=`hidden-${b.slug}`
+                          row gap=12 align-items="center"
+                            Avatar(initials=b.initials, color=b.color, size=44)
+                            text b.name flex=1
           else if e.name == "chat"
             column navigationKey=`${e.id}` navigationScroll="transcript" position="absolute" inset=0
               header display="flex" align-items="center" gap=8 padding="8px 16px"
                 Avatar(initials=nameOf(bots, e.params.slug).slice(0, 1), color=colorOf(bots, e.params.slug), size=28)
                 text nameOf(bots, e.params.slug) role="heading" aria-level=1 flex=1
+                link href=path("details", e.params.slug) aria-label="Bot details" testId="bot-details"
+                  image "symbol:info"
               list id="transcript" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true flex=1 min-height=0
                 for m in chat.rows key=m.id
                   column
@@ -179,6 +339,104 @@ component Bots
                 else
                   button press=post disabled=(draft.trim() == "" or pending(sent)) buttonStyle="filled" margin="4px 0" retainFocus=true aria-label="Send" testId="send"
                     image "symbol:send"
+          else if e.name == "details"
+            for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
+              BotDetails(route=e.id, bot=b, error=botError, rename=doRename, recolour=doRecolour, hide=doHide, makeMain=doMain, drop=doDropBot)
+          else if e.name == "settings"
+            column navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
+              header display="flex" align-items="center" padding="8px 16px"
+                text "Settings" role="heading" aria-level=1 flex=1
+              list id="settings-form" appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+                section
+                  row
+                    text "Name"
+                    input value=(nameEditing ? nameDraft : prefs.userName) input=doEditName change=doSaveName placeholder="Your name" aria-label="Your name" text-align="end" flex=1 min-width=0 testId="user-name"
+                section
+                  header
+                    text "Appearance"
+                  row gap=8 role="radiogroup" aria-label="Theme"
+                    for t in ["system", "light", "dark"] key=t
+                      button press=doPickTheme(t) role="radio" aria-checked=(prefs.theme == t) buttonStyle="bordered" flex=1 testId=`theme-${t}`
+                        text themeLabel(t)
+                section
+                  row
+                    text "Projects beta"
+                    input type="checkbox" switch checked=prefs.projects change=doSetBeta aria-label="Projects beta" testId="beta-projects"
+                  footer
+                    text "A board of projects, tasks, machines, services, repos, notes and links, that the Bot can read and write."
+                section
+                  header
+                    text "Remote access"
+                  row
+                    input type="password" value=newPassword input=editNewPassword submit=doSavePassword placeholder=(session.passwordRequired ? "New password" : "Set a password") aria-label="Password" autocomplete="new-password" flex=1 min-width=0 testId="new-password"
+                  if passwordError != "" and not pending(passwordSet)
+                    text passwordError color="-exact-system-red" testId="password-error"
+                  button press=doSavePassword disabled=(newPassword == "" or pending(passwordSet)) testId="save-password"
+                    text (session.passwordRequired ? "Change Password" : "Set Password")
+                  footer
+                    text "Anyone who opens Bots from another device signs in with this password."
+                if session.passwordRequired
+                  section
+                    button press=logout testId="sign-out"
+                      text "Sign Out"
+          else if e.name == "vault"
+            column navigationKey=`${e.id}` navigationScroll="vault-list" position="absolute" inset=0
+              header display="flex" align-items="center" padding="8px 16px"
+                text "Vault" role="heading" aria-level=1 flex=1
+                button press=open("/vault/new") aria-label="New Login" testId="new-login"
+                  image "symbol:add"
+              if failed(vault)
+                EmptyState(symbol="symbol:alert", title="Can’t Open the Vault", message="Check that `hbots` is running, then try again.")
+              else if vault.length == 0 and not pending(vault)
+                EmptyState(symbol="symbol:lock", title="No Logins Yet", message="Save a login here. Its password stays in the Vault and shows only when you press Reveal.")
+                  button press=open("/vault/new") testId="empty-login"
+                    text "Add a Login"
+              else
+                list id="vault-list" appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+                  section
+                    for v in vault key=v.id
+                      link href=path("vaultEdit", v.id) testId=`login-${v.id}`
+                        row gap=12 align-items="center"
+                          column flex=1 min-width=0
+                            text v.title font-weight=600
+                            text (v.username != "" ? v.username : v.website) color="-exact-secondary-label" font="-exact-footnote"
+          else if e.name == "vaultAdd"
+            LoginSheet(route=e.id, item=Login(id="", title="", website="", username="", hasPassword=false, hints=""), revealedFor=revealedFor, revealedText=revealedText, error=loginError, save=doCommitLogin, reveal=doReveal, hide=doHideReveal, drop=doDropLogin, cancel=doCloseLogin)
+          else if e.name == "vaultEdit"
+            for l in vault.filter(x => x.id == e.params.id) key=l.id
+              LoginSheet(route=e.id, item=l, revealedFor=revealedFor, revealedText=revealedText, error=loginError, save=doCommitLogin, reveal=doReveal, hide=doHideReveal, drop=doDropLogin, cancel=doCloseLogin)
+          else if e.name == "projects"
+            column navigationKey=`${e.id}` navigationScroll="projects-list" position="absolute" inset=0
+              header display="flex" align-items="center" padding="8px 16px"
+                text "Projects" role="heading" aria-level=1 flex=1
+                button press=open("/projects/new") aria-label="New Project" testId="new-project"
+                  image "symbol:add"
+              if failed(board)
+                EmptyState(symbol="symbol:checkmark", title="Projects Are Off", message="Turn on the Projects beta in Settings, then try again.")
+                  button press=open("/settings") testId="open-beta"
+                    text "Open Settings"
+              else if board.length == 0 and not pending(board)
+                EmptyState(symbol="symbol:checkmark", title="No Projects Yet", message="Track projects, tasks, machines, services, repos, notes and links on one board.")
+                  button press=open("/projects/new") testId="empty-project"
+                    text "Add a Project"
+              else
+                list id="projects-list" appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+                  for k in ["project", "task", "machine", "service", "repo", "note", "link"] key=k
+                    if board.filter(p => p.kind == k).length > 0
+                      section
+                        header
+                          text kindTitle(k)
+                        for p in board.filter(p => p.kind == k) key=p.id
+                          link href=path("projectEdit", p.id) testId=`project-${p.id}`
+                            row gap=12 align-items="center"
+                              column flex=1 min-width=0
+                                text p.title font-weight=600
+                                text (p.status != "" ? p.status : p.area) color="-exact-secondary-label" font="-exact-footnote"
+          else if e.name == "projectAdd"
+            ProjectSheet(route=e.id, item=Project(id="", kind="project", title="", status="", area="", body=""), error=projectError, save=doCommitProject, drop=doDropProject, cancel=back)
+          else if e.name == "projectEdit"
+            for p in board.filter(x => x.id == e.params.id) key=p.id
+              ProjectSheet(route=e.id, item=p, error=projectError, save=doCommitProject, drop=doDropProject, cancel=back)
           else
             column navigationKey=`${e.id}` navigationScroll="new-form" position="absolute" inset=0
               header display="flex" align-items="center" padding="8px 16px"
@@ -207,3 +465,214 @@ component Avatar
   view
     column width=size height=size border-radius=(size / 2) background-color=color align-items="center" justify-content="center" flex-shrink=0
       text initials font-size=(size * 0.4) font-weight=600 color="#ffffff"
+
+// A Bot's own page, pushed from its chat or the inbox's Hidden section.
+component BotDetails
+  props
+    route: number
+    bot: Bot
+    error: string
+    rename: action
+    recolour: action
+    hide: action
+    makeMain: action
+    drop: action
+  state name = bot.name
+  action edit(v: string)
+    name = v
+  view
+    column navigationKey=`${route}` navigationScroll="details" position="absolute" inset=0
+      header display="flex" align-items="center" padding="8px 16px"
+        text "Bot Details" role="heading" aria-level=1 flex=1
+      list id="details" appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+        section
+          column align-items="center" gap=8 padding=16
+            Avatar(initials=bot.initials, color=bot.color, size=72)
+            text bot.name font-weight=600 testId="details-name"
+        section
+          row
+            input value=name input=edit change=rename(bot.slug) aria-label="Name" text-align="end" flex=1 min-width=0 testId="bot-name"
+        section
+          header
+            text "Colour"
+          row gap=12
+            for c in ["#1cc3b0", "#1084fe", "#9159fe", "#ff5eb1", "#ff6700", "#00c972"] key=c
+              button press=recolour(bot.slug, c) appearance="none" aria-label=`Colour ${c}` aria-pressed=(bot.color == c) testId=`colour-${c}`
+                column width=42 height=42 border-radius=21 background-color=c border=(bot.color == c ? "3px solid -exact-label" : "3px solid transparent")
+        section
+          row
+            text "Main Bot"
+            if bot.main
+              text "Yes" color="-exact-secondary-label" testId="is-main"
+            else
+              button press=makeMain(bot.slug) buttonStyle="bordered" testId="make-main"
+                text "Make Main"
+          row
+            text "Hidden from the list"
+            input type="checkbox" switch checked=bot.hidden disabled=bot.main change=hide(bot.slug) aria-label="Hidden from the list" testId="hide-bot"
+          footer
+            text (bot.main ? "The main Bot can’t be hidden or deleted. Make another Bot main first." : "A hidden Bot moves to the Hidden section of the list.")
+        if error != ""
+          section
+            text error color="-exact-system-red" testId="bot-error"
+        section
+          button commandfor="drop-bot" command="show-modal" disabled=bot.main testId="delete-bot"
+            text "Delete Bot"
+      dialog id="drop-bot" role="alertdialog" aria-label=`Delete ${bot.name}?`
+        text "Its folder moves to the trash. This can’t be undone from here."
+        button press=drop(bot.slug) destructive=true commandfor="drop-bot" command="close" testId="drop-bot-ok"
+          text "Delete"
+        button commandfor="drop-bot" command="close" testId="drop-bot-cancel"
+          text "Cancel"
+
+// A Vault login's sheet. The password field starts empty: a saved password is shown only after Reveal.
+component LoginSheet
+  props
+    route: number
+    item: Login
+    revealedFor: string
+    revealedText: string
+    error: string
+    save: action
+    reveal: action
+    hide: action
+    drop: action
+    cancel: action
+  state ttl = item.title
+  state site = item.website
+  state user = item.username
+  state pass = ""
+  state note = item.hints
+  action editTitle(v: string)
+    ttl = v
+  action editWebsite(v: string)
+    site = v
+  action editUsername(v: string)
+    user = v
+  action editPassword(v: string)
+    pass = v
+  action editHints(v: string)
+    note = v
+  view
+    column navigationKey=`${route}` navigationPresentation="modal" position="absolute" inset=0
+      header display="flex" align-items="center" justify-content="space-between" padding="8px 16px"
+        button press=cancel aria-label="Cancel" testId="login-cancel"
+          image "symbol:close"
+        text (item.id == "" ? "New Login" : item.title) role="heading" aria-level=1
+        button press=save(item.id, ttl, site, user, pass, note) disabled=(ttl.trim() == "" and site.trim() == "") buttonStyle="filled" aria-label="Save" testId="login-save"
+          image "symbol:checkmark"
+      list appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+        section
+          row
+            input value=ttl input=editTitle placeholder="Title" aria-label="Title" flex=1 min-width=0 testId="login-title"
+          row
+            input type="url" value=site input=editWebsite placeholder="Website" aria-label="Website" autocapitalize="none" flex=1 min-width=0 testId="login-website"
+          footer
+            text "A login needs a website or a title."
+        section
+          row
+            input value=user input=editUsername placeholder="Username" aria-label="Username" autocapitalize="none" autocomplete="username" flex=1 min-width=0 testId="login-username"
+          row
+            input type="password" value=pass input=editPassword placeholder=(item.hasPassword ? "New password (blank keeps it)" : "Password") aria-label="Password" autocomplete="new-password" flex=1 min-width=0 testId="login-password"
+        section
+          if item.hasPassword
+            row
+              text "Saved password"
+              if revealedFor == item.id and revealedText != ""
+                text revealedText user-select="text" testId="revealed-password"
+              else
+                text "••••••••" color="-exact-secondary-label" testId="hidden-password"
+            row
+              if revealedFor == item.id and revealedText != ""
+                button press=hide buttonStyle="bordered" testId="hide-password"
+                  text "Hide"
+              else
+                button press=reveal(item.id) buttonStyle="bordered" testId="reveal-password"
+                  text "Reveal"
+        section
+          row
+            input value=note input=editHints placeholder="Notes" aria-label="Notes" flex=1 min-width=0 testId="login-notes"
+        if error != ""
+          section
+            text error color="-exact-system-red" testId="login-error"
+        if item.id != ""
+          section
+            button commandfor="drop-login" command="show-modal" testId="login-delete"
+              text "Delete Login"
+      dialog id="drop-login" role="alertdialog" aria-label="Delete this login?"
+        text "It is removed from the Vault. This can’t be undone."
+        button press=drop(item.id) destructive=true commandfor="drop-login" command="close" testId="drop-login-ok"
+          text "Delete"
+        button commandfor="drop-login" command="close" testId="drop-login-cancel"
+          text "Cancel"
+
+// A project's sheet. Its kind is chosen when it is made and fixed after.
+component ProjectSheet
+  props
+    route: number
+    item: Project
+    error: string
+    save: action
+    drop: action
+    cancel: action
+  state kind = item.kind
+  state ttl = item.title
+  state status = item.status
+  state area = item.area
+  state body = item.body
+  action pickKind(v: string)
+    kind = v
+  action editTitle(v: string)
+    ttl = v
+  action editStatus(v: string)
+    status = v
+  action editArea(v: string)
+    area = v
+  action editBody(v: string)
+    body = v
+  view
+    column navigationKey=`${route}` navigationPresentation="modal" position="absolute" inset=0
+      header display="flex" align-items="center" justify-content="space-between" padding="8px 16px"
+        button press=cancel aria-label="Cancel" testId="project-cancel"
+          image "symbol:close"
+        text (item.id == "" ? "New Project" : item.title) role="heading" aria-level=1
+        button press=save(item.id, kind, ttl, status, area, body) disabled=(ttl.trim() == "") buttonStyle="filled" aria-label="Save" testId="project-save"
+          image "symbol:checkmark"
+      list appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+        section
+          row
+            input value=ttl input=editTitle placeholder="Title" aria-label="Title" flex=1 min-width=0 testId="project-title"
+          row
+            text "Kind"
+            if item.id == ""
+              select value=kind change=pickKind aria-label="Kind" testId="project-kind"
+                option "Project" value="project"
+                option "Task" value="task"
+                option "Machine" value="machine"
+                option "Service" value="service"
+                option "Repo" value="repo"
+                option "Note" value="note"
+                option "Link" value="link"
+            else
+              text kind color="-exact-secondary-label"
+        section
+          row
+            input value=status input=editStatus placeholder="Status" aria-label="Status" flex=1 min-width=0 testId="project-status"
+          row
+            input value=area input=editArea placeholder="Area" aria-label="Area" flex=1 min-width=0 testId="project-area"
+        section
+          row
+            textarea value=body input=editBody rows=6 placeholder="Notes" aria-label="Notes" flex=1 min-width=0 testId="project-body"
+        if error != ""
+          section
+            text error color="-exact-system-red" testId="project-error"
+        if item.id != ""
+          section
+            button commandfor="drop-project" command="show-modal" testId="project-delete"
+              text "Delete"
+      dialog id="drop-project" role="alertdialog" aria-label="Delete this item?"
+        text "It is removed from the board. This can’t be undone."
+        button press=drop(item.id) destructive=true commandfor="drop-project" command="close" testId="drop-project-ok"
+          text "Delete"
+        button commandfor="drop-project" command="close" testId="drop-project-cancel"
+          text "Cancel"
