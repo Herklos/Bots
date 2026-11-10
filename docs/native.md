@@ -10,7 +10,7 @@ keys: the Exact clone's `README.md` (quick start, section 3 "Run it natively"), 
 |---|---|---|---|
 | Web | 2026-11-10 on this Mac: Exact from `.exact-path`, `EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/web/build.mjs" bots-web` → `app/target/web-dist`; gateway serves it on :3780. Face screenshots via `tests/face/screenshot.sh` + system Chrome. | OK | Keep rebuilding after Contract changes. |
 | Linux | Earlier: Hermes install for `x86_64-unknown-linux-gnu` failed (`UnknownIssuer`). No Bots linux crate under `app/linux/`. | BLOCKED here | Needs a Linux host with Hermes; `"linux": {}` is in `app/app.json`. |
-| macOS | Xcode present (`/Applications/Xcode.app`). Command: `EXACT_APP_DIR=<hbots>/app bun "$EXACT_DIR/host/apple/build.mjs" --run`. Full native build not finished in this handoff (long first compile). | Tools ready; build not verified | Run the apple host build; `host.macos` has `minimumOS` 14.0 and window size. |
+| macOS | 2026-11-10: `EXACT_APP_DIR=<hbots>/app bun "$EXACT_DIR/host/apple/build.mjs"` (no `--run`). Finished `host-dev`; wrote `app/target/clients/…/macos/hbots.app` (arm64). Note: no Metal toolchain → Canvas 2D uses Core Graphics (`xcodebuild -downloadComponent MetalToolchain`). | OK (build) | Launch with `--run` or open the `.app`; wire `HBOTS_URL` for a live gateway. Desktop shell that starts `hbots serve` is still design-only. |
 | iOS | Same apple host script with `--ios --run` (Simulator) or `--device --run`. | Not run | Needs Simulator/device. `host.ios` `minimumOS` 17.0; ATS for `http:` as below. |
 
 ## Requirements (from the Exact docs)

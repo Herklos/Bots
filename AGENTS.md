@@ -36,6 +36,8 @@ Env prefix is `HBOTS_*` (`HBOTS_HOME`, `HBOTS_PASSWORD`, `HBOTS_TAILSCALE_PATH`,
 
 Release: set GitHub repo variable `EXACT_REF` to a pinned Exact commit/tag (workflow defaults to `main`). Pack locally with `HBOTS_VERSION=… sh scripts/pack-release.sh`; install with `install.sh --version … --from <tarball> --sums SHA256SUMS`.
 
+macOS native client: `EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/apple/build.mjs"` → `app/target/clients/…/macos/hbots.app` (gitignored under `app/target`).
+
 ## Exact checkout
 
 Exact is not in this repo. Path is in **`.exact-path`** (gitignored):
