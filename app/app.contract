@@ -2136,10 +2136,10 @@ component ChatMessage
       column gap="2px" max-width="82%" align-items=(row.mine ? "flex-end" : "flex-start") hover=setOver pointerdown=tapDown pointerup=tapUp focusin=chromeFocus focusout=chromeBlur
         if row.quote != ""
           text row.quote color="ink.muted" font="-exact-footnote" testId=`quote-${row.id}`
-        if row.text != ""
+        if row.text != "" or row.react != "" or not row.mine
           row gap="space.xs" align-items="flex-end" max-width="100%"
             column position="relative" padding-bottom="10px" max-width="100%"
-              if row.mine
+              if row.text != "" and row.mine
                 text row.text class=Bubble testId=`message-${row.id}`
                   background-color="brand.default"
                   color="ink.dark"
@@ -2147,7 +2147,7 @@ component ChatMessage
                   border-top-right-radius="radius.lg"
                   border-bottom-left-radius="radius.lg"
                   border-bottom-right-radius=(row.tail ? "radius.sm" : "radius.lg")
-              else
+              else if row.text != ""
                 text row.text markup="markdown" class=Bubble white-space="normal" testId=`message-${row.id}`
                   background-color="surface.bubble"
                   color="-exact-label"
@@ -2158,8 +2158,8 @@ component ChatMessage
               if row.react != ""
                 button class=ReactionChip appearance="none" position="absolute" bottom="-4px" left=(row.mine ? "0" : "auto") right=(row.mine ? "auto" : "0") z-index=1 press=react(row.id, row.react) aria-label=t("chat.removeReaction") testId=`react-${row.id}`
                   text row.react
-            if not row.mine and row.react == "" and showChrome
-              button class=TextControl appearance="none" press=openPicker(row.id) aria-label=t("chat.react") title=t("chat.react") min-height=24 padding="0 space.xs" testId=`add-react-${row.id}`
+            if not row.mine and row.react == ""
+              button class=TextControl appearance="none" press=openPicker(row.id) aria-label=t("chat.react") title=t("chat.react") min-height=24 padding="0 space.xs" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none") testId=`add-react-${row.id}`
                 Glyph(name="smile", size=14)
         for f in row.files key=f.id
           if f.kind == "image"
