@@ -38,6 +38,17 @@ t3 auth session issue --ttl 30d --label hbots --token-only      # paste into T3_
 T3_TOKEN=… cargo run --release                                  # http://127.0.0.1:3780
 ```
 
+`t3: command not found`? The T3 Code desktop app doesn't always put its command line on your `PATH`.
+Try, in this order (none of these are verified against every T3 Code version):
+
+1. `npx t3 auth session issue --ttl 30d --label hbots --token-only`, if Node is installed.
+2. Look for a `t3` the app carries: `mdfind -name t3 | grep -i t3`, or open `/Applications/T3 Code.app/Contents/Resources`.
+   Run it by its full path, or link it onto your `PATH`.
+3. Install the command line from the T3 Code README, then run the command above.
+
+`hbots up` does the same lookup (your `PATH`, then `~/.t3/bin/t3`) and, when it finds nothing, tells you to
+set `T3_TOKEN` yourself.
+
 Settings: `T3_URL`, `T3_TOKEN`, `HOST`, `PORT`, `HBOTS_PASSWORD`, `HBOTS_HOME`,
 `HBOTS_ROOT`, `HBOTS_MCP_URL`, `HBOTS_MCP_TOKEN`, `ALLOWED_ORIGINS`, `STATIC_DIR` (where the built web app is).
 Without a password it listens on localhost only and signs nobody in; set `HBOTS_PASSWORD` before exposing it.

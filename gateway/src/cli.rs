@@ -257,7 +257,7 @@ async fn up(flags: &Flags) -> Result<()> {
         || settings.contains_key("T3_TOKEN")
         || std::fs::read_to_string(&token_file).is_ok_and(|t| !t.trim().is_empty());
     if !have_token {
-        let t3 = find_t3().ok_or_else(|| anyhow!("T3 Code isn't installed. Install it with `curl -fsSL https://t3.codes/install.sh | sh`, run `t3 up`, then run `hbots up` again."))?;
+        let t3 = find_t3().ok_or_else(|| anyhow!("No `t3` command found on your PATH or in ~/.t3/bin. Get a token another way (try `npx t3 auth session issue --ttl 30d --label hbots --token-only`), put it in T3_TOKEN in ~/.hbots/.env, then run `hbots up` again."))?;
         print_line("Asking T3 Code for a token");
         let out = std::process::Command::new(&t3)
             .args([
