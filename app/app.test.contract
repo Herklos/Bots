@@ -280,9 +280,13 @@ test "the parent sheet lists its subagents without a new subagent button"
   expect tree has "subagent-save"
   expect tree has "delete-subagent"
 
-test "the reaction picker opens under a Bot message"
+test "the reaction picker opens beside a Bot message"
+  // The smile is not in the tree until a latch tap shows chrome. "Under" described the old row.
   at "/bot/fixture"
   clock data
+  expect tree missing "add-react-m3"
+  tap "message-m3"
+  expect tree has "add-react-m3"
   tap "add-react-m3"
   expect tree has "react-picker"
   expect tree has "pick-🎉"
