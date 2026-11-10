@@ -130,7 +130,12 @@ pub fn selection(
     let levels = entry["efforts"].as_array().cloned().unwrap_or_default();
     let chosen = match effort.filter(|e| !e.is_empty()) {
         Some(e) if levels.iter().any(|l| l["id"] == e) => Some(e.to_string()),
-        Some(_) => return Err(format!("{} doesn't offer that level.", entry["name"].as_str().unwrap_or(model))),
+        Some(_) => {
+            return Err(format!(
+                "{} doesn't offer that level.",
+                entry["name"].as_str().unwrap_or(model)
+            ))
+        }
         None => entry["effort"].as_str().map(String::from),
     };
     let options = chosen
@@ -165,44 +170,96 @@ mod tests {
     fn only_ready_providers_are_offered_with_their_models_and_effort_levels() {
         let list = from_config(&config());
         let providers = list["providers"].as_array().unwrap();
-        let names: Vec<&str> = providers.iter().map(|p| p["displayName"].as_str().unwrap()).collect();
+        let names: Vec<&str> = providers
+            .iter()
+            .map(|p| p["displayName"].as_str().unwrap())
+            .collect();
         assert!(names.contains(&"Claude Code") && names.contains(&"Codex"));
-        assert!(!names.contains(&"Cursor"), "a disabled provider is not offered");
-        let claude = providers.iter().find(|p| p["instanceId"] == "claudeAgent").unwrap();
-        let opus = claude["models"].as_array().unwrap().iter().find(|m| m["slug"] == "claude-opus-5-5").unwrap();
+        assert!(
+            !names.contains(&"Cursor"),
+            "a disabled provider is not offered"
+        );
+        let claude = providers
+            .iter()
+            .find(|p| p["instanceId"] == "claudeAgent")
+            .unwrap();
+        let opus = claude["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["slug"] == "claude-opus-5-5")
+            .unwrap();
         assert_eq!(opus["effort"], "medium");
         assert!(opus["efforts"].as_array().unwrap().len() >= 3);
-        assert!(!list.to_string().contains("@"), "no email leaves this module");
+        assert!(
+            !list.to_string().contains("@"),
+            "no email leaves this module"
+        );
     }
 
     #[test]
     fn hidden_models_and_the_account_email_stay_out() {
         let mut c = config();
-        c["settings"]["providerModelPreferences"]["claudeAgent"] = json!({ "hiddenModels": ["claude-opus-5-5"] });
+        c["settings"]["providerModelPreferences"]["claudeAgent"] =
+            json!({ "hiddenModels": ["claude-opus-5-5"] });
         c["providers"][0]["auth"]["email"] = json!("someone@example.com");
         let list = from_config(&c);
-        let claude = list["providers"].as_array().unwrap().iter().find(|p| p["instanceId"] == "claudeAgent").unwrap();
-        assert!(claude["models"].as_array().unwrap().iter().all(|m| m["slug"] != "claude-opus-5-5"));
+        let claude = list["providers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["instanceId"] == "claudeAgent")
+            .unwrap();
+        assert!(claude["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|m| m["slug"] != "claude-opus-5-5"));
         assert!(!list.to_string().contains("someone@example.com"));
     }
 
     #[test]
     fn a_choice_is_checked_against_what_the_provider_offers() {
         let list = from_config(&config());
-        let ok = selection(&list, "claudeAgent", "claude-opus-5-5", Some("high"), &Value::Null).unwrap();
+        let ok = selection(
+            &list,
+            "claudeAgent",
+            "claude-opus-5-5",
+            Some("high"),
+            &Value::Null,
+        )
+        .unwrap();
         assert_eq!(effort_of(&ok), "high");
-        let default = selection(&list, "claudeAgent", "claude-opus-5-5", None, &Value::Null).unwrap();
+        let default =
+            selection(&list, "claudeAgent", "claude-opus-5-5", None, &Value::Null).unwrap();
         assert_eq!(effort_of(&default), "medium");
-        assert!(selection(&list, "claudeAgent", "claude-opus-5-5", Some("turbo"), &Value::Null).unwrap_err().contains("level"));
-        assert!(selection(&list, "claudeAgent", "gpt-nope", None, &Value::Null).unwrap_err().contains("model"));
-        assert!(selection(&list, "cursor", "x", None, &Value::Null).unwrap_err().contains("provider"));
+        assert!(selection(
+            &list,
+            "claudeAgent",
+            "claude-opus-5-5",
+            Some("turbo"),
+            &Value::Null
+        )
+        .unwrap_err()
+        .contains("level"));
+        assert!(
+            selection(&list, "claudeAgent", "gpt-nope", None, &Value::Null)
+                .unwrap_err()
+                .contains("model")
+        );
+        assert!(selection(&list, "cursor", "x", None, &Value::Null)
+            .unwrap_err()
+            .contains("provider"));
     }
 
     #[test]
     fn the_current_choice_is_kept_when_t3_no_longer_lists_it() {
         let list = from_config(&config());
         let current = json!({ "instanceId": "gone", "model": "old", "options": [] });
-        assert_eq!(selection(&list, "gone", "old", None, &current).unwrap(), current);
+        assert_eq!(
+            selection(&list, "gone", "old", None, &current).unwrap(),
+            current
+        );
         assert!(selection(&list, "gone", "other", None, &current).is_err());
     }
 }

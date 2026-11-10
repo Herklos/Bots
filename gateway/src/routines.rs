@@ -69,11 +69,18 @@ pub fn tasks_for_thread(doc: &Value, thread_id: &str) -> Vec<Value> {
 fn clock_12(time: &str) -> String {
     let (h, m) = time.split_once(':').unwrap_or((time, "00"));
     let h: u32 = h.trim().parse().unwrap_or(0) % 24;
-    format!("{}:{} {}", if h % 12 == 0 { 12 } else { h % 12 }, m.get(..2).unwrap_or("00"), if h < 12 { "AM" } else { "PM" })
+    format!(
+        "{}:{} {}",
+        if h % 12 == 0 { 12 } else { h % 12 },
+        m.get(..2).unwrap_or("00"),
+        if h < 12 { "AM" } else { "PM" }
+    )
 }
 
 const WEEKDAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS: [&str; 12] = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
 
 /// Which days a daily routine runs: every day, weekdays, weekends, or the days named.
 fn days_label(days: &[u64]) -> Option<String> {
@@ -84,7 +91,13 @@ fn days_label(days: &[u64]) -> Option<String> {
         [] | [0, 1, 2, 3, 4, 5, 6] => None,
         [1, 2, 3, 4, 5] => Some("Weekdays".into()),
         [0, 6] => Some("Weekends".into()),
-        other => Some(other.iter().map(|d| WEEKDAYS[*d as usize]).collect::<Vec<_>>().join(", ")),
+        other => Some(
+            other
+                .iter()
+                .map(|d| WEEKDAYS[*d as usize])
+                .collect::<Vec<_>>()
+                .join(", "),
+        ),
     }
 }
 
@@ -109,8 +122,16 @@ pub fn schedule_label(task: &Value) -> String {
             }
         }
         Some("fixed_time") => {
-            let at = schedule["timeOfDay"].as_str().filter(|t| !t.is_empty()).map(clock_12);
-            let days: Vec<u64> = schedule["weekdays"].as_array().into_iter().flatten().filter_map(Value::as_u64).collect();
+            let at = schedule["timeOfDay"]
+                .as_str()
+                .filter(|t| !t.is_empty())
+                .map(clock_12);
+            let days: Vec<u64> = schedule["weekdays"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_u64)
+                .collect();
             let lead = days_label(&days).unwrap_or_else(|| "Every day".into());
             match at {
                 Some(at) => format!("{lead} at {at}"),
@@ -119,9 +140,18 @@ pub fn schedule_label(task: &Value) -> String {
         }
         Some("once") => {
             let run = schedule["runAt"].as_str().unwrap_or("");
-            let date = run.get(5..7).and_then(|m| m.parse::<usize>().ok()).filter(|m| (1..=12).contains(m)).zip(run.get(8..10));
+            let date = run
+                .get(5..7)
+                .and_then(|m| m.parse::<usize>().ok())
+                .filter(|m| (1..=12).contains(m))
+                .zip(run.get(8..10));
             match (date, run.get(11..16)) {
-                (Some((m, d)), Some(t)) => format!("Once, {} {} at {}", MONTHS[m - 1], d.trim_start_matches('0'), clock_12(t)),
+                (Some((m, d)), Some(t)) => format!(
+                    "Once, {} {} at {}",
+                    MONTHS[m - 1],
+                    d.trim_start_matches('0'),
+                    clock_12(t)
+                ),
                 _ => "Once".into(),
             }
         }
@@ -293,26 +323,57 @@ mod tests {
     #[test]
     fn schedules_read_the_way_a_person_says_them() {
         let at = |s: Value| schedule_label(&json!({ "schedule": s }));
-        let daily = |days: Value, time: &str| at(json!({ "type": "fixed_time", "timeOfDay": time, "weekdays": days }));
-        assert_eq!(daily(json!([1, 2, 3, 4, 5]), "08:00"), "Weekdays at 8:00 AM");
+        let daily = |days: Value, time: &str| {
+            at(json!({ "type": "fixed_time", "timeOfDay": time, "weekdays": days }))
+        };
+        assert_eq!(
+            daily(json!([1, 2, 3, 4, 5]), "08:00"),
+            "Weekdays at 8:00 AM"
+        );
         assert_eq!(daily(json!([0, 6]), "17:21"), "Weekends at 5:21 PM");
         assert_eq!(daily(json!([1, 3]), "00:05"), "Mon, Wed at 12:05 AM");
-        assert_eq!(daily(json!([0, 1, 2, 3, 4, 5, 6]), "12:00"), "Every day at 12:00 PM");
+        assert_eq!(
+            daily(json!([0, 1, 2, 3, 4, 5, 6]), "12:00"),
+            "Every day at 12:00 PM"
+        );
         assert_eq!(daily(json!([]), "13:30"), "Every day at 1:30 PM");
-        assert_eq!(at(json!({ "type": "interval", "everyMs": 7_200_000 })), "Every 2 hours");
-        assert_eq!(at(json!({ "type": "interval", "everyMs": 1_800_000 })), "Every 30 minutes");
-        assert_eq!(at(json!({ "type": "once", "runAt": "2026-11-10T08:00:00+01:00" })), "Once, Nov 10 at 8:00 AM");
+        assert_eq!(
+            at(json!({ "type": "interval", "everyMs": 7_200_000 })),
+            "Every 2 hours"
+        );
+        assert_eq!(
+            at(json!({ "type": "interval", "everyMs": 1_800_000 })),
+            "Every 30 minutes"
+        );
+        assert_eq!(
+            at(json!({ "type": "once", "runAt": "2026-11-10T08:00:00+01:00" })),
+            "Once, Nov 10 at 8:00 AM"
+        );
         assert_eq!(at(json!({ "type": "webhook" })), "When a webhook arrives");
     }
 
     #[test]
     fn a_paused_routine_with_a_failed_run_says_so() {
-        let made: Value = serde_json::from_str(include_str!("../../tests/fixtures/t3/routine-created.json")).unwrap();
+        let made: Value =
+            serde_json::from_str(include_str!("../../tests/fixtures/t3/routine-created.json"))
+                .unwrap();
         let row = task_row(&made["taskRow"]);
-        assert_eq!((row["paused"].as_bool(), row["lastStatus"].as_str()), (Some(true), Some("never")));
+        assert_eq!(
+            (row["paused"].as_bool(), row["lastStatus"].as_str()),
+            (Some(true), Some("never"))
+        );
         assert_eq!(row["schedule"], "Weekdays at 8:00 AM");
-        let failed = task_row(&json!({ "id": "x", "enabled": true, "lastRunStatus": "failed", "lastRunError": "No model", "nextRunAt": "2026-11-11T08:00:00Z", "schedule": { "type": "interval", "everyMs": 3_600_000 } }));
-        assert_eq!((failed["paused"].as_bool(), failed["lastStatus"].as_str(), failed["lastError"].as_str()), (Some(false), Some("failed"), Some("No model")));
+        let failed = task_row(
+            &json!({ "id": "x", "enabled": true, "lastRunStatus": "failed", "lastRunError": "No model", "nextRunAt": "2026-11-11T08:00:00Z", "schedule": { "type": "interval", "everyMs": 3_600_000 } }),
+        );
+        assert_eq!(
+            (
+                failed["paused"].as_bool(),
+                failed["lastStatus"].as_str(),
+                failed["lastError"].as_str()
+            ),
+            (Some(false), Some("failed"), Some("No model"))
+        );
         assert_eq!(failed["nextRunAt"], "2026-11-11T08:00:00Z");
     }
 
