@@ -40,6 +40,8 @@ jobs:
         run: cd exact && bun scripts/exact.mjs setup
       - name: Build the web app
         run: EXACT_APP_DIR="$PWD/app" bun exact/host/web/build.mjs bots-web
+      - name: Check web build
+        run: test -s app/target/web-dist/index.html
       - uses: actions/upload-artifact@v4
         with:
           name: web-dist
@@ -81,6 +83,13 @@ jobs:
           HBOTS_VERSION: ${{ needs.verify.outputs.version }}
           STATIC_DIR: web-dist
         run: scripts/pack-release.sh
+      - name: Verify release contents
+        run: |
+          archive="dist/hbots-${{ needs.verify.outputs.version }}-${{ matrix.target }}.tar.gz"
+          mkdir release-check
+          tar -xzf "$archive" -C release-check
+          test -x release-check/hbots
+          test -s release-check/web/index.html
       - uses: actions/upload-artifact@v4
         with:
           name: hbots-${{ matrix.target }}

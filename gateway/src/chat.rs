@@ -246,11 +246,13 @@ pub fn transcript_for(projection: &Value, peers: &Peers) -> Value {
     json!({ "messages": messages, "events": events, "requests": requests, "working": working || active.is_some(), "activeRunId": active })
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+// Nothing in the gateway calls this yet.
+#[allow(dead_code)]
 pub const LOADED_SENTENCE: &str = "Search covers the loaded conversation.";
 
 /// Filters messages already loaded from a projection. Nothing else is searched.
-#[cfg_attr(not(test), allow(dead_code))]
+// Nothing in the gateway calls this yet.
+#[allow(dead_code)]
 pub fn search_messages(messages: &[Value], query: &str, partial: bool) -> Value {
     let query = query.trim().to_lowercase();
     let hits: Vec<Value> = if query.is_empty() {

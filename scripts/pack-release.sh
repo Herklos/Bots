@@ -1,5 +1,5 @@
 #!/bin/sh
-# Pack the hbots binary into dist/hbots-<version>-<target>.tar.gz and record its SHA-256.
+# Pack the binary and web app into a release archive and record its SHA-256.
 set -eu
 
 root=$(CDPATH='' cd -- "$(dirname "$0")/.." && pwd)
@@ -29,6 +29,12 @@ if [ ! -f "$bin" ]; then
   exit 1
 fi
 
+static_dir=${STATIC_DIR:-$root/app/target/web-dist}
+if [ ! -s "$static_dir/index.html" ]; then
+  echo "pack-release: no web app at $static_dir/index.html; build it first or set STATIC_DIR" >&2
+  exit 1
+fi
+
 name="hbots-${version}-${target}"
 outdir=${HBOTS_DIST:-$root/dist}
 stage=$(mktemp -d)
@@ -36,22 +42,20 @@ trap 'rm -rf "$stage"' EXIT
 
 cp "$bin" "$stage/hbots"
 chmod 755 "$stage/hbots"
-if [ -n "${STATIC_DIR:-}" ] && [ -d "$STATIC_DIR" ]; then
-  mkdir -p "$stage/web"
-  cp -R "$STATIC_DIR/." "$stage/web/"
-fi
+mkdir -p "$stage/web"
+cp -R "$static_dir/." "$stage/web/"
 
 mkdir -p "$outdir"
-if [ -d "$stage/web" ]; then
-  tar -C "$stage" -czf "$outdir/$name.tar.gz" hbots web
-else
-  tar -C "$stage" -czf "$outdir/$name.tar.gz" hbots
-fi
+tar -C "$stage" -czf "$outdir/$name.tar.gz" hbots web
 sums="$outdir/SHA256SUMS"
 tmp=$(mktemp)
 if [ -f "$sums" ]; then
   grep -v "  $name.tar.gz$" "$sums" > "$tmp" || true
 fi
-(cd "$outdir" && sha256sum "$name.tar.gz") >> "$tmp"
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$outdir" && sha256sum "$name.tar.gz") >> "$tmp"
+else
+  (cd "$outdir" && shasum -a 256 "$name.tar.gz") >> "$tmp"
+fi
 mv "$tmp" "$sums"
 echo "$outdir/$name.tar.gz"
