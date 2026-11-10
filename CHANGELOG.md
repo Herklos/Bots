@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- Pinned Bun and installed Chrome for release builds.
+
 ## 0.1.1
 
 - Fixed release packaging when Exact is checked out inside the Rust workspace.
