@@ -786,8 +786,10 @@ async fn dispatch_room(s: &AppState, dispatches: &[rooms::Dispatch]) -> ApiResul
 }
 
 /// Member rows for a room, with each member's working flag, and each member's group thread messages.
-/// With `ensure`, a member who is set up but has no thread for this group gets one now. A group
-/// talks in its own threads, so nothing it says lands in a Bot's one-to-one conversation.
+/// With `ensure`, a member who is set up but has no thread for this group gets one now. An empty
+/// id or the Bot's one-to-one thread counts as none: the read path drops it from the member and
+/// passes no messages, and the next ensure launches. A failed launch stays empty. A group talks
+/// in its own threads, so nothing it says lands in a Bot's one-to-one conversation.
 async fn room_snapshot(
     s: &AppState,
     room: &Value,
@@ -809,8 +811,12 @@ async fn room_snapshot(
         else {
             continue;
         };
-        let provisioned = bot["mainThreadId"].as_str().is_some_and(|t| !t.is_empty());
+        let main = bot["mainThreadId"].as_str().unwrap_or("");
+        let provisioned = !main.is_empty();
         let mut thread = room["threads"][&slug].as_str().unwrap_or("").to_string();
+        if rooms::Rooms::group_thread_missing(&thread, main) {
+            thread.clear();
+        }
         if thread.is_empty() && ensure && provisioned {
             if let (Some(rpc), Some(project)) = (&rpc, bot["projectId"].as_str()) {
                 let model = [&bot["model"], &settings["defaultModel"]]

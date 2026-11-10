@@ -157,6 +157,11 @@ impl Rooms {
         write_doc(&self.path, &doc).await
     }
 
+    /// Nothing stored, or the Bot's one-to-one thread, is not a thread for this group.
+    pub fn group_thread_missing(stored: &str, main_thread_id: &str) -> bool {
+        stored.is_empty() || stored == main_thread_id
+    }
+
     pub async fn delete(&self, room_id: &str) -> ApiResult<()> {
         let _g = self.lock.lock().await;
         let mut doc = read_doc(&self.path).await?;
@@ -712,6 +717,13 @@ async fn write_doc(path: &std::path::Path, doc: &Value) -> ApiResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_stored_main_thread_is_missing() {
+        assert!(Rooms::group_thread_missing("", "main-1"));
+        assert!(Rooms::group_thread_missing("main-1", "main-1"));
+        assert!(!Rooms::group_thread_missing("group-1", "main-1"));
+    }
 
     fn directory() -> Vec<Member> {
         vec![

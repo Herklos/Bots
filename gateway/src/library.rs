@@ -1072,16 +1072,12 @@ mod tests {
         assert!(!toml.contains("hidden"));
         assert!(toml.contains("tool_timeout_sec = 960"));
         assert!(toml.contains("https://mcp.example/z"));
-        let claude = claude_settings(
-            &json!({}),
-            json!([
-                { "name": "notes", "enabled": false },
-                { "name": "zebra", "enabled": true },
-                { "name": "bot", "enabled": false }
-            ])
-            .as_array()
-            .unwrap(),
-        );
+        let servers = json!([
+            { "name": "notes", "enabled": false },
+            { "name": "zebra", "enabled": true },
+            { "name": "bot", "enabled": false }
+        ]);
+        let claude = claude_settings(&json!({}), servers.as_array().unwrap());
         assert_eq!(claude["enableAllProjectMcpServers"], true);
         assert_eq!(claude["disabledMcpjsonServers"], json!(["notes"]));
     }

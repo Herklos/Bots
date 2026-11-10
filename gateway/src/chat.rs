@@ -176,10 +176,9 @@ pub fn without_group_turns(items: Vec<Value>) -> Vec<Value> {
 }
 
 fn is_group_prompt(text: &str) -> bool {
-    let t = text.trim();
-    t.starts_with("[Group \"")
-        || t.contains("\n[Group \"")
-        || t.contains("Your reply is shared with the group")
+    text.contains("[Group \"")
+        || text.contains("Your reply is shared with the group")
+        || text.contains("Write @slug only when")
 }
 
 /// The bubbles and cards of a thread projection, oldest first.
@@ -779,6 +778,40 @@ mod tests {
             vec!["back"],
             "a padded group prompt stays out of the one-to-one chat"
         );
+    }
+
+    #[test]
+    fn a_group_prompt_later_in_the_text_and_the_older_slug_frame_stay_out() {
+        let later = json!({ "turnItems": [
+            { "id": "1", "type": "user_message", "text": "hi", "status": "completed" },
+            { "id": "2", "type": "assistant_message", "text": "hello", "status": "completed" },
+            { "id": "3", "type": "user_message", "text": "note [Group \"Duo\": Ada (@ada). You wrote:]\nask", "status": "completed" },
+            { "id": "4", "type": "assistant_message", "text": "from the group", "status": "completed" },
+            { "id": "5", "type": "user_message", "text": "thanks", "status": "completed" },
+        ]});
+        let later = transcript(&later);
+        let kept: Vec<&str> = later["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["text"].as_str().unwrap())
+            .collect();
+        assert_eq!(kept, vec!["hi", "hello", "thanks"]);
+
+        let older = json!({ "turnItems": [
+            { "id": "1", "type": "user_message", "text": "mine", "status": "completed" },
+            { "id": "2", "type": "user_message", "text": "[Group \"Duo\": Ada (@ada), Bea (@bea). You wrote:]\nask\n\n[Your reply is shared with the group. Write @slug only when you need something from that member; never to thank or acknowledge.]", "status": "completed" },
+            { "id": "3", "type": "assistant_message", "text": "should hide", "status": "completed" },
+            { "id": "4", "type": "user_message", "text": "still mine", "status": "completed" },
+        ]});
+        let older = transcript(&older);
+        let kept: Vec<&str> = older["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["text"].as_str().unwrap())
+            .collect();
+        assert_eq!(kept, vec!["mine", "still mine"]);
     }
 
     fn family() -> Value {
