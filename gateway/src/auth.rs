@@ -146,6 +146,9 @@ impl Auth {
     /// Browsers attach cookies to cross-site requests and don't apply the same-origin policy to
     /// WebSockets, so a change must also come from this app's own pages.
     pub fn same_origin(&self, headers: &HeaderMap) -> bool {
+        if crate::config::dev_allow_any_origin() {
+            return true;
+        }
         let Some(origin) = headers.get("origin").and_then(|o| o.to_str().ok()) else {
             return headers.get("sec-fetch-site").and_then(|v| v.to_str().ok())
                 != Some("cross-site");

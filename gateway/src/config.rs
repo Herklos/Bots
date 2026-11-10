@@ -31,6 +31,11 @@ fn env(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.is_empty())
 }
 
+/// Only debug builds may opt into unrestricted browser origins for LAN development.
+pub fn dev_allow_any_origin() -> bool {
+    cfg!(debug_assertions) && std::env::var("HBOTS_DEV_ALLOW_ANY_ORIGIN").as_deref() == Ok("1")
+}
+
 fn home() -> PathBuf {
     env("HOME")
         .map(PathBuf::from)

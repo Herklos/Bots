@@ -418,9 +418,9 @@ async fn guard(State(s): S, req: Request, next: Next) -> Response {
         .get(header::ORIGIN)
         .and_then(|o| o.to_str().ok())
         .map(String::from);
-    let cors = origin
-        .clone()
-        .filter(|o| loopback_origin(o) || s.cfg.allowed_origins.contains(o));
+    let cors = origin.clone().filter(|o| {
+        config::dev_allow_any_origin() || loopback_origin(o) || s.cfg.allowed_origins.contains(o)
+    });
     if req.method() == Method::OPTIONS {
         let mut res = StatusCode::NO_CONTENT.into_response();
         if let Some(o) = cors {

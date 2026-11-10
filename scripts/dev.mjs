@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 // Local dev stack.
 //   bun scripts/dev.mjs
+//   bun scripts/dev.mjs --lan  (set HBOTS_DEV_HOST to choose a LAN address)
 //
 // Gateway (debug, restarts after a Rust change): http://127.0.0.1:3780
 // Frontend (Exact dev loop, rebuilds and reloads the page): http://127.0.0.1:8765
@@ -13,11 +14,23 @@ import { spawn, execFileSync } from 'node:child_process';
 import { watch, existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { networkInterfaces } from 'node:os';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const gatewayPort = 3780;
 const webPort = 8765;
-const gatewayUrl = `http://127.0.0.1:${gatewayPort}`;
+const lan = process.argv.slice(2).includes('--lan');
+const unknown = process.argv.slice(2).filter((arg) => arg !== '--lan');
+if (unknown.length) {
+  console.error(`Usage: bun scripts/dev.mjs [--lan]`);
+  process.exit(1);
+}
+const lanAddress = process.env.HBOTS_DEV_HOST || Object.values(networkInterfaces()).flat().find((a) => a?.family === 'IPv4' && !a.internal)?.address;
+if (lan && !lanAddress) {
+  console.error('No LAN IPv4 address found; set HBOTS_DEV_HOST to this machine’s reachable address');
+  process.exit(1);
+}
+const gatewayUrl = `http://${lan ? lanAddress : '127.0.0.1'}:${gatewayPort}`;
 const pathFile = resolve(root, '.exact-path');
 const exact = process.env.EXACT_DIR || (existsSync(pathFile)
   ? readFileSync(pathFile, 'utf8').match(/^EXACT_DIR=(.+)$/m)?.[1].trim().replace(/^['"]|['"]$/g, '')
@@ -112,7 +125,7 @@ function cargoBuild() {
 
 function startGateway() {
   const bin = resolve(root, 'target/debug/hbots');
-  gateway = spawnGroup(bin, ['serve'], process.env);
+  gateway = spawnGroup(bin, ['serve'], lan ? { ...process.env, HOST: '0.0.0.0', HBOTS_DEV_ALLOW_ANY_ORIGIN: '1' } : process.env);
   prefix(gateway, 'gateway');
   const started = gateway;
   started.on('exit', (code, signal) => {
@@ -171,7 +184,7 @@ if (taken.length) {
   console.error(`port ${webPort} is in use (${command(taken[0]) || taken[0]})`);
   process.exit(1);
 }
-web = spawnGroup(process.execPath, [resolve(exact, 'host/web/dev.mjs'), '--app', resolve(root, 'app'), '--port', String(webPort)], webEnv);
+web = spawnGroup(process.execPath, [resolve(exact, 'host/web/dev.mjs'), '--app', resolve(root, 'app'), '--port', String(webPort), ...(lan ? ['--lan'] : [])], webEnv);
 prefix(web, 'web');
 web.on('exit', (code, signal) => {
   if (stopping) return;
@@ -185,7 +198,8 @@ arm('gateway/Cargo.toml', false);
 arm('design/Cargo.toml', false);
 arm('Cargo.toml', false);
 
-console.log(`[web] http://127.0.0.1:${webPort}`);
+console.log(`[web] http://${lan ? lanAddress : '127.0.0.1'}:${webPort}`);
+if (lan) console.warn('[dev] LAN mode allows requests from any browser origin; use only on a trusted network.');
 cycle();
 
 async function shutdown() {

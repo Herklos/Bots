@@ -39,6 +39,11 @@ From the repo root, with T3 Code already running:
 bun scripts/dev.mjs
 ```
 
+For access from another device on the local network, run `bun scripts/dev.mjs --lan`.
+Set `HBOTS_DEV_HOST` to the machine's reachable address if the automatically selected IPv4
+address is wrong. LAN mode accepts browser requests from any origin in the debug gateway;
+use it only on a trusted network. Release builds do not enable this behavior.
+
 That starts both and rebuilds each when its own code changes.
 
 - **Gateway.** Debug build at http://127.0.0.1:3780. A change under `gateway/` or `design/`, or in the workspace `Cargo.toml`, rebuilds `target/debug/hbots` and restarts `serve`. An `hbots` process already listening on 3780 is stopped once that binary is ready.
