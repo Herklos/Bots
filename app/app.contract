@@ -770,7 +770,7 @@ component Bots
   state heldTab = ""
   resource session = loadSession() as shape Session else empty()
   resource keptDrafts = loadDrafts() as shape DraftPack else empty()
-  resource bots = loadBots(slug) as shape Bot[] else empty()
+  resource bots = loadBots(slug != "" ? slug : roomId) as shape Bot[] else empty()
   resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId) as shape Convo[] else empty()
   resource chat = loadChat(slug, childThread) as shape Chat else empty()
   resource room = loadRoom(roomId) as shape Room else empty()

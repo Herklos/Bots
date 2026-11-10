@@ -125,6 +125,9 @@ type ChatRow = any;
 
 // The contract runner has no gateway: a small conversation, a writable child and a missing pin.
 // Pins are mutable so a Pin tap can toggle a row without a live gateway.
+// A room the contract runner just created. Null keeps the built-in Design room.
+let fixtureMade: { title: string; description: string; color: string; shape: string; slugs: string[] } | null = null;
+
 const fixturePins: Record<string, PinRow[]> = {
   'fixture-thread': [
     { id: 'm1', text: 'Hello', missing: false },
@@ -521,7 +524,13 @@ const sources: Sources = {
     return reply(await call(store, `/api/rooms/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }));
   },
   createGroup: async ([title, description, color, shape, members], store): Promise<Result<'createGroup'>> => {
-    const r = await call(store, '/api/rooms', { method: 'POST', body: JSON.stringify({ title, description, color, shape, members: members === '' ? [] : members.split('\n') }) });
+    const slugs = members === '' ? [] : members.split('\n').filter((s) => s !== '');
+    // The contract runner's Bots. A real room still goes to the gateway.
+    if (slugs.length >= 2 && slugs.every((s) => s === 'fixture' || s === 'bea')) {
+      fixtureMade = { title, description, color, shape, slugs };
+      return { ok: true, id: 'fixture', error: '' };
+    }
+    const r = await call(store, '/api/rooms', { method: 'POST', body: JSON.stringify({ title, description, color, shape, members: slugs }) });
     return r.ok ? { ok: true, id: String(r.body.id ?? ''), error: '' } : { ok: false, id: '', error: r.error };
   },
   sendRoom: async ([id, text], store) => reply(await call(store, `/api/rooms/${encodeURIComponent(id)}/messages`, { method: 'POST', body: JSON.stringify({ text }) })),
@@ -764,6 +773,14 @@ const sources: Sources = {
   loadRoom: async ([id], store): Promise<Result<'loadRoom'>> => {
     if (id === '') return { id: '', title: '', description: '', color: 'brand.default', shape: 'ball', members: [], messages: [] };
     if (id === 'fixture') {
+      if (fixtureMade) {
+        const nameOf = (slug: string) => (slug === 'bea' ? 'Bea' : 'Ada');
+        return {
+          id: 'fixture', title: fixtureMade.title, description: fixtureMade.description, color: fixtureMade.color, shape: fixtureMade.shape,
+          members: fixtureMade.slugs.map((slug) => ({ slug, name: nameOf(slug), line: 'Ready to chat', state: 'idle', ready: true, working: false })),
+          messages: [],
+        };
+      }
       return {
         id: 'fixture', title: 'Design', description: 'Where Ada and Bea trade drafts', color: 'brand.blue', shape: 'hex',
         members: [
