@@ -350,7 +350,6 @@ function chatRows(slug: string, body: any, now: number, reactions: Record<string
     rows.push(row);
     prev = { who, t, index: rows.length - 1 };
   }
-  if (hideGroup) return rows;
   for (const r of (body.requests ?? []) as any[]) {
     const kind = String(r.kind);
     const choices = kind === 'approval_request'
