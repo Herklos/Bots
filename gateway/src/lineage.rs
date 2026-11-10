@@ -42,6 +42,30 @@ const LIVE: &[&str] = &[
     "starting",
 ];
 
+/// Keys that mark one child: its item id, and its thread when T3 gives one.
+/// A turn item and the `subagents` roster often use different ids for the same child.
+fn row_keys(row: &Value) -> Vec<String> {
+    let mut keys = Vec::new();
+    if let Some(id) = row["id"].as_str().filter(|s| !s.is_empty()) {
+        keys.push(id.to_string());
+    }
+    if let Some(thread) = row["threadId"].as_str().filter(|s| !s.is_empty()) {
+        keys.push(format!("thread:{thread}"));
+    }
+    keys
+}
+
+fn push_unique(out: &mut Vec<Value>, seen: &mut std::collections::HashSet<String>, row: Value) {
+    let keys = row_keys(&row);
+    if keys.is_empty() || keys.iter().any(|k| seen.contains(k)) {
+        return;
+    }
+    for key in keys {
+        seen.insert(key);
+    }
+    out.push(row);
+}
+
 /// Rows for the Bot details sheet. Remote delegates stay remote.
 /// With no subagent, the latest live turn is one Working row and not an Open target.
 pub fn rows(projection: &Value) -> Vec<Value> {
@@ -62,8 +86,7 @@ pub fn rows(projection: &Value) -> Vec<Value> {
             };
             if item["type"] == "subagent" {
                 if let Some(row) = one(item) {
-                    seen.insert(row["id"].as_str().unwrap_or("").to_string());
-                    out.push(row);
+                    push_unique(&mut out, &mut seen, row);
                 }
             }
         }
@@ -71,10 +94,7 @@ pub fn rows(projection: &Value) -> Vec<Value> {
     if let Some(agents) = projection["subagents"].as_array() {
         for agent in agents {
             if let Some(row) = one(agent) {
-                let id = row["id"].as_str().unwrap_or("").to_string();
-                if seen.insert(id) {
-                    out.push(row);
-                }
+                push_unique(&mut out, &mut seen, row);
             }
         }
     }
@@ -307,6 +327,32 @@ mod tests {
         }));
         assert_eq!(listed[0]["status"], "Done");
         assert!(rows(&json!({ "turnItems": [{ "type": "message", "id": "m" }] })).is_empty());
+    }
+
+    #[test]
+    fn the_same_child_in_turn_items_and_subagents_is_one_row() {
+        let listed = rows(&json!({
+            "turnItems": [{
+                "type": "subagent",
+                "id": "call_abc:child-1",
+                "title": "/root/test",
+                "status": "running",
+                "childThreadId": "thread:provider:codex:native-thread:child-1"
+            }],
+            "subagents": [{
+                "id": "node:provider:codex:native-node:call_abc:child-1",
+                "title": "/root/test",
+                "status": "running",
+                "childThreadId": "thread:provider:codex:native-thread:child-1"
+            }]
+        }));
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0]["title"], "/root/test");
+        assert_eq!(
+            listed[0]["threadId"],
+            "thread:provider:codex:native-thread:child-1"
+        );
+        assert_eq!(listed[0]["status"], "Working");
     }
 
     #[test]

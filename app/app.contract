@@ -521,6 +521,7 @@ shape Prefs
   defaultInstance: string
   defaultModel: string
   defaultEffort: string
+  defaultRuntimeMode: string
 
 // Result of uploading one chat attachment to the gateway.
 shape Attached
@@ -838,6 +839,10 @@ component Bots
   // Empty follows the server's selected tab. A pick refetches that page.
   state computerTab = ""
   state computerEnlarged = false
+  // Set while a silent Open browser request is in flight or waiting for a tab.
+  state wantOpen = false
+  // Set while a silent Close browser request is in flight or waiting for tabs to clear.
+  state wantClose = false
   resource hostTime = exactTime() as shape HostTime
   resource pointerFacts = exactViewport() as shape PointerFacts
   resource session = loadSession(hostTime.locale) as shape Session else empty()
@@ -902,6 +907,8 @@ component Bots
   mutation defaultSaved as shape Reply refreshes prefs, models
   mutation controlled as shape Reply refreshes computer then afterControl
   mutation driven as shape DriveReply refreshes computer then afterDrive
+  mutation openedBrowser as shape Reply refreshes computer then afterOpen
+  mutation closedBrowser as shape Reply refreshes computer then afterClose
   derive slug = match stack(nav).filter(e => e.name == "chat").at(-1) { case some(e) => e.params.slug, case none => "" }
   derive signInError = match signedIn { case some(r) => r.error, case none => "" }
   derive createError = match created { case some(r) => r.error, case none => "" }
@@ -967,6 +974,10 @@ component Bots
   derive usageGate = top(nav).name == "settings" ? "1" : "0"
   derive modelError = match modelSaved { case some(r) => r.error, case none => "" }
   derive controlError = match controlled { case some(r) => r.error, case none => "" }
+  derive openError = match openedBrowser { case some(r) => r.error, case none => "" }
+  derive openingBrowser = wantOpen and computer.tabs.length == 0
+  derive closeError = match closedBrowser { case some(r) => r.error, case none => "" }
+  derive closingBrowser = wantClose and computer.tabs.length > 0
   derive driveError = match driven { case some(r) => r.error, case none => "" }
   derive holding = wantHold and controlError == "" and not pending(controlled)
 
@@ -1071,6 +1082,8 @@ component Bots
   // replaces that chat, so the conversation swaps instead of stacking.
   action open(url: string)
     computerEnlarged = false
+    wantOpen = false
+    wantClose = false
     childThread = ""
     panelPage = "root"
     computerTab = ""
@@ -1177,6 +1190,7 @@ component Bots
       case none
   action sendHeldVoice
     if voiceId != "" and not pending(voiceSent)
+      toEnd()
       send voiceSent = sendVoice(slug, voiceSeconds, voiceId, childThread)
   action afterVoice
     match voiceSent
@@ -1285,6 +1299,8 @@ component Bots
     focus("room-composer")
   action postRoom
     if roomText.trim() != "" and not pending(roomSent) and roomId != ""
+      if lastRoomId != ""
+        scrollIntoView("room-log", lastRoomId, block="end")
       send roomSent = sendRoom(roomId, roomText.trim())
       roomText = ""
     focus("room-composer")
@@ -1324,6 +1340,8 @@ component Bots
       send voiceDropped = dropVoice(slug, id)
   action post
     if canSend and not pending(sent)
+      messageQuery = ""
+      toEnd()
       // pendingAttaches entries are `id\\tname`; the data module keeps the ids.
       lastText = draft.trim()
       failedText = ""
@@ -1349,6 +1367,7 @@ component Bots
     toEnd()
   action retry
     if failedText != "" and not pending(sent)
+      toEnd()
       let again = failedText
       lastText = again
       failedText = ""
@@ -1535,6 +1554,9 @@ component Bots
   action afterModel
     if modelError == ""
       toast = t("toast.modelSaved")
+  action doDefaultMode(mode: string)
+    if not pending(prefsSaved)
+      send prefsSaved = setDefaultMode(mode)
   action doMakeDefault(instanceId: string, model: string, effort: string)
     if not pending(defaultSaved)
       send defaultSaved = setDefaultModel(instanceId, model, effort)
@@ -1583,6 +1605,39 @@ component Bots
     if holding and heldTab != "" and kind != ""
       send driven = computerInput(slug, kind, x, y, boxW, boxH, delta, text)
 
+  action doOpenBrowser
+    if slug != "" and not pending(openedBrowser) and not wantOpen
+      wantOpen = true
+      wantClose = false
+      send openedBrowser = openComputer(slug)
+  action afterOpen
+    match openedBrowser
+      case some(r)
+        if not r.ok
+          wantOpen = false
+      case none
+  task clearWantOpen when wantOpen and computer.tabs.length > 0
+    after(1, dropWantOpen)
+  action dropWantOpen
+    wantOpen = false
+  action doCloseBrowser
+    if slug != "" and not pending(closedBrowser) and not wantClose and computer.tabs.length > 0
+      if holding
+        doRelease()
+      wantClose = true
+      wantOpen = false
+      computerEnlarged = false
+      send closedBrowser = closeComputer(slug)
+  action afterClose
+    match closedBrowser
+      case some(r)
+        if not r.ok
+          wantClose = false
+      case none
+  task clearWantClose when wantClose and computer.tabs.length == 0
+    after(1, dropWantClose)
+  action dropWantClose
+    wantClose = false
   action showComputerLarge
     computerEnlarged = true
   action focusComputerFrame
@@ -1738,6 +1793,13 @@ component Bots
                 column flex=1
                 button class=IconControl appearance="none" press=toggleChatSearch aria-label=t("chat.search") title=t("chat.search") testId="chat-search-open" width=36 height=36
                   Glyph(name=(chatSearching ? "close" : "search"), size=18)
+              if childThread != ""
+                row align-items="center" gap="space.sm" padding="space.xs space.md" min-height=44 box-sizing="border-box" background-color="surface.raised" border-bottom="1px solid surface.line" testId="child-strip"
+                  button class=TextControl appearance="none" press=closeChild display="flex" align-items="center" aria-label=(nameOf(bots, e.params.slug) != "" ? t("chat.backToNamed", name=nameOf(bots, e.params.slug)) : t("chat.backToChat")) testId="close-child" min-height=44 padding="0 space.sm" color="AccentColor" flex=1 min-width=0
+                    column color="AccentColor" rotate="180deg" flex-shrink=0
+                      Glyph(name="chevron", size=16)
+                    text (nameOf(bots, e.params.slug) != "" ? t("chat.backToNamed", name=nameOf(bots, e.params.slug)) : t("chat.backToChat")) font="-exact-subheadline" font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                  text (chat.readOnly ? t("status.done") : chat.working ? t("status.working") : t("status.done")) color="ink.muted" font="-exact-footnote" flex-shrink=0 testId="child-strip-status"
               if failed(chat)
                 EmptyState(symbol="symbol:alert", title=t("error.chatTitle"), message=t("error.chatHint"))
                   button press=pull testId="retry-chat"
@@ -1851,9 +1913,6 @@ component Bots
                 text t("chat.readOnly") color="ink.muted" padding="space.md space.lg space.xl" testId="child-readonly"
               else
                 column width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.xs"
-                  if childThread != ""
-                    button class=TextControl appearance="none" press=closeChild aria-label=t("chat.backToChat") testId="close-child" min-height=44 padding="0 space.sm"
-                      text t("chat.backToChat")
                   if replyTo != ""
                     row gap="space.sm" align-items="center" padding="space.xs space.sm" border-radius="radius.md" background-color="surface.raised" border="1px solid surface.line" testId="reply-bar"
                       text replyQuote font="-exact-footnote" color="ink.muted" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="reply-quote"
@@ -1889,7 +1948,7 @@ component Bots
                       button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="send"
                         Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), showComputerLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
+                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), showComputerLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, openBrowser=doOpenBrowser, opening=openingBrowser, openError=openError, closeBrowser=doCloseBrowser, closing=closingBrowser, closeError=closeError, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
           else if e.name == "group"
             column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="room-header"
@@ -1922,32 +1981,33 @@ component Bots
                   column flex=1 min-height=0 justify-content="flex-end" position="relative"
                     list id="room-log" appearance="none" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" flex=1 min-height=0 padding="space.sm space.lg space.xl" virtualized=true scroll-start="end" scrollFollowEnd=true testId="room-log"
                       for msg in roomRows key=msg.id
-                        if msg.id == "working"
-                          row gap="space.sm" align-items="center" padding="2px 0" testId="room-working"
-                            for m in workingMembers key=m.slug
-                              Face(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state="working", size=24, still=false)
-                            row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working") testId="room-working-dots"
-                              for n in [0, 1, 2] key=n
-                                column width=7 height=7 border-radius="radius.full" background-color="ink.muted" opacity=0.6
-                        else
-                          row justify-content=(msg.from == "user" ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="2px 0" testId=`room-msg-${msg.id}`
-                            if msg.from != "user"
-                              Face(shape=shapeOf(bots, msg.from), color=faceColor(colorOf(bots, msg.from)), state="idle", size=28, still=true)
-                            column gap="2px" max-width="82%" align-items=(msg.from == "user" ? "flex-end" : "flex-start")
+                        column
+                          if msg.id == "working"
+                            row gap="space.sm" align-items="center" padding="1px 0" testId="room-working"
+                              for m in workingMembers key=m.slug
+                                Face(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state="working", size=24, still=false)
+                              row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working") testId="room-working-dots"
+                                for n in [0, 1, 2] key=n
+                                  column width=7 height=7 border-radius="radius.full" background-color="ink.muted" opacity=0.6
+                          else
+                            row justify-content=(msg.from == "user" ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="1px 0" testId=`room-msg-${msg.id}`
                               if msg.from != "user"
-                                text msg.name font="-exact-footnote" font-weight=600 color="ink.muted" testId=`room-from-${msg.id}`
-                              if msg.from == "user"
-                                text msg.text class=Bubble testId=`room-text-${msg.id}`
-                                  background-color="brand.default"
-                                  color="ink.dark"
-                                  border-radius="radius.lg"
-                                  border-bottom-right-radius="radius.sm"
-                              else
-                                text msg.text markup="markdown" class=Bubble white-space="normal" testId=`room-text-${msg.id}`
-                                  background-color="surface.bubble"
-                                  color="-exact-label"
-                                  border-radius="radius.lg"
-                                  border-bottom-left-radius="radius.sm"
+                                Face(shape=shapeOf(bots, msg.from), color=faceColor(colorOf(bots, msg.from)), state="idle", size=28, still=true)
+                              column gap="2px" max-width="82%" align-items=(msg.from == "user" ? "flex-end" : "flex-start")
+                                if msg.from != "user"
+                                  text msg.name font="-exact-footnote" font-weight=600 color="ink.muted" testId=`room-from-${msg.id}`
+                                if msg.from == "user"
+                                  text msg.text class=Bubble testId=`room-text-${msg.id}`
+                                    background-color="brand.default"
+                                    color="ink.dark"
+                                    border-radius="radius.lg"
+                                    border-bottom-right-radius="radius.sm"
+                                else
+                                  text msg.text markup="markdown" class=Bubble white-space="normal" testId=`room-text-${msg.id}`
+                                    background-color="surface.bubble"
+                                    color="-exact-label"
+                                    border-radius="radius.lg"
+                                    border-bottom-left-radius="radius.sm"
                 column width="calc(100% - 32px)" max-width="44rem" min-width=0 align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.sm" flex-shrink=0
                   if roomError != "" and not pending(roomSent)
                     text roomError color="-exact-system-red" font="-exact-footnote" testId="room-send-error"
@@ -1967,10 +2027,10 @@ component Bots
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader
                 text t("settings.title") role="heading" aria-level=1 class=PageTitle flex=1
-              row role="tablist" aria-label=t("settings.domains") justify-content="center" flex-wrap="wrap" gap="space.xs" padding="0 space.lg space.md"
+              row role="tablist" aria-label=t("settings.domains") justify-content="center" flex-wrap="wrap" gap="space.xs" padding="space.md space.lg space.sm"
                 for d in ["user", "models", "access", "updates"] key=d
                   button class=Segment appearance="none" role="tab" aria-selected=(settingsDomain == d) press=pickSettingsDomain(d) min-height=36 padding="space.xs space.md" testId=`settings-domain-${d}` background-color=(settingsDomain == d ? "surface.raised" : "transparent") color=(settingsDomain == d ? "-exact-label" : "ink.muted")
-                    text settingsDomainLabel(d, t("settings.domainUser"), t("settings.domainModels"), t("settings.domainAccess"), t("settings.domainUpdates")) font="-exact-subheadline"
+                    text settingsDomainLabel(d, t("settings.domainUser"), t("settings.domainModels"), t("settings.domainAccess"), t("settings.about")) font="-exact-subheadline"
               scroll id="settings-form" flex=1 min-height=0
                 column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" margin="0 auto" padding="space.lg space.lg space.xl" gap="space.xl"
                   if settingsDomain == "user"
@@ -2006,6 +2066,16 @@ component Bots
                           text t("settings.noProvider") color="ink.muted" font="-exact-subheadline" padding="space.sm"
                         else
                           ModelPicker(providers=providers, instanceId=prefs.defaultInstance, model=prefs.defaultModel, effort=prefs.defaultEffort, prefix="default", pick=doMakeDefault)
+                    column gap="space.sm"
+                      text t("settings.defaultAccess") class=SectionLabel
+                      column class=GroupCard padding="space.md" gap="space.sm"
+                        row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("settings.defaultAccess")
+                          for mode in ["approval-required", "auto", "full-access"] key=mode
+                            button class=Segment appearance="none" role="radio" aria-checked=(prefs.defaultRuntimeMode == mode) press=doDefaultMode(mode) testId=`default-access-${mode}` border="1px solid surface.line" background-color=(prefs.defaultRuntimeMode == mode ? "surface.raised" : "transparent")
+                              text (mode == "approval-required" ? t("model.ask") : mode == "auto" ? t("model.auto") : t("model.fullAccess"))
+                        text t("settings.defaultAccessNote") color="ink.muted" font="-exact-footnote"
+                        if prefsError != ""
+                          text prefsError color="-exact-system-red" font="-exact-footnote"
                   else if settingsDomain == "access"
                     column gap="space.sm"
                       text t("settings.private") class=SectionLabel
@@ -2037,6 +2107,8 @@ component Bots
                         row justify-content="space-between" align-items="center" min-height=40 border-top="1px solid surface.line" font="-exact-subheadline"
                           text about.harness color="ink.muted"
                           text (about.connected ? t("settings.connected") : t("settings.disconnected")) color=(about.connected ? "-exact-label" : "-exact-system-red") testId="about-harness"
+                      link class=ChoiceRow href="https://github.com/Herklos/HBots/blob/main/CHANGELOG.md" target="_blank" testId="about-changelog"
+                        text t("settings.changelog") font-weight=500
                       if session.passwordRequired
                         button class=ChoiceRow appearance="none" press=logout justify-content="center" color="-exact-system-red" testId="sign-out"
                           text t("settings.signOut") font-weight=500
@@ -2233,14 +2305,14 @@ component InboxRow
           button class=TextControl appearance="none" press=chooseMain aria-label=t("edit.makeMain") width="100%" justify-content="flex-start"
             text t("edit.makeMain") testId=`menu-main-${row.id}`
 
-// One transcript message. Time, reply and pin stay in the tree so the keyboard
-// can focus them. They paint while the pointer is over the message, while a tap
-// has left them open, or while reply or pin is focused. The tap that opens them
+// One transcript message. Time and reply stay in the tree so the keyboard
+// can focus the action. They paint while the pointer is over the message, while a tap
+// has left them open, or while an action is focused. The tap that opens them
 // does not close them on the way up; the next tap does. On a device that can
 // hover, the pointer leaving the message closes them too. Hidden chrome takes
 // no taps. An applied reaction is a chip overlapping the bubble corner; the add control sits beside a Bot bubble only while that chrome (or the picker) is showing.
 // A secondary click or a long press (both a contextmenu) opens a menu inside this
-// message. It uses the same reply, pin and react actions as the hover chrome, and
+// message. It offers reply, pin and react actions, and
 // it goes away with that chrome or when a row is chosen. One message menu is open.
 component ChatMessage
   props
@@ -2300,21 +2372,21 @@ component ChatMessage
     else
       openPicker(row.id)
   action chromeFocus(e: FocusEvent)
-    focused = e.target == `reply-${row.id}` or e.target == `pin-message-${row.id}` or e.target == `menu-reply-${row.id}` or e.target == `menu-pin-${row.id}` or e.target == `menu-copy-${row.id}` or e.target == `menu-react-${row.id}`
+    focused = e.target == `reply-${row.id}` or e.target == `menu-reply-${row.id}` or e.target == `menu-pin-${row.id}` or e.target == `menu-copy-${row.id}` or e.target == `menu-react-${row.id}`
   action chromeBlur(e: FocusEvent)
     match e.relatedTarget
       case some(id)
-        focused = id == `reply-${row.id}` or id == `pin-message-${row.id}` or id == `menu-reply-${row.id}` or id == `menu-pin-${row.id}` or id == `menu-copy-${row.id}` or id == `menu-react-${row.id}`
+        focused = id == `reply-${row.id}` or id == `menu-reply-${row.id}` or id == `menu-pin-${row.id}` or id == `menu-copy-${row.id}` or id == `menu-react-${row.id}`
       case none
         focused = false
   view
-    row justify-content=(row.mine ? "flex-end" : "flex-start") padding=(row.head ? "space.sm space.lg 2px" : "2px space.lg")
+    row justify-content=(row.mine ? "flex-end" : "flex-start") padding=(row.head ? "space.sm space.lg 1px" : "1px space.lg")
       column gap="2px" max-width="82%" align-items=(row.mine ? "flex-end" : "flex-start") hover=setOver pointerdown=tapDown pointerup=tapUp contextmenu=openFromSecondary focusin=chromeFocus focusout=chromeBlur
         if row.quote != ""
           text row.quote color="ink.muted" font="-exact-footnote" testId=`quote-${row.id}`
         if row.text != "" or row.react != "" or not row.mine
-          row gap="space.xs" align-items="flex-end" max-width="100%"
-            column position="relative" padding-bottom="10px" max-width="100%"
+          row gap="space.xs" align-items="center" max-width="100%"
+            column position="relative" padding-bottom="6px" max-width="100%"
               if row.text != "" and row.mine
                 text row.text class=Bubble testId=`message-${row.id}`
                   background-color="brand.default"
@@ -2337,6 +2409,8 @@ component ChatMessage
             if not row.mine and row.react == ""
               button class=TextControl appearance="none" press=openPicker(row.id) aria-label=t("chat.react") title=t("chat.react") min-height=24 padding="0 space.xs" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none") testId=`add-react-${row.id}`
                 Glyph(name="smile", size=14)
+            button id=`reply-${row.id}` class=TextControl appearance="none" press=reply(row.id, row.text) aria-label=t("chat.reply") title=t("chat.reply") min-height=24 padding="0 space.xs" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none") testId=`reply-${row.id}`
+              Glyph(name="reply", size=14)
         for f in row.files key=f.id
           if f.kind == "image"
             link href=f.url target="_blank" aria-label=t("common.openNamed", name=f.name) testId=`image-${f.id}`
@@ -2359,10 +2433,6 @@ component ChatMessage
           row gap="space.xs" align-items="center" padding="0 space.xs"
             row gap="space.xs" align-items="center" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none")
               text row.time font="-exact-footnote" color="ink.faint"
-              button id=`reply-${row.id}` class=TextControl appearance="none" press=reply(row.id, row.text) aria-label=t("chat.reply") title=t("chat.reply") min-height=24 padding="0 space.xs" pointer-events=(showChrome ? "auto" : "none") testId=`reply-${row.id}`
-                text t("chat.reply") font="-exact-footnote"
-              button id=`pin-message-${row.id}` class=TextControl appearance="none" press=pin(row.id, row.text) aria-label=t("chat.pin") title=t("chat.pin") min-height=24 padding="0 space.xs" pointer-events=(showChrome ? "auto" : "none") testId=`pin-message-${row.id}`
-                text t("chat.pin") font="-exact-footnote"
         if menuOpen
           column role="menu" aria-label=t("chat.message") gap="2px" padding="space.xs" border-radius="radius.md" background-color="surface.card" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="message-menu"
             button id=`menu-reply-${row.id}` class=TextControl appearance="none" pointerdown=holdMenu press=chooseReply aria-label=t("chat.reply") testId=`menu-reply-${row.id}` width="100%" justify-content="flex-start"
@@ -2376,9 +2446,9 @@ component ChatMessage
               button id=`menu-react-${row.id}` class=TextControl appearance="none" pointerdown=holdMenu press=chooseReact aria-label=(row.react != "" ? t("chat.removeReaction") : t("chat.react")) testId=`menu-react-${row.id}` width="100%" justify-content="flex-start"
                 text (row.react != "" ? t("chat.removeReaction") : t("chat.react"))
         if picking
-          row gap="2px" padding="space.xs" border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="react-picker"
+          row gap="2px" flex-wrap="wrap" max-width="100%" box-sizing="border-box" padding="space.xs" border-radius="radius.lg" background-color="surface.raised" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="react-picker"
             for em in ["👍", "❤️", "😂", "😮", "🎉", "🙏"] key=em
-              button class=TextControl appearance="none" press=react(row.id, em) aria-label=t("chat.reactWith", emoji=em) width=36 height=36 min-height=36 padding=0 border-radius="radius.full" font="-exact-title3" testId=`pick-${em}`
+              button class=TextControl appearance="none" press=react(row.id, em) aria-label=t("chat.reactWith", emoji=em) width=44 height=44 min-height=44 padding=0 border-radius="radius.md" font="-exact-title3" testId=`pick-${em}`
                 text em
 
 component Faces
@@ -2641,8 +2711,6 @@ component BotPanel
     models: ModelList
     modelsDown: bool
     pickModel: action
-    makeDefault: action
-    isDefault: bool
     modelError: string
     routines: RoutineList
     routinesDown: bool
@@ -2669,6 +2737,12 @@ component BotPanel
     release: action
     picked: string
     pick: action
+    openBrowser: action
+    opening: bool
+    openError: string
+    closeBrowser: action
+    closing: bool
+    closeError: string
     bots: Bot[]
     subSlug: string
     subName: string
@@ -2722,7 +2796,7 @@ component BotPanel
             Glyph(name="close", size=20)
       if page == "model"
         scroll flex=1 min-height=0
-          ModelPage(models=models, down=modelsDown, bot=bot, pick=pickModel, makeDefault=makeDefault, isDefault=isDefault, error=modelError)
+          ModelPage(models=models, down=modelsDown, bot=bot, pick=pickModel, error=modelError)
       else if page == "usage"
         scroll flex=1 min-height=0
           UsageView(report=report, down=reportDown, period=period, view=usageView, pickPeriod=pickPeriod, pickView=pickView, showBots=false)
@@ -2760,7 +2834,7 @@ component BotPanel
             if subSlug != ""
               text t("panel.model") class=SectionLabel
               for c in children.filter(c => c.slug == subSlug) key=c.slug
-                ModelPage(models=childModels, down=childModelsDown, bot=c, pick=pickModel, makeDefault=makeDefault, isDefault=isDefault, error=modelError)
+                ModelPage(models=childModels, down=childModelsDown, bot=c, pick=pickModel, error=modelError)
             if subError != ""
               text subError color="-exact-system-red" testId="subagent-error"
             if subSlug == ""
@@ -2858,7 +2932,7 @@ component BotPanel
                         Glyph(name="chevron", size=14)
                       column flex=1 gap="2px" min-width=0
                         text line.title font-weight=500 overflow-wrap="anywhere"
-                        text (line.remote ? t("panel.remote") : line.threadId != "" ? t("panel.local") : "") color="ink.muted" font="-exact-footnote" testId=`where-${line.id}`
+                        text (line.remote ? t("panel.remote") : line.threadId != "" ? t("panel.local") : t("panel.thisTurn")) color="ink.muted" font="-exact-footnote" testId=`where-${line.id}`
                       if not line.remote and line.threadId != ""
                         button class=TextControl appearance="none" press=openChild(line.threadId) min-height=28 padding="0 space.sm" font="-exact-footnote" color="AccentColor" testId=`open-${line.id}`
                           text t("common.open")
@@ -2869,7 +2943,7 @@ component BotPanel
             BotShelf(shelf=shelf, down=shelfDown, name=bot.name)
         column id="bot-tab-computer" role="tabpanel" aria-label=t("panel.computer") display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0
           scroll id="panel-computer-scroll" flex=1 min-height=0
-            ScreenCard(name=bot.name, computer=computer, down=computerDown, showLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=live, drive=drive, take=take, release=release, picked=picked, pick=pick)
+            ScreenCard(name=bot.name, computer=computer, down=computerDown, showLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=live, drive=drive, take=take, release=release, picked=picked, pick=pick, openBrowser=openBrowser, opening=opening, openError=openError, closeBrowser=closeBrowser, closing=closing, closeError=closeError)
 
 // Pick the provider, the model and how hard it thinks. Each choice applies to the Bot's next message.
 // Provider, model and effort as one picker. The Bot's panel and Settings both use it.
@@ -2916,8 +2990,6 @@ component ModelPage
     down: bool
     bot: Bot
     pick: action
-    makeDefault: action
-    isDefault: bool
     error: string
   action choose(i: string, m: string, e: string)
     pick(bot.slug, i, m, e, "")
@@ -2942,13 +3014,6 @@ component ModelPage
             button class=Segment appearance="none" role="radio" aria-checked=(models.runtimeMode == "full-access") press=chooseMode("full-access") testId="access-full" border="1px solid surface.line" background-color=(models.runtimeMode == "full-access" ? "surface.raised" : "transparent")
               text t("model.fullAccess")
           text t("model.nextThread") color="ink.muted" font="-exact-footnote" padding="0 space.xs"
-        row align-items="center" gap="space.md" padding="space.xs 0" border-top="1px solid surface.line"
-          column flex=1 gap="2px"
-            text t("model.useDefault") font-weight=500 font="-exact-subheadline"
-            text t("model.defaultNote") color="ink.muted" font="-exact-footnote"
-          button class=ToggleControl appearance="none" role="switch" aria-checked=isDefault press=makeDefault(models.instanceId, models.current, models.effort) aria-label=t("model.useDefault") testId="default-model"
-            row width=36 height=22 border-radius="radius.full" background-color=(isDefault ? "AccentColor" : "surface.line") align-items="center" justify-content=(isDefault ? "flex-end" : "flex-start")
-              column width=16 height=16 margin="0 3px" border-radius="radius.full" background-color="ink.light"
         if error != ""
           text error color="-exact-system-red" font="-exact-footnote" testId="model-save-error"
 
@@ -3111,6 +3176,12 @@ component ScreenCard
     release: action
     picked: string
     pick: action
+    openBrowser: action
+    opening: bool
+    openError: string
+    closeBrowser: action
+    closing: bool
+    closeError: string
   derive current = tabId(computer.tabs, picked, computer.selected)
   view
     column gap="space.md" padding="0 space.lg space.xl" testId="screen"
@@ -3121,17 +3192,30 @@ component ScreenCard
           column color="ink.faint"
             Glyph(name="monitor", size=32)
           text t("computer.none", name=name) color="ink.muted" text-align="center" testId="computer-status"
+          if opening
+            text t("computer.opening", name=name) color="ink.muted" font="-exact-footnote" text-align="center" testId="computer-opening"
+          else
+            button class=PrimaryButton buttonStyle="bordered" press=openBrowser testId="computer-open"
+              text t("computer.open")
+          if openError != ""
+            text openError color="-exact-system-red" testId="computer-open-error"
       else
-        column border-radius="radius.md" overflow="hidden" border="1px solid surface.line" background-color="surface.card"
+        column position="relative" border-radius="radius.md" overflow="hidden" border="1px solid surface.line" background-color="surface.card"
           if computer.image != ""
             button appearance="none" press=showLarge padding=0 border="none" background-color="transparent" width="100%" aria-label=t("computer.openScreen", name=name) testId="computer-frame"
               image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=name) width="100%"
           else
             column align-items="center" justify-content="center" height=140 color="ink.faint"
               Glyph(name="monitor", size=28)
+          button class=IconControl appearance="none" press=closeBrowser disabled=closing aria-label=t("computer.closePage", name=name) title=t("computer.closePage", name=name) testId="computer-close-page" position="absolute" top=8 right=8 z-index=1 width=36 height=36 border-radius="radius.full" background-color="brand.black" color="ink.light" opacity=(closing ? 0.5 : 0.85)
+            Glyph(name="close", size=18)
         column gap="space.xs" align-items="center"
           text t("computer.screen", name=name) color="ink.muted" testId="computer-status"
           text tabTitle(computer.tabs, current) font-weight=500 text-align="center" overflow-wrap="anywhere" testId="computer-tab-title"
+          if closing
+            text t("computer.closing", name=name) color="ink.muted" font="-exact-footnote" text-align="center" testId="computer-closing"
+          if closeError != ""
+            text closeError color="-exact-system-red" testId="computer-close-error"
         if computer.tabs.length > 1
           column gap="2px" width="100%"
             for t in computer.tabs key=t.id

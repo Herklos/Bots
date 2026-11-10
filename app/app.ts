@@ -54,12 +54,14 @@ function when(at: unknown, now: number): string {
   if (days < 7) return DAYS[d.getDay()]!;
   return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
-// A group prompt that leaked into a Bot's own thread. It belongs in the room, not under their name.
-// Same three needles as a framed dispatch: the frame at the start (or after a newline), or the share line.
+// A framed prompt that leaked into a Bot's own thread (group dispatch or Computer open).
+// Same needles as the gateway transcript filter for silent turns.
 function isGroupLeak(text: string): boolean {
   return text.trim().startsWith('[Group "')
     || text.includes('\n[Group "')
-    || text.includes('Your reply is shared with the group');
+    || text.includes('Your reply is shared with the group')
+    || text.trim().startsWith('[Computer]')
+    || text.includes('\n[Computer]');
 }
 // The one line under a Bot's name in the inbox.
 function lineOf(b: any): string {
@@ -91,6 +93,7 @@ const FILE_EMPTY = 'That file is empty.';
 const FILE_TOO_BIG = 'Attach a file under 8 MB.';
 const FILE_READ = 'Can’t read that file. Try another one.';
 const LOAD_KEY: Record<string, string> = {
+  computerOpen: 'error.computerOpen',
   usage: 'error.loadUsage',
   models: 'error.loadModels',
   providers: 'error.loadProviders',
@@ -240,7 +243,7 @@ function savedEffort(body: any): string {
   const model = body?.defaultModel;
   if (!model || typeof model !== 'object') return '';
   if (typeof model.effort === 'string' && model.effort !== '') return model.effort;
-  const option = Array.isArray(model.options) ? model.options.find((row: any) => row && row.id === 'effort') : undefined;
+  const option = Array.isArray(model.options) ? model.options.find((row: any) => row && (row.id === 'effort' || row.id === 'reasoningEffort')) : undefined;
   return typeof option?.value === 'string' ? option.value : '';
 }
 
@@ -649,9 +652,11 @@ const sources: Sources = {
       defaultInstance: String(body.defaultModel?.instanceId ?? ''),
       defaultModel: String(body.defaultModel?.model ?? ''),
       defaultEffort: savedEffort(body),
+      defaultRuntimeMode: String(body.defaultRuntimeMode ?? (body.autoReview === false ? "full-access" : "auto")),
     };
   },
   setUserName: async ([userName], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ userName }) })),
+  setDefaultMode: async ([defaultRuntimeMode], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ defaultRuntimeMode }) })),
   setTheme: async ([theme], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ theme }) })),
   setPassword: async ([password], store) => reply(await call(store, '/api/access/password', { method: 'PUT', body: JSON.stringify({ password }) })),
   loadVault: async (_args, store): Promise<Result<'loadVault'>> => {
@@ -1033,6 +1038,19 @@ const sources: Sources = {
     const r = await call(store, `/api/usage/report?period=${encodeURIComponent(period)}&bot=${encodeURIComponent(slug === '' ? 'all' : slug)}&offset=${offset}`);
     if (!r.ok) return emptyReport(explain(r.error, 'usage'));
     return usageReport(r.body);
+  },
+  openComputer: async ([slug], store) => {
+    if (slug === 'frame' || slug === 'page' || slug === 'tabs') return { ok: true, error: '' };
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/open`, {
+      method: 'POST', body: '{}',
+    });
+    if (!r.ok) return { ok: false, error: explain(r.error, 'computerOpen') };
+    return { ok: true, error: '' };
+  },
+  closeComputer: async ([slug], store) => {
+    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/close`, {
+      method: 'POST', body: '{}',
+    }));
   },
   computerControl: async ([slug, tabId, action], store) => {
     if (slug === 'frame' || slug === 'page' || slug === 'tabs') return { ok: true, error: '' };

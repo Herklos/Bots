@@ -7,7 +7,12 @@ use std::{sync::Arc, time::Duration};
 /// The mode `orchestration.launchThread` already accepts. A missing or unknown field keeps
 /// today's launch: `autoReview == false` is full access, otherwise auto. A stored choice wins.
 pub fn launch_runtime_mode(bot: &Value, settings: &Value) -> &'static str {
-    match bot.get("runtimeMode").and_then(Value::as_str) {
+    match bot
+        .get("runtimeMode")
+        .and_then(Value::as_str)
+        .filter(|mode| matches!(*mode, "approval-required" | "auto" | "full-access"))
+        .or_else(|| settings.get("defaultRuntimeMode").and_then(Value::as_str))
+    {
         Some("approval-required") => "approval-required",
         Some("auto") => "auto",
         Some("full-access") => "full-access",
@@ -353,6 +358,20 @@ mod tests {
         let review_on = json!({ "autoReview": true });
         let review_off = json!({ "autoReview": false });
         assert_eq!(launch_runtime_mode(&json!({}), &review_on), "auto");
+        assert_eq!(
+            launch_runtime_mode(
+                &json!({}),
+                &json!({"defaultRuntimeMode": "approval-required"})
+            ),
+            "approval-required"
+        );
+        assert_eq!(
+            launch_runtime_mode(
+                &json!({"runtimeMode": "auto"}),
+                &json!({"defaultRuntimeMode": "approval-required"})
+            ),
+            "auto"
+        );
         assert_eq!(launch_runtime_mode(&json!({}), &review_off), "full-access");
         assert_eq!(
             launch_runtime_mode(&json!({ "runtimeMode": "approval-required" }), &review_off),

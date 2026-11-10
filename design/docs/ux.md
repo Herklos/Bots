@@ -109,7 +109,7 @@ Each has a title, a message that says what to do, and a symbol.
 | This machine, gateway down | (no title) | Can’t load usage. Check that hbots is running, then try again. |
 | Library, empty | (the Bot's name) | Files and pages shared with {name} appear here. |
 | Library, gateway down | (the Face) | Can’t open this library. Check that hbots is running, then try again. |
-| Computer, no page | (the Bot's name) | This Bot has not opened a page. |
+| Computer, no page | (the Bot's name) | This Bot has not opened a page. Open browser asks the Bot to open a page without a chat bubble. |
 | Computer, gateway down | (the Face) | Can’t open this Bot’s browser. Check that hbots is running, then try again. |
 | Working on, no other threads | (no title) | No other threads yet. |
 

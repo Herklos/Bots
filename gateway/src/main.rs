@@ -333,6 +333,8 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/bots/{slug}/routines/run", post(bot_routine_run))
         .route("/api/bots/{slug}/lineage", get(lineage_get))
         .route("/api/bots/{slug}/computer", get(computer_get))
+        .route("/api/bots/{slug}/computer/open", post(computer_open))
+        .route("/api/bots/{slug}/computer/close", post(computer_close))
         .route("/api/bots/{slug}/computer/control", post(computer_control))
         .route("/api/bots/{slug}/computer/input", post(computer_input))
         .route("/api/main-bot", put(main_bot))
@@ -1099,6 +1101,16 @@ async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
             checked_selection(&s, &patch["defaultModel"], &current["defaultModel"]).await?;
         patch["defaultModel"] = chosen;
     }
+    if let Some(mode) = patch.get("defaultRuntimeMode") {
+        if !matches!(
+            mode.as_str(),
+            Some("approval-required" | "auto" | "full-access")
+        ) {
+            return Err(ApiError::bad_request(
+                "defaultRuntimeMode must be approval-required, auto, or full-access",
+            ));
+        }
+    }
     let mut next = store::merge(&current, &patch);
     if let Some(beta) = patch.get("beta") {
         let beta = beta
@@ -1662,6 +1674,35 @@ async fn computer_get(
         "selected": selected,
         "error": error,
     })))
+}
+
+/// Steers the Bot to open a server browser tab. Does not wait for the tab to appear.
+async fn computer_open(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+    computer_steer(&s, &slug, computer::open_command).await
+}
+
+/// Steers the Bot to close its server browser tabs. Does not wait for them to go.
+async fn computer_close(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+    computer_steer(&s, &slug, computer::close_command).await
+}
+
+async fn computer_steer(
+    s: &AppState,
+    slug: &str,
+    command: fn(&str) -> Value,
+) -> ApiResult<Json<Value>> {
+    let thread = main_thread(s, slug).await?;
+    let command = command(&thread);
+    let rpc =
+        s.t3.rpc()
+            .await
+            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
+    rpc.call("orchestration.dispatchCommand", command.clone())
+        .await
+        .map_err(|e| ApiError::new(502, e.to_string()))?;
+    Ok(Json(
+        json!({ "ok": true, "messageId": command["messageId"] }),
+    ))
 }
 
 async fn computer_control(

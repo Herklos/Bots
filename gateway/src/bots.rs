@@ -802,26 +802,31 @@ pub fn render_agents_md(
     } else {
         String::new()
     };
-    let subagents = if !child && !children.is_empty() {
+    let subagents = if child {
+        String::new()
+    } else {
         let mut lines = String::from("\n## Subagents\n\n");
-        for child in children {
-            let child_name = child["name"].as_str().unwrap_or("Bot");
-            let child_slug = child["slug"].as_str().unwrap_or("");
-            lines.push_str(&format!("- {child_name} (`{child_slug}`)\n"));
+        if children.is_empty() {
+            lines.push_str("You have no lasting helpers yet.\n");
+        } else {
+            for child in children {
+                let child_name = child["name"].as_str().unwrap_or("Bot");
+                let child_slug = child["slug"].as_str().unwrap_or("");
+                lines.push_str(&format!("- {child_name} (`{child_slug}`)\n"));
+            }
+            lines.push('\n');
         }
         lines.push_str(
-            "\nTo list these helpers, use `subagent_list`. A lasting helper is `subagent_create`. Work that ends with the turn stays a T3 child thread.\n",
+            "To list lasting helpers, use `subagent_list`. Create one with `subagent_create` (its own folder, project, and main thread). Work that ends with this turn stays a T3 child thread, and is not a lasting Subagent.\n",
         );
         lines
-    } else {
-        String::new()
     };
     format!(
         "{MANAGED_START}\n# {name}{label}\n\n\
 {intro}\n\n\
 ## Memory\n\n- Your notes: `memory/MEMORY.md`. Keep durable facts there, short and current.\n- Your work log: `memory/log.md`.\n{own_folders}- Facts shared by every Bot: {}.\n- Files you keep for the person: `library/`.\n{own_prompt}{inherited}\n\
 ## Tools\n\nThe `bot` MCP server gives you the Vault (`vault_list`) and the Projects board (`projects_*`). Never read the vault files on disk.\n\n\
-## Routines\n\nTo run something on a schedule, use your `schedule_task` tool. Weekdays count from 0 for Sunday to 6 for Saturday, and times are local. The person sees your routines in the app but can't change them there, so say what you set up.\n\n## Other Bots\n\nTo message another Bot, use `t3_thread_send`. Say who you are and what you need.\n{subagents}\n## Asking first\n\nAsk before anything that leaves this machine or can't be undone.\n{MANAGED_END}\n",
+## Routines\n\nTo run something on a schedule, use your `schedule_task` tool. Weekdays count from 0 for Sunday to 6 for Saturday, and times are local. The person sees your routines in the app but can't change them there, so say what you set up.\n\n## Computer\n\nThe person can open or close your browser from the Computer panel. A message framed `[Computer]` means open a page (resume where you left off, or https://www.google.com) or close your browser tabs with your browser tools, without asking, and stay quiet in chat.\n\n## Other Bots\n\nTo message another Bot, use `t3_thread_send`. Say who you are and what you need.\n{subagents}\n## Asking first\n\nAsk before anything that leaves this machine or can't be undone.\n{MANAGED_END}\n",
         shared.display()
     )
 }
@@ -958,6 +963,8 @@ mod tests {
             &[],
         );
         assert!(text.contains("schedule_task") && text.contains("t3_thread_send"));
+        assert!(text.contains("## Computer") && text.contains("[Computer]"));
+        assert!(text.contains("https://www.google.com"));
         assert!(text.contains("Sunday") && text.starts_with(MANAGED_START));
     }
 
@@ -1329,7 +1336,12 @@ mod tests {
         assert!(text.contains("- Scout (`scout`)"));
         assert!(text.contains("- Lookup (`lookup`)"));
         assert!(text.contains("`subagent_list`") && text.contains("`subagent_create`"));
+        assert!(text.contains("T3 child thread"));
         assert!(!text.contains("subagent_send"));
+        let alone = render_agents_md(&ada, std::path::Path::new("/bots"), None, &[]);
+        assert!(alone.contains("no lasting helpers yet"));
+        assert!(alone.contains("`subagent_list`") && alone.contains("`subagent_create`"));
+        assert!(alone.contains("T3 child thread"));
     }
 
     #[tokio::test]

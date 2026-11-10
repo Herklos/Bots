@@ -33,12 +33,17 @@ impl Providers {
 }
 
 /// The effort levels a model offers, with its own default marked.
-fn efforts(model: &Value) -> Vec<Value> {
+fn effort_descriptor(model: &Value) -> Option<&Value> {
     model["capabilities"]["optionDescriptors"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .find(|d| d["id"] == "effort" && d["type"] == "select")
+        .as_array()?
+        .iter()
+        .find(|d| {
+            matches!(d["id"].as_str(), Some("effort" | "reasoningEffort")) && d["type"] == "select"
+        })
+}
+
+fn efforts(model: &Value) -> Vec<Value> {
+    effort_descriptor(model)
         .and_then(|d| d["options"].as_array())
         .into_iter()
         .flatten()
@@ -78,6 +83,7 @@ pub fn from_config(config: &Value) -> Value {
                     let fallback = levels.iter().find(|l| l["isDefault"] == true);
                     json!({
                         "slug": m["slug"], "name": m["name"].as_str().or(m["slug"].as_str()).unwrap_or(""),
+                        "effortOptionId": effort_descriptor(m).and_then(|d| d["id"].as_str()).unwrap_or("effort"),
                         "efforts": levels, "effort": fallback.map(|l| l["id"].clone()).unwrap_or(Value::Null),
                         "recommended": instance == default["instanceId"] && m["slug"] == default["model"],
                     })
@@ -139,7 +145,9 @@ pub fn selection(
         None => entry["effort"].as_str().map(String::from),
     };
     let options = chosen
-        .map(|v| json!([{ "id": "effort", "value": v }]))
+        .map(
+            |v| json!([{ "id": entry["effortOptionId"].as_str().unwrap_or("effort"), "value": v }]),
+        )
         .unwrap_or_else(|| json!([]));
     Ok(json!({ "instanceId": instance, "model": model, "options": options }))
 }
@@ -150,7 +158,7 @@ pub fn effort_of(selection: &Value) -> String {
         .as_array()
         .into_iter()
         .flatten()
-        .find(|o| o["id"] == "effort")
+        .find(|o| o["id"] == "effort" || o["id"] == "reasoningEffort")
         .and_then(|o| o["value"].as_str())
         .unwrap_or("")
         .to_string()
@@ -195,6 +203,15 @@ mod tests {
             !list.to_string().contains("@"),
             "no email leaves this module"
         );
+    }
+
+    #[test]
+    fn codex_reasoning_effort_is_exposed_and_saved_with_its_descriptor_id() {
+        let list = from_config(&config());
+        let selected =
+            selection(&list, "codex", "gpt-6.1-sol", Some("high"), &Value::Null).unwrap();
+        assert_eq!(selected["options"][0]["id"], "reasoningEffort");
+        assert_eq!(effort_of(&selected), "high");
     }
 
     #[test]
