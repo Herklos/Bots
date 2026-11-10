@@ -42,7 +42,7 @@ use axum::{
         IntoResponse, Response,
     },
     routing::{any, get, post, put},
-    Json, Router,
+    Extension, Json, Router,
 };
 use error::{ApiError, ApiResult};
 use futures_util::{stream, Stream, StreamExt};
@@ -57,9 +57,11 @@ pub struct AppState {
     pub bots: bots::Bots,
     pub vault: vault::Vault,
     pub projects: projects::Projects,
-    pub access: remote_access::RemoteAccess,
-    pub jwks: access::JwksCache,
-    pub tunnels: exposure::Tunnels,
+    // T4 remote access: Cloudflare Access, the Tailscale listener, the tunnel, the password in access.json.
+    pub access: Option<access::Access>,
+    pub exposure: exposure::Exposure,
+    pub tailnet: Arc<exposure::Tailnet>,
+    pub remote: Arc<remote_access::RemoteAccess>,
     pub threads: thread_meta::ThreadMeta,
     pub routine_history: routines::RoutineHistory,
     pub system: release::System,
@@ -187,12 +189,32 @@ async fn main() -> anyhow::Result<()> {
             t
         }
     };
-    let jwks_url = if cfg.access_team.is_empty() || cfg.access_aud.is_empty() {
-        String::new()
-    } else {
-        access::jwks_url(&access::issuer_for(&cfg.access_team))
-    };
+    let exposure_cfg =
+        exposure::Exposure::from_env(|k| std::env::var(k).ok().filter(|v| !v.is_empty()));
+    let tailnet = Arc::new(exposure::Tailnet::new());
+    let remote = Arc::new(remote_access::RemoteAccess::new(
+        remote_access::RemoteConfig {
+            home: cfg.data_root.clone(),
+            store_file: app_dir.join("access.json"),
+            url_file: app_dir.join("tunnel-url"),
+            local_port: cfg.port,
+            env_password: cfg.password.clone(),
+            env_tailnet: exposure_cfg.tailnet_port > 0,
+            env_tailnet_users: exposure_cfg.tailnet_users.clone(),
+            tailscale_bin: remote_access::find_tailscale(),
+        },
+        tailnet.clone(),
+    ));
+    let access = access::Access::from_env(
+        &cfg.access_team,
+        &cfg.access_aud,
+        &cfg.access_emails.join(","),
+    );
     let state = Arc::new(AppState {
+        access,
+        exposure: exposure_cfg,
+        tailnet: tailnet.clone(),
+        remote: remote.clone(),
         auth: auth::Auth::load(&app_dir, cfg.password.clone(), cfg.allowed_origins.clone())?,
         t3: t3::T3::new(cfg.t3_url.clone(), cfg.t3_token.clone()),
         bots: bots::Bots::new(
@@ -202,9 +224,6 @@ async fn main() -> anyhow::Result<()> {
         ),
         vault: vault::Vault::new(cfg.vault_file.clone(), cfg.vault_key_file.clone()),
         projects: projects::Projects::new(app_dir.join("projects.json")),
-        access: remote_access::RemoteAccess::load(cfg.data_root.join("access.json")),
-        jwks: access::JwksCache::new(jwks_url, std::time::Duration::from_secs(3600)),
-        tunnels: exposure::Tunnels::new(),
         threads: thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
         routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
         system: release::System::new(cfg.data_root.clone(), app_dir.clone()),
@@ -229,6 +248,31 @@ async fn main() -> anyhow::Result<()> {
     provisioner::start(state.clone());
     release::start(state.clone()).await;
 
+    // The tailnet listener from TAILNET_PORT starts first; Settings' Tailscale and tunnel choices
+    // come back in the background.
+    if state.exposure.tailnet_port > 0 {
+        let router = exposure::on_tailnet(app(state.clone()));
+        state
+            .tailnet
+            .open(
+                state.exposure.tailnet_port,
+                &state.exposure.tailnet_users,
+                router,
+            )
+            .await?;
+    }
+    let booting = state.clone();
+    tokio::spawn(async move {
+        let router = exposure::on_tailnet(app(booting.clone()));
+        booting.remote.boot(router).await;
+    });
+    let stopping = state.clone();
+    tokio::spawn(async move {
+        shutdown_signal().await;
+        stopping.remote.stop().await;
+        std::process::exit(0);
+    });
+
     let addr: SocketAddr = format!("{}:{}", state.cfg.host, state.cfg.port).parse()?;
     tracing::info!(
         "hbots gateway on http://{addr} → T3 {}, bots in {}",
@@ -236,29 +280,10 @@ async fn main() -> anyhow::Result<()> {
         state.cfg.bots_root.display()
     );
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    if state.access.mode() != exposure::Exposure::Off {
-        let extra = SocketAddr::new(addr.ip(), exposure::tailscale_port(addr.port()));
-        match tokio::net::TcpListener::bind(extra).await {
-            Ok(tailscale) => {
-                tracing::info!("tailscale listener on http://{extra}");
-                let tail = state.clone();
-                tokio::spawn(async move {
-                    if let Err(e) = axum::serve(
-                        tailscale,
-                        tailscale_app(tail).into_make_service_with_connect_info::<SocketAddr>(),
-                    )
-                    .await
-                    {
-                        tracing::error!("tailscale listener stopped: {e}");
-                    }
-                });
-            }
-            Err(e) => tracing::warn!("tailscale listener on {extra} did not start: {e}"),
-        }
-    }
     axum::serve(
         listener,
-        app(state).into_make_service_with_connect_info::<SocketAddr>(),
+        exposure::on_public(app(state.clone()), state.clone())
+            .into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await?;
     Ok(())
@@ -276,15 +301,24 @@ fn service_spec() -> service::ServiceSpec {
     service::spec(exe, &home, &std::env::var("PATH").unwrap_or_default())
 }
 
+/// Ctrl-C or SIGTERM: the gateway stops its tunnel before it exits.
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut term = signal(SignalKind::terminate()).expect("SIGTERM handler");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = term.recv() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+}
+
 pub fn app(state: Arc<AppState>) -> Router {
-    build(state, false)
-}
-
-fn tailscale_app(state: Arc<AppState>) -> Router {
-    build(state, true)
-}
-
-fn build(state: Arc<AppState>, tailscale: bool) -> Router {
     let api = Router::new()
         .route("/api/config", get(config_route))
         .route("/api/settings", get(get_settings).put(put_settings))
@@ -329,10 +363,10 @@ fn build(state: Arc<AppState>, tailscale: bool) -> Router {
         .route("/api/projects/items", post(projects_save))
         .route("/api/projects/delete", post(projects_delete))
         .route("/api/projects/events", get(projects_events))
-        .route("/api/access", get(get_access))
-        .route("/api/access/password", put(put_access_password))
-        .route("/api/access/tailscale", post(post_access_tailscale))
-        .route("/api/access/tunnel", post(post_access_tunnel))
+        .route("/api/access", get(access_status))
+        .route("/api/access/password", put(access_password))
+        .route("/api/access/tailscale", post(access_tailscale))
+        .route("/api/access/tunnel", post(access_tunnel))
         .route("/api/threads/{thread}/meta", get(thread_meta_get))
         .route("/api/threads/{thread}/reactions", post(thread_reaction))
         .route("/api/threads/{thread}/voice", post(thread_voice))
@@ -363,14 +397,6 @@ fn build(state: Arc<AppState>, tailscale: bool) -> Router {
             any(|| async { ApiError::not_found("not found") }),
         )
         .fallback(static_files);
-    let routed = if tailscale {
-        routed.layer(middleware::from_fn_with_state(
-            state.clone(),
-            mark_tailscale,
-        ))
-    } else {
-        routed
-    };
     routed
         .layer(middleware::from_fn_with_state(state.clone(), guard))
         .with_state(state)
@@ -386,11 +412,7 @@ fn loopback_origin(origin: &str) -> bool {
 
 /// Same-origin check for changes, and CORS for the Exact dev loop (`exact.mjs web` on another
 /// loopback port). Native Exact hosts send no Origin and authenticate with a bearer.
-async fn guard(State(s): S, mut req: Request, next: Next) -> Response {
-    // The Tailscale listener is the only place allowed to set this. A client on the public
-    // port cannot carry it through.
-    req.headers_mut()
-        .remove(axum::http::HeaderName::from_static(exposure::MARK));
+async fn guard(State(s): S, req: Request, next: Next) -> Response {
     let origin = req
         .headers()
         .get(header::ORIGIN)
@@ -444,78 +466,38 @@ fn bearer(h: &HeaderMap) -> Option<&str> {
         .strip_prefix("Bearer ")
 }
 
-fn password_required(s: &AppState) -> bool {
-    s.auth.password_required() || s.access.password_set()
-}
-
-fn password_ok(s: &AppState, given: &str) -> bool {
-    let env = s.auth.password_required();
-    let remote = s.access.password_set();
-    if !env && !remote {
-        return true;
+/// Who may use the app on this listener, as in Threebot: the signed-in Tailscale user on the tailnet
+/// listener; elsewhere a valid Cloudflare Access token, or a session when a password is set; with
+/// neither, open only when Cloudflare Access isn't configured either.
+async fn authed(s: &AppState, h: &HeaderMap, surface: exposure::Surface) -> bool {
+    if surface == exposure::Surface::Tailnet {
+        return exposure::tailnet_user_allowed(h, &s.tailnet.users());
     }
-    (env && s.auth.password_matches(given)) || (remote && s.access.verify(given))
-}
-
-fn session_ok(s: &AppState, h: &HeaderMap) -> bool {
-    s.auth.has_session(h) || bearer(h).is_some_and(|b| s.auth.valid_session(b))
-}
-
-fn via_tailscale(h: &HeaderMap) -> bool {
-    h.get(exposure::MARK).and_then(|v| v.to_str().ok()) == Some("1")
-}
-
-async fn cloudflare_email(s: &AppState, h: &HeaderMap) -> Option<String> {
-    if s.cfg.access_aud.is_empty() || s.cfg.access_team.is_empty() {
-        return None;
+    if let Some(access) = &s.access {
+        if let Some(token) = access::token_from(h) {
+            if access.verify(&token).await.is_some() {
+                return true;
+            }
+        }
     }
-    let token = h.get("cf-access-jwt-assertion")?.to_str().ok()?;
-    let jwks = s.jwks.get().await.ok()?;
-    let issuer = access::issuer_for(&s.cfg.access_team);
-    access::verify_token(
-        token,
-        &jwks,
-        &access::Policy {
-            audience: &s.cfg.access_aud,
-            issuer: &issuer,
-            emails: &s.cfg.access_emails,
-        },
-    )
-    .ok()
+    if s.remote.password_required() {
+        return auth::cookie(h, auth::COOKIE).is_some_and(|c| s.auth.valid_session(&c))
+            || bearer(h).is_some_and(|b| s.auth.valid_session(b));
+    }
+    // No password is set (BOT_PASSWORD and Settings both empty), so `Auth::authed` is true here.
+    s.access.is_none() && s.auth.authed(h)
 }
 
-async fn is_authed(s: &AppState, h: &HeaderMap) -> bool {
-    if via_tailscale(h) || session_ok(s, h) {
-        return true;
-    }
-    if cloudflare_email(s, h).await.is_some() {
-        return true;
-    }
-    !password_required(s)
+fn surface_of(req: &Request) -> exposure::Surface {
+    req.extensions()
+        .get::<exposure::Surface>()
+        .copied()
+        .unwrap_or(exposure::Surface::Public)
 }
 
 async fn require_login(State(s): S, req: Request, next: Next) -> Response {
-    if !is_authed(&s, req.headers()).await {
+    if !authed(&s, req.headers(), surface_of(&req)).await {
         return ApiError::new(401, "login required").into_response();
-    }
-    next.run(req).await
-}
-
-async fn mark_tailscale(State(s): S, mut req: Request, next: Next) -> Response {
-    req.headers_mut()
-        .remove(axum::http::HeaderName::from_static(exposure::MARK));
-    let login = req
-        .headers()
-        .get(exposure::TAILSCALE_USER)
-        .and_then(|v| v.to_str().ok())
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(str::to_string);
-    if exposure::grants(s.access.mode(), req.uri().path(), login.as_deref()) {
-        req.headers_mut().insert(
-            axum::http::HeaderName::from_static(exposure::MARK),
-            HeaderValue::from_static("1"),
-        );
     }
     next.run(req).await
 }
@@ -542,12 +524,18 @@ fn parse(body: &Bytes) -> ApiResult<Value> {
 
 // ---------- sign-in ----------
 
-async fn session(State(s): S, h: HeaderMap) -> Json<Value> {
-    let access_login =
-        !session_ok(&s, &h) && !via_tailscale(&h) && cloudflare_email(&s, &h).await.is_some();
+async fn session(
+    State(s): S,
+    surface: Option<Extension<exposure::Surface>>,
+    h: HeaderMap,
+) -> Json<Value> {
+    let surface = surface.map_or(exposure::Surface::Public, |Extension(x)| x);
+    let needs_password = s.remote.password_required();
+    // Cloudflare's login only helps requests that came through Cloudflare; on this machine or the LAN, use the password.
+    let access_login = s.access.is_some() && !(needs_password && !h.contains_key("cf-ray"));
     Json(json!({
-        "authenticated": is_authed(&s, &h).await,
-        "passwordRequired": password_required(&s),
+        "authenticated": authed(&s, &h, surface).await,
+        "passwordRequired": needs_password,
         "accessLogin": access_login,
     }))
 }
@@ -575,7 +563,13 @@ async fn login(
         return Err(ApiError::new(413, "body too large"));
     }
     let password = parse(&body)?["password"].as_str().unwrap_or("").to_string();
-    if !password_ok(&s, &password) {
+    // HBOTS_PASSWORD is checked as before; otherwise the password saved in Settings.
+    let ok = if s.remote.password_from_env() {
+        s.auth.password_matches(&password)
+    } else {
+        !s.remote.password_required() || s.remote.password_matches(&password).await
+    };
+    if !ok {
         s.auth.login_failed(&ip);
         tracing::warn!("failed login from {ip}");
         return Err(ApiError::new(401, "wrong password"));
@@ -591,46 +585,80 @@ async fn login(
         .into_response())
 }
 
-async fn get_access(State(s): S) -> Json<Value> {
-    Json(remote_access::public_view(&s.access, s.cfg.port))
+/// The app as the tailnet listener serves it.
+fn tailnet_app(s: &Arc<AppState>) -> Router {
+    exposure::on_tailnet(app(s.clone()))
 }
 
-async fn put_access_password(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
-    require_json(&h)?;
-    let password = parse(&body)?["password"].as_str().unwrap_or("").to_string();
-    s.access
-        .set_password(&password)
-        .map_err(ApiError::bad_request)?;
-    // A new password signs everyone out and closes sockets that are already open.
+fn access_body(body: &Bytes) -> ApiResult<Value> {
+    parse(body)
+}
+
+async fn access_status(State(s): S) -> Json<Value> {
+    let mut out = s.remote.status().await;
+    out["cloudflareAccess"] = match &s.access {
+        Some(access) => json!({ "emails": access.emails() }),
+        None => Value::Null,
+    };
+    Json(out)
+}
+
+async fn access_password(
+    State(s): S,
+    h: HeaderMap,
+    body: Bytes,
+) -> Result<Response, remote_access::AccessError> {
+    let body =
+        access_body(&body).map_err(|e| remote_access::AccessError::bad_request(e.message))?;
+    // A missing or null password removes it, as Threebot's `password ?? null` does.
+    let password = match &body["password"] {
+        Value::Null => None,
+        Value::String(p) => Some(p.clone()),
+        _ => Some(String::new()),
+    };
+    let setting = password.is_some();
+    s.remote.set_password(password).await?;
+    // Everyone signs in again with the new password; this browser gets a fresh session now.
     s.auth
         .rotate()
-        .map_err(|_| ApiError::new(500, "The session secret could not be rotated."))?;
-    Ok(Json(json!({ "ok": true })))
+        .map_err(remote_access::AccessError::internal)?;
+    let https = h.get("x-forwarded-proto").is_some_and(|v| v == "https");
+    let mut res = Json(s.remote.status().await).into_response();
+    if setting {
+        let token = s.auth.make_session();
+        if let Ok(value) = HeaderValue::from_str(&auth::session_cookie(&token, https)) {
+            res.headers_mut().insert(header::SET_COOKIE, value);
+        }
+    }
+    Ok(res)
 }
 
-async fn post_access_tailscale(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
-    require_json(&h)?;
-    let mode = exposure::Exposure::parse(parse(&body)?["mode"].as_str().unwrap_or("off"));
-    s.access.set_mode(mode).map_err(ApiError::bad_request)?;
-    let command = exposure::tailscale_serve(s.cfg.port);
-    let started = s.tunnels.start(&command).ok();
-    Ok(Json(json!({
-        "ok": true,
-        "mode": mode.as_str(),
-        "port": exposure::tailscale_port(s.cfg.port),
-        "command": command,
-        "started": started.is_some(),
-    })))
+async fn access_tailscale(
+    State(s): S,
+    body: Bytes,
+) -> Result<Json<Value>, remote_access::AccessError> {
+    let body =
+        access_body(&body).map_err(|e| remote_access::AccessError::bad_request(e.message))?;
+    if body["on"].as_bool() == Some(true) {
+        s.remote.tailscale_on(tailnet_app(&s)).await?;
+    } else {
+        s.remote.tailscale_off().await?;
+    }
+    Ok(Json(s.remote.status().await))
 }
 
-async fn post_access_tunnel(State(s): S) -> ApiResult<Json<Value>> {
-    let command = exposure::cloudflared_tunnel(s.cfg.port);
-    let started = s.tunnels.start(&command).map(|_| true).unwrap_or(false);
-    Ok(Json(json!({
-        "ok": started,
-        "command": command,
-        "url": format!("http://127.0.0.1:{}", s.cfg.port),
-    })))
+async fn access_tunnel(
+    State(s): S,
+    body: Bytes,
+) -> Result<Json<Value>, remote_access::AccessError> {
+    let body =
+        access_body(&body).map_err(|e| remote_access::AccessError::bad_request(e.message))?;
+    if body["on"].as_bool() == Some(true) {
+        s.remote.tunnel_on().await?;
+    } else {
+        s.remote.tunnel_off().await?;
+    }
+    Ok(Json(s.remote.status().await))
 }
 
 async fn thread_meta_get(State(s): S, Path(thread): Path<String>) -> ApiResult<Json<Value>> {
@@ -771,10 +799,11 @@ async fn logout() -> Response {
 
 // ---------- app API ----------
 
-async fn config_route(State(s): S) -> Json<Value> {
+async fn config_route(State(s): S, surface: Option<Extension<exposure::Surface>>) -> Json<Value> {
+    let on_tailnet = surface.is_some_and(|Extension(x)| x == exposure::Surface::Tailnet);
     Json(json!({
         "botsRoot": s.cfg.bots_root,
-        "accessLogout": false,
+        "accessLogout": s.access.is_some() && !on_tailnet,
         "executorUrl": if s.cfg.executor_url.is_empty() { Value::Null } else { json!(s.cfg.executor_url) },
         "appUrl": s.cfg.app_url,
     }))
