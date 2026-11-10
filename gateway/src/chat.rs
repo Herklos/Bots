@@ -181,6 +181,14 @@ fn is_group_prompt(text: &str) -> bool {
         || text.contains("Write @slug only when")
 }
 
+fn turn_items(projection: &Value) -> Vec<Value> {
+    projection["turnItems"]
+        .as_array()
+        .or_else(|| projection["visibleTurnItems"].as_array())
+        .cloned()
+        .unwrap_or_default()
+}
+
 /// The bubbles and cards of a thread projection, oldest first.
 pub fn transcript(projection: &Value) -> Value {
     transcript_for(projection, &Peers::new())
@@ -189,22 +197,30 @@ pub fn transcript(projection: &Value) -> Value {
 /// Like [`transcript`], with the lines between messages (`events`) and each message's files.
 /// `ordinal` orders messages and events together.
 pub fn transcript_for(projection: &Value, peers: &Peers) -> Value {
-    let items = without_group_turns(
-        projection["turnItems"]
-            .as_array()
-            .or_else(|| projection["visibleTurnItems"].as_array())
-            .cloned()
-            .unwrap_or_default(),
-    );
+    project_turns(
+        &without_group_turns(turn_items(projection)),
+        peers,
+        projection,
+    )
+}
+
+/// The same shape as [`transcript`], for a thread that is itself the group.
+/// A group thread has no one-to-one sender line, so this takes no peers.
+/// The one-to-one filter stays on [`transcript`]: it would drop the framed user message and the reply.
+pub fn group_transcript(projection: &Value) -> Value {
+    project_turns(&turn_items(projection), &Peers::new(), projection)
+}
+
+fn project_turns(items: &[Value], peers: &Peers, projection: &Value) -> Value {
     let mut messages = Vec::new();
     let mut events = Vec::new();
     let mut requests = Vec::new();
     let mut working = false;
-    for (index, raw) in items.into_iter().enumerate() {
+    for (index, raw) in items.iter().enumerate() {
         let item = if raw["item"].is_object() {
             raw["item"].clone()
         } else {
-            raw
+            raw.clone()
         };
         let kind = item["type"].as_str().unwrap_or("");
         let status = item["status"].as_str().unwrap_or("");
@@ -812,6 +828,69 @@ mod tests {
             .map(|m| m["text"].as_str().unwrap())
             .collect();
         assert_eq!(kept, vec!["mine", "still mine"]);
+    }
+
+    #[test]
+    fn a_group_only_projection_stays_empty_for_one_to_one_and_kept_for_the_group() {
+        let frame = "[Group \"Duo\": Ada (@ada). You wrote:]\nask";
+        let mut items = vec![
+            json!({ "id": "turn-item:message:disp-1", "type": "user_message", "text": frame, "status": "completed" }),
+            json!({ "id": "turn-item:message:reply-1", "type": "assistant_message", "text": "four", "status": "streaming", "streaming": true }),
+        ];
+        let group_only = json!({ "turnItems": items });
+        assert!(transcript(&group_only)["messages"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        let rows = |projection: &Value| -> Vec<(String, String, String)> {
+            group_transcript(projection)["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|m| {
+                    (
+                        m["id"].as_str().unwrap().to_string(),
+                        m["role"].as_str().unwrap().to_string(),
+                        m["text"].as_str().unwrap().to_string(),
+                    )
+                })
+                .collect()
+        };
+        let kept = group_transcript(&group_only);
+        assert_eq!(
+            rows(&group_only),
+            vec![
+                (
+                    "turn-item:message:disp-1".into(),
+                    "user".into(),
+                    frame.into()
+                ),
+                (
+                    "turn-item:message:reply-1".into(),
+                    "bot".into(),
+                    "four".into()
+                ),
+            ]
+        );
+        assert_eq!(kept["working"], true);
+        items.push(json!({ "id": "u2", "type": "user_message", "text": "and then", "status": "completed" }));
+        let with_follow = json!({ "turnItems": items });
+        assert_eq!(
+            rows(&with_follow),
+            vec![
+                (
+                    "turn-item:message:disp-1".into(),
+                    "user".into(),
+                    frame.into()
+                ),
+                (
+                    "turn-item:message:reply-1".into(),
+                    "bot".into(),
+                    "four".into()
+                ),
+                ("u2".into(), "user".into(), "and then".into()),
+            ]
+        );
     }
 
     fn family() -> Value {

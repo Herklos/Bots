@@ -855,7 +855,8 @@ async fn room_snapshot(
                     )
                     .await
                 {
-                    let transcript = chat::transcript(&projection);
+                    // This thread is the group, so the one-to-one filter would drop the anchor and the reply.
+                    let transcript = chat::group_transcript(&projection);
                     working = transcript["working"] == true;
                     threads.insert(
                         slug.clone(),
