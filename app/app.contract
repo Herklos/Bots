@@ -1118,14 +1118,14 @@ component Bots
               if failed(bots) and bots.length == 0
                 EmptyState(symbol="symbol:alert", title="Can’t Reach the Gateway", message="Start the `hbots` gateway on this machine or on your server, then try again.")
                   button press=pull testId="retry"
-                    text "Try Again"
+                    text "Try again"
               else if bots.length == 0 and not pending(bots)
                 column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="empty-bots"
                   Face(shape="ball", color="teal", state="idle", size=72, still=false)
                   text "Meet your first Bot" role="heading" aria-level=2 class=PageTitle
                   text "Give your Bot a name, then make it your own. Your conversations stay together, right here." color="-exact-secondary-label" text-align="center" max-width="22rem"
                   button press=openNew buttonStyle="filled" testId="empty-new"
-                    text "Create Your First Bot"
+                    text "Create your first Bot"
               else if query != "" and visibleBots.length == 0 and hiddenBots.length == 0
                 column flex=1 min-height=0 align-items="center" justify-content="center" padding="space.xl" testId="no-bot-match"
                   EmptyState(symbol="symbol:search", title=`No Bots match “${botQuery.trim()}”`, message="Check the spelling, or clear the search to see every Bot.")
@@ -1195,9 +1195,9 @@ component Bots
                 button class=IconControl appearance="none" press=toggleChatSearch aria-label="Search this conversation" title="Search this conversation" testId="chat-search-open" width=36 height=36
                   Glyph(name=(chatSearching ? "close" : "search"), size=18)
               if failed(chat)
-                EmptyState(symbol="symbol:alert", title="Can’t Load This Conversation", message="Your messages haven’t loaded. Check the gateway, then try again.")
+                EmptyState(symbol="symbol:alert", title="Can’t load this conversation", message="Your messages haven’t loaded. Check the gateway, then try again.")
                   button press=pull testId="retry-chat"
-                    text "Try Again"
+                    text "Try again"
               else if pending(chat) and chat.rows.length == 0
                 column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" aria-busy=true
                   Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="working", size=44, still=false)
@@ -1462,20 +1462,20 @@ component Bots
                         text (about.connected ? "Connected" : "Not connected") color=(about.connected ? "-exact-label" : "-exact-system-red") testId="about-harness"
                     if session.passwordRequired
                       button class=ChoiceRow appearance="none" press=logout justify-content="center" color="-exact-system-red" testId="sign-out"
-                        text "Sign Out" font-weight=500
+                        text "Sign out" font-weight=500
           else if e.name == "vault"
             column class=Screen navigationKey=`${e.id}` navigationScroll="vault-list" position="absolute" inset=0
               header class=PageHeader flex-wrap="wrap"
                 text "Vault" role="heading" aria-level=1 class=PageTitle flex=1
-                button class=IconControl appearance="none" press=open("/vault/new") aria-label="New Login" title="New Login" testId="new-login"
+                button class=IconControl appearance="none" press=open("/vault/new") aria-label="New login" title="New login" testId="new-login"
                   Glyph(name="add", size=20)
                 input type="search" class=SearchField value=vaultQuery input=editVaultQuery placeholder="Search Vault" aria-label="Search Vault" testId="vault-search" width="100%"
               if failed(vault)
-                EmptyState(symbol="symbol:alert", title="Can’t Open the Vault", message="Check that `hbots` is running, then try again.")
+                EmptyState(symbol="symbol:alert", title="Can’t open the Vault", message="Check that `hbots` is running, then try again.")
               else if vault.length == 0 and not pending(vault)
-                EmptyState(symbol="symbol:lock", title="No Logins Yet", message="Save a login here. Its password stays in the Vault and shows only when you press Reveal.")
+                EmptyState(symbol="symbol:lock", title="No logins yet", message="Save a login here. Its password stays in the Vault and shows only when you press Reveal.")
                   button press=open("/vault/new") testId="empty-login"
-                    text "Add a Login"
+                    text "Add a login"
               else if vquery != "" and shownVault.length == 0
                 column flex=1 min-height=0 align-items="center" justify-content="center" padding="space.xl" testId="no-vault-match"
                   EmptyState(symbol="symbol:search", title=`No logins match “${vaultQuery.trim()}”`, message="Check the spelling, or clear the search to see every login.")
@@ -1523,7 +1523,7 @@ component Bots
                     text createError color="-exact-system-red" testId="create-error"
                   row justify-content="center"
                     button class=PrimaryButton buttonStyle="filled" press=create disabled=(newName.trim() == "" or pending(created)) testId="create"
-                      text (pending(created) ? "Creating…" : "Get Started")
+                      text (pending(created) ? "Creating…" : "Get started")
                   if suggestions.length > 0
                     column gap="space.sm"
                       text "Suggestions" font="-exact-subheadline" font-weight=600 color="ink.muted"
@@ -1571,7 +1571,7 @@ component LoginSheet
       header class=PageHeader justify-content="space-between"
         button press=cancel aria-label="Cancel" testId="login-cancel"
           Glyph(name="close", size=20)
-        text (item.id == "" ? "New Login" : item.title) role="heading" aria-level=1
+        text (item.id == "" ? "New login" : item.title) role="heading" aria-level=1
         button press=save(item.id, ttl, site, user, pass, note) disabled=(ttl.trim() == "" and site.trim() == "") buttonStyle="filled" aria-label="Save" testId="login-save"
           text "Save"
       list class=FormList appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
@@ -1616,7 +1616,7 @@ component LoginSheet
         if item.id != ""
           section
             button commandfor="drop-login" command="show-modal" testId="login-delete"
-              text "Delete Login"
+              text "Delete login"
       dialog id="drop-login" role="alertdialog" aria-label="Delete this login?"
         text "It is removed from the Vault. This can’t be undone."
         button press=drop(item.id) destructive=true commandfor="drop-login" command="close" testId="drop-login-ok"
@@ -2080,7 +2080,7 @@ component ScreenCard
               text "Release"
           else
             button class=PrimaryButton buttonStyle="bordered" press=take(t.id) testId="computer-take"
-              text "Take Control"
+              text "Take control"
         if heldTab != ""
           text "You have this page. Release it so the Bot can use it again." color="ink.muted" font="-exact-footnote" text-align="center"
         else
