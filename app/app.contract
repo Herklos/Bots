@@ -2736,7 +2736,6 @@ component BotShelf
       else if shelf.total == 0
         text t("library.empty", name=name) color="ink.muted" testId="library-status"
       else
-        text (shelf.total == 1 ? t("library.one", name=name) : t("library.many", n=shelf.total, name=name)) color="ink.muted" testId="library-count"
         if shelf.pictures.length > 0
           column gap="space.sm"
             text t("library.pictures") class=SectionLabel
