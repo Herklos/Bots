@@ -334,6 +334,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/bots/{slug}/lineage", get(lineage_get))
         .route("/api/bots/{slug}/computer", get(computer_get))
         .route("/api/bots/{slug}/computer/open", post(computer_open))
+        .route("/api/bots/{slug}/computer/close", post(computer_close))
         .route("/api/bots/{slug}/computer/control", post(computer_control))
         .route("/api/bots/{slug}/computer/input", post(computer_input))
         .route("/api/main-bot", put(main_bot))
@@ -1677,8 +1678,21 @@ async fn computer_get(
 
 /// Steers the Bot to open a server browser tab. Does not wait for the tab to appear.
 async fn computer_open(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
-    let thread = main_thread(&s, &slug).await?;
-    let command = computer::open_command(&thread);
+    computer_steer(&s, &slug, computer::open_command).await
+}
+
+/// Steers the Bot to close its server browser tabs. Does not wait for them to go.
+async fn computer_close(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
+    computer_steer(&s, &slug, computer::close_command).await
+}
+
+async fn computer_steer(
+    s: &AppState,
+    slug: &str,
+    command: fn(&str) -> Value,
+) -> ApiResult<Json<Value>> {
+    let thread = main_thread(s, slug).await?;
+    let command = command(&thread);
     let rpc =
         s.t3.rpc()
             .await

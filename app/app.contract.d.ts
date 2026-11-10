@@ -4,6 +4,7 @@
 // What app.ts writes, in brief (the declarations follow): `sources: Sources` has one
 // function per source, given its arguments as an array (then store, storage, native) and
 // answering its shape, or a Promise of it.
+//   closeComputer: (args: [string]) => Reply
 //   computerControl: (args: [string, string, string]) => Reply
 //   computerInput: (args: [string, string, number, number, number, number, number, string]) => DriveReply
 //   createBot: (args: [string, string, string, string]) => Reply
@@ -61,7 +62,7 @@
 //   stopRun: (args: [string, string]) => Reply
 //   updateGroup: (args: [string, string, string]) => Reply
 //   uploadAttachment: (args: [string, string, string, string, string]) => Attached
-// The shapes. None is exported: name one by its source, `type Reply = Result<'computerControl'>`.
+// The shapes. None is exported: name one by its source, `type Reply = Result<'closeComputer'>`.
 //   Reply = { ok: boolean; error: string }
 //   DriveReply = { ok: boolean; error: string; text: string }
 //   Session = { authenticated: boolean; passwordRequired: boolean }
@@ -544,9 +545,10 @@ type T212 = { "offsetX": T28; "offsetY": T28; "deltaX": T28; "deltaY": T28; "del
 type T213 = { "target": T1; "relatedTarget": T74; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultMode" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "closeComputer" | "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultMode" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
+  "closeComputer": { args: [T1]; result: T2 };
   "computerControl": { args: [T1, T1, T1]; result: T2 };
   "computerInput": { args: [T1, T1, T28, T28, T28, T28, T28, T1]; result: T3 };
   "createBot": { args: [T1, T1, T1, T1]; result: T2 };

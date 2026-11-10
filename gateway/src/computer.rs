@@ -14,21 +14,35 @@ pub const OPEN_PROMPT: &str = "\
 [Computer]
 Open your browser where you left off if you still have that page. Otherwise open https://www.google.com with your browser tools. Do this without asking, and do not reply in chat.";
 
-/// `message.dispatch` that steers the Bot to open a server browser tab.
-pub fn open_command(thread: &str) -> Value {
+/// Framed prompt the small-screen × dispatches. Chat hides this turn.
+pub const CLOSE_PROMPT: &str = "\
+[Computer]
+Close your browser tabs with your browser tools. Do this without asking, and do not reply in chat.";
+
+fn steer_command(thread: &str, text: &str) -> Value {
     let id = uuid::Uuid::new_v4().to_string();
     json!({
         "commandId": id,
         "type": "message.dispatch",
         "threadId": thread,
         "messageId": id,
-        "text": OPEN_PROMPT,
+        "text": text,
         "attachments": [],
         "createdBy": "user",
         "creationSource": "web",
         "deliveryIntent": "steer",
         "dispatchMode": { "type": "start_immediately" },
     })
+}
+
+/// `message.dispatch` that steers the Bot to open a server browser tab.
+pub fn open_command(thread: &str) -> Value {
+    steer_command(thread, OPEN_PROMPT)
+}
+
+/// `message.dispatch` that steers the Bot to close its server browser tabs.
+pub fn close_command(thread: &str) -> Value {
+    steer_command(thread, CLOSE_PROMPT)
 }
 
 pub fn control_message(action: &str) -> Result<Value, &'static str> {
@@ -623,6 +637,20 @@ mod tests {
             command["messageId"].as_str()
         );
         assert!(!command["messageId"].as_str().unwrap_or("").is_empty());
+    }
+
+    #[test]
+    fn close_command_steers_with_the_computer_frame() {
+        let command = close_command("thread-ada");
+        assert_eq!(command["type"], "message.dispatch");
+        assert_eq!(command["threadId"], "thread-ada");
+        assert_eq!(command["deliveryIntent"], "steer");
+        assert_eq!(command["attachments"], json!([]));
+        let text = command["text"].as_str().unwrap();
+        assert!(text.contains("[Computer]"));
+        assert!(text.contains("Close your browser"));
+        assert_eq!(text, CLOSE_PROMPT);
+        assert_ne!(text, OPEN_PROMPT);
     }
 
     #[test]
