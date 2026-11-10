@@ -459,16 +459,20 @@ shape Room
   members: RoomMember[]
   messages: RoomMessage[]
 
-// One group in the sidebar: its look, who is in it, and the last line said.
-shape Group
+// One row of the sidebar list: a Bot or a group, newest conversation first.
+shape Convo
+  kind: string
+  key: string
   id: string
-  title: string
-  description: string
+  name: string
   color: string
   shape: string
-  members: string[]
   line: string
   time: string
+  at: string
+  unread: bool
+  working: bool
+  ready: bool
 
 shape Made
   ok: bool
@@ -696,7 +700,9 @@ component Bots
   state groupShape = "ball"
   state groupMembers: string[] = []
   state roomText = ""
-  state armedGroup = ""
+  state plusOpen = false
+  state groupPanel = false
+  state groupPage = "root"
   state nameDraft = ""
   state nameEditing = false
   state newPassword = ""
@@ -734,7 +740,7 @@ component Bots
   state heldTab = ""
   resource session = loadSession() as shape Session else empty()
   resource bots = loadBots(slug) as shape Bot[] else empty()
-  resource groups = loadGroups(slug, roomId) as shape Group[] else empty()
+  resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId) as shape Convo[] else empty()
   resource chat = loadChat(slug, childThread) as shape Chat else empty()
   resource room = loadRoom(roomId) as shape Room else empty()
   resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
@@ -753,9 +759,10 @@ component Bots
   mutation signedIn as shape Reply refreshes session, bots
   mutation signedOut as shape Reply refreshes session, bots
   mutation created as shape Reply refreshes bots then afterCreate
-  mutation groupMade as shape Made refreshes groups then afterGroupMade
-  mutation roomSent as shape Reply refreshes room, groups
-  mutation groupGone as shape Reply refreshes groups
+  mutation groupMade as shape Made refreshes convos then afterGroupMade
+  mutation roomSent as shape Reply refreshes room, convos
+  mutation groupGone as shape Reply refreshes convos
+  mutation groupSaved as shape Reply refreshes room, convos
   mutation seen as shape Reply refreshes bots
   mutation reacted as shape Reply refreshes chat
   mutation sent as shape Reply refreshes chat then afterSend
@@ -791,6 +798,7 @@ component Bots
   derive lastId = match chat.rows.at(-1) { case some(m) => m.id, case none => "" }
   derive locked = session.passwordRequired and not session.authenticated
   derive query = botQuery.trim().toLowerCase()
+  derive groupSaveError = match groupSaved { case some(r) => r.error, case none => "" }
   derive groupError = match groupMade { case some(r) => r.error, case none => "" }
   derive canMakeGroup = groupName.trim() != "" and groupMembers.length >= 2 and not pending(groupMade)
   derive roomError = match roomSent { case some(r) => r.error, case none => "" }
@@ -800,7 +808,6 @@ component Bots
   derive searchNote = qtext != "" and chat.partial ? "Search covers the loaded conversation." : ""
   derive visibleBots = bots.filter(b => not b.hidden and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
   derive tiles = visibleBots.filter(b => query == "" and (b.main or b.pinned))
-  derive rows = visibleBots.filter(b => query != "" or not (b.main or b.pinned))
   derive openUnread = bots.filter(b => b.slug == slug and b.unread).length > 0
   derive hiddenBots = bots.filter(b => b.hidden and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
   derive vquery = vaultQuery.trim().toLowerCase()
@@ -898,7 +905,7 @@ component Bots
 
   action pull
     refresh bots
-    refresh groups
+    refresh convos
     refresh chat
     if top(nav).name == "chat" and openUnread and not pending(seen)
       send seen = markSeen(slug)
@@ -1036,6 +1043,7 @@ component Bots
   action openChild(threadId: string)
     childThread = threadId
   action openNew
+    plusOpen = false
     newName = ""
     newColor = "brand.default"
     newShape = "ball"
@@ -1071,6 +1079,7 @@ component Bots
     if createError == "" and top(nav).name == "create"
       nav = back(nav)
   action openNewGroup
+    plusOpen = false
     groupName = ""
     groupAbout = ""
     groupColor = "brand.default"
@@ -1096,13 +1105,28 @@ component Bots
         if r.ok and r.id != "" and top(nav).name == "newGroup"
           nav = push(back(nav), path("group", r.id))
       case none
-  action removeGroup
-    if armedGroup == roomId and roomId != ""
+  action togglePlus
+    plusOpen = not plusOpen
+  action toggleGroupPanel
+    groupPanel = not groupPanel
+    groupPage = "root"
+  action openGroupEdit
+    groupPage = "edit"
+  action groupBack
+    groupPage = "root"
+  action patchGroup(field: string, value: string)
+    if roomId != ""
+      send groupSaved = updateGroup(roomId, field, value)
+  action toggleGroupMemberOf(m: string)
+    let current = room.members.map(x => x.slug)
+    let next = current.includes(m) ? current.filter(x => x != m) : current.concat([m])
+    send groupSaved = updateGroup(roomId, "members", next.join("\n"))
+  action dropGroup
+    if roomId != ""
       send groupGone = deleteGroup(roomId)
-      armedGroup = ""
+      groupPanel = false
+      groupPage = "root"
       nav = back(nav)
-    else
-      armedGroup = roomId
   action editRoomText(v: string)
     roomText = v
   action mention(m: string)
@@ -1312,9 +1336,23 @@ component Bots
                   button class=IconControl appearance="none" press=openSearch aria-label="Search Bots" title="Search Bots" testId="search-open"
                     column class=Disc
                       Glyph(name="search", size=18)
-                  button class=IconControl appearance="none" press=openNew aria-label="New Bot" title="New Bot" testId="new-bot"
+                  button class=IconControl appearance="none" press=togglePlus aria-label="New Bot or group" title="New Bot or group" aria-expanded=plusOpen testId="new-bot"
                     column class=Disc
                       Glyph(name="add", size=18)
+              if plusOpen
+                button appearance="none" press=togglePlus aria-label="Close menu" position="absolute" inset=0 z-index=9 background-color="transparent" border="none" testId="new-menu-backdrop"
+                column position="absolute" top=52 right=8 z-index=10 width=208 box-sizing="border-box" padding="space.xs" gap="2px" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-menu"
+                  button class=ConversationLink appearance="none" press=openNew testId="new-bot-option" padding="space.sm space.md"
+                    row gap="space.md" align-items="center"
+                      Face(shape="ball", color="teal", state="idle", size=28, still=true)
+                      text "New Bot" font-weight=500
+                  button class=ConversationLink appearance="none" press=openNewGroup disabled=(bots.length < 2) testId="new-group-option" padding="space.sm space.md"
+                    row gap="space.md" align-items="center"
+                      Face(shape="hex", color="blue", state="idle", size=28, still=true)
+                      column gap="2px"
+                        text "New group" font-weight=500
+                        if bots.length < 2
+                          text "Needs two Bots" font="-exact-footnote" color="ink.faint"
               column navigationSplit="placeholder" flex=1 align-items="center" justify-content="center" gap="space.lg" padding="space.xl"
                 Face(shape="ball", color="teal", state="idle", size=72, still=false)
                 text "Your own Bots, in one place." class=HeroTitle text-align="center"
@@ -1344,18 +1382,18 @@ component Bots
                           Avatar(shape=b.shape, color=faceColor(b.color), state=(b.ready ? (b.working ? "working" : "idle") : "asleep"), size=64, still=(not b.working), presence=(b.unread ? "unread" : b.working ? "online" : ""))
                           text b.name font="-exact-footnote" font-weight=600 max-width="100%" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" text-align="center"
                 list id="bots-list" appearance="none" flex=1 min-height=0 padding="0 space.sm" gap="2px"
-                  for b in rows key=b.slug
-                    link class=ConversationLink href=path("chat", b.slug) testId=`bot-${b.slug}` background-color=(slug == b.slug ? "surface.raised" : "transparent")
+                  for c in convos key=c.key
+                    link class=ConversationLink href=(c.kind == "group" ? path("group", c.id) : path("chat", c.id)) testId=(c.kind == "group" ? `group-${c.id}` : `bot-${c.id}`) background-color=((c.kind == "group" ? roomId == c.id : slug == c.id) ? "surface.raised" : "transparent")
                       row gap="space.md" align-items="center"
-                        Avatar(shape=b.shape, color=faceColor(b.color), state=(b.ready ? (b.working ? "working" : "idle") : "asleep"), size=44, still=(not b.working), presence=(b.working ? "online" : ""))
+                        Avatar(shape=c.shape, color=faceColor(c.color), state=(c.ready ? (c.working ? "working" : "idle") : "asleep"), size=44, still=(not c.working), presence=(c.working ? "online" : ""))
                         column gap="2px" flex=1 min-width=0
                           row gap="space.sm" align-items="baseline"
-                            text b.name font-weight=(b.unread ? 700 : 600) flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
-                            text b.time font="-exact-footnote" color="ink.faint"
+                            text c.name font-weight=(c.unread ? 700 : 600) flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=(c.kind == "group" ? `group-title-${c.id}` : `bot-title-${c.id}`)
+                            text c.time font="-exact-footnote" color="ink.faint"
                           row gap="space.sm" align-items="center"
-                            text b.line color=(b.unread ? "-exact-label" : "ink.muted") font="-exact-footnote" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
-                            if showUnread(b.unread, slug == b.slug, b.hidden)
-                              column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label="Unread" testId=`unread-${b.slug}`
+                            text c.line color=(c.unread ? "-exact-label" : "ink.muted") font="-exact-footnote" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                            if showUnread(c.unread, slug == c.id, false)
+                              column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label="Unread" testId=`unread-${c.id}`
                   if hiddenBots.length > 0
                     button class=ConversationLink appearance="none" press=toggleHidden aria-expanded=hiddenOpen testId="hidden-toggle"
                       row gap="space.sm" align-items="center"
@@ -1370,25 +1408,6 @@ component Bots
                             text b.name flex=1 color="ink.muted"
                             if showUnread(b.unread, slug == b.slug, b.hidden)
                               column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label="Unread" testId=`unread-${b.slug}`
-                  if query == ""
-                    text "Groups" class=SectionLabel testId="groups-label"
-                    for g in groups key=g.id
-                      link class=ConversationLink href=path("group", g.id) testId=`group-${g.id}` background-color=(roomId == g.id ? "surface.raised" : "transparent")
-                        row gap="space.md" align-items="center"
-                          Avatar(shape=g.shape, color=faceColor(g.color), state="idle", size=44, still=true, presence="")
-                          column gap="2px" flex=1 min-width=0
-                            row gap="space.sm" align-items="baseline"
-                              text g.title font-weight=600 flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=`group-title-${g.id}`
-                              text g.time font="-exact-footnote" color="ink.faint"
-                            text (g.line != "" ? g.line : g.description) color="ink.muted" font="-exact-footnote" overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
-                    button class=ConversationLink appearance="none" press=openNewGroup testId="new-group" disabled=(bots.length < 2)
-                      row gap="space.md" align-items="center"
-                        column class=Disc width=44 height=44 color="ink.muted"
-                          Glyph(name="add", size=18)
-                        column gap="2px" flex=1 min-width=0
-                          text "New group" font-weight=500 color="ink.muted"
-                          if bots.length < 2
-                            text "Needs two Bots" font="-exact-footnote" color="ink.faint"
               column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
                 link class=ConversationLink href="/vault" aria-label="Vault" testId="sidebar-vault" padding="space.xs space.md"
                   row align-items="center" gap="space.md"
@@ -1618,19 +1637,16 @@ component Bots
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
                 BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease)
           else if e.name == "group"
-            column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0
-              header class=PageHeader testId="room-header"
+            column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
+              header appearance="none" class=PageHeader position="relative" testId="room-header"
                 button id="back" class=IconControl appearance="none" press=back aria-label="Back" title="Back" display=(wide ? "none" : "flex")
                   column rotate="180deg"
                     Glyph(name="chevron", size=20)
-                if room.title != ""
-                  Face(shape=room.shape, color=faceColor(room.color), state="idle", size=36, still=true)
-                column flex=1 min-width=0 gap="2px"
-                  text (room.title != "" ? room.title : "Group") role="heading" aria-level=1 class=PageTitle overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="room-title"
-                  if room.description != ""
-                    text room.description color="ink.muted" font="-exact-footnote" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="room-about"
-                button class=TextControl appearance="none" press=removeGroup color=(armedGroup == roomId ? "-exact-system-red" : "ink.muted") testId="group-delete"
-                  text (armedGroup == roomId ? "Tap again to delete" : "Delete")
+                button class=HeaderToggle appearance="none" press=toggleGroupPanel aria-label=(groupPanel ? "Hide group details" : "Show group details") aria-expanded=groupPanel aria-controls="group-panel" title="Group details" testId="group-toggle" position="absolute" left="50%" translate="-50% 0" gap="space.sm" padding="0 space.md" max-width="75%"
+                  if room.title != ""
+                    Face(shape=room.shape, color=faceColor(room.color), state="idle", size=28, still=true)
+                  text (room.title != "" ? room.title : "Group") role="heading" aria-level=1 class=PageTitle overflow="hidden" text-overflow="ellipsis" white-space="nowrap" min-width=0 testId="room-title"
+                column flex=1
               if failed(room)
                 EmptyState(symbol="symbol:alert", title="Can’t load this group", message="Check that hbots is running, then try again.")
                   button press=pull testId="room-retry"
@@ -1683,6 +1699,7 @@ component Bots
                     button class=SendControl appearance="none" press=postRoom disabled=(roomText.trim() == "" or pending(roomSent)) margin="2px 0" retainFocus=true aria-label="Send" testId="room-send"
                       Glyph(name="send", size=18)
                   text (roomText.includes("@") ? "Only the Bots you mention are woken." : "No @mention: the Bot that spoke last answers, or everyone at first.") color="ink.muted" font="-exact-footnote" testId="room-hint"
+              GroupPanel(shown=groupPanel, wide=wide, page=groupPage, room=room, bots=bots, closePanel=toggleGroupPanel, openEdit=openGroupEdit, goRoot=groupBack, patch=patchGroup, toggleMember=toggleGroupMemberOf, drop=dropGroup, error=groupSaveError)
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader
@@ -1995,6 +2012,107 @@ style ChoiceRow
     box-shadow="0 0 0 2px AccentColor"
 
 // The Bot's right panel: its Face and name, then three tabs, and pages for its model, its usage and editing it.
+// The details beside a group, as a Bot has: who is in it, and its name, look and members.
+component GroupPanel
+  props
+    shown: bool
+    wide: bool
+    page: string
+    room: Room
+    bots: Bot[]
+    closePanel: action
+    openEdit: action
+    goRoot: action
+    patch: action
+    toggleMember: action
+    drop: action
+    error: string
+  state title = room.title
+  state about = room.description
+  derive picked = room.members.map(m => m.slug)
+  action editTitle(v: string)
+    title = v
+  action editAbout(v: string)
+    about = v
+  view
+    column id="group-panel" display=(shown ? "flex" : "none") position="absolute" top=(wide ? 0 : 72) right=0 bottom=0 width=(wide ? "20rem" : "100%") box-sizing="border-box" background-color="surface.canvas" border-left="1px solid surface.line" testId="group-panel"
+      row align-items="center" gap="space.xs" padding="space.sm space.sm space.sm space.md" min-height=52 box-sizing="border-box"
+        if page == "edit"
+          button class=IconControl appearance="none" press=goRoot aria-label="Back" title="Back" testId="group-panel-back"
+            column rotate="180deg"
+              Glyph(name="chevron", size=20)
+          text "Edit group" role="heading" aria-level=2 class=PageTitle flex=1 testId="group-panel-title"
+        else
+          column flex=1
+          button class=IconControl appearance="none" press=openEdit aria-label="Edit group" title="Edit group" testId="group-edit"
+            Glyph(name="settings", size=20)
+          button class=IconControl appearance="none" press=closePanel aria-label="Close panel" title="Close panel" testId="group-panel-close"
+            Glyph(name="close", size=20)
+      if page == "edit"
+        scroll flex=1 min-height=0
+          column gap="space.lg" padding="space.sm space.lg space.xl" testId="group-edit-page"
+            column gap="space.sm"
+              text "Name" class=SectionLabel
+              input appearance="none" class=Field value=title input=editTitle change=patch("title") aria-label="Group name" padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-edit-name"
+            column gap="space.sm"
+              text "Description" class=SectionLabel
+              input appearance="none" class=Field value=about input=editAbout change=patch("description") placeholder="What the group works on" aria-label="Description" padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-edit-about"
+            column gap="space.sm"
+              text "Colour" class=SectionLabel
+              row gap="space.xs" flex-wrap="wrap"
+                for c in pickerColours() key=c
+                  button class=SwatchControl press=patch("color", c) appearance="none" aria-label=`Colour ${faceColor(c)}` aria-pressed=(room.color == c) testId=`group-edit-colour-${c}` width=40 height=40 padding=0
+                    column width=30 height=30 box-sizing="border-box" border-radius="radius.full" background-color=c border=(room.color == c ? "3px solid AccentColor" : "3px solid transparent")
+            column gap="space.sm"
+              text "Shape" class=SectionLabel
+              row gap="space.xs" flex-wrap="wrap"
+                for s in shapeNames() key=s
+                  button class=SwatchControl press=patch("shape", s) appearance="none" aria-label=`Shape ${s}` aria-pressed=(room.shape == s) testId=`group-edit-shape-${s}` width=48 height=48 padding=0 border-radius="radius.md" background-color=(room.shape == s ? "surface.raised" : "transparent")
+                    Avatar(shape=s, color=faceColor(room.color), state="idle", size=34, still=true, presence="")
+            column gap="space.sm"
+              text "Bots" class=SectionLabel
+              for b in bots key=b.slug
+                button appearance="none" press=toggleMember(b.slug) role="checkbox" aria-checked=picked.includes(b.slug) aria-label=b.name testId=`group-edit-member-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border=(picked.includes(b.slug) ? "2px solid AccentColor" : "2px solid surface.line") border-radius="radius.md" background-color="surface.card" color="-exact-label"
+                  row gap="space.md" align-items="center" width="100%"
+                    Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=32, still=true, presence="")
+                    text b.name font-weight=500 flex=1 min-width=0 text-align="left"
+                    if picked.includes(b.slug)
+                      column color="AccentColor"
+                        Glyph(name="check", size=18)
+            if error != ""
+              text error color="-exact-system-red" testId="group-error-panel"
+            row align-items="center" gap="space.md" min-height=56 padding="0 space.md" border-top="1px solid surface.line"
+              column class=IconTile color="-exact-system-red"
+                Glyph(name="trash", size=18)
+              column flex=1 gap="2px"
+                text "Delete group" font-weight=600 color="-exact-system-red"
+                text "Removes the group. The Bots and their chats stay." color="ink.muted" font="-exact-footnote"
+              button class=IconControl appearance="none" commandfor="drop-group" command="show-modal" aria-label="Delete group" title="Delete group" color="-exact-system-red" testId="group-delete"
+                Glyph(name="trash", size=20)
+            dialog id="drop-group" role="alertdialog" aria-label=`Delete ${room.title}?`
+              text "The group and what was said in it are removed. The Bots and their own chats stay."
+              button press=drop destructive=true commandfor="drop-group" command="close" testId="group-delete-ok"
+                text "Delete"
+              button commandfor="drop-group" command="close" testId="group-delete-cancel"
+                text "Cancel"
+      else
+        scroll flex=1 min-height=0
+          column gap="space.lg" padding="0 space.lg space.xl"
+            column align-items="center" gap="space.xs"
+              Face(shape=room.shape, color=faceColor(room.color), state=(room.members.filter(m => m.working).length > 0 ? "working" : "idle"), size=72, still=(room.members.filter(m => m.working).length == 0))
+              text room.title font="-exact-title3" font-weight=700 letter-spacing="-0.3px" text-align="center" overflow-wrap="anywhere" testId="group-details-name"
+              text (room.description != "" ? room.description : "No description yet") color="ink.muted" font="-exact-footnote" text-align="center" testId="group-details-about"
+            column gap="2px"
+              text `Bots, ${room.members.length}` class=SectionLabel testId="group-members-label"
+              for m in room.members key=m.slug
+                link class=ConversationLink href=path("chat", m.slug) testId=`group-member-${m.slug}` padding="space.sm space.md"
+                  row gap="space.md" align-items="center"
+                    Avatar(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state=m.state, size=40, still=(m.state != "working"), presence="")
+                    column gap="2px" flex=1 min-width=0
+                      text m.name font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                      text m.line color="ink.muted" font="-exact-footnote"
+            text "Write @name to wake one Bot. A message with no @name goes to whoever spoke last." color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="group-details-hint"
+
 component BotPanel
   props
     working: bool

@@ -81,6 +81,12 @@ async function read(store: any, path: string): Promise<any> {
   if (!r.ok) throw new Error(r.error);
   return r.body;
 }
+// Two lists read the Bots in one tick; the second shares the first's request.
+let botsInflight: Promise<any> | null = null;
+function botsBody(store: any): Promise<any> {
+  if (!botsInflight) botsInflight = read(store, '/api/bots').finally(() => { botsInflight = null; });
+  return botsInflight;
+}
 const reply = (r: Answered) => (r.ok ? { ok: true, error: '' } : { ok: false, error: r.error });
 
 // The screen says what failed. A stopped gateway, an old hbots, a signed-out
@@ -328,7 +334,7 @@ const sources: Sources = {
         { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true, shape: 'ball', pinned: false, working: false, line: 'Getting set up…', time: '' },
       ];
     }
-    const body = await read(store, '/api/bots');
+    const body = await botsBody(store);
     if (Number(body.now) > 0) lastNow = Number(body.now);
     const at = (b: any): string => (typeof b.preview?.at === 'string' ? b.preview.at : '');
     // The main Bot first, then the most recent conversation; a Bot with none goes last.
@@ -377,18 +383,41 @@ const sources: Sources = {
     return reply(r);
   },
   deleteLogin: async ([id], store) => reply(await call(store, `/api/vault/${encodeURIComponent(id)}`, { method: 'DELETE' })),
-  loadGroups: async ([focus, room], store): Promise<Result<'loadGroups'>> => {
+  loadConvos: async ([query, focus, room], store): Promise<Result<'loadConvos'>> => {
     if (focus === 'fixture' || room === 'fixture') {
-      return [{ id: 'fixture', title: 'Design', description: 'Where Ada and Bea trade drafts', color: 'brand.blue', shape: 'hex', members: ['ada', 'bea'], line: 'Ada: On it', time: '' }];
+      return [
+        { kind: 'bot', key: 'bot-fixture', id: 'fixture', name: 'Ada', color: fill('brand.default'), shape: 'ball', line: 'Ready to chat', time: '', at: '', unread: true, working: false, ready: true },
+        { kind: 'group', key: 'group-fixture', id: 'fixture', name: 'Design', color: 'brand.blue', shape: 'hex', line: 'Ada: On it', time: '', at: '', unread: false, working: false, ready: true },
+      ];
     }
-    const body = await read(store, '/api/rooms');
-    return (Array.isArray(body.rooms) ? body.rooms : []).map((g: any) => ({
-      id: String(g.id), title: String(g.title ?? ''), description: String(g.description ?? ''),
-      color: String(g.color ?? 'brand.default'), shape: String(g.shape ?? 'ball'),
-      members: (Array.isArray(g.members) ? g.members : []).map(String),
-      line: g.last ? `${String(g.last.name ?? '')}: ${String(g.last.text ?? '')}`.slice(0, 120) : '',
-      time: when(g.last?.at, lastNow),
-    })).reverse();
+    const body = await botsBody(store);
+    const now = Number(body.now);
+    const at = (b: any): string => (typeof b.preview?.at === 'string' ? b.preview.at : '');
+    const match = (...names: string[]): boolean => query === '' || names.some((n) => n.toLowerCase().includes(query));
+    const bots = (body.bots as any[])
+      .filter((b) => b.hidden !== true && (query !== '' || !(b.primary === true || b.pinned === true)) && match(String(b.name), String(b.label ?? '')))
+      .map((b) => ({
+        kind: 'bot', key: `bot-${String(b.slug)}`, id: String(b.slug), name: String(b.name), color: fill(b.color), shape: String(b.shape ?? 'ball'),
+        line: lineOf(b), time: when(b.preview?.at, now), at: at(b), unread: b.unread === true, working: b.working === true,
+        ready: typeof b.mainThreadId === 'string',
+      }));
+    const rooms = await read(store, '/api/rooms');
+    const groups = (Array.isArray(rooms.rooms) ? rooms.rooms : [])
+      .filter((g: any) => match(String(g.title ?? '')))
+      .map((g: any) => {
+        const last = g.last ? `${String(g.last.name ?? '')}: ${String(g.last.text ?? '')}`.slice(0, 120) : '';
+        const said = typeof g.last?.at === 'string' ? g.last.at : '';
+        return {
+          kind: 'group', key: `group-${String(g.id)}`, id: String(g.id), name: String(g.title ?? ''), color: String(g.color ?? 'brand.default'), shape: String(g.shape ?? 'ball'),
+          line: last !== '' ? last : String(g.description ?? ''), time: when(said, now), at: said, unread: false, working: false, ready: true,
+        };
+      });
+    // The most recent conversation first, a Bot or a group alike; one with nothing said goes last.
+    return [...bots, ...groups].sort((x, y) => y.at.localeCompare(x.at));
+  },
+  updateGroup: async ([id, field, value], store) => {
+    const body = field === 'members' ? { members: value === '' ? [] : value.split('\n') } : { [field]: value };
+    return reply(await call(store, `/api/rooms/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }));
   },
   createGroup: async ([title, description, color, shape, members], store): Promise<Result<'createGroup'>> => {
     const r = await call(store, '/api/rooms', { method: 'POST', body: JSON.stringify({ title, description, color, shape, members: members === '' ? [] : members.split('\n') }) });
