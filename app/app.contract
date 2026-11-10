@@ -662,6 +662,7 @@ component Bots
   state newPassword = ""
   state botQuery = ""
   state searching = false
+  state away = false
   state chatSearching = false
   state hiddenOpen = false
   state vaultQuery = ""
@@ -973,7 +974,17 @@ component Bots
   action stop
     send stopped = stopRun(slug)
   action toEnd
+    away = false
     scrollIntoView("transcript", lastId, block="end")
+  action moved(x: number, y: number, e: ScrollEvent)
+    away = e.scrollHeight - e.scrollTop - e.clientHeight > 80
+  action pasted(e: ClipboardEvent)
+    if slug != "" and not pending(attached) and pendingAttaches.length < 8 and e.files.length > 0
+      preventDefault()
+      match e.files.at(0)
+        case some(f)
+          send attached = uploadAttachment(slug, f, "", "")
+        case none
   // Bot details: a Bot's name, colour, visibility and main status, and its deletion.
   action doRename(bslug: string, name: string)
     if name.trim() != ""
@@ -1203,9 +1214,12 @@ component Bots
                     input type="search" class=SearchField value=messageQuery input=editChatQuery placeholder="Search this conversation" aria-label="Search this conversation" testId="chat-search" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="0 space.lg space.xs"
                   if chatSearching and searchNote != ""
                     text searchNote color="ink.muted" font="-exact-footnote" testId="search-note" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
+                  if away
+                    button class=IconControl appearance="none" press=toEnd aria-label="Jump to the latest message" title="Jump to the latest" testId="to-end" position="absolute" left="50%" translate="-50% 0" bottom=8 z-index=1 width=32 height=32 border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line"
+                      Glyph(name="arrow-down", size=16)
                   for p in chat.pins key=p.id
                     text p.text color="ink.muted" font="-exact-footnote" testId=`pin-${p.id}` width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
-                  list id="transcript" testId=(chat.readOnly ? "child-transcript" : "transcript") width="100%" box-sizing="border-box" padding="space.lg max(0px, calc((100% - 46rem) / 2))" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true max-height="100%" min-height=0 flex-shrink=1
+                  list id="transcript" testId=(chat.readOnly ? "child-transcript" : "transcript") width="100%" box-sizing="border-box" padding="space.lg max(0px, calc((100% - 46rem) / 2))" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true scroll=moved max-height="100%" min-height=0 flex-shrink=1
                     for m in shownRows key=m.id
                       column
                         if m.kind == "day"
@@ -1344,7 +1358,7 @@ component Bots
                   if voiceHold != ""
                     text voiceHold font="-exact-footnote" color="ink.muted" testId="voice-hold"
                   input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
-                  textarea id="composer" value=draft input=edit rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(bots, e.params.slug) != "" ? `Message ${nameOf(bots, e.params.slug)}` : "Write a message…") aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
+                  textarea id="composer" value=draft input=edit paste=pasted outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(bots, e.params.slug) != "" ? `Message ${nameOf(bots, e.params.slug)}` : "Write a message…") aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
                   if chat.working and not canSend
                     button class=StopControl appearance="none" press=stop margin="2px 0" aria-label="Stop" testId="stop"
                       Glyph(name="stop", size=16)
