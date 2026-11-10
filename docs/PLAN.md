@@ -144,6 +144,17 @@ Still open:
 
 These are not scheduled. They sit next to the messenger, the way model, routines, and Working on did.
 
+### Memory store + maintenance (port threebot PR #40, opt-in)
+
+Port durable Bot memory (facts, notes, provenance, reflection, defrag, note split/merge),
+MCP tools, opt-in "Memory maintenance" routine (dedicated thread, Settings Memory model),
+CLI, `/api/memory*`, and Exact Memory tab. All memory reads/writes (including Bot create
+bootstrap of MEMORY.md / log.md / shared-memory.md) go through the Workspace adapter; no
+auto-enroll at startup or from journal recovery. Design: [docs/memory-maintenance.md](memory-maintenance.md).
+Files: `gateway/src/memory.rs`, `memory_defrag.rs`, `memory_routine.rs`, `memory_tools.rs`,
+`workspace.rs` (`exists` / `symlink_kind` / `require_dir` / `ensure_dir`), hooks in `main.rs` /
+`mcp.rs` / `cli.rs` / `routines.rs` (`tasks_for_bot`), `app/` Settings + Memory tab + strings.
+
 ### Groups
 
 A group is a room where two or more Bots talk with the person. It is not the Working on list. That list is one Bot's child threads.
