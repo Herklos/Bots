@@ -29,11 +29,11 @@ test "a login is reached through Settings and needs a title or website"
   expect tree has "user-name"
   expect tree has "open-vault"
 
-test "Settings counts this machine and still hides Projects"
+test "Settings counts usage and still hides Projects"
   tap "Settings"
   clock data
-  expect tree has "usage-line"
-  expect text "usage-line" == "Can’t load usage. Check that hbots is running, then try again."
+  expect tree has "usage-error"
+  expect text "usage-error" == "Can’t load usage. Check that hbots is running, then try again."
   expect tree missing "open-projects"
   expect tree missing "beta-projects"
   expect tree has "open-vault"
@@ -41,24 +41,26 @@ test "Settings counts this machine and still hides Projects"
 
 test "the library says when it cannot open"
   size 340x740
-  at "/bot/ada/library"
+  at "/bot/fixture"
   clock data
-  expect tree has "library-status"
-  expect text "library-status" == "Can’t open this library. Check that hbots is running, then try again."
+  tap "panel-toggle"
+  tap "panel-tab-library"
+  clock data
+  expect tree has "library-error"
+  expect text "library-error" == "Can’t open this library. Check that hbots is running, then try again."
   expect tree missing "open-projects"
-  expect tree missing "filter-all"
   expect tree missing "add-library"
   expect tree missing "add-connector"
-  expect tree missing "library-kind"
 
 test "the computer says when it cannot open"
   size 340x740
-  at "/bot/ada/computer"
+  at "/bot/fixture"
   clock data
-  expect tree has "computer-status"
-  expect text "computer-status" == "Can’t open this Bot’s browser. Check that hbots is running, then try again."
-  expect tree missing "take-computer"
-  expect tree missing "release-computer"
+  tap "panel-toggle"
+  tap "panel-tab-computer"
+  clock data
+  expect tree has "computer-error"
+  expect text "computer-error" == "Can’t open this Bot’s browser. Check that hbots is running, then try again."
   expect tree missing "computer-frame"
   expect tree missing "open-projects"
 
@@ -99,6 +101,65 @@ test "a wide window does not invent a panel for a missing Bot"
   expect tree missing "open-library"
   expect tree missing "open-projects"
   expect tree has "panel-toggle"
+
+test "a room shows who is working and who is still getting set up"
+  at "/group/fixture"
+  clock data
+  expect text "member-ada-name" == "Ada"
+  expect text "member-ada-state" == "Working"
+  expect text "member-bea-name" == "Bea"
+  expect text "member-bea-state" == "Getting set up…"
+
+test "a message shows a reaction, a quote, and a pin that is not in view"
+  at "/bot/fixture"
+  clock data
+  expect text "react-m2" == "🔥"
+  expect text "quote-m2" == "Hello"
+  expect text "pin-missing" == "This message is not in view."
+
+test "the open chat is clear and a hidden Bot keeps its mark"
+  size 1440x900
+  at "/bot/fixture"
+  clock data
+  expect tree missing "unread-fixture"
+  tap "hidden-toggle"
+  expect tree has "unread-bea"
+
+test "search filters the loaded conversation"
+  at "/bot/fixture"
+  clock data
+  expect tree has "message-m1"
+  type "chat-search" "there"
+  expect tree missing "message-m1"
+  expect tree has "message-m2"
+  expect text "search-note" == "Search covers the loaded conversation."
+
+test "a local child opens and a remote child stays on the other machine"
+  size 1440x900
+  at "/bot/fixture"
+  clock +600
+  clock data
+  expect text "where-remote-1" == "On another machine"
+  expect tree missing "open-remote-1"
+  tap "open-local-1"
+  clock data
+  expect tree has "child-transcript"
+  expect tree missing "send"
+  expect text "child-readonly" == "This thread is read only."
+
+test "a token line shows only when the turn shares an id"
+  at "/bot/fixture"
+  clock data
+  expect text "tokens-m2" == "12 in, 3 out, 4 read from cache, 1 written to cache."
+  expect tree missing "tokens-m3"
+
+test "the composer holds a voice clip and the sent clip is that attachment"
+  at "/bot/fixture"
+  clock data
+  expect tree has "file-voice"
+  tap "voice-record"
+  clock settle
+  expect text "voice-hold" == "voice.m4a"
 
 test "creating a Bot works on a narrow screen"
   size 340x740

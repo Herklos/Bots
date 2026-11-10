@@ -85,6 +85,56 @@ const reply = (r: Answered) => (r.ok ? { ok: true, error: '' } : { ok: false, er
 
 // The screen says what failed. A stopped gateway, an old hbots, a signed-out
 // session, and a quiet T3 are not the same problem.
+const NOT_IN_VIEW = 'This message is not in view.';
+
+function tokenText(tokens: unknown): string {
+  if (!tokens || typeof tokens !== 'object') return '';
+  const n = (key: string): number => {
+    const value = (tokens as Record<string, unknown>)[key];
+    return typeof value === 'number' ? value : 0;
+  };
+  return `${n('inputTokens')} in, ${n('outputTokens')} out, ${n('cachedInputTokens')} read from cache, ${n('cacheCreationTokens')} written to cache.`;
+}
+
+function marksOf(reactions: unknown, id: string): string {
+  if (!reactions || typeof reactions !== 'object') return '';
+  const list = (reactions as Record<string, unknown>)[id];
+  if (!Array.isArray(list)) return '';
+  return list.map((mark) => String(mark)).filter(Boolean).join('');
+}
+
+function quoteOf(replyTo: unknown, id: string): string {
+  if (!replyTo || typeof replyTo !== 'object') return '';
+  const entry = (replyTo as Record<string, unknown>)[id];
+  if (!entry || typeof entry !== 'object') return '';
+  return String((entry as { text?: unknown }).text ?? '');
+}
+
+function blankChat(slug: string) {
+  return { slug, rows: [] as ChatRow[], working: false, partial: false, readOnly: false, pins: [] as PinRow[], threadId: '' };
+}
+
+type PinRow = { id: string; text: string; missing: boolean };
+type ChatRow = any;
+
+// The contract runner has no gateway: a small conversation, a read only child and a missing pin.
+function fixtureChat(child: string) {
+  const row = (r: Record<string, unknown>) => ({ ...blank, head: true, tail: true, mine: false, text: '', ...r, kind: 'message' }) as ChatRow;
+  if (child === 'child-thread') {
+    return { slug: 'fixture', working: false, partial: false, readOnly: true, threadId: 'child-thread', pins: [] as PinRow[], rows: [row({ id: 'c1', text: 'Notes' })] };
+  }
+  return {
+    slug: 'fixture', working: false, partial: true, readOnly: false, threadId: '',
+    pins: [{ id: 'm1', text: 'Hello', missing: false }, { id: 'missing', text: NOT_IN_VIEW, missing: true }],
+    rows: [
+      row({ id: 'm1', mine: true, text: 'Hello', tail: false }),
+      row({ id: 'm2', time: '9:00 AM', text: 'Hi there', react: '🔥', quote: 'Hello', tokens: '12 in, 3 out, 4 read from cache, 1 written to cache.', head: true }),
+      row({ id: 'm3', text: 'No tokens here', head: false }),
+      row({ id: 'voice1', mine: true, files: [{ id: 'voice', name: 'voice.m4a', kind: 'file', size: '1 KB', url: '' }] }),
+    ],
+  };
+}
+
 function explain(error: string, what: string): string {
   const e = error.toLowerCase();
   if (e.includes('reach the gateway')) return `Can’t load ${what}. Check that hbots is running, then try again.`;
@@ -178,11 +228,11 @@ function dayLabel(at: string, now: number): string {
   const day = days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : days < 7 ? DAYS[d.getDay()]! : `${MONTHS[d.getMonth()]} ${d.getDate()}`;
   return `${day} ${clock(d)}`;
 }
-const blank = { react: '', key: '', time: '', title: '', files: [] as any[], botSlug: '', botName: '', botColor: 'brand.default', botShape: 'ball', variant: '', choices: [] as any[], placeholder: '' };
+const blank = { quote: '', tokens: '', react: '', key: '', time: '', title: '', files: [] as any[], botSlug: '', botName: '', botColor: 'brand.default', botShape: 'ball', variant: '', choices: [] as any[], placeholder: '' };
 
 // The transcript as rows: day marks, messages in runs, the lines between them, what the Bot is
 // waiting on, and the working line. A run is one sender's messages with no break between them.
-function chatRows(slug: string, body: any, now: number, reactions: Record<string, string[]> = {}): any[] {
+function chatRows(slug: string, body: any, now: number, reactions: Record<string, string[]> = {}, replyTo: unknown = {}): any[] {
   const peer = (b: any) => (b && typeof b === 'object'
     ? { botSlug: String(b.slug ?? ''), botName: String(b.name ?? ''), botColor: fill(b.color), botShape: String(b.shape ?? 'ball') } : {});
   const timeline = [
@@ -209,7 +259,7 @@ function chatRows(slug: string, body: any, now: number, reactions: Record<string
       id: String(f.id), name: String(f.name), kind: String(f.kind), size: fileSize(Number(f.bytes ?? 0)),
       url: `${API}/api/bots/${encodeURIComponent(slug)}/attachments/${encodeURIComponent(String(f.id))}`,
     }));
-    const row = { ...blank, ...peer(item.from), id: String(item.id), kind: 'message', mine, text: String(item.text ?? ''), react: ((reactions[String(item.id)] ?? []) as string[]).join(' '), files, head: !(prev && prev.who === who && t - prev.t < 5 * 60_000), tail: true,
+    const row = { ...blank, ...peer(item.from), id: String(item.id), kind: 'message', mine, text: String(item.text ?? ''), react: ((reactions[String(item.id)] ?? []) as string[]).join(' '), quote: quoteOf(replyTo, String(item.id)), tokens: tokenText(item.tokens), files, head: !(prev && prev.who === who && t - prev.t < 5 * 60_000), tail: true,
       time: Number.isFinite(t) ? clock(new Date(t)) : '' };
     if (prev && !row.head) rows[prev.index].tail = false;
     rows.push(row);
@@ -241,7 +291,14 @@ const sources: Sources = {
     return reply(r);
   },
   signOut: async (_args, store) => { store.set('session', ''); return { ok: true, error: '' }; },
-  loadBots: async (_args, store): Promise<Result<'loadBots'>> => {
+  loadBots: async ([focus], store): Promise<Result<'loadBots'>> => {
+    // Reserved slug for the contract runner, which has no gateway. A real inbox still fetches.
+    if (focus === 'fixture') {
+      return [
+        { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '' },
+        { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true, shape: 'ball', pinned: false, working: false, line: 'Getting set up…', time: '' },
+      ];
+    }
     const body = await read(store, '/api/bots');
     if (Number(body.now) > 0) lastNow = Number(body.now);
     const at = (b: any): string => (typeof b.preview?.at === 'string' ? b.preview.at : '');
@@ -313,13 +370,33 @@ const sources: Sources = {
     return ((r.body.suggestions ?? []) as any[]).map((s) => ({ name: String(s.name), about: String(s.about ?? ''), color: fill(s.color), shape: String(s.shape ?? 'ball'), first: String(s.firstMessage ?? '') }));
   },
   markSeen: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/seen`, { method: 'POST', body: '{}' })),
-  loadChat: async ([slug], store): Promise<Result<'loadChat'>> => {
-    if (slug === '') return { slug, rows: [], working: false }; // no chat is open: nothing to read
-    const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat`);
-    const meta = await call(store, `/api/threads/${encodeURIComponent(String(body.threadId ?? ''))}/meta`);
-    threads[slug] = String(body.threadId ?? '');
-    const rows = chatRows(slug, body, Number(body.now), meta.ok ? (meta.body.reactions ?? {}) : {});
-    return { slug, rows, working: body.working === true };
+  loadChat: async ([slug, child], store): Promise<Result<'loadChat'>> => {
+    if (slug === '') return blankChat('');
+    if (slug === 'fixture') return fixtureChat(child);
+    const query = child !== '' ? `?child=${encodeURIComponent(child)}` : '';
+    const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat${query}`);
+    const threadId = String(body.threadId ?? '');
+    let meta: any = {};
+    if (threadId !== '') {
+      try {
+        meta = await read(store, `/api/threads/${encodeURIComponent(threadId)}/meta`);
+      } catch {
+        meta = {};
+      }
+    }
+    if (child === '') threads[slug] = threadId;
+    const rows = chatRows(slug, body, Number(body.now), meta.reactions ?? {}, meta.replyTo ?? {});
+    const pins: PinRow[] = Array.isArray(meta.pins)
+      ? meta.pins.map((id: unknown) => {
+        const key = String(id);
+        const hit = rows.find((row) => row.id === key);
+        return hit ? { id: key, text: hit.text, missing: false } : { id: key, text: NOT_IN_VIEW, missing: true };
+      })
+      : [];
+    return {
+      slug, rows, working: body.working === true, partial: body.partial === true,
+      readOnly: body.readOnly === true, pins, threadId,
+    };
   },
   respondRequest: async ([slug, id, kind, key, value], store) => {
     const body = kind === 'secret_request'
@@ -432,6 +509,15 @@ const sources: Sources = {
   },
   loadLineage: async ([slug, gate], store): Promise<Result<'loadLineage'>> => {
     if (slug === '' || gate !== '1') return { ok: true, rows: [], error: '' };
+    if (slug === 'fixture') {
+      return {
+        ok: true, error: '',
+        rows: [
+          { id: 'local-1', title: 'Notes', status: 'Done', remote: false, threadId: 'child-thread' },
+          { id: 'remote-1', title: 'Away', status: 'Working', remote: true, threadId: 'remote-thread' },
+        ],
+      };
+    }
     const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/lineage`);
     if (!r.ok) {
       if (r.error.includes('no conversation') || r.error.includes('getting set up')) {
@@ -493,5 +579,33 @@ const sources: Sources = {
   computerControl: async ([slug, tabId, action], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/control`, {
     method: 'POST', body: JSON.stringify({ tabId, action }),
   })),
+  loadRoom: async ([id], store): Promise<Result<'loadRoom'>> => {
+    if (id === '') return { id: '', title: '', members: [], messages: [] };
+    if (id === 'fixture') {
+      return {
+        id: 'fixture', title: 'Design',
+        members: [
+          { slug: 'ada', name: 'Ada', line: 'Working', state: 'working', ready: true, working: true },
+          { slug: 'bea', name: 'Bea', line: 'Getting set up…', state: 'asleep', ready: false, working: false },
+        ],
+        messages: [
+          { id: 'r1', name: 'You', text: 'Hello' },
+          { id: 'r2', name: 'Ada', text: 'On it' },
+        ],
+      };
+    }
+    const body = await read(store, `/api/rooms/${encodeURIComponent(id)}`);
+    const members = Array.isArray(body.members) ? body.members : [];
+    const messages = Array.isArray(body.messages) ? body.messages : [];
+    return {
+      id: String(body.id ?? id),
+      title: String(body.title ?? ''),
+      members: members.map((m: any) => ({
+        slug: String(m.slug ?? ''), name: String(m.name ?? ''), line: String(m.line ?? ''),
+        state: String(m.state ?? 'idle'), ready: m.ready === true, working: m.working === true,
+      })),
+      messages: messages.map((m: any) => ({ id: String(m.id ?? ''), name: String(m.name ?? ''), text: String(m.text ?? '') })),
+    };
+  },
 };
 export const answer: Answer = (source, args, store, storage, native) => sources[source](args, store, storage, native);

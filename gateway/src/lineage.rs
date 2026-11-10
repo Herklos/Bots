@@ -107,6 +107,19 @@ fn one(agent: &Value) -> Option<Value> {
     }))
 }
 
+/// A local child opens as that thread, read only. A remote child does not open, and never as the parent.
+pub fn open_child(row: &Value, parent: &str) -> Option<String> {
+    if row["remote"] == true {
+        return None;
+    }
+    let thread = row["threadId"].as_str().unwrap_or("");
+    if thread.is_empty() || thread == parent {
+        None
+    } else {
+        Some(thread.to_string())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -221,5 +234,32 @@ mod tests {
         }));
         assert_eq!(listed[0]["status"], "Done");
         assert!(rows(&json!({ "turnItems": [{ "type": "message", "id": "m" }] })).is_empty());
+    }
+
+    #[test]
+    fn a_local_child_opens_and_a_remote_child_does_not_become_the_parent() {
+        let projection = json!({
+            "turnItems": [{
+                "type": "subagent",
+                "id": "away",
+                "title": "Away",
+                "status": "running",
+                "remoteChild": { "threadId": "remote-1", "environmentId": "env-9" },
+                "childThreadId": "should-not-win"
+            }],
+            "subagents": [{
+                "id": "notes",
+                "title": "Notes",
+                "status": "completed",
+                "childThreadId": "child-thread"
+            }]
+        });
+        let listed = rows(&projection);
+        let remote = listed.iter().find(|row| row["remote"] == true).unwrap();
+        let local = listed.iter().find(|row| row["remote"] == false).unwrap();
+        assert_eq!(open_child(local, "parent-thread").as_deref(), Some("child-thread"));
+        assert_eq!(open_child(remote, "parent-thread"), None);
+        assert_ne!(open_child(remote, "parent-thread").as_deref(), Some("parent-thread"));
+        assert_eq!(open_child(&json!({ "remote": false, "threadId": "parent-thread" }), "parent-thread"), None);
     }
 }

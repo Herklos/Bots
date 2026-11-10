@@ -207,6 +207,72 @@ pub fn transcript_for(projection: &Value, peers: &Peers) -> Value {
     json!({ "messages": messages, "events": events, "requests": requests, "working": working || active.is_some(), "activeRunId": active })
 }
 
+pub const LOADED_SENTENCE: &str = "Search covers the loaded conversation.";
+
+/// Filters messages already loaded from a projection. Nothing else is searched.
+pub fn search_messages(messages: &[Value], query: &str, partial: bool) -> Value {
+    let query = query.trim().to_lowercase();
+    let hits: Vec<Value> = if query.is_empty() {
+        Vec::new()
+    } else {
+        messages
+            .iter()
+            .filter(|message| {
+                message["text"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_lowercase()
+                    .contains(&query)
+            })
+            .cloned()
+            .collect()
+    };
+    json!({
+        "messages": hits,
+        "note": if partial && !query.is_empty() { LOADED_SENTENCE } else { "" },
+    })
+}
+
+pub fn projection_partial(projection: &Value) -> bool {
+    projection["truncated"] == true || projection["hasMore"] == true || projection["partial"] == true
+}
+
+/// Adds a token line only where [`crate::usage::turn_token_line`] finds a shared id.
+pub fn with_tokens(mut transcript: Value, projection: &Value) -> Value {
+    if let Some(messages) = transcript.get_mut("messages").and_then(Value::as_array_mut) {
+        for message in messages.iter_mut() {
+            let id = message["id"].as_str().unwrap_or("");
+            message["tokens"] = crate::usage::turn_token_line(projection, id)
+                .unwrap_or(Value::Null);
+        }
+    }
+    transcript["partial"] = json!(projection_partial(projection));
+    transcript
+}
+
+/// Writes the clip as an attachment, records the duration, and builds the dispatch.
+/// `voiceCalls` stays a time and a duration. The command gains no quote field.
+pub async fn store_voice_send(
+    root: &std::path::Path,
+    slug: &str,
+    threads: &crate::thread_meta::ThreadMeta,
+    thread: &str,
+    bytes: &[u8],
+    seconds: f64,
+    at: &str,
+) -> crate::error::ApiResult<Value> {
+    let meta = crate::attachments::write_file(root, slug, "voice.m4a", "audio/mp4", bytes).await?;
+    let seen = threads
+        .add_voice_call(Some(thread), Some(&json!(seconds)), at)
+        .await?;
+    let command = send_command(thread, "", &[crate::attachments::command_part(&meta)]);
+    Ok(json!({
+        "attachment": meta,
+        "voiceCalls": seen["voiceCalls"],
+        "command": command,
+    }))
+}
+
 /// The command a phone send dispatches.
 /// `attachments` is the gateway's file records (`attachments::command_part`).
 pub fn send_command(thread: &str, text: &str, attachments: &[Value]) -> Value {
@@ -332,5 +398,85 @@ mod tests {
         );
         assert_eq!(command["attachments"][0]["name"], "notes.txt");
         assert_eq!(command["text"], "");
+    }
+
+    #[test]
+    fn search_returns_only_matching_loaded_messages() {
+        let messages = vec![
+            json!({ "id": "1", "text": "Hello Ada" }),
+            json!({ "id": "2", "text": "goodbye" }),
+        ];
+        let hit = search_messages(&messages, "ada", true);
+        assert_eq!(hit["messages"].as_array().unwrap().len(), 1);
+        assert_eq!(hit["messages"][0]["id"], "1");
+        assert_eq!(hit["note"], LOADED_SENTENCE);
+        assert_eq!(search_messages(&messages, "ada", false)["note"], "");
+        assert!(search_messages(&messages, "missing", true)["messages"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        assert_eq!(
+            search_messages(&messages, "missing", true)["note"],
+            LOADED_SENTENCE
+        );
+    }
+
+    #[test]
+    fn a_token_line_is_attached_only_for_a_shared_id() {
+        let projection = json!({
+            "partial": true,
+            "providerTurns": [{
+                "id": "m2",
+                "turnTokenUsage": {
+                    "inputTokens": 10, "outputTokens": 2,
+                    "cachedInputTokens": 4, "cacheCreationTokens": 1
+                }
+            }],
+            "turnItems": [
+                { "id": "m1", "type": "user_message", "text": "hi", "status": "completed" },
+                { "id": "m2", "type": "assistant_message", "text": "hello", "status": "completed" }
+            ]
+        });
+        let out = with_tokens(transcript(&projection), &projection);
+        assert_eq!(out["partial"], true);
+        assert!(out["messages"][0]["tokens"].is_null());
+        assert_eq!(out["messages"][1]["tokens"]["inputTokens"], 10);
+        assert_eq!(out["messages"][1]["tokens"]["cachedInputTokens"], 4);
+        assert_ne!(
+            out["messages"][1]["tokens"]["inputTokens"].as_u64().unwrap(),
+            14
+        );
+    }
+
+    #[tokio::test]
+    async fn a_voice_send_stores_bytes_as_an_attachment_and_a_duration() {
+        let dir = tempfile::tempdir().unwrap();
+        let threads = crate::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
+        let bytes = b"fake-audio-bytes";
+        let out = store_voice_send(
+            dir.path(),
+            "ada",
+            &threads,
+            "thread-1",
+            bytes,
+            12.2,
+            "2026-11-10T00:00:00.000Z",
+        )
+        .await
+        .unwrap();
+        let id = out["attachment"]["id"].as_str().unwrap();
+        let (_meta, disk) = crate::attachments::read_file(dir.path(), "ada", id)
+            .await
+            .unwrap();
+        assert_eq!(disk, bytes);
+        assert_eq!(out["voiceCalls"].as_array().unwrap().len(), 1);
+        assert_eq!(out["voiceCalls"][0]["at"], "2026-11-10T00:00:00.000Z");
+        assert_eq!(out["voiceCalls"][0]["seconds"], 12);
+        assert!(out["voiceCalls"][0].get("audio").is_none());
+        let raw = serde_json::to_string(&out["voiceCalls"]).unwrap();
+        assert!(!raw.contains("fake-audio"));
+        assert!(out["command"].get("quote").is_none());
+        assert_eq!(out["command"]["attachments"][0]["id"], id);
+        assert_eq!(out["command"]["type"], "message.dispatch");
     }
 }

@@ -333,6 +333,7 @@ style PrimaryButton
 routes nav
   inbox "/"
     chat "/bot/:slug"
+    group "/group/:id"
     create "/new"
     settings "/settings"
       vault "/vault"
@@ -400,6 +401,8 @@ shape Row
   placeholder: string
   key: string
   react: string
+  quote: string
+  tokens: string
 
 shape Suggestion
   name: string
@@ -414,10 +417,38 @@ shape About
   harness: string
   connected: bool
 
+shape Pin
+  id: string
+  text: string
+  missing: bool
+
 shape Chat
   slug: string
   rows: Row[]
   working: bool
+  partial: bool
+  readOnly: bool
+  pins: Pin[]
+  threadId: string
+
+shape RoomMember
+  slug: string
+  name: string
+  line: string
+  state: string
+  ready: bool
+  working: bool
+
+shape RoomMessage
+  id: string
+  name: string
+  text: string
+
+shape Room
+  id: string
+  title: string
+  members: RoomMember[]
+  messages: RoomMessage[]
 
 shape Prefs
   userName: string
@@ -612,6 +643,8 @@ fn attachmentName(entry: string): string = match entry.split("\\t").at(-1) { cas
 fn themeLabel(t: string): string = t == "system" ? "System" : t == "dark" ? "Dark" : "Light"
 // Face colours are plain names; Bot colours are brand.* tokens from the design package.
 fn faceColor(c: string): string = c == "brand.default" ? "teal" : c == "brand.blue" ? "blue" : c == "brand.violet" ? "violet" : c == "brand.pink" ? "pink" : c == "brand.orange" ? "orange" : c == "brand.green" ? "green" : c == "brand.black" ? "black" : c == "brand.white" ? "white" : c == "brand.brown" ? "brown" : c == "brand.red" ? "red" : c == "brand.amber" ? "amber" : c == "brand.yellow" ? "yellow" : c == "brand.cyan" ? "cyan" : c == "brand.purple" ? "purple" : c == "brand.magenta" ? "magenta" : c == "brand.gray" ? "gray" : "teal"
+// The open chat is clear. A hidden Bot keeps the mark until that chat is the open one.
+fn showUnread(unread: bool, open: bool, hidden: bool): bool = unread and not open and (hidden or not hidden)
 
 component Bots
   state password = ""
@@ -630,6 +663,10 @@ component Bots
   state searching = false
   state hiddenOpen = false
   state vaultQuery = ""
+  state messageQuery = ""
+  state marksOn = true
+  state voiceHold = ""
+  state childThread = ""
   // Wide windows show the Bot's panel beside the chat, like Threebot's desktop.
   state wide = false
   // The right panel (the Bot's settings) opens and closes from the chat header's
@@ -646,8 +683,9 @@ component Bots
   state wantHold = false
   state heldTab = ""
   resource session = loadSession() as shape Session else empty()
-  resource bots = loadBots() as shape Bot[] else empty()
-  resource chat = loadChat(slug) as shape Chat else empty()
+  resource bots = loadBots(slug) as shape Bot[] else empty()
+  resource chat = loadChat(slug, childThread) as shape Chat else empty()
+  resource room = loadRoom(roomId) as shape Room else empty()
   resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
   resource providers = loadProviders() as shape Provider[] else empty()
   resource about = loadAbout() as shape About else empty()
@@ -691,6 +729,10 @@ component Bots
   derive lastId = match chat.rows.at(-1) { case some(m) => m.id, case none => "" }
   derive locked = session.passwordRequired and not session.authenticated
   derive query = botQuery.trim().toLowerCase()
+  derive roomId = match stack(nav).filter(e => e.name == "group").at(-1) { case some(e) => e.params.id, case none => "" }
+  derive qtext = messageQuery.trim().toLowerCase()
+  derive shownRows = chat.rows.filter(m => m.kind != "message" or qtext == "" or m.text.toLowerCase().includes(qtext))
+  derive searchNote = qtext != "" and chat.partial ? "Search covers the loaded conversation." : ""
   derive visibleBots = bots.filter(b => not b.hidden and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
   derive tiles = visibleBots.filter(b => query == "" and (b.main or b.pinned))
   derive rows = visibleBots.filter(b => query != "" or not (b.main or b.pinned))
@@ -786,6 +828,8 @@ component Bots
     refresh chat
     if top(nav).name == "chat" and openUnread and not pending(seen)
       send seen = markSeen(slug)
+    if top(nav).name == "group"
+      refresh room
     if top(nav).name == "settings"
       refresh usage
       refresh report
@@ -809,10 +853,21 @@ component Bots
   // A wide window shows the list beside the open chat. Opening another Bot
   // replaces that chat, so the conversation swaps instead of stacking.
   action open(url: string)
+    childThread = ""
     panelPage = "root"
     nav = top(nav).name == "chat" and url.startsWith("/bot/") ? replace(nav, url) : go(nav, url)
   action back
+    childThread = ""
     nav = back(nav)
+  action editChatQuery(v: string)
+    messageQuery = v
+  action toggleShownMark
+    let next = not marksOn
+    marksOn = next
+  action holdVoice
+    voiceHold = "voice.m4a"
+  action openChild(threadId: string)
+    childThread = threadId
   action openNew
     newName = ""
     newColor = "brand.default"
@@ -1057,8 +1112,8 @@ component Bots
                             text b.time font="-exact-footnote" color="ink.faint"
                           row gap="space.sm" align-items="center"
                             text b.line color=(b.unread ? "-exact-label" : "ink.muted") font="-exact-footnote" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
-                            if b.unread
-                              column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label="Unread"
+                            if showUnread(b.unread, slug == b.slug, b.hidden)
+                              column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label="Unread" testId=`unread-${b.slug}`
                   if hiddenBots.length > 0
                     button class=ConversationLink appearance="none" press=toggleHidden aria-expanded=hiddenOpen testId="hidden-toggle"
                       row gap="space.sm" align-items="center"
@@ -1071,6 +1126,8 @@ component Bots
                           row gap="space.md" align-items="center"
                             Avatar(shape=b.shape, color=faceColor(b.color), state="asleep", size=32, still=true, presence="")
                             text b.name flex=1 color="ink.muted"
+                            if showUnread(b.unread, slug == b.slug, b.hidden)
+                              column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label="Unread" testId=`unread-${b.slug}`
               column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
                 link class=ConversationLink href="/vault" aria-label="Vault" testId="sidebar-vault" padding="space.sm space.md"
                   row align-items="center" gap="space.md"
@@ -1123,8 +1180,13 @@ component Bots
                   if chat.rows.length > 6
                     button class=IconControl appearance="none" press=toEnd aria-label="Jump to the latest message" title="Jump to the latest" testId="to-end" position="absolute" right=16 bottom=8 width=36 height=36 border-radius="radius.full" background-color="surface.card" border="1px solid surface.line"
                       Glyph(name="arrow-down", size=18)
-                  list id="transcript" testId="transcript" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="space.lg 0" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true max-height="100%" min-height=0 flex-shrink=1
-                    for m in chat.rows key=m.id
+                  input type="search" class=SearchField value=messageQuery input=editChatQuery placeholder="Search this conversation" aria-label="Search this conversation" testId="chat-search" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="0 space.lg space.xs"
+                  if searchNote != ""
+                    text searchNote color="ink.muted" font="-exact-footnote" testId="search-note" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
+                  for p in chat.pins key=p.id
+                    text p.text color="ink.muted" font="-exact-footnote" testId=`pin-${p.id}` width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
+                  list id="transcript" testId=(chat.readOnly ? "child-transcript" : "transcript") width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="space.lg 0" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true max-height="100%" min-height=0 flex-shrink=1
+                    for m in shownRows key=m.id
                       column
                         if m.kind == "day"
                           text m.text text-align="center" font="-exact-footnote" color="ink.faint" padding="space.lg space.lg space.xs" testId=`day-${m.id}`
@@ -1143,6 +1205,8 @@ component Bots
                         else if m.kind == "message"
                           row justify-content=(m.mine ? "flex-end" : "flex-start") padding=(m.head ? "space.sm space.lg 2px" : "2px space.lg")
                             column gap="2px" max-width="82%" align-items=(m.mine ? "flex-end" : "flex-start")
+                              if m.quote != ""
+                                text m.quote color="ink.muted" font="-exact-footnote" testId=`quote-${m.id}`
                               if m.text != "" and m.mine
                                 text m.text class=Bubble testId=`message-${m.id}`
                                   background-color="brand.default"
@@ -1173,14 +1237,16 @@ component Bots
                                         text f.size font="-exact-footnote" color="ink.muted"
                                       column color="ink.muted"
                                         Glyph(name="download", size=18)
+                              if m.tokens != ""
+                                text m.tokens color="ink.muted" font="-exact-footnote" testId=`tokens-${m.id}`
                               if m.tail and m.time != ""
                                 row gap="space.xs" align-items="center" padding="0 space.xs"
                                   text m.time font="-exact-footnote" color="ink.faint"
                                   if m.react != ""
-                                    button class=TextControl appearance="none" press=doReact(m.id, "👍") aria-label="Remove reaction" min-height=24 padding="0 space.xs" testId=`reaction-${m.id}`
+                                    button class=TextControl appearance="none" press=doReact(m.id, "👍") aria-label="Remove reaction" min-height=24 padding="0 space.xs" testId=`react-${m.id}`
                                       text m.react font="-exact-footnote"
                                   else if not m.mine
-                                    button class=TextControl appearance="none" press=doReact(m.id, "👍") aria-label="React with thumbs up" title="React" min-height=24 padding="0 space.xs" testId=`react-${m.id}`
+                                    button class=TextControl appearance="none" press=doReact(m.id, "👍") aria-label="React with thumbs up" title="React" min-height=24 padding="0 space.xs" testId=`add-react-${m.id}`
                                       Glyph(name="smile", size=14)
                         else if m.kind == "request"
                           row padding="space.sm space.lg"
@@ -1244,19 +1310,47 @@ component Bots
                       text attachmentName(entry) font="-exact-footnote" color="-exact-label" overflow-wrap="anywhere" flex=1 min-width=0
                       button class=IconControl appearance="none" press=dropPending(entry) aria-label=`Remove ${attachmentName(entry)}` title="Remove attachment" testId="pending-file" width=28 height=28
                         Glyph(name="close", size=14)
-              row align-items="flex-end" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
-                button class=IconControl press=pickFiles disabled=(slug == "" or pending(attached) or pendingAttaches.length >= 8) appearance="none" aria-label="Attach a file" title="Attach a file" testId="attach" width=36 height=36 border-radius="radius.full" background-color="surface.raised"
-                  Glyph(name="add", size=18)
-                input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
-                textarea id="composer" value=draft input=edit rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(bots, e.params.slug) != "" ? `Message ${nameOf(bots, e.params.slug)}` : "Write a message…") aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
-                if chat.working and not canSend
-                  button class=StopControl appearance="none" press=stop margin="2px 0" aria-label="Stop" testId="stop"
-                    Glyph(name="stop", size=16)
-                else
-                  button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label="Send" testId="send"
-                    Glyph(name="send", size=18)
+              if chat.readOnly
+                text "This thread is read only." color="ink.muted" padding="space.md space.lg space.xl" testId="child-readonly"
+              else
+                row align-items="flex-end" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
+                  button class=IconControl press=pickFiles disabled=(slug == "" or pending(attached) or pendingAttaches.length >= 8) appearance="none" aria-label="Attach a file" title="Attach a file" testId="attach" width=36 height=36 border-radius="radius.full" background-color="surface.raised"
+                    Glyph(name="add", size=18)
+                  button class=QuietButton appearance="none" press=holdVoice aria-label="Record a voice clip" testId="voice-record"
+                    text "Voice"
+                  if voiceHold != ""
+                    text voiceHold font="-exact-footnote" color="ink.muted" testId="voice-hold"
+                  input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
+                  textarea id="composer" value=draft input=edit rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(bots, e.params.slug) != "" ? `Message ${nameOf(bots, e.params.slug)}` : "Write a message…") aria-label="Message" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
+                  if chat.working and not canSend
+                    button class=StopControl appearance="none" press=stop margin="2px 0" aria-label="Stop" testId="stop"
+                      Glyph(name="stop", size=16)
+                  else
+                    button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label="Send" testId="send"
+                      Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease)
+                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease)
+          else if e.name == "group"
+            column class=Screen navigationKey=`${e.id}` position="absolute" inset=0
+              header class=PageHeader
+                button id="back" class=IconControl appearance="none" press=back aria-label="Back" title="Back"
+                  column rotate="180deg"
+                    Glyph(name="chevron", size=20)
+                text (room.title != "" ? room.title : "Room") role="heading" aria-level=1 class=PageTitle flex=1 testId="room-title"
+              if failed(room)
+                text "Can’t load this room. Check that hbots is running, then try again." color="-exact-system-red" padding="space.lg" testId="room-error"
+              else
+                column flex=1 min-height=0 padding="space.lg" gap="space.lg" max-width="46rem" width="100%" align-self="center" box-sizing="border-box"
+                  for m in room.members key=m.slug
+                    row gap="space.md" align-items="center" min-height=52
+                      Avatar(shape="ball", color="teal", state=m.state, size=40, still=(m.state != "working"), presence="")
+                      column gap="2px" flex=1 min-width=0
+                        text m.name font-weight=600 testId=`member-${m.slug}-name`
+                        text m.line color="ink.muted" font="-exact-footnote" testId=`member-${m.slug}-state`
+                  for msg in room.messages key=msg.id
+                    row gap="space.sm" align-items="center" min-height=44
+                      text msg.name font-weight=600
+                      text msg.text flex=1 min-width=0
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader
@@ -1548,6 +1642,7 @@ component BotPanel
     pickTab: action
     openPage: action
     closePanel: action
+    openChild: action
     wide: bool
     bot: Bot
     error: string
@@ -1691,7 +1786,10 @@ component BotPanel
                         Glyph(name="chevron", size=14)
                       column flex=1 gap="2px" min-width=0
                         text line.title font-weight=500 overflow-wrap="anywhere"
-                        text (line.remote ? "On another machine" : line.threadId != "" ? "On this machine" : "") color="ink.muted" font="-exact-footnote"
+                        text (line.remote ? "On another machine" : line.threadId != "" ? "On this machine" : "") color="ink.muted" font="-exact-footnote" testId=`where-${line.id}`
+                      if not line.remote and line.threadId != ""
+                        button class=QuietButton appearance="none" press=openChild(line.threadId) min-height=44 testId=`open-${line.id}`
+                          text "Open"
                       row class=Chip
                         text line.status
         column id="bot-tab-library" role="tabpanel" aria-label="Library" display=(tab == "library" ? "flex" : "none") flex=1 min-height=0
