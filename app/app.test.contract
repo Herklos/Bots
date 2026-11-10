@@ -246,6 +246,27 @@ test "creating a Bot works on a narrow screen"
   clock settle
   expect disabled "create"
 
+test "the parent sheet lists its subagents and opens a new one"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  expect text "subagent-name-ada-junior-1" == "Ada junior 1"
+  expect tree has "subagent-ada-junior-1"
+  tap "edit-subagent-ada-junior-1"
+  clock settle
+  expect text "panel-page-title" == "Subagent"
+  expect tree has "subagent-prompt"
+  expect tree has "subagent-inherit"
+  expect tree has "subagent-save"
+  expect tree has "delete-subagent"
+  tap "panel-back"
+  clock settle
+  tap "new-subagent"
+  clock settle
+  expect text "panel-page-title" == "New subagent"
+  expect tree has "subagent-create"
+
 test "the reaction picker opens under a Bot message"
   at "/bot/fixture"
   clock data
