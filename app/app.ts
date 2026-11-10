@@ -1047,9 +1047,12 @@ const sources: Sources = {
     return { ok: true, error: '' };
   },
   closeComputer: async ([slug], store) => {
-    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/close`, {
+    if (slug === 'frame' || slug === 'page' || slug === 'tabs') return { ok: true, error: '' };
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/close`, {
       method: 'POST', body: '{}',
-    }));
+    });
+    if (!r.ok) return { ok: false, error: explain(r.error, 'computerClose') };
+    return { ok: true, error: '' };
   },
   computerControl: async ([slug, tabId, action], store) => {
     if (slug === 'frame' || slug === 'page' || slug === 'tabs') return { ok: true, error: '' };
