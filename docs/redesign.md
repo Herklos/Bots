@@ -120,7 +120,7 @@ Cut from the first draft: a Bot-colour wash behind the transcript (decoration, f
 | Requests | `RequestCard` with the Bot's Face and the question. Approvals get Allow and Deny buttons; questions get the options or a text field; a secret request points to the Vault. These use the existing respond route |
 | Working | One quiet bubble with three dots and the Face working, replacing "Working…" text; text streams into the bubble as it arrives |
 | Sending | The message appears at once (60% ink while sending). On failure: "Not sent" with a Retry button in the bubble, not an error line above the composer |
-| Reactions | Double-click or long-press shows a row of five emoji; a chosen one sits under the bubble as a chip. Uses `/api/threads/{thread}/reactions` |
+| Reactions | A chosen emoji is a chip overlapping the bubble corner; the add control appears beside the bubble on hover or long-press. Uses `/api/threads/{thread}/reactions` |
 | Scrolling | Stays at the end when you are at the end. Otherwise a "New messages" pill and a scroll-to-end circle |
 | Empty | Face 96, the Bot's name, "A little help, a new idea, or just a hello.", three starter chips above the composer |
 
