@@ -136,3 +136,12 @@ Destructive actions name the thing and say whether it can be undone:
 
 - Fast (120 ms) for a press; base (200 ms) for a sheet or a row; slow (320 ms) for a screen change.
 - The Face breathes at rest, rocks while the Bot works, and blinks. It holds still when reduced motion is on (`prefer prefers-reduced-motion reduce`).
+
+
+## Redesign pass (branch `redesign`)
+
+- Inbox: search and New Bot are circles; the main and pinned Bots are tiles; rows show the latest message, a time and an unread dot; a Vault row sits above the user chip.
+- Chat: Bot replies are Markdown on `surface.bubble`; day marks, event lines (Messaged, Message from, Routine ran, Created routine), file and image cards; requests are answered in the chat; a sent message shows at once, and "Not sent" offers Retry.
+- Bot panel: Details (model row, usage card, routines to read, what the Bot is working on), Library (pictures, files and links, read only) and Computer (the page as a card). The gear opens Edit Bot. The model page picks provider, model and effort; the usage page shows today, 7 days, 30 days or all time, as a summary or detail.
+- New Bot: a live Face, ten colours, eight shapes, and suggestions.
+- Settings: profile, theme cards, the default model, usage by Bot and period, Vault, remote access and about.

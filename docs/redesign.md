@@ -1,6 +1,6 @@
 # hbots redesign plan
 
-Status: step 0 (real T3 data, fixtures) and step 1 (tokens) are done; everything else is still a plan. Values stay in `design/tokens.json`; every new value goes there first, then `cargo run -p hbots-design -- sync`.
+Status: built on branch `redesign` (steps 0 to 10). Not done: reactions, scroll-to-end and New messages pill, drag and drop and paste, Vault favicons, removing the Projects HTTP routes (B16), and the sign-in polish. Grouping of message runs stayed in `app.ts`. Values stay in `design/tokens.json`; every new value goes there first, then `cargo run -p hbots-design -- sync`.
 
 ## 0. Decisions already made
 
