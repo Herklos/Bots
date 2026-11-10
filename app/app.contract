@@ -2686,9 +2686,9 @@ component UsageView
     showBots: bool
   view
     column gap="space.lg" padding="space.sm space.lg space.xl" testId="usage-view"
-      row gap="space.xs" role="radiogroup" aria-label=t("usage.period") overflow-x="auto" flex-wrap="nowrap" min-width=0
+      row gap="space.xs" role="radiogroup" aria-label=t("usage.period") flex-wrap="wrap"
         for p in ["today", "7d", "30d", "all"] key=p
-          button class=Segment appearance="none" role="radio" aria-checked=(period == p) press=pickPeriod(p) testId=`period-${p}` border="1px solid surface.line" min-height=32 flex-shrink=0 padding="2px space.xs" font="-exact-footnote" white-space="nowrap" box-sizing="border-box"
+          button class=Segment appearance="none" role="radio" aria-checked=(period == p) press=pickPeriod(p) testId=`period-${p}` border="1px solid surface.line" min-height=32 padding="2px space.xs" font="-exact-footnote" white-space="nowrap" box-sizing="border-box"
             background-color=(period == p ? "surface.raised" : "transparent")
             text (p == "today" ? t("usage.today") : p == "7d" ? t("usage.days7") : p == "30d" ? t("usage.days30") : t("usage.all"))
       row gap="space.xs" role="radiogroup" aria-label=t("usage.view")
@@ -2729,7 +2729,7 @@ component UsageView
                 row gap="space.md" align-items="center" padding="space.xs space.md"
                   column flex=1 gap="2px" min-width=0
                     text d.label font-weight=500
-                    text t("usage.dayLine", input=d.input, output=d.output, cached=d.cached) color="ink.muted" font="-exact-footnote"
+                    text t("usage.dayLine", input=d.input, output=d.output, cached=d.cached) color="ink.muted" font="-exact-footnote" white-space="normal" overflow-wrap="anywhere"
                   column align-items="flex-end" gap="2px"
                     text d.tokens font-weight=600
                     text t("usage.msg", n=d.messages) color="ink.faint" font="-exact-footnote"
