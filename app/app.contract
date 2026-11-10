@@ -2686,9 +2686,9 @@ component UsageView
     showBots: bool
   view
     column gap="space.lg" padding="space.sm space.lg space.xl" testId="usage-view"
-      row gap="space.xs" role="radiogroup" aria-label=t("usage.period")
+      row gap="space.xs" role="radiogroup" aria-label=t("usage.period") overflow-x="auto" flex-wrap="nowrap" min-width=0
         for p in ["today", "7d", "30d", "all"] key=p
-          button class=Segment appearance="none" role="radio" aria-checked=(period == p) press=pickPeriod(p) testId=`period-${p}` border="1px solid surface.line" min-height=32 flex=1 min-width=0 padding="2px space.xs" font="-exact-footnote" white-space="nowrap" box-sizing="border-box"
+          button class=Segment appearance="none" role="radio" aria-checked=(period == p) press=pickPeriod(p) testId=`period-${p}` border="1px solid surface.line" min-height=32 flex-shrink=0 padding="2px space.xs" font="-exact-footnote" white-space="nowrap" box-sizing="border-box"
             background-color=(period == p ? "surface.raised" : "transparent")
             text (p == "today" ? t("usage.today") : p == "7d" ? t("usage.days7") : p == "30d" ? t("usage.days30") : t("usage.all"))
       row gap="space.xs" role="radiogroup" aria-label=t("usage.view")
