@@ -119,14 +119,17 @@ impl Rooms {
             room["color"] = json!(clean_color(color.as_str().unwrap_or("")));
         }
         if let Some(shape) = patch.get("shape") {
-            room["shape"] = json!(
-                crate::bots::shape_name(shape.as_str().unwrap_or("")).unwrap_or_else(|| "ball".into())
-            );
+            room["shape"] = json!(crate::bots::shape_name(shape.as_str().unwrap_or(""))
+                .unwrap_or_else(|| "ball".into()));
         }
         if let Some(members) = patch.get("members") {
             let list: Vec<String> = members
                 .as_array()
-                .map(|l| l.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+                .map(|l| {
+                    l.iter()
+                        .filter_map(|v| v.as_str().map(str::to_string))
+                        .collect()
+                })
                 .unwrap_or_default();
             let list = distinct(&list);
             if list.len() < 2 {
@@ -152,6 +155,11 @@ impl Rooms {
         }
         room["threads"][slug] = json!(thread);
         write_doc(&self.path, &doc).await
+    }
+
+    /// Nothing stored, or the Bot's one-to-one thread, is not a thread for this group.
+    pub fn group_thread_missing(stored: &str, main_thread_id: &str) -> bool {
+        stored.is_empty() || stored == main_thread_id
     }
 
     pub async fn delete(&self, room_id: &str) -> ApiResult<()> {
@@ -250,14 +258,20 @@ impl Rooms {
             // T3 names a thread item `turn-item:message:<id>` after the id the command gave it.
             let suffix = format!(":{anchor}");
             let Some(position) = messages.iter().position(|m| {
-                m["id"].as_str().is_some_and(|id| id == anchor || id.ends_with(&suffix))
+                m["id"]
+                    .as_str()
+                    .is_some_and(|id| id == anchor || id.ends_with(&suffix))
             }) else {
                 continue;
             };
             for reply in &messages[position + 1..] {
                 let text = reply["text"].as_str().unwrap_or("").trim();
                 let id = reply["id"].as_str().unwrap_or("");
-                if reply["role"] != "bot" || reply["streaming"] == true || text.is_empty() || id.is_empty() {
+                if reply["role"] != "bot"
+                    || reply["streaming"] == true
+                    || text.is_empty()
+                    || id.is_empty()
+                {
                     continue;
                 }
                 if has_message(room, id) {
@@ -336,7 +350,8 @@ fn clean_color(raw: &str) -> String {
     let avatar = &hbots_design::tokens().avatar;
     let name = raw.strip_prefix("brand.").unwrap_or(raw);
     let named = avatar.picker.iter().any(|c| c == name) || (raw == "brand.default");
-    let hex = raw.len() == 7 && raw.starts_with('#') && raw[1..].chars().all(|c| c.is_ascii_hexdigit());
+    let hex =
+        raw.len() == 7 && raw.starts_with('#') && raw[1..].chars().all(|c| c.is_ascii_hexdigit());
     if named || hex {
         raw.to_string()
     } else {
@@ -415,10 +430,47 @@ fn frame(
 /// A short thanks or acknowledgement, even with an `@`, must not start another turn.
 fn is_courtesy(text: &str) -> bool {
     const ACK: &[&str] = &[
-        "thanks", "thank", "thx", "ty", "ok", "okay", "k", "got", "it", "on", "sure", "noted",
-        "done", "yep", "yeah", "yes", "welcome", "np", "cool", "great", "perfect", "sounds",
-        "good", "will", "do", "acknowledged", "roger", "alright", "right", "nice", "awesome",
-        "cheers", "appreciated", "you", "too", "as", "well", "no", "problem", "of", "course",
+        "thanks",
+        "thank",
+        "thx",
+        "ty",
+        "ok",
+        "okay",
+        "k",
+        "got",
+        "it",
+        "on",
+        "sure",
+        "noted",
+        "done",
+        "yep",
+        "yeah",
+        "yes",
+        "welcome",
+        "np",
+        "cool",
+        "great",
+        "perfect",
+        "sounds",
+        "good",
+        "will",
+        "do",
+        "acknowledged",
+        "roger",
+        "alright",
+        "right",
+        "nice",
+        "awesome",
+        "cheers",
+        "appreciated",
+        "you",
+        "too",
+        "as",
+        "well",
+        "no",
+        "problem",
+        "of",
+        "course",
     ];
     let mentions = mention_words(text);
     let words: Vec<String> = text
@@ -455,7 +507,9 @@ fn mention_words(text: &str) -> Vec<String> {
         if chars[i] == '@' && starts_word {
             let mut word = String::new();
             let mut j = i + 1;
-            while j < chars.len() && (chars[j].is_alphanumeric() || chars[j] == '-' || chars[j] == '_') {
+            while j < chars.len()
+                && (chars[j].is_alphanumeric() || chars[j] == '-' || chars[j] == '_')
+            {
                 word.extend(chars[j].to_lowercase());
                 j += 1;
             }
@@ -477,7 +531,12 @@ pub fn mentioned(members: &[Member], text: &str) -> Vec<usize> {
         .iter()
         .enumerate()
         .filter(|(_, m)| {
-            let compact: String = m.title.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+            let compact: String = m
+                .title
+                .to_lowercase()
+                .chars()
+                .filter(|c| c.is_alphanumeric())
+                .collect();
             words.iter().any(|w| *w == m.slug || *w == compact)
         })
         .map(|(i, _)| i)
@@ -592,9 +651,10 @@ fn member_slugs(room: &Value) -> Vec<String> {
 }
 
 fn has_message(room: &Value, id: &str) -> bool {
-    room["messages"]
-        .as_array()
-        .is_some_and(|list| list.iter().any(|message| message["id"].as_str() == Some(id)))
+    room["messages"].as_array().is_some_and(|list| {
+        list.iter()
+            .any(|message| message["id"].as_str() == Some(id))
+    })
 }
 
 fn push_message(room: &mut Value, message: &Value) -> ApiResult<()> {
@@ -658,6 +718,13 @@ async fn write_doc(path: &std::path::Path, doc: &Value) -> ApiResult<()> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn a_stored_main_thread_is_missing() {
+        assert!(Rooms::group_thread_missing("", "main-1"));
+        assert!(Rooms::group_thread_missing("main-1", "main-1"));
+        assert!(!Rooms::group_thread_missing("group-1", "main-1"));
+    }
+
     fn directory() -> Vec<Member> {
         vec![
             Member {
@@ -686,7 +753,7 @@ mod tests {
             .await
             .unwrap();
         let id = created["id"].as_str().unwrap().to_string();
-        assert!(rooms.list().await.unwrap().is_empty() == false);
+        assert!(!rooms.list().await.unwrap().is_empty());
 
         let (stored, dispatches) = rooms
             .send(&id, &directory(), "hello both", "m1", "t1")
@@ -825,7 +892,13 @@ mod tests {
 
     async fn trio_room(rooms: &Rooms) -> String {
         rooms
-            .create("Team", "Plans the week", "blue", "hex", &["ada".into(), "bea".into(), "cy".into()])
+            .create(
+                "Team",
+                "Plans the week",
+                "blue",
+                "hex",
+                &["ada".into(), "bea".into(), "cy".into()],
+            )
             .await
             .unwrap()["id"]
             .as_str()
@@ -848,22 +921,43 @@ mod tests {
         assert_eq!(room["shape"], "hex");
 
         let odd = rooms
-            .create("Odd", "", "not-a-colour", "not-a-shape", &["ada".into(), "bea".into()])
+            .create(
+                "Odd",
+                "",
+                "not-a-colour",
+                "not-a-shape",
+                &["ada".into(), "bea".into()],
+            )
             .await
             .unwrap();
         assert_eq!(odd["color"], hbots_design::tokens().avatar.default.as_str());
-        assert_eq!(odd["shape"], "ball", "an unknown shape falls back to the ball");
+        assert_eq!(
+            odd["shape"], "ball",
+            "an unknown shape falls back to the ball"
+        );
         let app = rooms
-            .create("App", "", "brand.violet", "egg", &["ada".into(), "bea".into()])
+            .create(
+                "App",
+                "",
+                "brand.violet",
+                "egg",
+                &["ada".into(), "bea".into()],
+            )
             .await
             .unwrap();
-        assert_eq!(app["color"], "brand.violet", "the app's own colour names are kept");
+        assert_eq!(
+            app["color"], "brand.violet",
+            "the app's own colour names are kept"
+        );
 
         let view = present(&room, &trio());
         assert_eq!(view["description"], "Plans the week");
         assert_eq!(view["shape"], "hex");
         let row = summary(&room);
-        assert!(row.get("messages").is_none(), "the list carries no transcript");
+        assert!(
+            row.get("messages").is_none(),
+            "the list carries no transcript"
+        );
         assert_eq!(row["last"], Value::Null);
     }
 
@@ -872,11 +966,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let ada = vec!["ada".to_string()];
-        assert!(rooms.create(" ", "", "", "", &["ada".into(), "bea".into()]).await.is_err());
+        assert!(rooms
+            .create(" ", "", "", "", &["ada".into(), "bea".into()])
+            .await
+            .is_err());
         assert!(rooms.create("Solo", "", "", "", &ada).await.is_err());
         let twice = vec!["ada".to_string(), "ada".to_string()];
         let err = rooms.create("Twin", "", "", "", &twice).await.unwrap_err();
-        assert_eq!(err.message, "A group needs two Bots.", "a duplicate is not a second Bot");
+        assert_eq!(
+            err.message, "A group needs two Bots.",
+            "a duplicate is not a second Bot"
+        );
     }
 
     #[tokio::test]
@@ -895,9 +995,15 @@ mod tests {
         assert_eq!(updated["shape"], "hex", "an omitted field stays");
         assert_eq!(updated["members"], json!(["ada", "cy"]));
         assert_eq!(updated["messages"].as_array().unwrap().len(), 1);
-        assert!(rooms.update(&id, &json!({ "members": ["ada"] })).await.is_err());
+        assert!(rooms
+            .update(&id, &json!({ "members": ["ada"] }))
+            .await
+            .is_err());
         assert!(rooms.update(&id, &json!({ "title": "  " })).await.is_err());
-        assert!(rooms.update("missing", &json!({ "title": "x" })).await.is_err());
+        assert!(rooms
+            .update("missing", &json!({ "title": "x" }))
+            .await
+            .is_err());
     }
 
     #[tokio::test]
@@ -910,27 +1016,56 @@ mod tests {
         let left = rooms.list().await.unwrap();
         assert_eq!(left.len(), 1);
         assert_eq!(left[0]["id"], json!(keep));
-        assert!(rooms.delete(&drop).await.is_err(), "a second delete finds nothing");
+        assert!(
+            rooms.delete(&drop).await.is_err(),
+            "a second delete finds nothing"
+        );
     }
 
     #[test]
     fn mentions_pick_members_by_slug_or_name_and_all_wakes_everyone() {
         let m = trio();
-        assert_eq!(plan_dispatches(&m, "@ada and @bea please look", None), vec![0, 1]);
-        assert_eq!(plan_dispatches(&m, "@cypark can you check", None), vec![2], "a name without spaces");
-        assert_eq!(plan_dispatches(&m, "@Cy hi", None), vec![2], "case does not matter");
+        assert_eq!(
+            plan_dispatches(&m, "@ada and @bea please look", None),
+            vec![0, 1]
+        );
+        assert_eq!(
+            plan_dispatches(&m, "@cypark can you check", None),
+            vec![2],
+            "a name without spaces"
+        );
+        assert_eq!(
+            plan_dispatches(&m, "@Cy hi", None),
+            vec![2],
+            "case does not matter"
+        );
         assert_eq!(plan_dispatches(&m, "@all stand up", None), vec![0, 1, 2]);
         assert_eq!(plan_dispatches(&m, "@everyone", None), vec![0, 1, 2]);
-        assert_eq!(plan_dispatches(&m, "mail me at joe@example.com", None), vec![0, 1, 2], "an address is not a mention");
-        assert_eq!(plan_dispatches(&m, "hello", None), vec![0, 1, 2], "nobody has spoken yet");
+        assert_eq!(
+            plan_dispatches(&m, "mail me at joe@example.com", None),
+            vec![0, 1, 2],
+            "an address is not a mention"
+        );
+        assert_eq!(
+            plan_dispatches(&m, "hello", None),
+            vec![0, 1, 2],
+            "nobody has spoken yet"
+        );
     }
 
     #[test]
     fn without_a_mention_the_last_speaker_answers() {
         let m = trio();
         assert_eq!(plan_dispatches(&m, "and then?", Some("bea")), vec![1]);
-        assert_eq!(plan_dispatches(&m, "@ada and then?", Some("bea")), vec![0], "a mention beats the last speaker");
-        assert_eq!(plan_dispatches(&m, "and then?", Some("gone")), vec![0, 1, 2]);
+        assert_eq!(
+            plan_dispatches(&m, "@ada and then?", Some("bea")),
+            vec![0],
+            "a mention beats the last speaker"
+        );
+        assert_eq!(
+            plan_dispatches(&m, "and then?", Some("gone")),
+            vec![0, 1, 2]
+        );
     }
 
     #[tokio::test]
@@ -938,12 +1073,21 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
-        let (_, woken) = rooms.send(&id, &trio(), "@bea draft the plan", "m1", "t1").await.unwrap();
+        let (_, woken) = rooms
+            .send(&id, &trio(), "@bea draft the plan", "m1", "t1")
+            .await
+            .unwrap();
         assert_eq!(slugs(&woken), vec!["bea"]);
         let text = &woken[0].text;
         assert!(text.contains("Group \"Team\""));
-        assert!(text.contains("Ada, Bea, Cy Park"), "the roster lists names, not @handles");
-        assert!(!text.contains("Ada (@ada)"), "echoing the header must not wake everyone");
+        assert!(
+            text.contains("Ada, Bea, Cy Park"),
+            "the roster lists names, not @handles"
+        );
+        assert!(
+            !text.contains("Ada (@ada)"),
+            "echoing the header must not wake everyone"
+        );
         assert!(text.contains("You wrote:") && text.contains("draft the plan"));
         let commands = dispatch_commands(&woken);
         assert_eq!(commands[0]["messageId"], json!(woken[0].message_id));
@@ -951,7 +1095,9 @@ mod tests {
     }
 
     fn thread(anchor: &str, replies: &[(&str, &str, bool)]) -> Vec<Value> {
-        let mut out = vec![json!({ "id": anchor, "role": "user", "text": "framed", "streaming": false, "at": "a0" })];
+        let mut out = vec![
+            json!({ "id": anchor, "role": "user", "text": "framed", "streaming": false, "at": "a0" }),
+        ];
         for (id, text, streaming) in replies {
             out.push(json!({ "id": id, "role": "bot", "text": text, "streaming": streaming, "at": "a1" }));
         }
@@ -963,10 +1109,19 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
-        let (_, woken) = rooms.send(&id, &trio(), "@ada hello", "m1", "t1").await.unwrap();
+        let (_, woken) = rooms
+            .send(&id, &trio(), "@ada hello", "m1", "t1")
+            .await
+            .unwrap();
         let anchor = woken[0].message_id.clone();
         let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
-        threads.insert("ada".into(), thread(&anchor, &[("a1", "Hi there", false), ("a2", "Typing", true)]));
+        threads.insert(
+            "ada".into(),
+            thread(
+                &anchor,
+                &[("a1", "Hi there", false), ("a2", "Typing", true)],
+            ),
+        );
 
         let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
         assert!(wake.is_empty());
@@ -976,9 +1131,19 @@ mod tests {
         assert_eq!(messages[1]["text"], "Hi there");
 
         let (again, _) = rooms.sync(&id, &trio(), &threads).await.unwrap();
-        assert_eq!(again["messages"].as_array().unwrap().len(), 2, "a second sync adds nothing");
+        assert_eq!(
+            again["messages"].as_array().unwrap().len(),
+            2,
+            "a second sync adds nothing"
+        );
 
-        threads.insert("ada".into(), thread(&anchor, &[("a1", "Hi there", false), ("a2", "Done typing", false)]));
+        threads.insert(
+            "ada".into(),
+            thread(
+                &anchor,
+                &[("a1", "Hi there", false), ("a2", "Done typing", false)],
+            ),
+        );
         let (done, _) = rooms.sync(&id, &trio(), &threads).await.unwrap();
         assert_eq!(done["messages"].as_array().unwrap().len(), 3);
     }
@@ -988,7 +1153,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
-        rooms.send(&id, &trio(), "@ada hello", "m1", "t1").await.unwrap();
+        rooms
+            .send(&id, &trio(), "@ada hello", "m1", "t1")
+            .await
+            .unwrap();
         let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
         threads.insert(
             "ada".into(),
@@ -998,7 +1166,11 @@ mod tests {
             ],
         );
         let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
-        assert_eq!(room["messages"].as_array().unwrap().len(), 1, "only the person's message");
+        assert_eq!(
+            room["messages"].as_array().unwrap().len(),
+            1,
+            "only the person's message"
+        );
         assert!(wake.is_empty());
     }
 
@@ -1007,7 +1179,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
-        let (_, woken) = rooms.send(&id, &trio(), "@ada hello", "m1", "t1").await.unwrap();
+        let (_, woken) = rooms
+            .send(&id, &trio(), "@ada hello", "m1", "t1")
+            .await
+            .unwrap();
         let anchor = format!("turn-item:message:{}", woken[0].message_id);
         let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
         threads.insert(
@@ -1020,8 +1195,17 @@ mod tests {
             ],
         );
         let (room, _) = rooms.sync(&id, &trio(), &threads).await.unwrap();
-        let texts: Vec<&str> = room["messages"].as_array().unwrap().iter().map(|m| m["text"].as_str().unwrap()).collect();
-        assert_eq!(texts, vec!["@ada hello", "fresh reply"], "only what follows our message is imported");
+        let texts: Vec<&str> = room["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["text"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            texts,
+            vec!["@ada hello", "fresh reply"],
+            "only what follows our message is imported"
+        );
     }
 
     #[tokio::test]
@@ -1029,16 +1213,28 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
-        let (_, woken) = rooms.send(&id, &trio(), "@ada ask Cy for numbers", "m1", "t1").await.unwrap();
+        let (_, woken) = rooms
+            .send(&id, &trio(), "@ada ask Cy for numbers", "m1", "t1")
+            .await
+            .unwrap();
         let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
-        threads.insert("ada".into(), thread(&woken[0].message_id, &[("a1", "@cy what are this week's numbers?", false)]));
+        threads.insert(
+            "ada".into(),
+            thread(
+                &woken[0].message_id,
+                &[("a1", "@cy what are this week's numbers?", false)],
+            ),
+        );
         let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
         assert_eq!(slugs(&wake), vec!["cy"], "Bea stays asleep");
         assert!(wake[0].text.contains("Ada wrote:"));
         assert_eq!(room["hops"], 1);
 
         // Cy's answer is kept in the room. The hop budget is spent, so Ada is not woken again.
-        threads.insert("cy".into(), thread(&wake[0].message_id, &[("c1", "@ada 42 units", false)]));
+        threads.insert(
+            "cy".into(),
+            thread(&wake[0].message_id, &[("c1", "@ada 42 units", false)]),
+        );
         let (room, back) = rooms.sync(&id, &trio(), &threads).await.unwrap();
         assert!(back.is_empty(), "an answer does not start another turn");
         assert!(
@@ -1056,7 +1252,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
-        let (_, woken) = rooms.send(&id, &trio(), "@ada start", "m1", "t1").await.unwrap();
+        let (_, woken) = rooms
+            .send(&id, &trio(), "@ada start", "m1", "t1")
+            .await
+            .unwrap();
         let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
         threads.insert(
             "ada".into(),
@@ -1065,13 +1264,11 @@ mod tests {
         let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
         assert!(wake.is_empty(), "a thank-you must not start another turn");
         assert_eq!(room["hops"], 0, "courtesy does not spend the hop budget");
-        assert!(
-            room["messages"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|m| m["text"].as_str() == Some("thanks @bea, on it"))
-        );
+        assert!(room["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["text"].as_str() == Some("thanks @bea, on it")));
     }
 
     #[tokio::test]
@@ -1085,23 +1282,40 @@ mod tests {
             .as_str()
             .unwrap()
             .to_string();
-        let (_, mut woken) = rooms.send(&id, &directory(), "@ada start", "m1", "t1").await.unwrap();
+        let (_, mut woken) = rooms
+            .send(&id, &directory(), "@ada start", "m1", "t1")
+            .await
+            .unwrap();
         let mut turns = 0;
         let mut counter = 0;
         while let Some(next) = woken.pop() {
             counter += 1;
             turns += 1;
             assert!(turns < 20, "the ping-pong never ends");
-            let other = if next.slug == "ada" { "@bea your turn" } else { "@ada your turn" };
+            let other = if next.slug == "ada" {
+                "@bea your turn"
+            } else {
+                "@ada your turn"
+            };
             let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
-            threads.insert(next.slug.clone(), thread(&next.message_id, &[(&format!("r{counter}"), other, false)]));
+            threads.insert(
+                next.slug.clone(),
+                thread(&next.message_id, &[(&format!("r{counter}"), other, false)]),
+            );
             let (_, wake) = rooms.sync(&id, &directory(), &threads).await.unwrap();
             woken.extend(wake);
         }
-        assert_eq!(turns as u64, MAX_HOPS + 1, "the person's first wake-up, then at most {MAX_HOPS} more");
+        assert_eq!(
+            turns as u64,
+            MAX_HOPS + 1,
+            "the person's first wake-up, then at most {MAX_HOPS} more"
+        );
         let room = rooms.get(&id).await.unwrap();
         // A new message from the person resets the budget.
-        rooms.send(&id, &directory(), "@bea again", "m2", "t9").await.unwrap();
+        rooms
+            .send(&id, &directory(), "@bea again", "m2", "t9")
+            .await
+            .unwrap();
         assert_eq!(rooms.get(&id).await.unwrap()["hops"], 0);
         assert!(room["messages"].as_array().unwrap().len() > 1);
     }
