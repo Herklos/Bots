@@ -81,18 +81,20 @@ fn event_for(item: &Value, peers: &Peers, ordinal: i64) -> Option<Value> {
             match tool_of(item) {
                 "t3_thread_send" => line("sent", "Messaged", "", peer(peers, &input["threadId"])),
                 "schedule_task" if input["scheduledTaskId"].is_null() => line(
-                    "routine",
+                    "routine-created",
                     "Created routine",
                     input["title"].as_str().unwrap_or(""),
                     Value::Null,
                 ),
                 "schedule_task" | "update_scheduled_task" => line(
-                    "routine",
+                    "routine-updated",
                     "Updated routine",
                     input["title"].as_str().unwrap_or(""),
                     Value::Null,
                 ),
-                "delete_scheduled_task" => line("routine", "Deleted routine", "", Value::Null),
+                "delete_scheduled_task" => {
+                    line("routine-deleted", "Deleted routine", "", Value::Null)
+                }
                 _ => None,
             }
         }
@@ -458,7 +460,11 @@ mod tests {
         let e = &t["events"][0];
         assert_eq!(
             (e["kind"].as_str(), e["text"].as_str(), e["title"].as_str()),
-            (Some("routine"), Some("Created routine"), Some("hbots test"))
+            (
+                Some("routine-created"),
+                Some("Created routine"),
+                Some("hbots test")
+            )
         );
         assert_eq!(e["ordinal"], 7);
         // An update carries the id of the routine it changes.
@@ -468,6 +474,64 @@ mod tests {
             transcript(&json!({ "turnItems": [update] }))["events"][0]["text"],
             "Updated routine"
         );
+    }
+
+    #[test]
+    fn tool_lines_carry_a_stable_verb_id() {
+        let mut peers = Peers::new();
+        peers.insert(
+            "thread-inbox".into(),
+            json!({ "slug": "inbox", "name": "Inbox", "color": "brand.pink", "shape": "hex" }),
+        );
+        let cases = [
+            (
+                json!({ "id": "s", "type": "dynamic_tool", "status": "completed", "toolName": "mcp__t3__t3_thread_send",
+                    "input": { "threadId": "thread-inbox", "message": "hi" } }),
+                "sent",
+                "Messaged",
+            ),
+            (
+                json!({ "id": "c", "type": "dynamic_tool", "status": "completed", "toolName": "mcp__t3-code__schedule_task",
+                    "input": { "title": "Morning" } }),
+                "routine-created",
+                "Created routine",
+            ),
+            (
+                json!({ "id": "u", "type": "dynamic_tool", "status": "completed", "toolName": "mcp__t3-code__update_scheduled_task",
+                    "input": { "scheduledTaskId": "scheduled-task:1", "title": "Morning" } }),
+                "routine-updated",
+                "Updated routine",
+            ),
+            (
+                json!({ "id": "d", "type": "dynamic_tool", "status": "completed", "toolName": "mcp__t3-code__delete_scheduled_task",
+                    "input": { "scheduledTaskId": "scheduled-task:1" } }),
+                "routine-deleted",
+                "Deleted routine",
+            ),
+            (
+                json!({ "id": "f", "type": "user_message", "status": "completed", "text": "hello", "senderThreadId": "thread-inbox" }),
+                "from",
+                "Message from",
+            ),
+            (
+                json!({ "id": "r", "type": "user_message", "status": "completed", "text": "go", "scheduledTaskId": "scheduled-task:1" }),
+                "ran",
+                "Routine ran",
+            ),
+            (
+                json!({ "id": "h", "type": "subagent", "status": "completed", "title": "Lookup" }),
+                "started",
+                "Started child thread",
+            ),
+        ];
+        for (item, kind, text) in cases {
+            let t = transcript_for(&json!({ "turnItems": [item] }), &peers);
+            let event = &t["events"][0];
+            assert_eq!(
+                (event["kind"].as_str(), event["text"].as_str()),
+                (Some(kind), Some(text))
+            );
+        }
     }
 
     #[test]
