@@ -4,8 +4,12 @@
 
 The product, the crate (`hbots`), the binary (`hbots`), configuration, and these docs use the name hbots.
 Home defaults to `~/.hbots`. Environment: `HBOTS_HOME`, `HBOTS_PASSWORD`, `HBOTS_ROOT`, `HBOTS_MCP_URL`,
-`HBOTS_MCP_TOKEN`, `HBOTS_EXECUTOR_URL`, `HBOTS_TAILSCALE_PATH` (legacy `TAILSCALE_PATH` still accepted).
-The Exact client reads `HBOTS_URL` at build time. Do not introduce another product name.
+`HBOTS_MCP_TOKEN`, `HBOTS_EXECUTOR_URL`, `HBOTS_TAILSCALE_PATH`, `HBOTS_CLOUDFLARED_PATH`,
+`HBOTS_TAILNET_PORT`, `HBOTS_TAILNET_USERS`, `HBOTS_PUBLIC_LANDING_ONLY` (legacy unprefixed Tailscale/tunnel
+names still accepted). The Exact client reads `HBOTS_URL` at build time. Do not introduce another product name.
+
+**Known gap (A6):** `release::busy_threads` cannot yet read T3's `orchestration.subscribeShell` stream, so
+auto-update will not install while that stays unimplemented.
 
 ## Shape
 

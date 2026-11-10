@@ -1,10 +1,10 @@
 //! Where the app answers, ported from `server/exposure.mts`.
 //!
-//! With a Tailscale listener configured (`TAILNET_PORT`), the full app can live on that loopback
+//! With a Tailscale listener configured (`HBOTS_TAILNET_PORT` / legacy `TAILNET_PORT`), the full app can live on that loopback
 //! port alone, and only `tailscale serve` should proxy to it: Serve sets the signed-in user's login
 //! on each request and replaces any value the client sent. The tailnet port never accepts
 //! Cloudflare tokens, and the normal port can be reduced to the public landing page
-//! (`PUBLIC_LANDING_ONLY=true`).
+//! (`HBOTS_PUBLIC_LANDING_ONLY=true` / legacy `PUBLIC_LANDING_ONLY`).
 //!
 //! Node tells the two ports apart by the socket's local port. Here each listener serves the same
 //! router with a `Surface` marker added by a layer, so the rest of the gateway asks the request.
@@ -26,7 +26,8 @@ use tokio::task::JoinHandle;
 use tower::ServiceExt;
 use tower_http::services::ServeFile;
 
-/// The settings `TAILNET_PORT`, `TAILNET_USERS` and `PUBLIC_LANDING_ONLY`.
+/// The settings `HBOTS_TAILNET_PORT`, `HBOTS_TAILNET_USERS` and `HBOTS_PUBLIC_LANDING_ONLY`
+/// (legacy unprefixed names still accepted).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Exposure {
     pub tailnet_port: u16,
@@ -34,14 +35,22 @@ pub struct Exposure {
     pub landing_only: bool,
 }
 
+fn env_pref(get: &impl Fn(&str) -> Option<String>, hbots: &str, legacy: &str) -> Option<String> {
+    get(hbots).or_else(|| get(legacy))
+}
+
 impl Exposure {
     pub fn from_env(get: impl Fn(&str) -> Option<String>) -> Self {
         Self {
-            tailnet_port: get("TAILNET_PORT")
+            tailnet_port: env_pref(&get, "HBOTS_TAILNET_PORT", "TAILNET_PORT")
                 .and_then(|p| p.trim().parse().ok())
                 .unwrap_or(0),
-            tailnet_users: normalize_users(&get("TAILNET_USERS").unwrap_or_default()),
-            landing_only: get("PUBLIC_LANDING_ONLY").as_deref() == Some("true"),
+            tailnet_users: normalize_users(
+                &env_pref(&get, "HBOTS_TAILNET_USERS", "TAILNET_USERS").unwrap_or_default(),
+            ),
+            landing_only: env_pref(&get, "HBOTS_PUBLIC_LANDING_ONLY", "PUBLIC_LANDING_ONLY")
+                .as_deref()
+                == Some("true"),
         }
     }
 }
@@ -264,8 +273,16 @@ mod tests {
         ]));
         assert_eq!(on.tailnet_users, vec!["a@b.com", "c@d.com"]);
         assert_eq!(on.tailnet_port, 3781);
+        let preferred = Exposure::from_env(env_map(&[
+            ("HBOTS_TAILNET_PORT", "3790"),
+            ("TAILNET_PORT", "3781"),
+        ]));
+        assert_eq!(preferred.tailnet_port, 3790);
         assert!(!Exposure::from_env(env_map(&[("PUBLIC_LANDING_ONLY", "1")])).landing_only);
         assert!(Exposure::from_env(env_map(&[("PUBLIC_LANDING_ONLY", "true")])).landing_only);
+        assert!(
+            Exposure::from_env(env_map(&[("HBOTS_PUBLIC_LANDING_ONLY", "true")])).landing_only
+        );
     }
 
     #[test]

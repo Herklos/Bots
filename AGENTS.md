@@ -16,7 +16,7 @@ Default is set in `gateway/src/provisioner.rs` (`default_model`) and live settin
 
 ### Start (dev checkout)
 
-1. **T3 Code** — open the desktop app (CLI also at `~/.t3/bin/t3`).
+1. **T3 Code** — open the desktop app once; it writes `~/.t3/bin/t3` (Electron shim into the app asar). There is no bare `t3` binary under `Contents/Resources` on current Nightly.
 2. **Web app** (once, or after Contract changes):
 
 ```sh
@@ -30,7 +30,9 @@ EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/web/build.mjs" bots-web
 
 Open http://127.0.0.1:3780. Settings: `~/.hbots/.env` + `~/.hbots/t3-token`.
 
-Env prefix is `HBOTS_*` (`HBOTS_HOME`, `HBOTS_PASSWORD`, `HBOTS_TAILSCALE_PATH`, …). Legacy `TAILSCALE_PATH` still works.
+Env prefix is `HBOTS_*` (`HBOTS_HOME`, `HBOTS_PASSWORD`, `HBOTS_TAILSCALE_PATH`, `HBOTS_CLOUDFLARED_PATH`, `HBOTS_TAILNET_PORT`, `HBOTS_TAILNET_USERS`, `HBOTS_PUBLIC_LANDING_ONLY`, …). Legacy unprefixed Tailscale/tunnel names still work.
+
+**A6 gap:** auto-update will not install while `busy_threads` cannot read T3's `orchestration.subscribeShell` stream (`gateway/src/release.rs`).
 
 Release: set GitHub repo variable `EXACT_REF` to a pinned Exact commit/tag (workflow defaults to `main`). Pack locally with `HBOTS_VERSION=… sh scripts/pack-release.sh`; install with `install.sh --version … --from <tarball> --sums SHA256SUMS`.
 

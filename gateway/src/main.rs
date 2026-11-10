@@ -197,7 +197,7 @@ async fn main() -> anyhow::Result<()> {
     provisioner::start(state.clone());
     release::start(state.clone()).await;
 
-    // The tailnet listener from TAILNET_PORT starts first; Settings' Tailscale and tunnel choices
+    // The tailnet listener from HBOTS_TAILNET_PORT starts first; Settings' Tailscale and tunnel choices
     // come back in the background.
     if state.exposure.tailnet_port > 0 {
         let router = exposure::on_tailnet(app(state.clone()));

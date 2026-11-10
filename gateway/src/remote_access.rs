@@ -512,10 +512,12 @@ fn find_on_path(name: &str) -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
-/// The cloudflared to run: `CLOUDFLARED_PATH`, else the pinned copy, else one on the PATH.
+/// The cloudflared to run: `HBOTS_CLOUDFLARED_PATH` (or legacy `CLOUDFLARED_PATH`), else the pinned copy, else PATH.
 pub fn find_cloudflared(home: &Path) -> Option<PathBuf> {
-    if let Some(path) = std::env::var_os("CLOUDFLARED_PATH").filter(|p| !p.is_empty()) {
-        return Some(PathBuf::from(path));
+    for key in ["HBOTS_CLOUDFLARED_PATH", "CLOUDFLARED_PATH"] {
+        if let Some(path) = std::env::var_os(key).filter(|p| !p.is_empty()) {
+            return Some(PathBuf::from(path));
+        }
     }
     let (platform, arch) = host_platform();
     let pinned = pinned_cloudflared(home, platform, arch);
@@ -872,7 +874,7 @@ impl RemoteAccess {
     async fn tailscale_on_locked(&self, router: Router) -> Result<Value, AccessError> {
         if self.cfg.env_tailnet {
             return Err(AccessError::conflict(
-                "Tailscale is set up in .env (TAILNET_PORT).",
+                "Tailscale is set up in .env (HBOTS_TAILNET_PORT).",
             ));
         }
         let ts = tailscale_status(self.cfg.tailscale_bin.as_deref()).await;

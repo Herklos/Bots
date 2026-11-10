@@ -257,7 +257,7 @@ async fn up(flags: &Flags) -> Result<()> {
         || settings.contains_key("T3_TOKEN")
         || std::fs::read_to_string(&token_file).is_ok_and(|t| !t.trim().is_empty());
     if !have_token {
-        let t3 = find_t3().ok_or_else(|| anyhow!("No `t3` command found on your PATH or in ~/.t3/bin. Get a token another way (try `npx t3 auth session issue --ttl 365d --label hbots --token-only`), put it in T3_TOKEN in ~/.hbots/.env, then run `hbots up` again."))?;
+        let t3 = find_t3().ok_or_else(|| anyhow!("No `t3` command found on your PATH or in ~/.t3/bin. Open the T3 Code app once so it writes ~/.t3/bin/t3, or get a token another way (`npx t3 auth session issue --ttl 365d --label hbots --token-only`), put it in T3_TOKEN in ~/.hbots/.env, then run `hbots up` again."))?;
         print_line("Asking T3 Code for a token");
         let out = std::process::Command::new(&t3)
             .args([
@@ -329,7 +329,11 @@ async fn up(flags: &Flags) -> Result<()> {
     Ok(())
 }
 
-/// The `t3` command: on PATH, in ~/.t3/bin, or inside a T3 Code.app bundle (macOS).
+/// The `t3` command: on PATH, then `~/.t3/bin/t3` (shim the desktop app writes on first open).
+///
+/// Current T3 Code (Nightly) does not ship a bare `Resources/t3` binary. The shim runs the app's
+/// Electron binary as Node against `Resources/app.asar/apps/server/dist/bin.mjs`. Older layouts that
+/// did put a `t3` next to the app are still checked as a last resort.
 fn find_t3() -> Option<PathBuf> {
     for dir in std::env::var("PATH").unwrap_or_default().split(':') {
         let candidate = Path::new(dir).join("t3");
@@ -342,7 +346,6 @@ fn find_t3() -> Option<PathBuf> {
     if own.is_file() {
         return Some(own);
     }
-    // Desktop app installs the CLI under Resources (Nightly or stable).
     for app in [
         "/Applications/T3 Code (Nightly).app/Contents/Resources/t3",
         "/Applications/T3 Code.app/Contents/Resources/t3",
