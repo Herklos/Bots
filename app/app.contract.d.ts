@@ -4,24 +4,28 @@
 // What app.ts writes, in brief (the declarations follow): `sources: Sources` has one
 // function per source, given its arguments as an array (then store, storage, native) and
 // answering its shape, or a Promise of it.
+//   addConnectedApp: (args: [string, string, string]) => Reply
 //   createBot: (args: [string, string]) => Reply
 //   deleteBot: (args: [string]) => Reply
 //   deleteLogin: (args: [string]) => Reply
 //   deleteProject: (args: [string]) => Reply
 //   hideBot: (args: [string, boolean]) => Reply
+//   loadApps: (args: []) => App[]
 //   loadBots: (args: []) => Bot[]
 //   loadChat: (args: [string]) => Chat
+//   loadConfig: (args: []) => Config
 //   loadPrefs: (args: []) => Prefs
 //   loadProjects: (args: []) => Project[]
 //   loadSession: (args: []) => Session
 //   loadVault: (args: []) => Login[]
 //   makeMainBot: (args: [string]) => Reply
 //   recolourBot: (args: [string, string]) => Reply
+//   removeConnectedApp: (args: [string]) => Reply
 //   renameBot: (args: [string, string]) => Reply
 //   revealPassword: (args: [string]) => Revealed
 //   saveLogin: (args: [string, string, string, string, string, string]) => Reply
 //   saveProject: (args: [string, string, string, string, string, string]) => Reply
-//   sendMessage: (args: [string, string]) => Reply
+//   sendMessage: (args: [string, string, string]) => Reply
 //   setPassword: (args: [string]) => Reply
 //   setProjects: (args: [boolean]) => Reply
 //   setTheme: (args: [string]) => Reply
@@ -29,13 +33,17 @@
 //   signIn: (args: [string]) => Reply
 //   signOut: (args: []) => Reply
 //   stopRun: (args: [string]) => Reply
-// The shapes. None is exported: name one by its source, `type Reply = Result<'createBot'>`.
+//   uploadAttachment: (args: [string, string, string, string]) => Attached
+// The shapes. None is exported: name one by its source, `type Reply = Result<'addConnectedApp'>`.
 //   Reply = { ok: boolean; error: string }
 //   Session = { authenticated: boolean; passwordRequired: boolean }
 //   Bot = { slug: string; name: string; label: string; initials: string; color: string; main: boolean; hidden: boolean; ready: boolean }
-//   Row = { id: string; kind: string; mine: boolean; text: string }
+//   Row = { id: string; kind: string; mine: boolean; text: string; files: string }
 //   Chat = { slug: string; rows: Row[]; working: boolean }
 //   Prefs = { userName: string; theme: string; projects: boolean }
+//   App = { id: string; name: string; url: string }
+//   Config = { executorUrl: string }
+//   Attached = { ok: boolean; id: string; name: string; error: string }
 //   Login = { id: string; title: string; website: string; username: string; hasPassword: boolean; hints: string }
 //   Revealed = { ok: boolean; id: string; password: string; error: string }
 //   Project = { id: string; kind: string; title: string; status: string; area: string; body: string }
@@ -65,7 +73,7 @@ export interface FileSystem {
   rename(from: string, to: string): Promise<void>;
   copyFile(from: string, to: string): Promise<void>;
   realpath(path: string): Promise<string>;
-  /** Exact patch 24: `stat` of a link itself. */
+  /** Exact patch 24 (exact2 LLP 1133.007 D6a): `stat` of a link itself. */
   lstat(path: string): Promise<FileStat>;
   /** A symbolic link's target. Needs `fs.read`. */
   readlink(path: string): Promise<string>;
@@ -81,10 +89,10 @@ export interface FileSystem {
   /** An exclusive advisory lock (POSIX `flock`), made if absent and left on
    * disk, waiting up to `timeout` ms: held until `unlock()`. Needs `fs.write`. */
   flock(path: string, options?: { timeout?: number }): Promise<{ unlock(): Promise<void> }>;
-  /** Exact patch 9, the app interface: decode the
+  /** Exact patch 9 (exact2 LLP 1069.002 A1), the app interface: decode the
    * image at `from`, scale it to fit `maxDimension` and encode a JPEG of at
    * most `maxBytes` at `to`, searching quality as Bluesky's composer does;
-   * or, with `type: "image/png"`, a PNG that keeps alpha, shrunk by
+   * or, with `type: "image/png"` (A1.11), a PNG that keeps alpha, shrunk by
    * 0.8 up to four times until it fits. Orientation is applied and no
    * metadata is written. Needs `fs.read` on
    * `from` and `fs.write` on `to`, both `app:/` paths. Rejects with a
@@ -92,11 +100,11 @@ export interface FileSystem {
    * on this host), `undecodable`, `too-large` (over 64 MiB, 64 Mi pixels,
    * or more decoding memory than the host allows), `unfit` (nothing fits) or
    * `timeout` (20 s), or a filesystem code. With `rotate`, `flip` or `crop`
-   * the edit is made first, in `transformImage`'s
+   * (exact2 LLP 1133.019 D15) the edit is made first, in `transformImage`'s
    * order, and the search runs on the edited picture; a crop that misses it
    * rejects with `code` `outside`. */
   compressImage(from: string, to: string, options: CompressImageOptions): Promise<CompressedImage>;
-  /** Exact patch 9a, the app interface: decode
+  /** Exact patch 9a (exact2 LLP 1133.019 D14), the app interface: decode
    * the image at `from` once, turn it upright, then `rotate` it about its
    * centre (degrees clockwise; a free angle takes the bounding box, clear
    * where the type keeps alpha and white otherwise), `flip` it in the
@@ -111,13 +119,13 @@ export interface FileSystem {
    * this host does not write), `undecodable`, `too-large`, `outside` (the
    * crop misses the picture) or `timeout`, or a filesystem code. */
   transformImage(from: string, to: string, options?: TransformImageOptions): Promise<TransformedImage>;
-  /** Exact patch 14, the app interface: this
+  /** Exact patch 14 (exact2 LLP 1069.010.000 D1), the app interface: this
    * answer depends on the `doc:/` path, and the host asks it again when the
    * file, a folder's own entries or, with `recursive`, its subtree change on
    * disk, by any process. Call it inside an answer; it carries no value, so
    * the answer reads again. Needs `fs.read` on the path. */
   watch(path: string, options?: WatchOptions): void;
-  /** Exact patch 15, the app interface: the
+  /** Exact patch 15 (exact2 LLP 1069.010.000 D5), the app interface: the
    * documents the host keeps for this app across launches, most recent
    * first, without reading them. `watch("doc:/")` asks the answer again when
    * the list changes. Needs the `doc.keep` grant; a host that keeps nothing
@@ -147,7 +155,7 @@ export interface WatchOptions {
 }
 
 export interface WriteOptions {
-  /** Exact patch 14: on a `doc:/` path, the
+  /** Exact patch 14 (exact2 LLP 1069.010.000 D2a): on a `doc:/` path, the
    * stat last read. The write is refused with `code` `ECHANGED`, writing
    * nothing, when the file's `modifiedMs` or `size` is no longer this. */
   readonly expect?: Pick<FileStat, "modifiedMs" | "size">;
@@ -160,7 +168,7 @@ export interface CompressImageOptions {
   readonly maxBytes: number;
   /** What to write; `"image/jpeg"` when absent. */
   readonly type?: "image/jpeg" | "image/png";
-  /** Exact patch 9a: `transformImage`'s edit. */
+  /** Exact patch 9a (exact2 LLP 1133.019 D15): `transformImage`'s edit. */
   readonly rotate?: number;
   readonly flip?: "horizontal" | "vertical";
   readonly crop?: ImageCrop;
@@ -270,50 +278,63 @@ type T1 = string;
 type T2 = { "ok": T0; "error": T1; };
 type T3 = { "authenticated": T0; "passwordRequired": T0; };
 type T4 = { "slug": T1; "name": T1; "label": T1; "initials": T1; "color": T1; "main": T0; "hidden": T0; "ready": T0; };
-type T5 = { "id": T1; "kind": T1; "mine": T0; "text": T1; };
+type T5 = { "id": T1; "kind": T1; "mine": T0; "text": T1; "files": T1; };
 type T6 = T5[];
 type T7 = { "slug": T1; "rows": T6; "working": T0; };
 type T8 = { "userName": T1; "theme": T1; "projects": T0; };
-type T9 = { "id": T1; "title": T1; "website": T1; "username": T1; "hasPassword": T0; "hints": T1; };
-type T10 = { "ok": T0; "id": T1; "password": T1; "error": T1; };
-type T11 = { "id": T1; "kind": T1; "title": T1; "status": T1; "area": T1; "body": T1; };
-type T12 = { "accessibilityTextSize": T0; };
-type T13 = { "prefersContrast": T1; };
-type T14 = number;
-type T15 = { "slug": T1; "id": T1; };
-type T16 = { "id": T14; "name": T1; "url": T1; "tab": T1; "params": T15; "fragment": T1; };
-type T17 = T16[];
-type T18 = { "name": T1; "stack": T17; };
-type T19 = T18[];
-type T20 = { "tab": T1; "tabs": T19; "next": T14; };
-type T21 = T4[];
-type T22 = T9[];
-type T23 = T11[];
-type T24 = T2 | null;
-type T25 = T10 | null;
+type T9 = { "id": T1; "name": T1; "url": T1; };
+type T10 = { "executorUrl": T1; };
+type T11 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
+type T12 = { "id": T1; "title": T1; "website": T1; "username": T1; "hasPassword": T0; "hints": T1; };
+type T13 = { "ok": T0; "id": T1; "password": T1; "error": T1; };
+type T14 = { "id": T1; "kind": T1; "title": T1; "status": T1; "area": T1; "body": T1; };
+type T15 = { "accessibilityTextSize": T0; };
+type T16 = { "prefersContrast": T1; };
+type T17 = number;
+type T18 = { "slug": T1; "id": T1; };
+type T19 = { "id": T17; "name": T1; "url": T1; "tab": T1; "params": T18; "fragment": T1; };
+type T20 = T19[];
+type T21 = { "name": T1; "stack": T20; };
+type T22 = T21[];
+type T23 = { "tab": T1; "tabs": T22; "next": T17; };
+type T24 = T1[];
+type T25 = T4[];
+type T26 = T12[];
+type T27 = T14[];
+type T28 = T9[];
+type T29 = T2 | null;
+type T30 = T13 | null;
+type T31 = T11 | null;
+type T32 = T17 | null;
+type T33 = { "path": T1; "name": T1; "type": T1; "size": T17; "width": T32; "height": T32; "duration": T32; };
+type T34 = T33[];
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "createBot" | "deleteBot" | "deleteLogin" | "deleteProject" | "hideBot" | "makeMainBot" | "recolourBot" | "renameBot" | "revealPassword" | "saveLogin" | "saveProject" | "sendMessage" | "setPassword" | "setProjects" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun";
+export type MutationSource = "addConnectedApp" | "createBot" | "deleteBot" | "deleteLogin" | "deleteProject" | "hideBot" | "makeMainBot" | "recolourBot" | "removeConnectedApp" | "renameBot" | "revealPassword" | "saveLogin" | "saveProject" | "sendMessage" | "setPassword" | "setProjects" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";
 
 export interface SourceMap {
+  "addConnectedApp": { args: [T1, T1, T1]; result: T2 };
   "createBot": { args: [T1, T1]; result: T2 };
   "deleteBot": { args: [T1]; result: T2 };
   "deleteLogin": { args: [T1]; result: T2 };
   "deleteProject": { args: [T1]; result: T2 };
   "hideBot": { args: [T1, T0]; result: T2 };
-  "loadBots": { args: []; result: T21 };
+  "loadApps": { args: []; result: T28 };
+  "loadBots": { args: []; result: T25 };
   "loadChat": { args: [T1]; result: T7 };
+  "loadConfig": { args: []; result: T10 };
   "loadPrefs": { args: []; result: T8 };
-  "loadProjects": { args: []; result: T23 };
+  "loadProjects": { args: []; result: T27 };
   "loadSession": { args: []; result: T3 };
-  "loadVault": { args: []; result: T22 };
+  "loadVault": { args: []; result: T26 };
   "makeMainBot": { args: [T1]; result: T2 };
   "recolourBot": { args: [T1, T1]; result: T2 };
+  "removeConnectedApp": { args: [T1]; result: T2 };
   "renameBot": { args: [T1, T1]; result: T2 };
-  "revealPassword": { args: [T1]; result: T10 };
+  "revealPassword": { args: [T1]; result: T13 };
   "saveLogin": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "saveProject": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
-  "sendMessage": { args: [T1, T1]; result: T2 };
+  "sendMessage": { args: [T1, T1, T1]; result: T2 };
   "setPassword": { args: [T1]; result: T2 };
   "setProjects": { args: [T0]; result: T2 };
   "setTheme": { args: [T1]; result: T2 };
@@ -321,6 +342,7 @@ export interface SourceMap {
   "signIn": { args: [T1]; result: T2 };
   "signOut": { args: []; result: T2 };
   "stopRun": { args: [T1]; result: T2 };
+  "uploadAttachment": { args: [T1, T1, T1, T1]; result: T11 };
 }
 
 export type Source = keyof SourceMap;
@@ -331,7 +353,7 @@ export type ArgsOf<O> = O extends { readonly __args?: infer A } ? A : never;
 * `type Recipe = Result<'recipe'>` (a list's element: `Result<'recipes'>[number]`). */
 export type Result<S extends Source> = SourceMap[S]['result'];
 export interface Store {
-/** The value kept under `name`; throws `InvalidAccessError` for a locked presence secret, read with `unlock`. */
+/** The value kept under `name`; throws `InvalidAccessError` for a locked presence secret, read with `unlock` (LLP 1133.010). */
 get(name: string): string | null;
 /** Throws `NotSupportedError` when the name would be kept locked and this device keeps no locked secret. */
 set(name: string, value: string): void;
@@ -346,26 +368,26 @@ unlock(name: string, options?: { reason?: string }): Promise<string | null>;
 protect(name: string): Promise<void>;
 /** After the person's check, unlock an `optional` presence name for good. */
 unprotect(name: string, options?: { reason?: string }): Promise<void>;
-/** Keep a P-256 pair under the `secret.keep <name>` grant. */
+/** Keep a P-256 pair under the `secret.keep <name>` grant (LLP 1069.005 D1b). */
 keepKey(name: string, pair: CryptoKeyPair): Promise<void>;
 /** The pair kept under `name`, its private key non-extractable. */
 key(name: string): Promise<CryptoKeyPair | null>;
 }
 declare global {
-/** Sign in through the system browser: the callback URL, or a rejection whose `status` is 499 cancelled, 403, 409, 428, 501 or 502. `message` is the sentence a loopback callback's page shows in place of "You can close this tab.". */
+/** Sign in through the system browser (LLP 1069.006): the callback URL, or a rejection whose `status` is 499 cancelled, 403, 409, 428, 501 or 502. `message` is the sentence a loopback callback's page shows in place of "You can close this tab." (LLP 1133.005 D9). */
 function openAuthSession(url: string, options: { callback: string; state: string; ephemeral?: boolean; message?: string }): Promise<string>;
-/** This carrier's auth callback, known before PAR. */
+/** This carrier's auth callback, known before PAR (LLP 1069.006 D2). */
 function authCallback(): string;
 }
 export interface NativeModule { readonly available: boolean; call(request: Record<string, unknown>): Record<string, unknown>; later(request: Record<string, unknown>): Promise<Record<string, unknown>>; watch(topic: string): void }
-/** A resource-owned WebSocket, for TypeScript on the web JS target and native hosts. Methods are synchronous-mutation-only; refresh or disposal invalidates it. */
+/** A resource-owned WebSocket, for TypeScript on the web JS target and native hosts (LLP 1016.000 D7). Methods are synchronous-mutation-only; refresh or disposal invalidates it. */
 export interface StreamSocket { readonly readyState: number; readonly bufferedAmount: number; send(data: string | ArrayBuffer | ArrayBufferView): void; close(code?: number, reason?: string): void }
-/** A local listener's connection: `send` writes a line and a `\n` (a line with a `\n` throws `SyntaxError`); `end()` closes it once what was sent is written. `readyState` is 1 while open, 3 after its `end`. The same rules as `StreamSocket`'s, by connection: its listener's mapper sends on the connection it is handed. */
+/** A local listener's connection (LLP 1133.005 D1): `send` writes a line and a `\n` (a line with a `\n` throws `SyntaxError`); `end()` closes it once what was sent is written. `readyState` is 1 while open, 3 after its `end`. The same rules as `StreamSocket`'s, by connection: its listener's mapper sends on the connection it is handed. */
 export interface ListenConnection { readonly readyState: number; send(line: string): void; end(): void }
 /** A local listener's event: `listening` (`address`, `port`: 0 for `unix:`), then each `connection`, `message` (one line, without its terminator) and `end` (`reason` `peer`, `app`, `timeout` or `overflow`), by connection `id`; `error` ends it (`kind` `Refused`, `AddressInUse`, `Unsupported` or `Network`). */
 export type ListenEvent = { readonly type: "listening"; readonly address: string; readonly port: number } | { readonly type: "connection"; readonly id: number } | { readonly type: "message"; readonly id: number; readonly data: string } | { readonly type: "end"; readonly id: number; readonly reason: "peer" | "app" | "timeout" | "overflow" } | { readonly type: "error"; readonly kind: string; readonly message: string };
 declare global {
-/** A local listener, a resource's answer as `fetch(url, {exactStream})` is: listening while the resource holds it, on `unix:<absolute path>` under a `net.listen` grant. Defined on desktop hosts only: test `"exactListen" in globalThis`. A mutation that calls it throws `InvalidStateError`. */
+/** A local listener (LLP 1133.005), a resource's answer as `fetch(url, {exactStream})` is: listening while the resource holds it, on `unix:<absolute path>` under a `net.listen` grant. Defined on desktop hosts only: test `"exactListen" in globalThis`. A mutation that calls it throws `InvalidStateError`. */
 function exactListen<T>(address: string, options: { exactStream: (event: ListenEvent, connection?: ListenConnection) => T; /** Newest wins: take the address over from a live listener. */ takeover?: boolean; /** ms, 1 to 600000: a connection whose first line has not arrived ends `timeout`. */ firstLineTimeout?: number; /** 1 to 1048576, 65536 by default. */ maxLineBytes?: number; /** 1 to 64, 16 by default. */ maxConnections?: number }): Promise<T>;
 }
 export interface StreamEvent { readonly type: string; readonly data: string | ArrayBuffer; readonly lastEventId: string; readonly coalesced: number; readonly kind?: string; readonly message?: string; readonly status?: number; readonly code?: number; readonly reason?: string; readonly wasClean?: boolean; /** An upload's `progress`: the body's bytes sent so far, of `total`. */ readonly loaded?: number; readonly total?: number; readonly lengthComputable?: boolean }
@@ -382,7 +404,7 @@ export type Answer = <S extends Source>(source: S, args: Args<S>, store: Store, 
 export type Write = { [S in Source]: { readonly id: number; readonly mutation: string; readonly source: S; readonly args: Args<S>; readonly reply?: Result<S>; readonly answered: boolean; keep(): void } }[Source];
 /** What a resource shows while writes affect it: its answer with them laid over it. Synchronous, with no effects; `undefined` shows the answer and stops showing every answered write. */
 export type Overlay = <S extends Source>(source: S, args: Args<S>, answer: Result<S>, writes: readonly Write[]) => Result<S> | undefined;
-/** A colour token of the app's design, by its name. */
+/** A colour token of the app's design, by its name (LLP 1121 D12). */
 export type ColorToken = "AccentColor" | "brand.black" | "brand.white" | "brand.brown" | "brand.red" | "brand.orange" | "brand.amber" | "brand.yellow" | "brand.green" | "brand.default" | "brand.cyan" | "brand.blue" | "brand.purple" | "brand.violet" | "brand.pink" | "brand.magenta" | "brand.gray" | "ink.light" | "ink.dark";
-/** A length token of the app's design, by its name. */
+/** A length token of the app's design, by its name (LLP 1121 D12). */
 export type LengthToken = "space.xs" | "space.sm" | "space.md" | "space.lg" | "space.xl" | "radius.sm" | "radius.md" | "radius.lg" | "radius.full";

@@ -27,6 +27,7 @@ EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/web/build.mjs" bots-web
 3. **Gateway** — first time: `PATH="$HOME/.t3/bin:$PATH" ./target/release/hbots up --no-service`  
    Then: `./target/release/hbots serve`  
    (`cargo build --release` if the binary is missing.)
+4. **macOS app** — `scripts/run-macos.sh` starts the gateway if needed and opens the macOS app (see `docs/native.md`).
 
 Open http://127.0.0.1:3780. Settings: `~/.hbots/.env` + `~/.hbots/t3-token`.
 

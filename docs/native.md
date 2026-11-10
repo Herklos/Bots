@@ -10,7 +10,7 @@ keys: the Exact clone's `README.md` (quick start, section 3 "Run it natively"), 
 |---|---|---|---|
 | Web | 2026-11-10 on this Mac: Exact from `.exact-path`, `EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/web/build.mjs" bots-web` → `app/target/web-dist`; gateway serves it on :3780. Face screenshots via `tests/face/screenshot.sh` + system Chrome. | OK | Keep rebuilding after Contract changes. |
 | Linux | Earlier: Hermes install for `x86_64-unknown-linux-gnu` failed (`UnknownIssuer`). No Bots linux crate under `app/linux/`. | BLOCKED here | Needs a Linux host with Hermes; `"linux": {}` is in `app/app.json`. |
-| macOS | 2026-11-10: `EXACT_APP_DIR=<hbots>/app bun "$EXACT_DIR/host/apple/build.mjs"` (no `--run`). Finished `host-dev`; wrote `app/target/clients/…/macos/hbots.app` (arm64). Note: no Metal toolchain → Canvas 2D uses Core Graphics (`xcodebuild -downloadComponent MetalToolchain`). | OK (build) | Launch with `--run` or open the `.app`; wire `HBOTS_URL` for a live gateway. Desktop shell that starts `hbots serve` is still design-only. |
+| macOS | 2026-11-10: `EXACT_APP_DIR=<hbots>/app bun "$EXACT_DIR/host/apple/build.mjs"` (no `--run`). Finished `host-dev`; wrote `app/target/clients/…/macos/hbots.app` (arm64). Note: no Metal toolchain → Canvas 2D uses Core Graphics (`xcodebuild -downloadComponent MetalToolchain`). | OK (build) | Launch with `scripts/run-macos.sh` (starts the gateway, opens the `.app`). The in-app shell that starts `hbots serve` is not built. |
 | iOS | Same apple host script with `--ios --run` (Simulator) or `--device --run`. | Not run | Needs Simulator/device. `host.ios` `minimumOS` 17.0; ATS for `http:` as below. |
 
 ## Requirements (from the Exact docs)
@@ -25,12 +25,23 @@ keys: the Exact clone's `README.md` (quick start, section 3 "Run it natively"), 
 `host` in `app/app.json` now has `ios`, `macos`, `linux` and `web`. Schema: `scripts/app.schema.json`. `host.linux` takes an
 optional `painter` (only `"ink"`); unset, the GPU painter is used when available, else the CPU.
 
-## Desktop shell (design, not built)
+## Desktop shell
 
-- A desktop shell starts `hbots serve` as a child process and points the Exact app at it.
-- The app reads its gateway URL from the `HBOTS_URL` build-time environment variable (`env` in `app/app.json`).
-  Build-time, not run-time: a per-launch URL needs a different mechanism, which this design does not cover.
-- The shell owns the child: start it, wait for `/api/health`, stop it on quit.
+Built: a dev script, `scripts/run-macos.sh`. Not built: the in-app shell.
+
+**Built (interim entry).** The script:
+
+- starts `target/release/hbots serve` if `GET $HBOTS_URL/api/health` (default `http://127.0.0.1:3780`) does not answer; it builds the binary first with `cargo build --release --bin hbots` if it is missing. Output goes to `target/serve.log`;
+- waits up to 60 s for `/api/health`;
+- opens the newest `app/target/clients/*/*/macos/hbots.app` if one exists. Opening leaves the gateway running, and the bundle keeps the `HBOTS_URL` it was built with;
+- otherwise runs the Exact apple host with `--run` (`EXACT_DIR` from `.exact-path`, `HBOTS_URL` passed to the build). It stops the gateway it started when the app quits.
+
+**Not built (the in-app shell).**
+
+- The Exact host, in the `.app`, does not start or stop the gateway. The script is the only starter.
+- `HBOTS_URL` is inlined at build (`app/app.ts`, `env` in `app/app.json`), so one bundle serves one gateway. A per-launch URL needs another mechanism, which is not chosen.
+- Candidate routes, undecided: Exact's `willQuit(done:)` native-module hook, which runs before quit and is where a child is stopped (`docs/reference.md`, around line 336); and `@exact/child-process` (`docs/reference.md`, "Child processes"). The second is for app data code under grant lines (`process.spawn`, origin `"app"`), not a host API, so it may not fit a host-owned child. Neither has been tried.
+- The shell must still wait for `/api/health` before it shows the app, and stop the child on quit.
 
 ## Phone access (design, not built)
 
@@ -44,4 +55,4 @@ optional `painter` (only `"ink"`); unset, the GPU painter is used when available
 ## Not done
 
 - No Linux or Bots native host crate under `app/linux/`.
-- No desktop shell code. Design only.
+- No in-app desktop shell. `scripts/run-macos.sh` is the interim entry.

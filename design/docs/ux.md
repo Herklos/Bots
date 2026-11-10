@@ -30,19 +30,19 @@ Inbox ──┬── Bot chat ──── Bot details
 
 ### 1. First run
 
-1. The person opens the web app or the installed app. If a password is set, the sign-in screen appears first.
+1. The person opens the web app or the installed app. If a password is set, the sign-in screen appears first: the Face, the wordmark, "Your Bots, at home.", then the password.
 2. Sign in with the password from Settings → Remote access. Five wrong tries lock sign-in for 15 minutes.
 3. The inbox shows **No Bots Yet** with "A Bot is a long-lived T3 Code thread with a face and a memory." and **Create Your First Bot**.
 
 ### 2. Create a Bot
 
-1. **New Bot**: type a name. The colour defaults to Tide; the picker offers six.
+1. **New Bot**: the Face of the colour you picked sits above the name. The colour defaults to Tide; the picker offers six.
 2. **Create Bot** is disabled until the name has text.
 3. The new Bot shows **Getting set up…** until its main conversation exists (the provisioner creates it), then **Ready**.
 
 ### 3. Talk to a Bot
 
-1. Open the Bot. Its conversation is loaded; the composer reads **Message**.
+1. Open the Bot. Its conversation is loaded. An empty one shows the Face and "One conversation. Say the first thing." The composer reads **Message**.
 2. Send. The reply appears as **Working…** while the Bot runs, then as a message.
 3. If the Bot asks for something the app can't answer yet, the request is shown as a card: "Answer this in T3 Code for now. It will show up here once the Bot can take your answer."
 4. **Stop** interrupts the running reply.

@@ -9,7 +9,7 @@ const HBOTS_URL = import.meta.env.HBOTS_URL ?? 'http://hbots-origin.invalid';
 const API: string = HBOTS_URL.replace(/\/$/, '');
 // Any gateway the person runs: their machine, a Tailscale address or a tunnel. Plain `http:` to a host
 // name on Apple also needs `appTransportSecurity.allowsArbitraryLoads` in app.json.
-export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session';
+export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session\nfs.read app:/tmp';
 
 // The avatar palette: the names a Bot may carry, and the app tokens they map to. Its values
 // come from design/tokens.json: change them there.
@@ -132,14 +132,78 @@ const sources: Sources = {
   loadChat: async ([slug], store): Promise<Result<'loadChat'>> => {
     if (slug === '') return { slug, rows: [], working: false }; // no chat is open: nothing to read
     const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat`);
+    const fileLabel = (m: any): string => {
+      const list = Array.isArray(m.attachments) ? m.attachments : [];
+      const names = list.map((a: any) => String(a?.name ?? a?.fileName ?? '').trim()).filter(Boolean);
+      return names.length === 0 ? '' : names.join(', ');
+    };
     const rows = [
-      ...(body.messages as any[]).map((m) => ({ id: String(m.id), kind: 'message', mine: m.role === 'user', text: String(m.text) })),
-      ...(body.requests as any[]).map((r) => ({ id: String(r.id), kind: 'request', mine: false, text: String(r.title) })),
-      ...(body.working === true ? [{ id: 'working', kind: 'working', mine: false, text: '' }] : []),
+      ...(body.messages as any[]).map((m) => ({
+        id: String(m.id), kind: 'message', mine: m.role === 'user', text: String(m.text ?? ''), files: fileLabel(m),
+      })),
+      ...(body.requests as any[]).map((r) => ({ id: String(r.id), kind: 'request', mine: false, text: String(r.title), files: '' })),
+      ...(body.working === true ? [{ id: 'working', kind: 'working', mine: false, text: '', files: '' }] : []),
     ];
     return { slug, rows, working: body.working === true };
   },
-  sendMessage: async ([slug, text], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/chat`, { method: 'POST', body: JSON.stringify({ text }) })),
+  sendMessage: async ([slug, text, pending], store) => {
+    const attachmentIds = String(pending ?? '')
+      .split('\n')
+      .map((line) => line.split('\t')[0]?.trim())
+      .filter((id) => !!id);
+    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/chat`, {
+      method: 'POST',
+      body: JSON.stringify({ text, attachmentIds }),
+    }));
+  },
+  uploadAttachment: async ([slug, path, name, mediaType], store, storage): Promise<Result<'uploadAttachment'>> => {
+    try {
+      const bytes = new Uint8Array(await storage.fs.readFile(String(path)));
+      if (bytes.byteLength === 0) return { ok: false, id: '', name: '', error: 'That file is empty.' };
+      if (bytes.byteLength > 8 << 20) return { ok: false, id: '', name: '', error: 'Attach a file under 8 MB.' };
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]!);
+      const data = btoa(binary);
+      const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/attachments`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: String(name || 'file'),
+          mediaType: String(mediaType || 'application/octet-stream'),
+          data,
+        }),
+      });
+      if (!r.ok) return { ok: false, id: '', name: '', error: r.error };
+      return {
+        ok: true,
+        id: String(r.body.id ?? r.body.attachmentId ?? ''),
+        name: String(r.body.name ?? name ?? 'file'),
+        error: '',
+      };
+    } catch {
+      return { ok: false, id: '', name: '', error: 'Can’t read that file. Try another one.' };
+    }
+  },
+  loadApps: async (_args, store): Promise<Result<'loadApps'>> => {
+    const body = await read(store, '/api/apps');
+    return (body.apps as any[] ?? []).map((a) => ({
+      id: String(a.id), name: String(a.name ?? ''), url: String(a.url ?? ''),
+    }));
+  },
+  loadConfig: async (_args, store): Promise<Result<'loadConfig'>> => {
+    const body = await read(store, '/api/config');
+    return { executorUrl: typeof body.executorUrl === 'string' ? body.executorUrl : '' };
+  },
+  addConnectedApp: async ([id, name, url], store) => {
+    const body = await read(store, '/api/apps');
+    const apps = Array.isArray(body.apps) ? [...body.apps] : [];
+    apps.push({ id, name, url });
+    return reply(await call(store, '/api/apps', { method: 'PUT', body: JSON.stringify({ apps }) }));
+  },
+  removeConnectedApp: async ([id], store) => {
+    const body = await read(store, '/api/apps');
+    const apps = (Array.isArray(body.apps) ? body.apps : []).filter((a: any) => String(a.id) !== id);
+    return reply(await call(store, '/api/apps', { method: 'PUT', body: JSON.stringify({ apps }) }));
+  },
   stopRun: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/stop`, { method: 'POST', body: '{}' })),
 };
 export const answer: Answer = (source, args, store, storage, native) => sources[source](args, store, storage, native);
