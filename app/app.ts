@@ -94,6 +94,7 @@ const FILE_TOO_BIG = 'Attach a file under 8 MB.';
 const FILE_READ = 'Can’t read that file. Try another one.';
 const LOAD_KEY: Record<string, string> = {
   computerOpen: 'error.computerOpen',
+  computerClose: 'error.computerClose',
   usage: 'error.loadUsage',
   models: 'error.loadModels',
   providers: 'error.loadProviders',
