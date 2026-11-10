@@ -1748,14 +1748,10 @@ async fn computer_input(
                 .map_err(ApiError::bad_request)?
         }
         "wheel" => {
-            let messages = vec![computer::wheel_message(
-                x,
-                y,
-                width,
-                height,
-                num(&body, "deltaY"),
-            )
-            .map_err(ApiError::bad_request)?];
+            let messages = vec![
+                computer::wheel_message(x, y, width, height, num(&body, "deltaY"))
+                    .map_err(ApiError::bad_request)?,
+            ];
             computer::send_input(&s.t3, &thread, &hold.tab, &messages)
                 .await
                 .map_err(ApiError::bad_request)?
@@ -1778,7 +1774,8 @@ async fn computer_input(
             .await
             .map_err(ApiError::bad_request)?,
         "selectAll" => {
-            let messages = vec![computer::edit_message("selectAll").map_err(ApiError::bad_request)?];
+            let messages =
+                vec![computer::edit_message("selectAll").map_err(ApiError::bad_request)?];
             computer::send_input(&s.t3, &thread, &hold.tab, &messages)
                 .await
                 .map_err(ApiError::bad_request)?
