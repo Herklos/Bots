@@ -55,8 +55,11 @@ function when(at: unknown, now: number): string {
   return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
 // A group prompt that leaked into a Bot's own thread. It belongs in the room, not under their name.
+// Same three needles as a framed dispatch: the frame at the start (or after a newline), or the share line.
 function isGroupLeak(text: string): boolean {
-  return text.includes('[Group "') || text.includes('Your reply is shared with the group');
+  return text.trim().startsWith('[Group "')
+    || text.includes('\n[Group "')
+    || text.includes('Your reply is shared with the group');
 }
 // The one line under a Bot's name in the inbox.
 function lineOf(b: any): string {
@@ -320,7 +323,11 @@ function chatRows(slug: string, body: any, now: number, reactions: Record<string
   const rows: any[] = [];
   let prev: any = null;
   let last = 0;
+  // A framed group user message, then the Bot's answer, stays out until the next ordinary user message.
+  let hideGroup = false;
   for (const item of timeline) {
+    if (item._t === 'message' && item.role === 'user') hideGroup = isGroupLeak(String(item.text ?? ''));
+    if (hideGroup) continue;
     const t = Date.parse(String(item.at ?? ''));
     if (now > 0 && Number.isFinite(t) && (last === 0 || t - last > GAP || dayStart(t) !== dayStart(last))) {
       rows.push({ ...blank, id: `day-${item.id}`, kind: 'day', mine: false, text: dayLabel(String(item.at), now), head: true, tail: true });
@@ -343,6 +350,7 @@ function chatRows(slug: string, body: any, now: number, reactions: Record<string
     rows.push(row);
     prev = { who, t, index: rows.length - 1 };
   }
+  if (hideGroup) return rows;
   for (const r of (body.requests ?? []) as any[]) {
     const kind = String(r.kind);
     const choices = kind === 'approval_request'
