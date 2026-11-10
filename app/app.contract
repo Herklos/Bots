@@ -399,6 +399,7 @@ shape Row
   choices: Choice[]
   placeholder: string
   key: string
+  react: string
 
 shape Suggestion
   name: string
@@ -439,6 +440,7 @@ shape Login
   username: string
   hasPassword: bool
   hints: string
+  icon: string
 
 // The one password the person asked to see, for the login it names.
 shape Revealed
@@ -662,6 +664,7 @@ component Bots
   mutation signedOut as shape Reply refreshes session, bots
   mutation created as shape Reply refreshes bots then afterCreate
   mutation seen as shape Reply refreshes bots
+  mutation reacted as shape Reply refreshes chat
   mutation sent as shape Reply refreshes chat then afterSend
   mutation answered as shape Reply refreshes chat then afterAnswer
   mutation stopped as shape Reply refreshes chat
@@ -884,6 +887,8 @@ component Bots
       lastText = again
       failedText = ""
       send sent = sendMessage(slug, again, "")
+  action doReact(item: string, emoji: string)
+    send reacted = reactTo(slug, item, emoji)
   action editAnswer(v: string)
     answerText = v
   action answer(rid: string, kind: string, key: string, value: string)
@@ -1114,7 +1119,10 @@ component Bots
                     button press=edit("What can we work on together?") class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-help"
                       text "See what we can do together"
               else
-                column flex=1 min-height=0 justify-content="flex-end"
+                column flex=1 min-height=0 justify-content="flex-end" position="relative"
+                  if chat.rows.length > 6
+                    button class=IconControl appearance="none" press=toEnd aria-label="Jump to the latest message" title="Jump to the latest" testId="to-end" position="absolute" right=16 bottom=8 width=36 height=36 border-radius="radius.full" background-color="surface.card" border="1px solid surface.line"
+                      Glyph(name="arrow-down", size=18)
                   list id="transcript" testId="transcript" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="space.lg 0" appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true max-height="100%" min-height=0 flex-shrink=1
                     for m in chat.rows key=m.id
                       column
@@ -1166,7 +1174,14 @@ component Bots
                                       column color="ink.muted"
                                         Glyph(name="download", size=18)
                               if m.tail and m.time != ""
-                                text m.time font="-exact-footnote" color="ink.faint" padding="0 space.xs"
+                                row gap="space.xs" align-items="center" padding="0 space.xs"
+                                  text m.time font="-exact-footnote" color="ink.faint"
+                                  if m.react != ""
+                                    button class=TextControl appearance="none" press=doReact(m.id, "👍") aria-label="Remove reaction" min-height=24 padding="0 space.xs" testId=`reaction-${m.id}`
+                                      text m.react font="-exact-footnote"
+                                  else if not m.mine
+                                    button class=TextControl appearance="none" press=doReact(m.id, "👍") aria-label="React with thumbs up" title="React" min-height=24 padding="0 space.xs" testId=`react-${m.id}`
+                                      Glyph(name="smile", size=14)
                         else if m.kind == "request"
                           row padding="space.sm space.lg"
                             column gap="space.sm" padding="space.md space.lg" border-radius="radius.lg" background-color="surface.bubble" flex=1 max-width="32rem" testId=`request-${m.id}`
@@ -1343,14 +1358,17 @@ component Bots
                     for v in shownVault key=v.id
                       link href=path("vaultEdit", v.id) testId=`login-${v.id}`
                         row class=BotRow
-                          column class=IconTile color="AccentColor"
-                            Glyph(name="lock", size=18)
+                          column class=IconTile color="AccentColor" overflow="hidden"
+                            if v.icon != ""
+                              image v.icon aria-label="" width=24 height=24 border-radius="radius.sm"
+                            else
+                              Glyph(name="lock", size=18)
                           column flex=1 min-width=0 gap="space.xs"
                             text v.title font-weight=600
                             text (v.username != "" ? v.username : v.website) color="ink.muted" font="-exact-footnote"
                           Glyph(name="chevron", size=20)
           else if e.name == "vaultAdd"
-            LoginSheet(route=e.id, item=Login(id="", title="", website="", username="", hasPassword=false, hints=""), revealedFor=revealedFor, revealedText=revealedText, error=loginError, save=doCommitLogin, reveal=doReveal, hide=doHideReveal, drop=doDropLogin, cancel=doCloseLogin)
+            LoginSheet(route=e.id, item=Login(id="", title="", website="", username="", hasPassword=false, hints="", icon=""), revealedFor=revealedFor, revealedText=revealedText, error=loginError, save=doCommitLogin, reveal=doReveal, hide=doHideReveal, drop=doDropLogin, cancel=doCloseLogin)
           else if e.name == "vaultEdit"
             for l in vault.filter(x => x.id == e.params.id) key=l.id
               LoginSheet(route=e.id, item=l, revealedFor=revealedFor, revealedText=revealedText, error=loginError, save=doCommitLogin, reveal=doReveal, hide=doHideReveal, drop=doDropLogin, cancel=doCloseLogin)

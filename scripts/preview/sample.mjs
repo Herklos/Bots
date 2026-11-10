@@ -93,7 +93,8 @@ export function sample(method, path, params, body) {
   if (path === '/api/suggestions') return { suggestions: [{ name: 'Night Shift', about: 'Works overnight and preps your morning digest', color: 'orange', shape: 'hex', firstMessage: 'Hi' }, { name: 'Inbox Triage', about: 'Sorts your email and drafts replies in your voice', color: 'pink', shape: 'cloud', firstMessage: 'Hi' }] };
   if (path === '/api/providers') return { ok: true, providers };
   if (path === '/api/usage/report') return report(params.get('period') ?? '7d');
-  if (path === '/api/vault') return { items: [] };
+  if (path === "/api/vault") return { items: [{ id: "v1", type: "login", title: "GitHub", website: "github.com", username: "ada", hasPassword: true }] };
+  if (path.startsWith("/api/threads/")) return { reactions: { m2: ["👍"] } };
   const m = path.match(/^\/api\/bots\/([^/]+)\/(.+)$/);
   if (m) {
     const [, slug, rest] = m;

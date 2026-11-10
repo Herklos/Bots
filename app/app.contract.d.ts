@@ -27,6 +27,7 @@
 //   makeMainBot: (args: [string]) => Reply
 //   markSeen: (args: [string]) => Reply
 //   pinBot: (args: [string, boolean]) => Reply
+//   reactTo: (args: [string, string, string]) => Reply
 //   recolourBot: (args: [string, string]) => Reply
 //   renameBot: (args: [string, string]) => Reply
 //   reshapeBot: (args: [string, string]) => Reply
@@ -49,13 +50,13 @@
 //   Bot = { slug: string; name: string; label: string; line: string; time: string; initials: string; color: string; shape: string; main: boolean; pinned: boolean; hidden: boolean; ready: boolean; working: boolean; unread: boolean }
 //   FileRef = { id: string; name: string; kind: string; size: string; url: string }
 //   Choice = { label: string; value: string; key: string; warn: string }
-//   Row = { id: string; kind: string; mine: boolean; text: string; title: string; time: string; head: boolean; tail: boolean; variant: string; files: FileRef[]; botSlug: string; botName: string; botColor: string; botShape: string; choices: Choice[]; placeholder: string; key: string }
+//   Row = { id: string; kind: string; mine: boolean; text: string; title: string; time: string; head: boolean; tail: boolean; variant: string; files: FileRef[]; botSlug: string; botName: string; botColor: string; botShape: string; choices: Choice[]; placeholder: string; key: string; react: string }
 //   Suggestion = { name: string; about: string; color: string; shape: string; first: string }
 //   About = { ok: boolean; version: string; harness: string; connected: boolean }
 //   Chat = { slug: string; rows: Row[]; working: boolean }
 //   Prefs = { userName: string; theme: string; defaultInstance: string; defaultModel: string }
 //   Attached = { ok: boolean; id: string; name: string; error: string }
-//   Login = { id: string; title: string; website: string; username: string; hasPassword: boolean; hints: string }
+//   Login = { id: string; title: string; website: string; username: string; hasPassword: boolean; hints: string; icon: string }
 //   Revealed = { ok: boolean; id: string; password: string; error: string }
 //   Usage = { ok: boolean; error: string; messages: number; attachments: number; vaultWrites: number; iconFetches: number }
 //   Effort = { id: string; label: string }
@@ -309,14 +310,14 @@ type T5 = { "id": T1; "name": T1; "kind": T1; "size": T1; "url": T1; };
 type T6 = { "label": T1; "value": T1; "key": T1; "warn": T1; };
 type T7 = T5[];
 type T8 = T6[];
-type T9 = { "id": T1; "kind": T1; "mine": T0; "text": T1; "title": T1; "time": T1; "head": T0; "tail": T0; "variant": T1; "files": T7; "botSlug": T1; "botName": T1; "botColor": T1; "botShape": T1; "choices": T8; "placeholder": T1; "key": T1; };
+type T9 = { "id": T1; "kind": T1; "mine": T0; "text": T1; "title": T1; "time": T1; "head": T0; "tail": T0; "variant": T1; "files": T7; "botSlug": T1; "botName": T1; "botColor": T1; "botShape": T1; "choices": T8; "placeholder": T1; "key": T1; "react": T1; };
 type T10 = { "name": T1; "about": T1; "color": T1; "shape": T1; "first": T1; };
 type T11 = { "ok": T0; "version": T1; "harness": T1; "connected": T0; };
 type T12 = T9[];
 type T13 = { "slug": T1; "rows": T12; "working": T0; };
 type T14 = { "userName": T1; "theme": T1; "defaultInstance": T1; "defaultModel": T1; };
 type T15 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
-type T16 = { "id": T1; "title": T1; "website": T1; "username": T1; "hasPassword": T0; "hints": T1; };
+type T16 = { "id": T1; "title": T1; "website": T1; "username": T1; "hasPassword": T0; "hints": T1; "icon": T1; };
 type T17 = { "ok": T0; "id": T1; "password": T1; "error": T1; };
 type T18 = number;
 type T19 = { "ok": T0; "error": T1; "messages": T18; "attachments": T18; "vaultWrites": T18; "iconFetches": T18; };
@@ -367,7 +368,7 @@ type T63 = T62[];
 type T64 = { "key": T1; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; "code": T1; "repeat": T0; "isComposing": T0; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "computerControl" | "createBot" | "deleteBot" | "deleteLogin" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveLogin" | "sendMessage" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";
+export type MutationSource = "computerControl" | "createBot" | "deleteBot" | "deleteLogin" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveLogin" | "sendMessage" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";
 
 export interface SourceMap {
   "computerControl": { args: [T1, T1, T1]; result: T2 };
@@ -393,6 +394,7 @@ export interface SourceMap {
   "makeMainBot": { args: [T1]; result: T2 };
   "markSeen": { args: [T1]; result: T2 };
   "pinBot": { args: [T1, T0]; result: T2 };
+  "reactTo": { args: [T1, T1, T1]; result: T2 };
   "recolourBot": { args: [T1, T1]; result: T2 };
   "renameBot": { args: [T1, T1]; result: T2 };
   "reshapeBot": { args: [T1, T1]; result: T2 };

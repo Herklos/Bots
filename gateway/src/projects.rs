@@ -72,6 +72,7 @@ fn kind_error() -> ApiError {
 }
 
 /// `{type: "bot", name, slug}` for a Bot, otherwise the user.
+#[allow(dead_code)]
 pub fn actor(input: Option<&Value>) -> Value {
     match input {
         Some(a) if a["type"] == "bot" => {

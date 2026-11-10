@@ -168,6 +168,7 @@ function usageReport(b: any) {
 // values like these between reads; the store only keeps the session.
 let lastNow = 0;
 const frames: Record<string, string> = {};
+const threads: Record<string, string> = {};
 const GAP = 60 * 60_000;
 const fileSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 // A day mark: the clock today, then "Yesterday 9:41 AM", the weekday for a week, then the date.
@@ -177,11 +178,11 @@ function dayLabel(at: string, now: number): string {
   const day = days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : days < 7 ? DAYS[d.getDay()]! : `${MONTHS[d.getMonth()]} ${d.getDate()}`;
   return `${day} ${clock(d)}`;
 }
-const blank = { key: '', time: '', title: '', files: [] as any[], botSlug: '', botName: '', botColor: 'brand.default', botShape: 'ball', variant: '', choices: [] as any[], placeholder: '' };
+const blank = { react: '', key: '', time: '', title: '', files: [] as any[], botSlug: '', botName: '', botColor: 'brand.default', botShape: 'ball', variant: '', choices: [] as any[], placeholder: '' };
 
 // The transcript as rows: day marks, messages in runs, the lines between them, what the Bot is
 // waiting on, and the working line. A run is one sender's messages with no break between them.
-function chatRows(slug: string, body: any, now: number): any[] {
+function chatRows(slug: string, body: any, now: number, reactions: Record<string, string[]> = {}): any[] {
   const peer = (b: any) => (b && typeof b === 'object'
     ? { botSlug: String(b.slug ?? ''), botName: String(b.name ?? ''), botColor: fill(b.color), botShape: String(b.shape ?? 'ball') } : {});
   const timeline = [
@@ -208,7 +209,7 @@ function chatRows(slug: string, body: any, now: number): any[] {
       id: String(f.id), name: String(f.name), kind: String(f.kind), size: fileSize(Number(f.bytes ?? 0)),
       url: `${API}/api/bots/${encodeURIComponent(slug)}/attachments/${encodeURIComponent(String(f.id))}`,
     }));
-    const row = { ...blank, ...peer(item.from), id: String(item.id), kind: 'message', mine, text: String(item.text ?? ''), files, head: !(prev && prev.who === who && t - prev.t < 5 * 60_000), tail: true,
+    const row = { ...blank, ...peer(item.from), id: String(item.id), kind: 'message', mine, text: String(item.text ?? ''), react: ((reactions[String(item.id)] ?? []) as string[]).join(' '), files, head: !(prev && prev.who === who && t - prev.t < 5 * 60_000), tail: true,
       time: Number.isFinite(t) ? clock(new Date(t)) : '' };
     if (prev && !row.head) rows[prev.index].tail = false;
     rows.push(row);
@@ -258,6 +259,7 @@ const sources: Sources = {
   hideBot: async ([slug, hidden], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ hidden }) })),
   makeMainBot: async ([slug], store) => reply(await call(store, '/api/main-bot', { method: 'PUT', body: JSON.stringify({ slug }) })),
   reshapeBot: async ([slug, shape], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ shape }) })),
+  reactTo: async ([slug, item, emoji], store) => reply(await call(store, `/api/threads/${encodeURIComponent(threads[slug] ?? '')}/reactions`, { method: 'POST', body: JSON.stringify({ item, emoji }) })),
   pinBot: async ([slug, pinned], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ pinned }) })),
   deleteBot: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'DELETE' })),
   loadPrefs: async (_args, store): Promise<Result<'loadPrefs'>> => {
@@ -272,6 +274,7 @@ const sources: Sources = {
     return (body.items as any[]).filter((i) => i.type === 'login').map((i) => ({
       id: String(i.id), title: String(i.title ?? ''), website: String(i.website ?? ''), username: String(i.username ?? ''),
       hasPassword: i.hasPassword === true, hints: String(i.hints ?? ''),
+      icon: ((h) => (h ? `${API}/api/icons/${h}` : ''))(/^(?:https?:\/\/)?([^/:?#\s]+\.[^/:?#\s]+)/i.exec(String(i.website ?? ''))?.[1] ?? ''),
     }));
   },
   revealPassword: async ([id], store): Promise<Result<'revealPassword'>> => {
@@ -313,7 +316,9 @@ const sources: Sources = {
   loadChat: async ([slug], store): Promise<Result<'loadChat'>> => {
     if (slug === '') return { slug, rows: [], working: false }; // no chat is open: nothing to read
     const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat`);
-    const rows = chatRows(slug, body, Number(body.now));
+    const meta = await call(store, `/api/threads/${encodeURIComponent(String(body.threadId ?? ''))}/meta`);
+    threads[slug] = String(body.threadId ?? '');
+    const rows = chatRows(slug, body, Number(body.now), meta.ok ? (meta.body.reactions ?? {}) : {});
     return { slug, rows, working: body.working === true };
   },
   respondRequest: async ([slug, id, kind, key, value], store) => {

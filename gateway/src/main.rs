@@ -44,18 +44,13 @@ use axum::{
     extract::{ConnectInfo, Path, Query, Request, State, WebSocketUpgrade},
     http::{header, HeaderMap, HeaderValue, Method, StatusCode, Uri},
     middleware::{self, Next},
-    response::{
-        sse::{Event, KeepAlive, Sse},
-        IntoResponse, Response,
-    },
+    response::{IntoResponse, Response},
     routing::{any, delete, get, post, put},
     Extension, Json, Router,
 };
 use error::{ApiError, ApiResult};
-use futures_util::{stream, Stream, StreamExt};
 use serde_json::{json, Value};
-use std::{collections::HashMap, convert::Infallible, net::SocketAddr, sync::Arc};
-use tokio_stream::wrappers::BroadcastStream;
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 pub struct AppState {
     pub cfg: config::Config,
@@ -351,10 +346,6 @@ pub fn app(state: Arc<AppState>) -> Router {
             post(vault_csv::import_csv).layer(axum::extract::DefaultBodyLimit::max(8 << 20)),
         )
         .route("/api/vault/export.csv", get(vault_csv::export))
-        .route("/api/projects", get(projects_board))
-        .route("/api/projects/items", post(projects_save))
-        .route("/api/projects/delete", post(projects_delete))
-        .route("/api/projects/events", get(projects_events))
         .route("/api/access", get(access_status))
         .route("/api/access/password", put(access_password))
         .route("/api/access/tailscale", post(access_tailscale))
@@ -1683,69 +1674,6 @@ async fn vault_delete(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Val
     s.vault.delete(&id).await?;
     s.usage.note(usage::Event::VaultWrite).await;
     Ok(Json(json!({ "ok": true })))
-}
-
-async fn projects_on(s: &AppState) -> ApiResult<()> {
-    if s.settings().await["beta"]["projects"] == true {
-        Ok(())
-    } else {
-        Err(ApiError::not_found("not found"))
-    }
-}
-
-async fn projects_board(State(s): S) -> ApiResult<Json<Value>> {
-    // With the beta off, an empty board that says so, not a 404 the browser logs as an error.
-    if s.settings().await["beta"]["projects"] != true {
-        return Ok(Json(
-            json!({ "beta": false, "version": 0, "items": [], "activity": [] }),
-        ));
-    }
-    Ok(Json(s.projects.try_board().await?))
-}
-
-async fn projects_save(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
-    projects_on(&s).await?;
-    // PROJECTS-HOOK (T3): writes must come from the app's own page.
-    if !projects_tools::same_origin(&h) {
-        return Err(ApiError::new(403, "This change didn't come from the app."));
-    }
-    require_json(&h)?;
-    let items = parse(&body)?["items"]
-        .as_array()
-        .cloned()
-        .ok_or_else(|| ApiError::bad_request("items must be a list"))?;
-    Ok(Json(s.projects.save(&items, projects::actor(None)).await?))
-}
-
-async fn projects_delete(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
-    projects_on(&s).await?;
-    if !projects_tools::same_origin(&h) {
-        return Err(ApiError::new(403, "This change didn't come from the app."));
-    }
-    require_json(&h)?;
-    let ids: Vec<String> = parse(&body)?["ids"]
-        .as_array()
-        .map(|l| {
-            l.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect()
-        })
-        .unwrap_or_default();
-    Ok(Json(s.projects.delete(&ids, projects::actor(None)).await?))
-}
-
-async fn projects_events(
-    State(s): S,
-) -> ApiResult<Sse<impl Stream<Item = Result<Event, Infallible>>>> {
-    projects_on(&s).await?;
-    let hello = Event::default()
-        .event("hello")
-        .data(json!({ "version": s.projects.version().await }).to_string());
-    let changes = BroadcastStream::new(s.projects.events.subscribe()).filter_map(|e| async move {
-        e.ok()
-            .map(|v| Ok(Event::default().event("change").data(v.to_string())))
-    });
-    Ok(Sse::new(stream::once(async { Ok(hello) }).chain(changes)).keep_alive(KeepAlive::default()))
 }
 
 // ---------- T3 passthrough ----------
