@@ -34,11 +34,17 @@ mod tests {
         let t = hbots_design::tokens();
         for s in all() {
             assert!(t.avatar.hex(s["color"].as_str().unwrap()).is_some(), "{s}");
-            assert!(crate::bots::shape_name(s["shape"].as_str().unwrap()).is_some(), "{s}");
+            assert!(
+                crate::bots::shape_name(s["shape"].as_str().unwrap()).is_some(),
+                "{s}"
+            );
             assert!(s["name"].as_str().unwrap().len() <= 24);
             assert!(s["firstMessage"].as_str().unwrap().len() <= 2000);
         }
-        let names: Vec<String> = all().iter().map(|s| s["name"].as_str().unwrap().to_string()).collect();
+        let names: Vec<String> = all()
+            .iter()
+            .map(|s| s["name"].as_str().unwrap().to_string())
+            .collect();
         let mut sorted = names.clone();
         sorted.sort();
         sorted.dedup();

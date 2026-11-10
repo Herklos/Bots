@@ -354,7 +354,10 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/access/tunnel", post(access_tunnel))
         .route("/api/thread-previews", post(thread_previews))
         .route("/api/rooms", get(rooms_list).post(rooms_create))
-        .route("/api/rooms/{id}", get(room_get).put(room_update).delete(room_delete))
+        .route(
+            "/api/rooms/{id}",
+            get(room_get).put(room_update).delete(room_delete),
+        )
         .route("/api/rooms/{id}/messages", post(room_send))
         .route("/api/threads/{thread}/meta", get(thread_meta_get))
         .route("/api/threads/{thread}/reactions", post(thread_reaction))
@@ -789,7 +792,10 @@ async fn room_snapshot(
     s: &AppState,
     room: &Value,
     ensure: bool,
-) -> ApiResult<(Vec<rooms::Member>, std::collections::HashMap<String, Vec<Value>>)> {
+) -> ApiResult<(
+    Vec<rooms::Member>,
+    std::collections::HashMap<String, Vec<Value>>,
+)> {
     let bots = s.bots.list().await?;
     let rpc = s.t3.rpc().await.ok();
     let room_id = room["id"].as_str().unwrap_or("").to_string();
@@ -797,7 +803,10 @@ async fn room_snapshot(
     let mut members = Vec::new();
     let mut threads = std::collections::HashMap::new();
     for slug in string_list(&room["members"]) {
-        let Some(bot) = bots.iter().find(|bot| bot["slug"].as_str() == Some(slug.as_str())) else {
+        let Some(bot) = bots
+            .iter()
+            .find(|bot| bot["slug"].as_str() == Some(slug.as_str()))
+        else {
             continue;
         };
         let provisioned = bot["mainThreadId"].as_str().is_some_and(|t| !t.is_empty());
@@ -844,7 +853,10 @@ async fn room_snapshot(
                     working = transcript["working"] == true;
                     threads.insert(
                         slug.clone(),
-                        transcript["messages"].as_array().cloned().unwrap_or_default(),
+                        transcript["messages"]
+                            .as_array()
+                            .cloned()
+                            .unwrap_or_default(),
                     );
                 }
             }
@@ -1070,7 +1082,8 @@ async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
     let mut patch = patch;
     // The default model is checked like a Bot's, and stored as T3 stores a selection.
     if patch.get("defaultModel").is_some_and(|v| v.is_object()) {
-        let chosen = checked_selection(&s, &patch["defaultModel"], &current["defaultModel"]).await?;
+        let chosen =
+            checked_selection(&s, &patch["defaultModel"], &current["defaultModel"]).await?;
         patch["defaultModel"] = chosen;
     }
     let mut next = store::merge(&current, &patch);
@@ -1610,7 +1623,9 @@ async fn computer_get(
     // A held page keeps the JPEG from its interactive session. Watching that
     // same tab does not open a second socket.
     let held = {
-        let sessions = computer::sessions().lock().unwrap_or_else(|poison| poison.into_inner());
+        let sessions = computer::sessions()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
         sessions.picture(&slug, &selected)
     };
     match held {
@@ -1654,7 +1669,9 @@ async fn computer_control(
     let frame = computer::send_control(&s.t3, &thread, tab, action)
         .await
         .map_err(ApiError::bad_request)?;
-    let mut sessions = computer::sessions().lock().unwrap_or_else(|poison| poison.into_inner());
+    let mut sessions = computer::sessions()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
     match action {
         "take" => {
             let width = body["width"].as_u64().unwrap_or(0) as u32;
@@ -1680,25 +1697,47 @@ async fn computer_input(
     let thread = main_thread(&s, &slug).await?;
     let body = parse(&body)?;
     let hold = {
-        let sessions = computer::sessions().lock().unwrap_or_else(|poison| poison.into_inner());
+        let sessions = computer::sessions()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
         sessions.get(&slug).cloned()
     };
     let Some(hold) = hold else {
         return Err(ApiError::bad_request("Take control first."));
     };
-    let width = body["width"].as_u64().map(|n| n as u32).filter(|n| *n > 0).unwrap_or(hold.width);
-    let height = body["height"].as_u64().map(|n| n as u32).filter(|n| *n > 0).unwrap_or(hold.height);
+    let width = body["width"]
+        .as_u64()
+        .map(|n| n as u32)
+        .filter(|n| *n > 0)
+        .unwrap_or(hold.width);
+    let height = body["height"]
+        .as_u64()
+        .map(|n| n as u32)
+        .filter(|n| *n > 0)
+        .unwrap_or(hold.height);
     let messages = match body["kind"].as_str().unwrap_or("") {
-        "click" => computer::click_messages(num(&body, "x"), num(&body, "y"), width, height).map_err(ApiError::bad_request)?,
-        "wheel" => vec![computer::wheel_message(num(&body, "x"), num(&body, "y"), width, height, num(&body, "deltaY")).map_err(ApiError::bad_request)?],
-        "text" => vec![computer::text_message(body["text"].as_str().unwrap_or("")).map_err(ApiError::bad_request)?],
-        "key" => vec![computer::key_message(body["key"].as_str().unwrap_or("")).map_err(ApiError::bad_request)?],
+        "click" => computer::click_messages(num(&body, "x"), num(&body, "y"), width, height)
+            .map_err(ApiError::bad_request)?,
+        "wheel" => vec![computer::wheel_message(
+            num(&body, "x"),
+            num(&body, "y"),
+            width,
+            height,
+            num(&body, "deltaY"),
+        )
+        .map_err(ApiError::bad_request)?],
+        "text" => vec![computer::text_message(body["text"].as_str().unwrap_or(""))
+            .map_err(ApiError::bad_request)?],
+        "key" => vec![computer::key_message(body["key"].as_str().unwrap_or(""))
+            .map_err(ApiError::bad_request)?],
         _ => return Err(ApiError::bad_request("Say click, wheel, text, or key.")),
     };
     let frame = computer::send_input(&s.t3, &thread, &hold.tab, &messages)
         .await
         .map_err(ApiError::bad_request)?;
-    let mut sessions = computer::sessions().lock().unwrap_or_else(|poison| poison.into_inner());
+    let mut sessions = computer::sessions()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
     if sessions.get(&slug).is_some() {
         if width > 0 && height > 0 {
             sessions.take(&slug, &hold.tab, width, height);
@@ -1728,11 +1767,10 @@ async fn main_thread(s: &AppState, slug: &str) -> ApiResult<String> {
 
 /// Rows of the parent's thread family. Used only to decide which child a send may use.
 async fn parent_rows(s: &AppState, parent: &str) -> ApiResult<Vec<Value>> {
-    let rpc = s
-        .t3
-        .rpc()
-        .await
-        .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
+    let rpc =
+        s.t3.rpc()
+            .await
+            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
     let projection = rpc
         .call(
             "orchestration.getThreadProjection",
@@ -1843,7 +1881,10 @@ async fn send_chat(
         return Err(ApiError::bad_request("Write a message first."));
     }
     let parent = main_thread(&s, &slug).await?;
-    let asked = body["child"].as_str().map(str::trim).filter(|id| !id.is_empty());
+    let asked = body["child"]
+        .as_str()
+        .map(str::trim)
+        .filter(|id| !id.is_empty());
     // Resolve before any reply is stored or any command is dispatched. A refused child
     // builds no command, so the parent thread is not written.
     let command = if let Some(child) = asked {
@@ -1935,22 +1976,16 @@ async fn send_voice(
             true,
         )
     };
-    let rpc = s
-        .t3
-        .rpc()
+    let rpc =
+        s.t3.rpc()
+            .await
+            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
+    rpc.call("orchestration.dispatchCommand", stored["command"].clone())
         .await
-        .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
-    rpc.call(
-        "orchestration.dispatchCommand",
-        stored["command"].clone(),
-    )
-    .await
-    .map_err(|e| ApiError::new(502, e.to_string()))?;
+        .map_err(|e| ApiError::new(502, e.to_string()))?;
     s.usage.note_for(&slug, usage::Event::Message).await;
     if wrote {
-        s.usage
-            .note_for(&slug, usage::Event::Attachment)
-            .await;
+        s.usage.note_for(&slug, usage::Event::Attachment).await;
     }
     Ok(Json(json!({
         "ok": true,
