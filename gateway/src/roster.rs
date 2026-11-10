@@ -150,7 +150,36 @@ pub async fn list(s: &AppState, bots: Vec<Value>) -> Vec<Value> {
         })
         .await
         .unwrap_or_else(|_| json!({}));
-    enrich(bots, &facts, &previews)
+    let mut rows = enrich(bots, &facts, &previews);
+    // A hidden Bot's mark is the message id, not the roster timestamp.
+    // Remember a new id without moving last-read. Opening the chat does that.
+    for bot in rows.iter_mut() {
+        if bot["hidden"] != true {
+            continue;
+        }
+        let thread = bot["mainThreadId"].as_str().unwrap_or("");
+        let preview_id = bot["preview"]["id"].as_str().unwrap_or("");
+        let meta = if thread.is_empty() {
+            json!({})
+        } else {
+            s.threads.get(Some(thread)).await.unwrap_or(json!({}))
+        };
+        let stored = meta["lastRead"].as_str().unwrap_or("");
+        let known = meta["latest"].as_str().unwrap_or("");
+        if !thread.is_empty() && !preview_id.is_empty() && preview_id != known {
+            if let Ok(seen) = s
+                .threads
+                .mark_read(Some(thread), Some(preview_id), false, true)
+                .await
+            {
+                bot["unread"] = seen["unread"].clone();
+                continue;
+            }
+        }
+        let latest = if !preview_id.is_empty() { preview_id } else { known };
+        bot["unread"] = json!(crate::thread_meta::inbox_unread(true, false, stored, latest));
+    }
+    rows
 }
 
 #[cfg(test)]

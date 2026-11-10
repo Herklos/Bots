@@ -1,4 +1,5 @@
 import type { Answer, Result, Sources, Storage } from './app.contract.d.ts';
+import { closeNotification, notificationStatus, showNotification } from '@exact/notifications';
 import en from './strings/en.json' with { type: 'json' };
 import fr from './strings/fr.json' with { type: 'json' };
 
@@ -11,7 +12,7 @@ const HBOTS_URL = import.meta.env.HBOTS_URL ?? 'http://hbots-origin.invalid';
 const API: string = HBOTS_URL.replace(/\/$/, '');
 // Any gateway the person runs: their machine, a Tailscale address or a tunnel. Plain `http:` to a host
 // name on Apple also needs `appTransportSecurity.allowsArbitraryLoads` in app.json.
-export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session\nsecret.keep drafts\nfs.read app:/tmp\nfs.write app:/tmp\ndevice.microphone purpose.microphone';
+export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session\nsecret.keep drafts\nfs.read app:/tmp\nfs.write app:/tmp\ndevice.microphone purpose.microphone\ndevice.notifications purpose.notifications';
 
 // The avatar palette: the names a Bot may carry, and the app tokens they map to. Its values
 // come from design/tokens.json: change them there.
@@ -459,6 +460,48 @@ function draftRows(raw: string | null): { stamp: string; texts: string[]; files:
   return { stamp: raw, texts, files, voices };
 }
 
+// The contract runner's slugs. A real Bot still notifies.
+const FIXTURE_SLUG = (slug: string): boolean => slug === 'fixture' || slug === 'bea' || slug === 'tabs';
+
+async function noticeGranted(): Promise<boolean> {
+  try {
+    const status = await notificationStatus({});
+    return status?.state === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+// Closes the one notice for this Bot. A host with no notification centre still opens the chat.
+async function closeNotice(slug: string): Promise<void> {
+  if (slug === '' || FIXTURE_SLUG(slug)) return;
+  try {
+    await closeNotification({ tag: `unread-${slug}` });
+  } catch {
+    // The page keeps working when the host cannot close a notice.
+  }
+}
+
+// One local notice per hidden unread Bot. The open chat is closed instead.
+// Nothing is posted until the person has allowed notifications, so a poll never asks.
+async function noteHidden(bots: any[], openSlug: string): Promise<void> {
+  if (FIXTURE_SLUG(openSlug)) return;
+  const hidden = bots.filter((b) => b && b.hidden === true && b.notifications !== false && !FIXTURE_SLUG(String(b.slug ?? '')));
+  if (hidden.length === 0) return;
+  if (!(await noticeGranted())) return;
+  for (const bot of hidden) {
+    const slug = String(bot.slug);
+    const tag = `unread-${slug}`;
+    if (slug === openSlug || bot.unread !== true) {
+      await closeNotification({ tag });
+      continue;
+    }
+    const line = lineOf(bot);
+    const body = line === 'Ready to chat' || line === 'Getting set up…' || line === 'Working…' ? say('notice.hidden') : line;
+    await showNotification({ title: String(bot.name || slug), body, tag, navigate: `/bot/${slug}` });
+  }
+}
+
 const sources: Sources = {
   loadSession: async ([locale], store): Promise<Result<'loadSession'>> => {
     noteLocale(locale);
@@ -491,6 +534,11 @@ const sources: Sources = {
     const at = (b: any): string => (typeof b.preview?.at === 'string' ? b.preview.at : '');
     // The main Bot first, then the most recent conversation; a Bot with none goes last.
     const sorted = [...(body.bots as any[])].sort((a, b) => (b.primary === true ? 1 : 0) - (a.primary === true ? 1 : 0) || at(b).localeCompare(at(a)));
+    try {
+      await noteHidden(sorted, focus);
+    } catch {
+      // A missing notification host still lists the Bots.
+    }
     return sorted.map((b) => ({
       slug: String(b.slug), name: String(b.name), label: String(b.label ?? ''), initials: initials(String(b.name)),
       color: fill(b.color), shape: String(b.shape ?? 'ball'), main: b.primary === true, pinned: b.pinned === true, hidden: b.hidden === true,
@@ -648,6 +696,7 @@ const sources: Sources = {
     }
     if (child === '') threads[slug] = threadId;
     const rows = chatRows(slug, body, Number(body.now), meta.reactions ?? {}, meta.replyTo ?? {});
+    if (child === '') await closeNotice(slug);
     const pins: PinRow[] = Array.isArray(meta.pins)
       ? meta.pins.map((id: unknown) => {
         const key = String(id);

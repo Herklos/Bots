@@ -1792,10 +1792,11 @@ async fn read_chat(
         )
         .await
         .map_err(|e| ApiError::new(502, e.to_string()))?;
-    let peers: chat::Peers = s
-        .bots
-        .list()
-        .await?
+    let listed = s.bots.list().await?;
+    let hidden = listed
+        .iter()
+        .any(|b| b["slug"].as_str() == Some(slug.as_str()) && b["hidden"] == true);
+    let peers: chat::Peers = listed
         .iter()
         .filter_map(|b| {
             Some((
@@ -1804,9 +1805,21 @@ async fn read_chat(
             ))
         })
         .collect();
+    // Opening the Bot's own chat advances last-read to the message id the inbox stored.
+    // A child thread is not that chat, and a visible Bot keeps the roster's own mark.
+    if asked.is_none() && hidden {
+        if let Ok(meta) = s.threads.get(Some(&thread)).await {
+            let stored = meta["lastRead"].as_str().unwrap_or("");
+            let latest = meta["latest"].as_str().unwrap_or("");
+            if !latest.is_empty() && stored != latest {
+                let _ = s.threads.mark_read(Some(&thread), None, true, true).await;
+            }
+        }
+    }
     let mut out = chat::with_tokens(chat::transcript_for(&projection, &peers), &projection);
     out["threadId"] = json!(thread);
     out["readOnly"] = json!(read_only);
+    out["hidden"] = json!(hidden);
     // The client has no clock it may read in its data code, so the gateway says what time it is.
     out["now"] = json!(unix_now() * 1000);
     Ok(([(header::CACHE_CONTROL, "no-store")], Json(out)).into_response())

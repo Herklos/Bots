@@ -1,5 +1,7 @@
 {
   "purpose.microphone": "Records a voice clip to send.",
+  "purpose.notifications": "Notifies you when a hidden Bot has a new message.",
+  "notice.hidden": "New message",
   "auth.passwordHint": "Enter the password you set in Settings → Remote access.",
   "auth.signIn": "Sign In",
   "auth.signingIn": "Signing in…",

@@ -9,6 +9,7 @@ use shapeNames from "./face.contract"
 use Glyph from "./glyph.contract"
 use getUserMedia, stopTrack, MediaStream, MediaStreamTrack from "@exact/media-capture"
 use startMediaRecorder, stopMediaRecorder, isTypeSupported, MediaRecorderInfo, RecordedMedia, TypeSupport from "@exact/recording"
+use showNotification, closeNotification, notificationStatus, requestNotificationPermission, NotificationStatus from "@exact/notifications"
 
 // Shared screen rhythm. Colours are generated from design/tokens.json.
 style Screen
@@ -807,6 +808,7 @@ component Bots
   mutation groupGone as shape Reply refreshes convos
   mutation groupSaved as shape Reply refreshes room, convos
   mutation seen as shape Reply refreshes bots
+  mutation noticeAsked as shape NotificationStatus
   mutation reacted as shape Reply refreshes chat
   mutation messagePinned as shape Reply refreshes chat
   mutation sent as shape Reply refreshes chat then afterSend
@@ -1316,6 +1318,8 @@ component Bots
   action doRecolour(bslug: string, color: string)
     send recoloured = recolourBot(bslug, color)
   action doHide(bslug: string, on: bool)
+    if on and bslug != "fixture" and bslug != "bea" and bslug != "tabs"
+      send noticeAsked = requestNotificationPermission()
     send hidSaved = hideBot(bslug, on)
   action doMain(bslug: string)
     send mainSaved = makeMainBot(bslug)

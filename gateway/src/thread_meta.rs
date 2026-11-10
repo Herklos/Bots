@@ -143,23 +143,25 @@ pub fn latest_preview(projection: &Value, names: &HashMap<String, String>) -> Op
                 };
                 let text = preview_text(&text_of(&item["text"]));
                 if !text.is_empty() {
-                    return Some(json!({ "kind": "text", "role": role, "text": text, "at": at }));
+                    return Some(with_id(json!({ "kind": "text", "role": role, "text": text, "at": at }), &item));
                 }
                 if item["attachments"]
                     .as_array()
                     .is_some_and(|a| !a.is_empty())
                 {
-                    return Some(
+                    return Some(with_id(
                         json!({ "kind": "attachment", "role": role, "text": "Attachment", "at": at }),
-                    );
+                        &item,
+                    ));
                 }
             }
             "user_input_request" => {
                 let text = preview_text(&text_of(&parsed(&item["questions"])[0]["question"]));
                 if !text.is_empty() {
-                    return Some(
+                    return Some(with_id(
                         json!({ "kind": "question", "role": "assistant", "text": text, "at": at }),
-                    );
+                        &item,
+                    ));
                 }
             }
             "dynamic_tool"
@@ -173,16 +175,24 @@ pub fn latest_preview(projection: &Value, names: &HashMap<String, String>) -> Op
                         .and_then(|id| names.get(id))
                         .map(String::as_str)
                         .unwrap_or("a Bot");
-                    return Some(json!({
+                    return Some(with_id(json!({
                         "kind": "sent", "role": "assistant",
                         "text": format!("Messaged {name}: {text}"), "at": at
-                    }));
+                    }), &item));
                 }
             }
             _ => {}
         }
     }
     None
+}
+
+/// Keeps the message id on a preview when the item has one. An id-less item stays as it was.
+fn with_id(mut row: Value, item: &Value) -> Value {
+    if let Some(id) = item["id"].as_str().filter(|id| !id.is_empty()) {
+        row["id"] = json!(id);
+    }
+    row
 }
 
 /// The state file, read once. A missing file starts empty; an unreadable one is an error, as in hbots.
@@ -283,6 +293,17 @@ pub fn next_last_read(stored: &str, latest: &str, open: bool, hidden: bool) -> S
 /// A hidden Bot keeps that mark until it is opened.
 pub fn is_unread(stored: &str, latest: &str, open: bool, hidden: bool) -> bool {
     !latest.is_empty() && next_last_read(stored, latest, open, hidden) != latest
+}
+
+/// The inbox mark. A hidden Bot follows the message id, so the roster's
+/// timestamp rule (a hidden Bot is never unread) does not apply. A visible
+/// Bot keeps the flag the roster already computed and is not notified from here.
+pub fn inbox_unread(hidden: bool, roster_unread: bool, last_read: &str, latest: &str) -> bool {
+    if hidden {
+        is_unread(last_read, latest, false, true)
+    } else {
+        roster_unread
+    }
 }
 
 /// Pins in stored order. An id that is not in the loaded messages stays, and says so.
@@ -952,5 +973,19 @@ mod tests {
             .unwrap();
         assert_eq!(opened["lastRead"], "m2");
         assert_eq!(opened["unread"], false);
+    }
+
+    #[test]
+    fn a_hidden_bot_with_a_later_message_id_is_unread_until_that_chat_is_open() {
+        assert!(inbox_unread(true, false, "", "m2"));
+        assert!(is_unread("", "m2", false, true));
+        assert!(!inbox_unread(true, false, "m2", "m2"));
+        assert!(!is_unread("m2", "m2", true, true));
+        assert!(!inbox_unread(false, false, "", "m2"));
+        assert!(inbox_unread(false, true, "m2", "m2"));
+        let item = message(1, "assistant_message", json!({ "id": "m2", "text": "Done" }));
+        let preview = latest_preview(&json!({ "turnItems": [item] }), &HashMap::new()).unwrap();
+        assert_eq!(preview["id"], "m2");
+        assert_eq!(preview["text"], "Done");
     }
 }

@@ -1,5 +1,7 @@
 {
   "purpose.microphone": "Enregistre un message vocal à envoyer.",
+  "purpose.notifications": "Prévient quand un Bot masqué a un nouveau message.",
+  "notice.hidden": "Nouveau message",
   "auth.passwordHint": "Entrez le mot de passe défini dans Réglages → Accès à distance.",
   "auth.signIn": "Connexion",
   "auth.signingIn": "Connexion…",
