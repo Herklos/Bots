@@ -284,6 +284,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         )
         .route("/api/bots/{slug}/seen", post(mark_seen))
         .route("/api/bots/{slug}/chat", get(read_chat).post(send_chat))
+        .route("/api/bots/{slug}/voice", post(send_voice))
         .route("/api/bots/{slug}/stop", post(stop_chat))
         .route(
             "/api/bots/{slug}/attachments",
@@ -356,6 +357,9 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/rooms/{id}/messages", post(room_send))
         .route("/api/threads/{thread}/meta", get(thread_meta_get))
         .route("/api/threads/{thread}/reactions", post(thread_reaction))
+        .route("/api/threads/{thread}/pins", post(thread_pin))
+        .route("/api/threads/{thread}/reply", post(thread_reply))
+        .route("/api/threads/{thread}/read", post(thread_read))
         .route("/api/threads/{thread}/voice", post(thread_voice))
         .route("/api/routines", get(routines_list).put(routines_upsert))
         .route("/api/routines/enabled", post(routines_enabled))
@@ -779,6 +783,61 @@ async fn thread_reaction(
     Ok(Json(
         s.threads
             .toggle_reaction(Some(&thread), body["item"].as_str(), body["emoji"].as_str())
+            .await?,
+    ))
+}
+
+async fn thread_pin(
+    State(s): S,
+    Path(thread): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    Ok(Json(
+        s.threads
+            .toggle_pin(Some(&thread), body["item"].as_str())
+            .await?,
+    ))
+}
+
+async fn thread_reply(
+    State(s): S,
+    Path(thread): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    Ok(Json(
+        s.threads
+            .set_reply(
+                Some(&thread),
+                body["messageId"].as_str(),
+                body["replyTo"].as_str(),
+                body["text"].as_str(),
+            )
+            .await?,
+    ))
+}
+
+async fn thread_read(
+    State(s): S,
+    Path(thread): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    Ok(Json(
+        s.threads
+            .mark_read(
+                Some(&thread),
+                body["latest"].as_str(),
+                body["open"].as_bool().unwrap_or(false),
+                body["hidden"].as_bool().unwrap_or(false),
+            )
             .await?,
     ))
 }
@@ -1509,12 +1568,44 @@ async fn main_thread(s: &AppState, slug: &str) -> ApiResult<String> {
         .ok_or_else(|| ApiError::new(409, "This Bot has no conversation yet"))
 }
 
-async fn read_chat(State(s): S, Path(slug): Path<String>) -> ApiResult<Response> {
-    let thread = main_thread(&s, &slug).await?;
+async fn read_chat(
+    State(s): S,
+    Path(slug): Path<String>,
+    Query(q): Query<HashMap<String, String>>,
+) -> ApiResult<Response> {
+    let parent = main_thread(&s, &slug).await?;
     let rpc =
         s.t3.rpc()
             .await
             .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
+    let asked = q
+        .get("child")
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|id| !id.is_empty());
+    let (thread, read_only) = if let Some(child) = asked {
+        let parent_projection = rpc
+            .call(
+                "orchestration.getThreadProjection",
+                json!({ "threadId": parent }),
+            )
+            .await
+            .map_err(|e| ApiError::new(502, e.to_string()))?;
+        let opened = lineage::rows(&parent_projection)
+            .iter()
+            .find(|row| row["threadId"].as_str() == Some(child))
+            .and_then(|row| lineage::open_child(row, &parent));
+        match opened {
+            Some(id) => (id, true),
+            None => {
+                return Err(ApiError::bad_request(
+                    "That thread stays on the other machine.",
+                ))
+            }
+        }
+    } else {
+        (parent, false)
+    };
     let projection = rpc
         .call(
             "orchestration.getThreadProjection",
@@ -1534,8 +1625,9 @@ async fn read_chat(State(s): S, Path(slug): Path<String>) -> ApiResult<Response>
             ))
         })
         .collect();
-    let mut out = chat::transcript_for(&projection, &peers);
+    let mut out = chat::with_tokens(chat::transcript_for(&projection, &peers), &projection);
     out["threadId"] = json!(thread);
+    out["readOnly"] = json!(read_only);
     // The client has no clock it may read in its data code, so the gateway says what time it is.
     out["now"] = json!(unix_now() * 1000);
     Ok(([(header::CACHE_CONTROL, "no-store")], Json(out)).into_response())
@@ -1564,6 +1656,16 @@ async fn send_chat(
             .await
             .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
     let command = chat::send_command(&thread, &text, &files);
+    if let Some(reply_to) = body["replyTo"].as_str().filter(|id| !id.is_empty()) {
+        s.threads
+            .set_reply(
+                Some(&thread),
+                command["messageId"].as_str(),
+                Some(reply_to),
+                body["quote"].as_str(),
+            )
+            .await?;
+    }
     rpc.call("orchestration.dispatchCommand", command.clone())
         .await
         .map_err(|e| ApiError::new(502, e.to_string()))?;
@@ -1571,6 +1673,67 @@ async fn send_chat(
     Ok(Json(
         json!({ "ok": true, "messageId": command["messageId"] }),
     ))
+}
+
+async fn send_voice(
+    State(s): S,
+    Path(slug): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    let seconds = body
+        .get("seconds")
+        .and_then(Value::as_f64)
+        .filter(|n| n.is_finite())
+        .ok_or_else(|| ApiError::bad_request("invalid duration"))?;
+    let bytes = body["data"]
+        .as_str()
+        .map(|data| {
+            base64::engine::Engine::decode(
+                &base64::engine::general_purpose::STANDARD,
+                data,
+            )
+        })
+        .transpose()
+        .map_err(|_| ApiError::bad_request("That clip could not be read."))?
+        .unwrap_or_default();
+    if bytes.is_empty() {
+        return Err(ApiError::bad_request("That clip is empty."));
+    }
+    let thread = main_thread(&s, &slug).await?;
+    let stored = chat::store_voice_send(
+        &s.cfg.bots_root,
+        &slug,
+        &s.threads,
+        &thread,
+        &bytes,
+        seconds,
+        &routines::stamped(),
+    )
+    .await?;
+    let rpc = s
+        .t3
+        .rpc()
+        .await
+        .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
+    rpc.call(
+        "orchestration.dispatchCommand",
+        stored["command"].clone(),
+    )
+    .await
+    .map_err(|e| ApiError::new(502, e.to_string()))?;
+    s.usage.note_for(&slug, usage::Event::Message).await;
+    s.usage
+        .note_for(&slug, usage::Event::Attachment)
+        .await;
+    Ok(Json(json!({
+        "ok": true,
+        "attachment": stored["attachment"],
+        "voiceCalls": stored["voiceCalls"],
+        "messageId": stored["command"]["messageId"],
+    })))
 }
 
 async fn stop_chat(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
