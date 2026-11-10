@@ -400,6 +400,13 @@ shape Row
   placeholder: string
   key: string
 
+shape Suggestion
+  name: string
+  about: string
+  color: string
+  shape: string
+  first: string
+
 shape Chat
   slug: string
   rows: Row[]
@@ -606,6 +613,8 @@ component Bots
   state answerText = ""
   state newName = ""
   state newColor = "brand.default"
+  state newShape = "ball"
+  state newFirst = ""
   state nameDraft = ""
   state nameEditing = false
   state newPassword = ""
@@ -631,6 +640,7 @@ component Bots
   resource session = loadSession() as shape Session else empty()
   resource bots = loadBots() as shape Bot[] else empty()
   resource chat = loadChat(slug) as shape Chat else empty()
+  resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
   resource prefs = loadPrefs() as shape Prefs else empty()
   resource vault = loadVault() as shape Login[] else empty()
   resource usage = loadUsage(usageGate) as shape Usage else empty()
@@ -792,6 +802,8 @@ component Bots
   action openNew
     newName = ""
     newColor = "brand.default"
+    newShape = "ball"
+    newFirst = ""
     nav = push(nav, "/new")
   action editBotQuery(v: string)
     botQuery = v
@@ -809,9 +821,16 @@ component Bots
     newName = v
   action pick(c: string)
     newColor = c
+  action pickShape(s: string)
+    newShape = s
+  action useStart(name: string, color: string, shape: string, first: string)
+    newName = name
+    newColor = color
+    newShape = shape
+    newFirst = first
   action create
     if newName.trim() != "" and not pending(created)
-      send created = createBot(newName.trim(), newColor)
+      send created = createBot(newName.trim(), newColor, newShape, newFirst)
   action afterCreate
     if createError == "" and top(nav).name == "create"
       nav = back(nav)
@@ -1311,24 +1330,35 @@ component Bots
                   Glyph(name="close", size=20)
                 text "New Bot" role="heading" aria-level=1 class=PageTitle flex=1
               scroll id="new-form" flex=1 min-height=0
-                column width="100%" max-width="25rem" box-sizing="border-box" margin="0 auto" padding="space.xl" gap="space.xl"
-                  column align-items="center" gap="space.md" padding="space.xl 0"
-                    Face(shape="ball", color=faceColor(newColor), state="idle", size=96, still=false)
-                    text "Pick a name and a colour." color="ink.muted" font="-exact-subheadline" text-align="center"
+                column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.xl" gap="space.xl"
+                  column align-items="center" gap="space.md" padding="space.lg 0 0"
+                    Avatar(shape=newShape, color=faceColor(newColor), state="idle", size=120, still=false, presence="")
+                    row gap="space.xs" flex-wrap="wrap" justify-content="center"
+                      for c in pickerColours() key=c
+                        button class=SwatchControl press=pick(c) appearance="none" aria-label=`Colour ${faceColor(c)}` aria-pressed=(newColor == c) testId=`colour-${c}` width=36 height=36 padding=0
+                          column width=26 height=26 box-sizing="border-box" margin="space.xs" border-radius="radius.full" background-color=c border=(newColor == c ? "3px solid AccentColor" : "3px solid transparent")
+                    row gap="space.xs" flex-wrap="wrap" justify-content="center"
+                      for s in shapeNames() key=s
+                        button class=SwatchControl press=pickShape(s) appearance="none" aria-label=`Shape ${s}` aria-pressed=(newShape == s) testId=`shape-${s}` width=44 height=44 padding=0 border-radius="radius.md" background-color=(newShape == s ? "surface.raised" : "transparent")
+                          Avatar(shape=s, color=faceColor(newColor), state="idle", size=30, still=true, presence="")
                   column gap="space.sm"
                     text "Name" font="-exact-subheadline" font-weight=600
                     input appearance="none" class=Field value=newName input=editName submit=create placeholder="What should we call your Bot?" aria-label="Name" padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-name"
-                  column gap="space.md"
-                    text "Colour" font="-exact-subheadline" font-weight=600
-                    row gap="space.xs" flex-wrap="wrap"
-                      for c in pickerColours() key=c
-                        button class=SwatchControl press=pick(c) appearance="none" aria-label=`Colour ${faceColor(c)}` aria-pressed=(newColor == c) testId=`colour-${c}` width=44 height=44 padding=0
-                          column width=36 height=36 box-sizing="border-box" margin="space.xs" border-radius="radius.full" background-color=c border=(newColor == c ? "3px solid AccentColor" : "3px solid transparent")
                   if createError != "" and not pending(created)
                     text createError color="-exact-system-red" testId="create-error"
-              row padding="space.lg space.xl space.xl" width="100%" max-width="25rem" box-sizing="border-box" align-self="center"
-                button class=PrimaryButton buttonStyle="filled" press=create disabled=(newName.trim() == "" or pending(created)) flex=1 testId="create"
-                  text (pending(created) ? "Creating…" : "Create Bot")
+                  row justify-content="center"
+                    button class=PrimaryButton buttonStyle="filled" press=create disabled=(newName.trim() == "" or pending(created)) testId="create"
+                      text (pending(created) ? "Creating…" : "Get Started")
+                  if suggestions.length > 0
+                    column gap="space.sm"
+                      text "Suggestions" font="-exact-subheadline" font-weight=600 color="ink.muted"
+                      column gap="space.sm"
+                        for s in suggestions key=s.name
+                          button class=PanelRow appearance="none" press=useStart(s.name, s.color, s.shape, s.first) testId=`start-${s.name}`
+                            Avatar(shape=s.shape, color=faceColor(s.color), state="idle", size=44, still=true, presence="")
+                            column flex=1 gap="2px" min-width=0
+                              text s.name font-weight=600
+                              text s.about color="ink.muted" font="-exact-footnote"
       if toast != ""
         row position="absolute" bottom=88 left="50%" translate="-50% 0" padding="space.md space.lg" border-radius="radius.full" background-color="-exact-label" color="surface.canvas" max-width="90%" box-sizing="border-box" testId="toast" role="status" aria-live="polite"
           text toast font="-exact-subheadline" font-weight=500

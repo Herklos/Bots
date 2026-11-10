@@ -288,7 +288,12 @@ const sources: Sources = {
     return reply(r);
   },
   deleteLogin: async ([id], store) => reply(await call(store, `/api/vault/${encodeURIComponent(id)}`, { method: 'DELETE' })),
-  createBot: async ([name, color], store) => reply(await call(store, '/api/bots', { method: 'POST', body: JSON.stringify({ name, color }) })),
+  createBot: async ([name, color, shape, firstMessage], store) => reply(await call(store, '/api/bots', { method: 'POST', body: JSON.stringify({ name, color, shape, ...(firstMessage !== '' ? { firstMessage } : {}) }) })),
+  loadSuggestions: async (_args, store): Promise<Result<'loadSuggestions'>> => {
+    const r = await call(store, '/api/suggestions');
+    if (!r.ok) return [];
+    return ((r.body.suggestions ?? []) as any[]).map((s) => ({ name: String(s.name), about: String(s.about ?? ''), color: fill(s.color), shape: String(s.shape ?? 'ball'), first: String(s.firstMessage ?? '') }));
+  },
   markSeen: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/seen`, { method: 'POST', body: '{}' })),
   loadChat: async ([slug], store): Promise<Result<'loadChat'>> => {
     if (slug === '') return { slug, rows: [], working: false }; // no chat is open: nothing to read
