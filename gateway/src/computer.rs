@@ -409,12 +409,11 @@ async fn drive(
     }
     if want_clipboard {
         let clipboard = wait_for_clipboard(&mut ws).await?;
-        let image = match tokio::time::timeout(Duration::from_millis(400), read_one_jpeg(&mut ws))
-            .await
-        {
-            Ok(Ok(bytes)) => bytes,
-            _ => Vec::new(),
-        };
+        let image =
+            match tokio::time::timeout(Duration::from_millis(400), read_one_jpeg(&mut ws)).await {
+                Ok(Ok(bytes)) => bytes,
+                _ => Vec::new(),
+            };
         return Ok(Driven { image, clipboard });
     }
     let image = match tokio::time::timeout(Duration::from_millis(800), read_one_jpeg(&mut ws)).await
@@ -468,9 +467,8 @@ async fn connect(
     }
 }
 
-type PreviewWs = tokio_tungstenite::WebSocketStream<
-    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
->;
+type PreviewWs =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 async fn read_one_jpeg(ws: &mut PreviewWs) -> Result<Vec<u8>, String> {
     use futures_util::{SinkExt, StreamExt};
@@ -502,9 +500,7 @@ async fn wait_for_control(ws: &mut PreviewWs) -> Result<(), String> {
     while tokio::time::Instant::now() < deadline {
         let frame = match tokio::time::timeout_at(deadline, ws.next()).await {
             Ok(Some(Ok(frame))) => frame,
-            Ok(Some(Err(_))) | Ok(None) => {
-                return Err("The browser closed the connection.".into())
-            }
+            Ok(Some(Err(_))) | Ok(None) => return Err("The browser closed the connection.".into()),
             Err(_) => break,
         };
         match frame {
@@ -540,9 +536,7 @@ async fn wait_for_clipboard(ws: &mut PreviewWs) -> Result<String, String> {
     while tokio::time::Instant::now() < deadline {
         let frame = match tokio::time::timeout_at(deadline, ws.next()).await {
             Ok(Some(Ok(frame))) => frame,
-            Ok(Some(Err(_))) | Ok(None) => {
-                return Err("The browser closed the connection.".into())
-            }
+            Ok(Some(Err(_))) | Ok(None) => return Err("The browser closed the connection.".into()),
             Err(_) => break,
         };
         match frame {
