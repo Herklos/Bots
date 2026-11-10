@@ -1924,14 +1924,14 @@ component Bots
                     list id="room-log" appearance="none" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" flex=1 min-height=0 padding="space.sm space.lg space.xl" virtualized=true scroll-start="end" scrollFollowEnd=true testId="room-log"
                       for msg in roomRows key=msg.id
                         if msg.id == "working"
-                          row gap="space.sm" align-items="center" padding="2px 0" testId="room-working"
+                          row gap="space.sm" align-items="center" padding="1px 0" testId="room-working"
                             for m in workingMembers key=m.slug
                               Face(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state="working", size=24, still=false)
                             row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working") testId="room-working-dots"
                               for n in [0, 1, 2] key=n
                                 column width=7 height=7 border-radius="radius.full" background-color="ink.muted" opacity=0.6
                         else
-                          row justify-content=(msg.from == "user" ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="2px 0" testId=`room-msg-${msg.id}`
+                          row justify-content=(msg.from == "user" ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="1px 0" testId=`room-msg-${msg.id}`
                             if msg.from != "user"
                               Face(shape=shapeOf(bots, msg.from), color=faceColor(colorOf(bots, msg.from)), state="idle", size=28, still=true)
                             column gap="2px" max-width="82%" align-items=(msg.from == "user" ? "flex-end" : "flex-start")
@@ -2309,13 +2309,13 @@ component ChatMessage
       case none
         focused = false
   view
-    row justify-content=(row.mine ? "flex-end" : "flex-start") padding=(row.head ? "space.sm space.lg 2px" : "2px space.lg")
+    row justify-content=(row.mine ? "flex-end" : "flex-start") padding=(row.head ? "space.sm space.lg 1px" : "1px space.lg")
       column gap="2px" max-width="82%" align-items=(row.mine ? "flex-end" : "flex-start") hover=setOver pointerdown=tapDown pointerup=tapUp contextmenu=openFromSecondary focusin=chromeFocus focusout=chromeBlur
         if row.quote != ""
           text row.quote color="ink.muted" font="-exact-footnote" testId=`quote-${row.id}`
         if row.text != "" or row.react != "" or not row.mine
           row gap="space.xs" align-items="flex-end" max-width="100%"
-            column position="relative" padding-bottom="10px" max-width="100%"
+            column position="relative" padding-bottom="6px" max-width="100%"
               if row.text != "" and row.mine
                 text row.text class=Bubble testId=`message-${row.id}`
                   background-color="brand.default"
