@@ -973,15 +973,17 @@ const sources: Sources = {
     }));
   },
   computerInput: async ([slug, kind, x, y, boxW, boxH, deltaY, text], store) => {
-    if (slug === 'frame' || slug === 'page' || slug === 'tabs') return { ok: true, error: '' };
-    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/input`, {
+    if (slug === 'frame' || slug === 'page' || slug === 'tabs') return { ok: true, error: '', text: '' };
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/input`, {
       method: 'POST',
       body: JSON.stringify({
         kind, x, y, boxW, boxH, deltaY,
         text: kind === 'text' ? text : '',
         key: kind === 'key' ? text : '',
       }),
-    }));
+    });
+    if (!r.ok) return { ok: false, error: localize(r.error), text: '' };
+    return { ok: true, error: '', text: typeof r.body.text === 'string' ? r.body.text : '' };
   },
   loadRoom: async ([id], store): Promise<Result<'loadRoom'>> => {
     if (id === '') return { id: '', title: '', description: '', color: 'brand.default', shape: 'ball', members: [], messages: [] };

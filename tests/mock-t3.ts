@@ -26,8 +26,17 @@ const previewMessage = (ws: any, raw: unknown) => {
   const msg = JSON.parse(String(raw));
   if (msg.type === 'takeControl') return ws.send(JSON.stringify({ type: 'control', controller: tabId === 'busy' ? 'another-viewer' : 'you', canOperate: true }));
   if (msg.type === 'text') return typed.set(tabId, (typed.get(tabId) ?? '') + String(msg.text));
+  if (msg.type === 'key' && msg.modifiers === 4 && String(msg.key).toLowerCase() === 'c') {
+    return ws.send(JSON.stringify({ type: 'clipboard', text: typed.get(tabId) ?? 'copied' }));
+  }
+  if (msg.type === 'key' && msg.modifiers === 4 && String(msg.key).toLowerCase() === 'x') {
+    const text = typed.get(tabId) ?? 'cut';
+    typed.set(tabId, '');
+    return ws.send(JSON.stringify({ type: 'clipboard', text }));
+  }
   if (msg.type === 'probe') return ws.send(JSON.stringify({ type: 'probe', x: msg.x, y: msg.y }));
   if (msg.type === 'releaseControl') return ws.send(JSON.stringify({ type: 'control', controller: 'none', canOperate: true }));
+  if (msg.type === 'ack') return;
 };
 
 Bun.serve({

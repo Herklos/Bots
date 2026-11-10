@@ -1738,21 +1738,57 @@ async fn computer_input(
     } else {
         (num(&body, "x"), num(&body, "y"))
     };
-    let messages = match body["kind"].as_str().unwrap_or("") {
-        "click" => computer::click_messages(x, y, width, height).map_err(ApiError::bad_request)?,
-        "wheel" => vec![
-            computer::wheel_message(x, y, width, height, num(&body, "deltaY"))
-                .map_err(ApiError::bad_request)?,
-        ],
-        "text" => vec![computer::text_message(body["text"].as_str().unwrap_or(""))
-            .map_err(ApiError::bad_request)?],
-        "key" => vec![computer::key_message(body["key"].as_str().unwrap_or(""))
-            .map_err(ApiError::bad_request)?],
-        _ => return Err(ApiError::bad_request("Say click, wheel, text, or key.")),
+    let kind = body["kind"].as_str().unwrap_or("");
+    let driven = match kind {
+        "click" => {
+            let messages =
+                computer::click_messages(x, y, width, height).map_err(ApiError::bad_request)?;
+            computer::send_input(&s.t3, &thread, &hold.tab, &messages)
+                .await
+                .map_err(ApiError::bad_request)?
+        }
+        "wheel" => {
+            let messages = vec![computer::wheel_message(
+                x,
+                y,
+                width,
+                height,
+                num(&body, "deltaY"),
+            )
+            .map_err(ApiError::bad_request)?];
+            computer::send_input(&s.t3, &thread, &hold.tab, &messages)
+                .await
+                .map_err(ApiError::bad_request)?
+        }
+        "text" => {
+            let messages = vec![computer::text_message(body["text"].as_str().unwrap_or(""))
+                .map_err(ApiError::bad_request)?];
+            computer::send_input(&s.t3, &thread, &hold.tab, &messages)
+                .await
+                .map_err(ApiError::bad_request)?
+        }
+        "key" => {
+            let messages = vec![computer::key_message(body["key"].as_str().unwrap_or(""))
+                .map_err(ApiError::bad_request)?];
+            computer::send_input(&s.t3, &thread, &hold.tab, &messages)
+                .await
+                .map_err(ApiError::bad_request)?
+        }
+        "copy" | "cut" => computer::send_edit(&s.t3, &thread, &hold.tab, kind)
+            .await
+            .map_err(ApiError::bad_request)?,
+        "selectAll" => {
+            let messages = vec![computer::edit_message("selectAll").map_err(ApiError::bad_request)?];
+            computer::send_input(&s.t3, &thread, &hold.tab, &messages)
+                .await
+                .map_err(ApiError::bad_request)?
+        }
+        _ => {
+            return Err(ApiError::bad_request(
+                "Say click, wheel, text, key, copy, cut, or selectAll.",
+            ))
+        }
     };
-    let frame = computer::send_input(&s.t3, &thread, &hold.tab, &messages)
-        .await
-        .map_err(ApiError::bad_request)?;
     let mut sessions = computer::sessions()
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
@@ -1760,14 +1796,14 @@ async fn computer_input(
         if width > 0 && height > 0 {
             sessions.take(&slug, &hold.tab, width, height);
         }
-        if !frame.is_empty() {
-            sessions.note_image(&slug, &library::encode_file(&frame));
-            if let Some((w, h)) = computer::jpeg_size(&frame) {
+        if !driven.image.is_empty() {
+            sessions.note_image(&slug, &library::encode_file(&driven.image));
+            if let Some((w, h)) = computer::jpeg_size(&driven.image) {
                 sessions.remember_size(&slug, w, h);
             }
         }
     }
-    Ok(Json(json!({ "ok": true })))
+    Ok(Json(json!({ "ok": true, "text": driven.clipboard })))
 }
 
 fn num(body: &Value, key: &str) -> f64 {

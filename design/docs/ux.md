@@ -69,8 +69,8 @@ Inbox ──┬── Bot chat ──┬── Library
 ### 3d. Computer
 
 1. The **Computer** sidebar tab watches one page this Bot has open. The Face sits beside the page title. An empty watch says "This Bot has not opened a page."
-2. **Take Control** is a second step. Watching does not take the page. **Release** gives it back, and leaving the screen releases it too, so the Bot can use the page.
-3. Mouse moves and typed text are not on this screen yet.
+2. Click the screen picture to open it large. **Take Control** is a second step and opens the large view for typing and clicking. Watching does not take the page. **Release** gives it back, and leaving the Computer tab releases it too, so the Bot can use the page.
+3. While holding the page, clicks, the wheel, typed text, paste, and copy/cut work in the large view.
 
 ### 4. Save and use a login
 

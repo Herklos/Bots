@@ -5,7 +5,7 @@
 // function per source, given its arguments as an array (then store, storage, native) and
 // answering its shape, or a Promise of it.
 //   computerControl: (args: [string, string, string]) => Reply
-//   computerInput: (args: [string, string, number, number, number, number, number, string]) => Reply
+//   computerInput: (args: [string, string, number, number, number, number, number, string]) => DriveReply
 //   createBot: (args: [string, string, string, string]) => Reply
 //   createGroup: (args: [string, string, string, string, string]) => Made
 //   createSubagent: (args: [string, string, string, string, string, boolean]) => Reply
@@ -328,6 +328,7 @@ export interface Statement {
 type T0 = boolean;
 type T1 = string;
 type T2 = { "ok": T0; "error": T1; };
+type T2b = { "ok": T0; "error": T1; "text": T1; };
 type T3 = { "authenticated": T0; "passwordRequired": T0; };
 type T4 = { "slug": T1; "name": T1; "label": T1; "line": T1; "time": T1; "initials": T1; "color": T1; "shape": T1; "main": T0; "pinned": T0; "hidden": T0; "ready": T0; "working": T0; "unread": T0; "parentSlug": T1; "hideFromSidebar": T0; "subagent": T0; "prompt": T1; "inheritParentPrompt": T0; };
 type T5 = { "id": T1; "name": T1; "kind": T1; "size": T1; "url": T1; };
@@ -543,7 +544,7 @@ export type MutationSource = "computerControl" | "computerInput" | "createBot" |
 
 export interface SourceMap {
   "computerControl": { args: [T1, T1, T1]; result: T2 };
-  "computerInput": { args: [T1, T1, T27, T27, T27, T27, T27, T1]; result: T2 };
+  "computerInput": { args: [T1, T1, T27, T27, T27, T27, T27, T1]; result: T2b };
   "createBot": { args: [T1, T1, T1, T1]; result: T2 };
   "createGroup": { args: [T1, T1, T1, T1, T1]; result: T24 };
   "createSubagent": { args: [T1, T1, T1, T1, T1, T0]; result: T2 };

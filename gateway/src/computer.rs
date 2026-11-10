@@ -170,19 +170,44 @@ pub fn text_message(text: &str) -> Result<Value, &'static str> {
     Ok(json!({ "type": "text", "text": text }))
 }
 
-/// T3's preview key map. Escape is the phone's back gesture, so it is not sent.
+/// A navigation or editing key for T3's server browser stream (CDP-shaped).
+/// Escape is the phone's back gesture, so it is not sent.
 pub fn key_message(key: &str) -> Result<Value, &'static str> {
-    let code = match key {
-        "ArrowUp" => 19,
-        "ArrowDown" => 20,
-        "ArrowLeft" => 21,
-        "ArrowRight" => 22,
-        "Tab" => 61,
-        "Enter" => 66,
-        "Backspace" => 67,
+    let (key, code) = match key {
+        "ArrowUp" => ("ArrowUp", "ArrowUp"),
+        "ArrowDown" => ("ArrowDown", "ArrowDown"),
+        "ArrowLeft" => ("ArrowLeft", "ArrowLeft"),
+        "ArrowRight" => ("ArrowRight", "ArrowRight"),
+        "Tab" => ("Tab", "Tab"),
+        "Enter" => ("Enter", "Enter"),
+        "Backspace" => ("Backspace", "Backspace"),
+        "Delete" => ("Delete", "Delete"),
+        "Home" => ("Home", "Home"),
+        "End" => ("End", "End"),
+        "PageUp" => ("PageUp", "PageUp"),
+        "PageDown" => ("PageDown", "PageDown"),
         _ => return Err("That key is not sent."),
     };
-    Ok(json!({ "type": "key", "keycode": code }))
+    Ok(json!({ "type": "key", "key": key, "code": code, "modifiers": 0 }))
+}
+
+/// Meta (4) matches T3's editingCommand for copy, cut and select-all on the server browser.
+pub const META: i64 = 4;
+
+/// Copy, cut or select-all on the held page. The clipboard text comes back on the same socket.
+pub fn edit_message(action: &str) -> Result<Value, &'static str> {
+    let (key, code) = match action {
+        "copy" => ("c", "KeyC"),
+        "cut" => ("x", "KeyX"),
+        "selectAll" => ("a", "KeyA"),
+        _ => return Err("Say copy, cut, or selectAll."),
+    };
+    Ok(json!({
+        "type": "key",
+        "key": key,
+        "code": code,
+        "modifiers": META,
+    }))
 }
 
 /// One held browser per Bot. Release drops it. A click does not open one.
@@ -302,31 +327,50 @@ pub async fn send_control(
     deliver(t3, thread, tab_id, &[message]).await
 }
 
+/// What one interactive turn returns: the next JPEG, and clipboard text after copy/cut.
+#[derive(Default)]
+pub struct Driven {
+    pub image: Vec<u8>,
+    pub clipboard: String,
+}
+
 /// Input on the held page. The messages are the click, scroll, text, or key, not a new take.
-/// The bytes are the next JPEG from that same interactive session.
+/// Take runs on this same socket first, so the page stays owned for the turn.
 pub async fn send_input(
     t3: &T3,
     thread: &str,
     tab_id: &str,
     messages: &[Value],
-) -> Result<Vec<u8>, String> {
+) -> Result<Driven, String> {
     if messages
         .iter()
         .any(|message| message.get("type").and_then(Value::as_str) == Some("takeControl"))
     {
         return Err("A click does not take control.".into());
     }
-    deliver(t3, thread, tab_id, messages).await
+    drive(t3, thread, tab_id, messages, false).await
 }
 
+/// Copy or cut on the held page. Waits for T3's clipboard event on the same socket.
+pub async fn send_edit(
+    t3: &T3,
+    thread: &str,
+    tab_id: &str,
+    action: &str,
+) -> Result<Driven, String> {
+    let message = edit_message(action).map_err(str::to_string)?;
+    drive(t3, thread, tab_id, &[message], true).await
+}
+
+/// Take or release only. Does not prepend another take.
 async fn deliver(
     t3: &T3,
     thread: &str,
     tab_id: &str,
     messages: &[Value],
 ) -> Result<Vec<u8>, String> {
-    let mut ws = connect(t3, thread, tab_id, true).await?;
     use futures_util::SinkExt;
+    let mut ws = connect(t3, thread, tab_id, true).await?;
     for message in messages {
         ws.send(tokio_tungstenite::tungstenite::Message::text(
             message.to_string(),
@@ -338,6 +382,50 @@ async fn deliver(
         Ok(Ok(bytes)) => Ok(bytes),
         _ => Ok(Vec::new()),
     }
+}
+
+/// One interactive turn: take on this socket, send the messages, then a frame and optional clipboard.
+async fn drive(
+    t3: &T3,
+    thread: &str,
+    tab_id: &str,
+    messages: &[Value],
+    want_clipboard: bool,
+) -> Result<Driven, String> {
+    use futures_util::SinkExt;
+    let mut ws = connect(t3, thread, tab_id, true).await?;
+    ws.send(tokio_tungstenite::tungstenite::Message::text(
+        control_message("take").map_err(str::to_string)?.to_string(),
+    ))
+    .await
+    .map_err(|_| "The browser closed the connection.".to_string())?;
+    wait_for_control(&mut ws).await?;
+    for message in messages {
+        ws.send(tokio_tungstenite::tungstenite::Message::text(
+            message.to_string(),
+        ))
+        .await
+        .map_err(|_| "The browser closed the connection.".to_string())?;
+    }
+    if want_clipboard {
+        let clipboard = wait_for_clipboard(&mut ws).await?;
+        let image = match tokio::time::timeout(Duration::from_millis(400), read_one_jpeg(&mut ws))
+            .await
+        {
+            Ok(Ok(bytes)) => bytes,
+            _ => Vec::new(),
+        };
+        return Ok(Driven { image, clipboard });
+    }
+    let image = match tokio::time::timeout(Duration::from_millis(800), read_one_jpeg(&mut ws)).await
+    {
+        Ok(Ok(bytes)) => bytes,
+        _ => Vec::new(),
+    };
+    Ok(Driven {
+        image,
+        clipboard: String::new(),
+    })
 }
 
 async fn connect(
@@ -380,11 +468,11 @@ async fn connect(
     }
 }
 
-async fn read_one_jpeg(
-    ws: &mut tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-    >,
-) -> Result<Vec<u8>, String> {
+type PreviewWs = tokio_tungstenite::WebSocketStream<
+    tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+>;
+
+async fn read_one_jpeg(ws: &mut PreviewWs) -> Result<Vec<u8>, String> {
     use futures_util::{SinkExt, StreamExt};
     use tokio_tungstenite::tungstenite::Message;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
@@ -394,12 +482,93 @@ async fn read_one_jpeg(
             .map_err(|_| "The picture didn't arrive.".to_string())?
             .ok_or_else(|| "The browser closed the connection.".to_string())?
             .map_err(|_| "The browser closed the connection.".to_string())?;
-        if let Message::Binary(bytes) = frame {
-            let _ = ws.send(Message::text(watch_message().to_string())).await;
-            return Ok(bytes.to_vec());
+        match frame {
+            Message::Binary(bytes) => {
+                let _ = ws.send(Message::text(watch_message().to_string())).await;
+                return Ok(bytes.to_vec());
+            }
+            Message::Text(_) => continue,
+            _ => continue,
         }
     }
     Err("The picture didn't arrive.".into())
+}
+
+/// The page is ready for input once this viewer owns it (or nobody else does).
+async fn wait_for_control(ws: &mut PreviewWs) -> Result<(), String> {
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while tokio::time::Instant::now() < deadline {
+        let frame = match tokio::time::timeout_at(deadline, ws.next()).await {
+            Ok(Some(Ok(frame))) => frame,
+            Ok(Some(Err(_))) | Ok(None) => {
+                return Err("The browser closed the connection.".into())
+            }
+            Err(_) => break,
+        };
+        match frame {
+            Message::Binary(_) => {
+                let _ = ws.send(Message::text(watch_message().to_string())).await;
+            }
+            Message::Text(text) => {
+                let Ok(msg) = serde_json::from_str::<Value>(text.as_str()) else {
+                    continue;
+                };
+                if msg.get("type").and_then(Value::as_str) != Some("control") {
+                    continue;
+                }
+                let controller = msg.get("controller").and_then(Value::as_str).unwrap_or("");
+                if controller == "another-viewer" {
+                    return Err("Someone else has this page.".into());
+                }
+                if controller == "you" || controller == "unclaimed" || controller == "none" {
+                    return Ok(());
+                }
+            }
+            _ => {}
+        }
+    }
+    // A quiet stream still accepted takeControl; input may proceed.
+    Ok(())
+}
+
+async fn wait_for_clipboard(ws: &mut PreviewWs) -> Result<String, String> {
+    use futures_util::{SinkExt, StreamExt};
+    use tokio_tungstenite::tungstenite::Message;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    while tokio::time::Instant::now() < deadline {
+        let frame = match tokio::time::timeout_at(deadline, ws.next()).await {
+            Ok(Some(Ok(frame))) => frame,
+            Ok(Some(Err(_))) | Ok(None) => {
+                return Err("The browser closed the connection.".into())
+            }
+            Err(_) => break,
+        };
+        match frame {
+            Message::Binary(_) => {
+                let _ = ws.send(Message::text(watch_message().to_string())).await;
+            }
+            Message::Text(text) => {
+                let Ok(msg) = serde_json::from_str::<Value>(text.as_str()) else {
+                    continue;
+                };
+                if msg.get("type").and_then(Value::as_str) == Some("clipboard") {
+                    let clip = msg
+                        .get("text")
+                        .and_then(Value::as_str)
+                        .unwrap_or("")
+                        .to_string();
+                    if clip.is_empty() {
+                        return Err("Nothing was copied.".into());
+                    }
+                    return Ok(clip);
+                }
+            }
+            _ => {}
+        }
+    }
+    Err("Nothing was copied.".into())
 }
 
 #[cfg(test)]
@@ -479,15 +648,26 @@ mod tests {
     }
 
     #[test]
-    fn keys_use_the_preview_map_and_escape_is_not_back() {
-        assert_eq!(key_message("Enter").unwrap()["keycode"], 66);
-        assert_eq!(key_message("Backspace").unwrap()["keycode"], 67);
-        assert_eq!(key_message("Tab").unwrap()["keycode"], 61);
-        assert_eq!(key_message("ArrowLeft").unwrap()["keycode"], 21);
-        assert_eq!(key_message("ArrowUp").unwrap()["keycode"], 19);
+    fn keys_use_the_browser_stream_shape_and_escape_is_not_back() {
+        let enter = key_message("Enter").unwrap();
+        assert_eq!(enter["type"], "key");
+        assert_eq!(enter["key"], "Enter");
+        assert_eq!(enter["code"], "Enter");
+        assert_eq!(enter["modifiers"], 0);
+        assert!(enter.get("keycode").is_none());
+        assert_eq!(key_message("Backspace").unwrap()["key"], "Backspace");
+        assert_eq!(key_message("Tab").unwrap()["code"], "Tab");
+        assert_eq!(key_message("ArrowLeft").unwrap()["key"], "ArrowLeft");
+        assert_eq!(key_message("Delete").unwrap()["key"], "Delete");
+        assert_eq!(key_message("PageDown").unwrap()["code"], "PageDown");
         let escape = key_message("Escape");
         assert!(escape.is_err());
         assert_ne!(escape.unwrap_or(json!({ "type": "nope" }))["type"], "back");
+        let copy = edit_message("copy").unwrap();
+        assert_eq!(copy["key"], "c");
+        assert_eq!(copy["code"], "KeyC");
+        assert_eq!(copy["modifiers"], META);
+        assert!(edit_message("paste").is_err());
     }
 
     #[test]

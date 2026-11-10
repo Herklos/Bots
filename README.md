@@ -173,7 +173,7 @@ Still open:
 - macOS, iOS and Linux native Exact hosts (tools ready; full apple build not finished here)
 - the release workflow on GitHub Actions
 - GitHub Actions release has not run. `EXACT_REF` is pinned to `956ae33a35ffa5313d7be3cebc55ed84f9480e0a`
-- mouse and typed text while taking control of a page
+- persistent computer hold socket (each input still takes on its own turn)
 - connected apps, voice, and the full avatar system
 
 The rest is tracked in [docs/PLAN.md](docs/PLAN.md).
