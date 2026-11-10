@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- Corrected the Chrome path passed to release setup.
+
 ## 0.1.2
 
 - Pinned Bun and installed Chrome for release builds.

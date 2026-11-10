@@ -42,7 +42,7 @@ jobs:
         id: chrome
       - name: Set up Exact
         env:
-          CHROME: ${{ steps.chrome.outputs.chrome-path }} (toolchains and tools; the first run takes a few minutes)
+          CHROME: ${{ steps.chrome.outputs.chrome-path }}
         run: cd exact && bun scripts/exact.mjs setup
       - name: Build the web app
         run: EXACT_APP_DIR="$PWD/app" bun exact/host/web/build.mjs bots-web
