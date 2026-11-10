@@ -460,6 +460,15 @@ impl Bots {
                 "Choose another main Bot before deleting this Bot.",
             ));
         }
+        let parent = if is_subagent(current) {
+            parent_slug_of(current).and_then(|slug| {
+                bots.iter()
+                    .find(|b| b["slug"].as_str() == Some(slug.as_str()))
+                    .cloned()
+            })
+        } else {
+            None
+        };
         let trash = self.root.join(".botapp").join("trash");
         tokio::fs::create_dir_all(&trash).await?;
         let stamp = std::time::SystemTime::now()
@@ -467,6 +476,9 @@ impl Bots {
             .unwrap_or_default()
             .as_millis();
         tokio::fs::rename(&dir, trash.join(format!("{slug}-{stamp}"))).await?;
+        if let Some(parent) = parent {
+            self.write_instructions(&parent).await?;
+        }
         self.reconcile().await
     }
 
@@ -752,12 +764,31 @@ pub fn render_agents_md(
     } else {
         ""
     };
+    let parent_slug = parent
+        .and_then(|p| p["slug"].as_str())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .or_else(|| parent_slug_of(bot))
+        .unwrap_or_default();
+    let reply = if child {
+        format!(
+            "\nAnswer {parent_name} with `subagent_send`, by the parent's slug (`{parent_slug}`). Do not invent a thread id.\n"
+        )
+    } else {
+        String::new()
+    };
+    let own_prompt = if child {
+        let prompt = bot["subagent"]["prompt"].as_str().unwrap_or("").trim();
+        if prompt.is_empty() {
+            String::new()
+        } else {
+            format!("\n## Your prompt\n\n{}\n", plain_prompt(prompt))
+        }
+    } else {
+        String::new()
+    };
     let inherited = if child && bot["subagent"]["inheritParentPrompt"] == true {
-        let prompt = parent
-            .and_then(|p| p["prompt"].as_str())
-            .unwrap_or("")
-            .replace(MANAGED_START, "")
-            .replace(MANAGED_END, "");
+        let prompt = plain_prompt(parent.and_then(|p| p["prompt"].as_str()).unwrap_or(""));
         format!("\n## Parent prompt\n\n{prompt}\n")
     } else {
         String::new()
@@ -776,12 +807,16 @@ pub fn render_agents_md(
     };
     format!(
         "{MANAGED_START}\n# {name}{label}\n\n\
-{intro}\n\n\
-## Memory\n\n- Your notes: `memory/MEMORY.md`. Keep durable facts there, short and current.\n- Your work log: `memory/log.md`.\n{own_folders}- Facts shared by every Bot: {}.\n- Files you keep for the person: `library/`.\n{inherited}\n\
+{intro}\n{reply}\n\
+## Memory\n\n- Your notes: `memory/MEMORY.md`. Keep durable facts there, short and current.\n- Your work log: `memory/log.md`.\n{own_folders}- Facts shared by every Bot: {}.\n- Files you keep for the person: `library/`.\n{own_prompt}{inherited}\n\
 ## Tools\n\nThe `bot` MCP server gives you the Vault (`vault_list`) and the Projects board (`projects_*`). Never read the vault files on disk.\n\n\
 ## Routines\n\nTo run something on a schedule, use your `schedule_task` tool. Weekdays count from 0 for Sunday to 6 for Saturday, and times are local. The person sees your routines in the app but can't change them there, so say what you set up.\n\n## Other Bots\n\nTo message another Bot, use `t3_thread_send`. Say who you are and what you need.\n{subagents}\n## Asking first\n\nAsk before anything that leaves this machine or can't be undone.\n{MANAGED_END}\n",
         shared.display()
     )
+}
+
+fn plain_prompt(text: &str) -> String {
+    text.replace(MANAGED_START, "").replace(MANAGED_END, "")
 }
 
 pub fn merge_managed(existing: &str, block: &str) -> String {
@@ -1322,5 +1357,68 @@ mod tests {
         let outside = parent_md.split(MANAGED_END).nth(1).unwrap_or("");
         assert!(outside.contains("My own notes"));
         assert!(!outside.contains("Finder"));
+    }
+
+    #[test]
+    fn a_child_block_includes_its_own_prompt_and_omits_an_empty_one() {
+        let parent = json!({ "name": "Ada", "slug": "ada", "prompt": "Be brief." });
+        let child = json!({
+            "name": "Scout",
+            "role": "subagent",
+            "parentSlug": "ada",
+            "subagent": { "prompt": "  Look things up.  ", "inheritParentPrompt": true }
+        });
+        let text = render_agents_md(&child, std::path::Path::new("/bots"), Some(&parent), &[]);
+        assert!(text.contains("## Your prompt\n\nLook things up."));
+        assert!(text.contains("## Parent prompt\n\nBe brief."));
+        let empty = json!({
+            "name": "Scout",
+            "role": "subagent",
+            "parentSlug": "ada",
+            "subagent": { "prompt": "   ", "inheritParentPrompt": false }
+        });
+        let without = render_agents_md(&empty, std::path::Path::new("/bots"), Some(&parent), &[]);
+        assert!(!without.contains("## Your prompt"));
+        assert!(!without.contains("Be brief."));
+    }
+
+    #[test]
+    fn a_child_block_answers_the_parent_by_slug() {
+        let parent = json!({ "name": "Ada", "slug": "ada" });
+        let child = json!({
+            "name": "Scout",
+            "role": "subagent",
+            "parentSlug": "ada",
+            "subagent": { "prompt": "" }
+        });
+        let text = render_agents_md(&child, std::path::Path::new("/bots"), Some(&parent), &[]);
+        assert!(text.contains(
+            "Answer Ada with `subagent_send`, by the parent's slug (`ada`). Do not invent a thread id."
+        ));
+    }
+
+    #[tokio::test]
+    async fn deleting_a_child_refreshes_the_parent_managed_block() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        bots.create(&json!({ "name": "Ada" })).await.unwrap();
+        let agents = dir.path().join("ada/AGENTS.md");
+        let mut text = std::fs::read_to_string(&agents).unwrap();
+        text.push_str("\nMy own notes\n");
+        std::fs::write(&agents, &text).unwrap();
+        bots.create(&json!({ "parentSlug": "ada", "name": "Scout" }))
+            .await
+            .unwrap();
+        bots.create(&json!({ "parentSlug": "ada", "name": "Lookup" }))
+            .await
+            .unwrap();
+        bots.remove("scout").await.unwrap();
+        let parent_md = std::fs::read_to_string(&agents).unwrap();
+        assert!(parent_md.contains("- Lookup (`lookup`)"));
+        assert!(!parent_md.contains("Scout"));
+        assert!(!parent_md.contains("`scout`"));
+        let outside = parent_md.split(MANAGED_END).nth(1).unwrap_or("");
+        assert!(outside.contains("My own notes"));
+        assert!(!outside.contains("Lookup"));
     }
 }
