@@ -8,6 +8,8 @@ Default is set in `gateway/src/provisioner.rs` (`default_model`) and live settin
 
 ## Stack
 
+For setup, the watch loop, LAN access, and troubleshooting, see [DEV.md](DEV.md).
+
 | Piece | What | Default |
 |---|---|---|
 | T3 Code | Harness (desktop app) | http://127.0.0.1:3773 |
