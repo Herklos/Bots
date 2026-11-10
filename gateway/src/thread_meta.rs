@@ -45,6 +45,9 @@ static WHITESPACE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").unwrap(
 static TOOL_SEPARATOR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"__|\.").unwrap());
 
 const MAX_STAMPS: usize = 200;
+/// Pins stay a short list. One past this is refused.
+pub const PIN_CAP: usize = 20;
+pub const NOT_IN_VIEW: &str = "This message is not in view.";
 
 fn bad(message: &str) -> ApiError {
     ApiError::bad_request(message)
@@ -234,7 +237,65 @@ fn view(state: &Map<String, Value>, thread: &str) -> Value {
                 .collect()
         })
         .unwrap_or_default();
-    json!({ "reactions": reactions, "voiceCalls": voice_calls })
+    let reply_to = entry
+        .and_then(|e| e.get("replyTo"))
+        .filter(|v| v.is_object())
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+    let pins = entry
+        .and_then(|e| e.get("pins"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let last_read = entry
+        .and_then(|e| e.get("lastRead"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let latest = entry
+        .and_then(|e| e.get("latest"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    json!({
+        "reactions": reactions,
+        "voiceCalls": voice_calls,
+        "replyTo": reply_to,
+        "pins": pins,
+        "lastRead": last_read,
+        "latest": latest,
+    })
+}
+
+/// Moves the mark to `latest` only while that chat is open.
+/// A hidden Bot that is not the open chat stays where it was.
+pub fn next_last_read(stored: &str, latest: &str, open: bool, hidden: bool) -> String {
+    if hidden && !open {
+        return stored.to_string();
+    }
+    if open && !latest.is_empty() {
+        return latest.to_string();
+    }
+    stored.to_string()
+}
+
+/// A later message is unread until this chat is the open one.
+/// A hidden Bot keeps that mark until it is opened.
+pub fn is_unread(stored: &str, latest: &str, open: bool, hidden: bool) -> bool {
+    !latest.is_empty() && next_last_read(stored, latest, open, hidden) != latest
+}
+
+/// Pins in stored order. An id that is not in the loaded messages stays, and says so.
+pub fn pin_lines(pins: &[Value], messages: &[Value]) -> Vec<Value> {
+    pins.iter()
+        .filter_map(Value::as_str)
+        .map(|id| match messages.iter().find(|message| message["id"].as_str() == Some(id)) {
+            Some(message) => json!({
+                "id": id,
+                "text": message["text"].as_str().unwrap_or(""),
+                "missing": false,
+            }),
+            None => json!({ "id": id, "text": NOT_IN_VIEW, "missing": true }),
+        })
+        .collect()
 }
 
 /// The thread's entry, created when it is missing.
@@ -357,6 +418,103 @@ impl ThreadMeta {
             .push(json!({ "at": at, "seconds": seconds.round() as i64 }));
         save(&self.file, state).await?;
         Ok(view(state, thread))
+    }
+
+    /// Adds the message id if it is absent, removes it if present. Past [`PIN_CAP`] is refused.
+    pub async fn toggle_pin(&self, thread: Option<&str>, item: Option<&str>) -> ApiResult<Value> {
+        let thread = checked(thread, &THREAD_ID, "thread")?;
+        let item = checked(item, &ITEM_ID, "message")?;
+        let mut slot = self.state.lock().await;
+        let state = loaded(&self.file, &mut slot).await?;
+        let entry = thread_entry(state, thread)?;
+        let mut pins: Vec<String> = entry
+            .get("pins")
+            .and_then(Value::as_array)
+            .map(|list| {
+                list.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if let Some(index) = pins.iter().position(|id| id == item) {
+            pins.remove(index);
+        } else if pins.len() >= PIN_CAP {
+            return Err(bad("That conversation already has 20 pins."));
+        } else {
+            pins.push(item.to_string());
+        }
+        entry.insert("pins".into(), json!(pins));
+        save(&self.file, state).await?;
+        Ok(view(state, thread))
+    }
+
+    /// Stores `replyTo` under the message id the gateway already assigned.
+    pub async fn set_reply(
+        &self,
+        thread: Option<&str>,
+        message_id: Option<&str>,
+        reply_to: Option<&str>,
+        quote: Option<&str>,
+    ) -> ApiResult<Value> {
+        let thread = checked(thread, &THREAD_ID, "thread")?;
+        let message_id = checked(message_id, &ITEM_ID, "message")?;
+        let reply_to = checked(reply_to, &ITEM_ID, "message")?;
+        let quote: String = quote.unwrap_or("").chars().take(500).collect();
+        let mut slot = self.state.lock().await;
+        let state = loaded(&self.file, &mut slot).await?;
+        let entry = thread_entry(state, thread)?;
+        let replies = entry
+            .entry("replyTo")
+            .or_insert_with(|| json!({}))
+            .as_object_mut()
+            .ok_or_else(corrupt)?;
+        replies.insert(
+            message_id.to_string(),
+            json!({ "id": reply_to, "text": quote }),
+        );
+        save(&self.file, state).await?;
+        Ok(view(state, thread))
+    }
+
+    /// Remembers the newest message id, and advances last-read only while the chat is open.
+    pub async fn mark_read(
+        &self,
+        thread: Option<&str>,
+        latest: Option<&str>,
+        open: bool,
+        hidden: bool,
+    ) -> ApiResult<Value> {
+        let thread = checked(thread, &THREAD_ID, "thread")?;
+        let latest = match latest {
+            Some(id) if !id.is_empty() => checked(Some(id), &ITEM_ID, "message")?,
+            _ => "",
+        };
+        let mut slot = self.state.lock().await;
+        let state = loaded(&self.file, &mut slot).await?;
+        let entry = thread_entry(state, thread)?;
+        let stored = entry
+            .get("lastRead")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let known = if latest.is_empty() {
+            entry
+                .get("latest")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string()
+        } else {
+            latest.to_string()
+        };
+        if !known.is_empty() {
+            entry.insert("latest".into(), json!(known));
+        }
+        let next = next_last_read(&stored, &known, open, hidden);
+        entry.insert("lastRead".into(), json!(next));
+        save(&self.file, state).await?;
+        let mut seen = view(state, thread);
+        seen["unread"] = json!(is_unread(&stored, &known, open, hidden));
+        Ok(seen)
     }
 
     /// The threads whose preview must be computed again: new, or with a moved stamp.
@@ -690,5 +848,107 @@ mod tests {
                 .status,
             axum::http::StatusCode::BAD_REQUEST
         );
+    }
+
+    #[tokio::test]
+    async fn toggling_one_reaction_twice_leaves_no_mark() {
+        let meta = ThreadMeta::new(scratch("meta.json").1);
+        meta.toggle_reaction(Some("t"), Some("m"), Some("🔥"))
+            .await
+            .unwrap();
+        let cleared = meta
+            .toggle_reaction(Some("t"), Some("m"), Some("🔥"))
+            .await
+            .unwrap();
+        assert!(cleared["reactions"].get("m").is_none());
+        assert_eq!(cleared["reactions"], json!({}));
+    }
+
+    #[tokio::test]
+    async fn reply_to_round_trips_under_the_gateway_message_id() {
+        let meta = ThreadMeta::new(scratch("meta.json").1);
+        let command = crate::chat::send_command("thread-1", "thanks", &[]);
+        assert!(command.get("quote").is_none());
+        let message_id = command["messageId"].as_str().unwrap();
+        assert_eq!(message_id, command["commandId"].as_str().unwrap());
+        let seen = meta
+            .set_reply(
+                Some("thread-1"),
+                Some(message_id),
+                Some("m-old"),
+                Some("the quoted line"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(seen["replyTo"][message_id]["id"], "m-old");
+        assert_eq!(seen["replyTo"][message_id]["text"], "the quoted line");
+        let again = meta.get(Some("thread-1")).await.unwrap();
+        assert_eq!(again["replyTo"][message_id]["text"], "the quoted line");
+    }
+
+    #[tokio::test]
+    async fn pins_toggle_refuse_one_past_the_cap_and_keep_a_missing_id() {
+        let (_dir, file) = scratch("meta.json");
+        let meta = ThreadMeta::new(file.clone());
+        for n in 0..PIN_CAP {
+            meta.toggle_pin(Some("t"), Some(&format!("m{n}")))
+                .await
+                .unwrap();
+        }
+        let err = meta.toggle_pin(Some("t"), Some("overflow")).await.unwrap_err();
+        assert_eq!(err.status, axum::http::StatusCode::BAD_REQUEST);
+        let saved = std::fs::read_to_string(&file).unwrap();
+        assert!(!saved.contains("overflow"));
+        let removed = meta.toggle_pin(Some("t"), Some("m0")).await.unwrap();
+        let pins = removed["pins"].as_array().unwrap();
+        assert_eq!(pins.len(), PIN_CAP - 1);
+        assert!(pins.iter().all(|id| id != "m0"));
+        meta.toggle_pin(Some("t"), Some("m0")).await.unwrap();
+        let seen = meta.get(Some("t")).await.unwrap();
+        let lines = pin_lines(
+            seen["pins"].as_array().unwrap(),
+            &[json!({ "id": "m1", "text": "Hello" })],
+        );
+        assert!(lines.iter().any(|line| line["id"] == "m1" && line["missing"] == false));
+        assert!(lines.iter().any(|line| {
+            line["id"] == "m2" && line["missing"] == true && line["text"] == NOT_IN_VIEW
+        }));
+    }
+
+    #[tokio::test]
+    async fn last_read_advances_while_open_and_a_hidden_bot_keeps_its_mark() {
+        let (_dir, file) = scratch("meta.json");
+        let meta = ThreadMeta::new(file.clone());
+        let open = meta
+            .mark_read(Some("t"), Some("m2"), true, false)
+            .await
+            .unwrap();
+        assert_eq!(open["lastRead"], "m2");
+        assert_eq!(open["unread"], false);
+        assert_eq!(next_last_read("m1", "m2", true, false), "m2");
+
+        let hidden = meta
+            .mark_read(Some("h"), Some("m1"), false, true)
+            .await
+            .unwrap();
+        assert_eq!(hidden["lastRead"], "");
+        let later = meta
+            .mark_read(Some("h"), Some("m2"), false, true)
+            .await
+            .unwrap();
+        assert_eq!(later["lastRead"], "");
+        assert_eq!(later["latest"], "m2");
+        assert_eq!(later["unread"], true);
+        assert_eq!(next_last_read("", "m2", false, true), "");
+        assert!(is_unread("", "m2", false, true));
+        assert!(!is_unread("m1", "m2", true, false));
+        assert!(is_unread("m1", "m2", false, false));
+
+        let opened = ThreadMeta::new(file)
+            .mark_read(Some("h"), None, true, true)
+            .await
+            .unwrap();
+        assert_eq!(opened["lastRead"], "m2");
+        assert_eq!(opened["unread"], false);
     }
 }
