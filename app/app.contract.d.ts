@@ -7,6 +7,7 @@
 //   computerControl: (args: [string, string, string]) => Reply
 //   createBot: (args: [string, string, string, string]) => Reply
 //   createGroup: (args: [string, string, string, string, string]) => Made
+//   createSubagent: (args: [string, string, string, string, string, boolean]) => Reply
 //   deleteBot: (args: [string]) => Reply
 //   deleteGroup: (args: [string]) => Reply
 //   deleteLogin: (args: [string]) => Reply
@@ -42,6 +43,7 @@
 //   revealPassword: (args: [string]) => Revealed
 //   saveDrafts: (args: [string[], string[], string[]]) => Reply
 //   saveLogin: (args: [string, string, string, string, string, string]) => Reply
+//   saveSubagent: (args: [string, string, string, string, string, boolean]) => Reply
 //   sendMessage: (args: [string, string, string, string, string, string]) => Reply
 //   sendRoom: (args: [string, string]) => Reply
 //   sendVoice: (args: [string, number, string, string]) => Reply
@@ -59,7 +61,7 @@
 // The shapes. None is exported: name one by its source, `type Reply = Result<'computerControl'>`.
 //   Reply = { ok: boolean; error: string }
 //   Session = { authenticated: boolean; passwordRequired: boolean }
-//   Bot = { slug: string; name: string; label: string; line: string; time: string; initials: string; color: string; shape: string; main: boolean; pinned: boolean; hidden: boolean; ready: boolean; working: boolean; unread: boolean }
+//   Bot = { slug: string; name: string; label: string; line: string; time: string; initials: string; color: string; shape: string; main: boolean; pinned: boolean; hidden: boolean; ready: boolean; working: boolean; unread: boolean; parentSlug: string; prompt: string; inheritParentPrompt: boolean }
 //   FileRef = { id: string; name: string; kind: string; size: string; url: string }
 //   Choice = { label: string; value: string; key: string; warn: string }
 //   Row = { id: string; kind: string; mine: boolean; text: string; title: string; time: string; head: boolean; tail: boolean; variant: string; files: FileRef[]; botSlug: string; botName: string; botColor: string; botShape: string; choices: Choice[]; placeholder: string; key: string; react: string; quote: string; tokens: string }
@@ -326,7 +328,7 @@ type T0 = boolean;
 type T1 = string;
 type T2 = { "ok": T0; "error": T1; };
 type T3 = { "authenticated": T0; "passwordRequired": T0; };
-type T4 = { "slug": T1; "name": T1; "label": T1; "line": T1; "time": T1; "initials": T1; "color": T1; "shape": T1; "main": T0; "pinned": T0; "hidden": T0; "ready": T0; "working": T0; "unread": T0; };
+type T4 = { "slug": T1; "name": T1; "label": T1; "line": T1; "time": T1; "initials": T1; "color": T1; "shape": T1; "main": T0; "pinned": T0; "hidden": T0; "ready": T0; "working": T0; "unread": T0; "parentSlug": T1; "prompt": T1; "inheritParentPrompt": T0; };
 type T5 = { "id": T1; "name": T1; "kind": T1; "size": T1; "url": T1; };
 type T6 = { "label": T1; "value": T1; "key": T1; "warn": T1; };
 type T7 = T5[];
@@ -532,12 +534,13 @@ type T206 = { "scrollLeft": T27; "scrollTop": T27; "scrollWidth": T27; "scrollHe
 type T207 = { "text": T1; "files": T58; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "computerControl" | "createBot" | "createGroup" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "computerControl" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "computerControl": { args: [T1, T1, T1]; result: T2 };
   "createBot": { args: [T1, T1, T1, T1]; result: T2 };
   "createGroup": { args: [T1, T1, T1, T1, T1]; result: T24 };
+  "createSubagent": { args: [T1, T1, T1, T1, T1, T0]; result: T2 };
   "deleteBot": { args: [T1]; result: T2 };
   "deleteGroup": { args: [T1]; result: T2 };
   "deleteLogin": { args: [T1]; result: T2 };
@@ -573,6 +576,7 @@ export interface SourceMap {
   "revealPassword": { args: [T1]; result: T30 };
   "saveDrafts": { args: [T58, T58, T58]; result: T2 };
   "saveLogin": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
+  "saveSubagent": { args: [T1, T1, T1, T1, T1, T0]; result: T2 };
   "sendMessage": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "sendRoom": { args: [T1, T1]; result: T2 };
   "sendVoice": { args: [T1, T27, T1, T1]; result: T2 };
