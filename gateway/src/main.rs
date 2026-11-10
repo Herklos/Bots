@@ -353,7 +353,7 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/access/tunnel", post(access_tunnel))
         .route("/api/thread-previews", post(thread_previews))
         .route("/api/rooms", get(rooms_list).post(rooms_create))
-        .route("/api/rooms/{id}", get(room_get))
+        .route("/api/rooms/{id}", get(room_get).put(room_update).delete(room_delete))
         .route("/api/rooms/{id}/messages", post(room_send))
         .route("/api/threads/{thread}/meta", get(thread_meta_get))
         .route("/api/threads/{thread}/reactions", post(thread_reaction))
@@ -653,21 +653,23 @@ async fn access_tunnel(
 }
 
 async fn rooms_list(State(s): S) -> ApiResult<Json<Value>> {
-    Ok(Json(json!({ "rooms": s.rooms.list().await? })))
+    let rooms: Vec<Value> = s.rooms.list().await?.iter().map(rooms::summary).collect();
+    Ok(Json(json!({ "rooms": rooms })))
 }
 
-async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
-    require_json(&h)?;
-    let body = parse(&body)?;
-    let title = body["title"].as_str().unwrap_or("");
-    let slugs: Vec<String> = body["members"]
+fn string_list(value: &Value) -> Vec<String> {
+    value
         .as_array()
         .map(|list| {
             list.iter()
                 .filter_map(|value| value.as_str().map(str::to_string))
                 .collect()
         })
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
+
+/// Refuses a slug that is not a Bot on this machine.
+async fn known_bots(s: &AppState, slugs: &[String]) -> ApiResult<()> {
     let known = s.bots.list().await?;
     if slugs.iter().any(|slug| {
         !known
@@ -676,13 +678,59 @@ async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
     }) {
         return Err(ApiError::bad_request("Pick Bots that already exist."));
     }
-    Ok(Json(s.rooms.create(title, &slugs).await?))
+    Ok(())
+}
+
+async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    let slugs = string_list(&body["members"]);
+    known_bots(&s, &slugs).await?;
+    let room = s
+        .rooms
+        .create(
+            body["title"].as_str().unwrap_or(""),
+            body["description"].as_str().unwrap_or(""),
+            body["color"].as_str().unwrap_or(""),
+            body["shape"].as_str().unwrap_or(""),
+            &slugs,
+        )
+        .await?;
+    let (members, _) = room_snapshot(&s, &room).await?;
+    Ok(Json(rooms::present(&room, &members)))
 }
 
 async fn room_get(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>> {
     let room = s.rooms.get(&id).await?;
-    let members = room_directory(&s, &room).await?;
+    let (members, threads) = room_snapshot(&s, &room).await?;
+    // Replies the members have finished since the last read join the room here, and a reply that
+    // mentions another member wakes that member.
+    let (room, wake) = s.rooms.sync(&id, &members, &threads).await?;
+    if let Err(err) = dispatch_room(&s, &wake).await {
+        tracing::warn!("group wake-up failed: {}", err.message);
+    }
     Ok(Json(rooms::present(&room, &members)))
+}
+
+async fn room_update(
+    State(s): S,
+    Path(id): Path<String>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let body = parse(&body)?;
+    if body.get("members").is_some() {
+        known_bots(&s, &string_list(&body["members"])).await?;
+    }
+    let room = s.rooms.update(&id, &body).await?;
+    let (members, _) = room_snapshot(&s, &room).await?;
+    Ok(Json(rooms::present(&room, &members)))
+}
+
+async fn room_delete(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+    s.rooms.delete(&id).await?;
+    Ok(Json(json!({ "ok": true })))
 }
 
 async fn room_send(
@@ -695,7 +743,7 @@ async fn room_send(
     let body = parse(&body)?;
     let text = body["text"].as_str().unwrap_or("").trim().to_string();
     let room = s.rooms.get(&id).await?;
-    let members = room_directory(&s, &room).await?;
+    let (members, _) = room_snapshot(&s, &room).await?;
     let (stored, dispatches) = s
         .rooms
         .send(
@@ -706,19 +754,7 @@ async fn room_send(
             &routines::stamped(),
         )
         .await?;
-    let commands = rooms::dispatch_commands(&dispatches, &text);
-    let mut dispatched = Vec::new();
-    if let Ok(rpc) = s.t3.rpc().await {
-        for (item, command) in dispatches.iter().zip(commands) {
-            rpc.call("orchestration.dispatchCommand", command)
-                .await
-                .map_err(|err| ApiError::new(502, err.to_string()))?;
-            s.usage
-                .note_for(&item.slug, usage::Event::Message)
-                .await;
-            dispatched.push(item.slug.clone());
-        }
-    }
+    let dispatched = dispatch_room(&s, &dispatches).await?;
     Ok(Json(json!({
         "ok": true,
         "room": rooms::present(&stored, &members),
@@ -726,20 +762,35 @@ async fn room_send(
     })))
 }
 
-/// Member rows for a room, with each Bot's existing main-thread working flag.
-async fn room_directory(s: &AppState, room: &Value) -> ApiResult<Vec<rooms::Member>> {
-    let slugs: Vec<String> = room["members"]
-        .as_array()
-        .map(|list| {
-            list.iter()
-                .filter_map(|value| value.as_str().map(str::to_string))
-                .collect()
-        })
-        .unwrap_or_default();
+/// Sends each dispatch to its member's main thread and counts it as that Bot's message.
+async fn dispatch_room(s: &AppState, dispatches: &[rooms::Dispatch]) -> ApiResult<Vec<String>> {
+    let mut sent = Vec::new();
+    if dispatches.is_empty() {
+        return Ok(sent);
+    }
+    let Ok(rpc) = s.t3.rpc().await else {
+        return Ok(sent);
+    };
+    for (item, command) in dispatches.iter().zip(rooms::dispatch_commands(dispatches)) {
+        rpc.call("orchestration.dispatchCommand", command)
+            .await
+            .map_err(|err| ApiError::new(502, err.to_string()))?;
+        s.usage.note_for(&item.slug, usage::Event::Message).await;
+        sent.push(item.slug.clone());
+    }
+    Ok(sent)
+}
+
+/// Member rows for a room, with each Bot's working flag, and each member's thread messages.
+async fn room_snapshot(
+    s: &AppState,
+    room: &Value,
+) -> ApiResult<(Vec<rooms::Member>, std::collections::HashMap<String, Vec<Value>>)> {
     let bots = s.bots.list().await?;
     let rpc = s.t3.rpc().await.ok();
     let mut members = Vec::new();
-    for slug in slugs {
+    let mut threads = std::collections::HashMap::new();
+    for slug in string_list(&room["members"]) {
         let Some(bot) = bots.iter().find(|bot| bot["slug"].as_str() == Some(slug.as_str())) else {
             continue;
         };
@@ -754,7 +805,12 @@ async fn room_directory(s: &AppState, room: &Value) -> ApiResult<Vec<rooms::Memb
                     )
                     .await
                 {
-                    working = chat::transcript(&projection)["working"] == true;
+                    let transcript = chat::transcript(&projection);
+                    working = transcript["working"] == true;
+                    threads.insert(
+                        slug.clone(),
+                        transcript["messages"].as_array().cloned().unwrap_or_default(),
+                    );
                 }
             }
         }
@@ -765,7 +821,7 @@ async fn room_directory(s: &AppState, room: &Value) -> ApiResult<Vec<rooms::Memb
             working,
         });
     }
-    Ok(members)
+    Ok((members, threads))
 }
 
 async fn thread_meta_get(State(s): S, Path(thread): Path<String>) -> ApiResult<Json<Value>> {

@@ -1,12 +1,21 @@
 //! A local room of Bots. This is not a T3 channel and not the Working on list.
-//! The file is `groups.json` in the app directory: an id, a title, member slugs,
-//! and the messages stored on this machine. A send is stored here, then dispatched
-//! to each member's existing main thread. Naming exactly one member leaves the others quiet.
+//! The file is `groups.json` in the app directory: an id, a title, a description, an avatar
+//! (color and shape), member slugs, and the messages stored on this machine.
+//!
+//! A send is stored here, then dispatched to the members it wakes: everyone named with `@`,
+//! `@all` for everyone, a single plain name, otherwise whoever spoke last (everyone while no
+//! Bot has spoken). Each dispatch remembers the message id it created, its anchor. A sync reads
+//! each member's thread and copies the replies after that anchor into the room. A reply that
+//! mentions another member wakes that member too, up to [`MAX_HOPS`] per message from the person.
 
 use crate::error::{ApiError, ApiResult};
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use tokio::sync::Mutex;
+
+/// Bot-to-Bot wake-ups one message from the person can set off.
+pub const MAX_HOPS: u64 = 4;
 
 #[derive(Clone, Debug)]
 pub struct Member {
@@ -16,10 +25,14 @@ pub struct Member {
     pub working: bool,
 }
 
+/// One message to send into a member's main thread.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Dispatch {
     pub slug: String,
     pub thread_id: String,
+    /// The T3 message id the dispatch creates; replies in the thread after it belong to the room.
+    pub message_id: String,
+    pub text: String,
 }
 
 pub struct Rooms {
@@ -41,15 +54,23 @@ impl Rooms {
         Ok(rooms_of(&doc))
     }
 
-    pub async fn create(&self, title: &str, slugs: &[String]) -> ApiResult<Value> {
+    pub async fn create(
+        &self,
+        title: &str,
+        description: &str,
+        color: &str,
+        shape: &str,
+        slugs: &[String],
+    ) -> ApiResult<Value> {
         let title = title.trim();
         if title.is_empty() {
-            return Err(ApiError::bad_request("Name the room."));
+            return Err(ApiError::bad_request("Name the group."));
         }
+        let slugs = distinct(slugs);
         if slugs.len() < 2 {
-            return Err(ApiError::bad_request("A room needs two Bots."));
+            return Err(ApiError::bad_request("A group needs two Bots."));
         }
-        for slug in slugs {
+        for slug in &slugs {
             if !crate::bots::valid_slug(slug) {
                 return Err(ApiError::bad_request("Pick Bots that already exist."));
             }
@@ -59,15 +80,77 @@ impl Rooms {
         let room = json!({
             "id": uuid::Uuid::new_v4().to_string(),
             "title": title,
+            "description": description.trim(),
+            "color": clean_color(color),
+            "shape": crate::bots::shape_name(shape).unwrap_or_else(|| "ball".into()),
             "members": slugs,
             "messages": [],
+            "anchors": {},
+            "hops": 0,
         });
         push_room(&mut doc, room.clone())?;
         write_doc(&self.path, &doc).await?;
         Ok(room)
     }
 
-    /// Stores one message on the room and returns who should hear it.
+    /// Changes the fields present in `patch`. Messages stay.
+    pub async fn update(&self, room_id: &str, patch: &Value) -> ApiResult<Value> {
+        let _g = self.lock.lock().await;
+        let mut doc = read_doc(&self.path).await?;
+        let room = room_mut(&mut doc, room_id)?;
+        if let Some(title) = patch.get("title") {
+            let title = title.as_str().unwrap_or("").trim();
+            if title.is_empty() {
+                return Err(ApiError::bad_request("Name the group."));
+            }
+            room["title"] = json!(title);
+        }
+        if let Some(description) = patch.get("description") {
+            room["description"] = json!(description.as_str().unwrap_or("").trim());
+        }
+        if let Some(color) = patch.get("color") {
+            room["color"] = json!(clean_color(color.as_str().unwrap_or("")));
+        }
+        if let Some(shape) = patch.get("shape") {
+            room["shape"] = json!(
+                crate::bots::shape_name(shape.as_str().unwrap_or("")).unwrap_or_else(|| "ball".into())
+            );
+        }
+        if let Some(members) = patch.get("members") {
+            let list: Vec<String> = members
+                .as_array()
+                .map(|l| l.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+                .unwrap_or_default();
+            let list = distinct(&list);
+            if list.len() < 2 {
+                return Err(ApiError::bad_request("A group needs two Bots."));
+            }
+            if list.iter().any(|slug| !crate::bots::valid_slug(slug)) {
+                return Err(ApiError::bad_request("Pick Bots that already exist."));
+            }
+            room["members"] = json!(list);
+        }
+        let stored = room.clone();
+        write_doc(&self.path, &doc).await?;
+        Ok(stored)
+    }
+
+    pub async fn delete(&self, room_id: &str) -> ApiResult<()> {
+        let _g = self.lock.lock().await;
+        let mut doc = read_doc(&self.path).await?;
+        let list = doc
+            .get_mut("rooms")
+            .and_then(Value::as_array_mut)
+            .ok_or_else(|| ApiError::new(500, "groups.json is not valid"))?;
+        let before = list.len();
+        list.retain(|room| room["id"].as_str() != Some(room_id));
+        if list.len() == before {
+            return Err(ApiError::not_found("No such group"));
+        }
+        write_doc(&self.path, &doc).await
+    }
+
+    /// Stores one message on the room and returns who it wakes.
     /// Members with no main thread are not dispatched.
     pub async fn send(
         &self,
@@ -85,11 +168,13 @@ impl Rooms {
         let mut doc = read_doc(&self.path).await?;
         let room = room_mut(&mut doc, room_id)?;
         let members = resolve(member_slugs(room), directory);
-        let dispatches = plan_dispatches(&members, text);
-        push_message(
-            room,
-            &message(id, at, "user", "You", text),
-        )?;
+        let last = last_responder(room);
+        let chosen = plan_dispatches(&members, text, last.as_deref());
+        let title = room["title"].as_str().unwrap_or("").to_string();
+        let dispatches = frame(&title, &members, "You", text, targets(&members, &chosen));
+        push_message(room, &message(id, at, "user", "You", text))?;
+        room["hops"] = json!(0);
+        anchor_all(room, &dispatches);
         let stored = room.clone();
         write_doc(&self.path, &doc).await?;
         Ok((stored, dispatches))
@@ -120,37 +205,230 @@ impl Rooms {
         Ok(stored)
     }
 
+    /// Copies each member's finished replies after its anchor into the room, and wakes the
+    /// members those replies mention. `threads` maps a slug to its thread's messages
+    /// (`id`, `role`, `text`, `streaming`, `at`), oldest first.
+    pub async fn sync(
+        &self,
+        room_id: &str,
+        directory: &[Member],
+        threads: &HashMap<String, Vec<Value>>,
+    ) -> ApiResult<(Value, Vec<Dispatch>)> {
+        let _g = self.lock.lock().await;
+        let mut doc = read_doc(&self.path).await?;
+        let room = room_mut(&mut doc, room_id)?;
+        let members = resolve(member_slugs(room), directory);
+        let title = room["title"].as_str().unwrap_or("").to_string();
+        let mut wake: Vec<Dispatch> = Vec::new();
+        let mut changed = false;
+        for member in &members {
+            let Some(messages) = threads.get(&member.slug) else {
+                continue;
+            };
+            let Some(anchor) = room["anchors"][&member.slug].as_str().map(str::to_string) else {
+                continue;
+            };
+            let Some(position) = messages.iter().position(|m| m["id"].as_str() == Some(&anchor))
+            else {
+                continue;
+            };
+            for reply in &messages[position + 1..] {
+                let text = reply["text"].as_str().unwrap_or("").trim();
+                let id = reply["id"].as_str().unwrap_or("");
+                if reply["role"] != "bot" || reply["streaming"] == true || text.is_empty() || id.is_empty() {
+                    continue;
+                }
+                if has_message(room, id) {
+                    continue;
+                }
+                let at = reply["at"].as_str().unwrap_or("");
+                push_message(room, &message(id, at, &member.slug, &member.title, text))?;
+                changed = true;
+                let hops = room["hops"].as_u64().unwrap_or(0);
+                if hops >= MAX_HOPS {
+                    continue;
+                }
+                let others: Vec<Member> = members
+                    .iter()
+                    .filter(|m| m.slug != member.slug)
+                    .cloned()
+                    .collect();
+                let named = mentioned(&others, text);
+                let mut chosen = targets(&others, &named);
+                chosen.truncate((MAX_HOPS - hops) as usize);
+                if chosen.is_empty() {
+                    continue;
+                }
+                room["hops"] = json!(hops + chosen.len() as u64);
+                let framed = frame(&title, &members, &member.title, text, chosen);
+                anchor_all(room, &framed);
+                wake.extend(framed);
+                changed = true;
+            }
+        }
+        let stored = room.clone();
+        if changed {
+            write_doc(&self.path, &doc).await?;
+        }
+        Ok((stored, wake))
+    }
+
     pub async fn get(&self, room_id: &str) -> ApiResult<Value> {
         let _g = self.lock.lock().await;
         let doc = read_doc(&self.path).await?;
         rooms_of(&doc)
             .into_iter()
             .find(|room| room["id"].as_str() == Some(room_id))
-            .ok_or_else(|| ApiError::not_found("No such room"))
+            .ok_or_else(|| ApiError::not_found("No such group"))
     }
 }
 
 /// The commands a room send dispatches. No quote field is added.
-pub fn dispatch_commands(dispatches: &[Dispatch], text: &str) -> Vec<Value> {
+pub fn dispatch_commands(dispatches: &[Dispatch]) -> Vec<Value> {
     dispatches
         .iter()
-        .map(|item| crate::chat::send_command(&item.thread_id, text, &[]))
+        .map(|item| {
+            let mut command = crate::chat::send_command(&item.thread_id, &item.text, &[]);
+            command["commandId"] = json!(item.message_id);
+            command["messageId"] = json!(item.message_id);
+            command
+        })
         .collect()
 }
 
-/// One member when the text names exactly one slug or title. Otherwise everyone.
-pub fn plan_dispatches(members: &[Member], text: &str) -> Vec<Dispatch> {
-    let chosen: Vec<&Member> = match named_one(members, text) {
-        Some(index) => vec![&members[index]],
-        None => members.iter().collect(),
-    };
-    chosen
+fn distinct(slugs: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for slug in slugs {
+        if !out.contains(slug) {
+            out.push(slug.clone());
+        }
+    }
+    out
+}
+
+fn clean_color(raw: &str) -> String {
+    let raw = raw.trim();
+    let avatar = &hbots_design::tokens().avatar;
+    if avatar.picker.iter().any(|c| c == raw) {
+        raw.to_string()
+    } else {
+        avatar.default.to_string()
+    }
+}
+
+/// Whoever spoke last in the room, if a Bot has.
+fn last_responder(room: &Value) -> Option<String> {
+    room["messages"].as_array()?.iter().rev().find_map(|m| {
+        let from = m["from"].as_str()?;
+        (from != "user").then(|| from.to_string())
+    })
+}
+
+/// Who a message from the person wakes, as indexes into `members`.
+pub fn plan_dispatches(members: &[Member], text: &str, last: Option<&str>) -> Vec<usize> {
+    if wants_everyone(text) {
+        return (0..members.len()).collect();
+    }
+    let named = mentioned(members, text);
+    if !named.is_empty() {
+        return named;
+    }
+    if let Some(index) = named_one(members, text) {
+        return vec![index];
+    }
+    if let Some(index) = last.and_then(|slug| members.iter().position(|m| m.slug == slug)) {
+        return vec![index];
+    }
+    (0..members.len()).collect()
+}
+
+/// Slug and thread of each chosen member that has a thread to wake.
+fn targets(members: &[Member], indexes: &[usize]) -> Vec<(String, String)> {
+    indexes
+        .iter()
+        .filter_map(|i| members.get(*i))
+        .filter(|m| !m.thread_id.is_empty())
+        .map(|m| (m.slug.clone(), m.thread_id.clone()))
+        .collect()
+}
+
+/// Wraps `text` for each target so a Bot knows it is in a group and how to bring someone in.
+fn frame(
+    title: &str,
+    members: &[Member],
+    from: &str,
+    text: &str,
+    targets: Vec<(String, String)>,
+) -> Vec<Dispatch> {
+    let names = members
+        .iter()
+        .map(|m| format!("{} (@{})", m.title, m.slug))
+        .collect::<Vec<_>>()
+        .join(", ");
+    targets
         .into_iter()
-        .filter(|member| !member.thread_id.is_empty())
-        .map(|member| Dispatch {
-            slug: member.slug.clone(),
-            thread_id: member.thread_id.clone(),
+        .map(|(slug, thread_id)| Dispatch {
+            slug,
+            thread_id,
+            message_id: uuid::Uuid::new_v4().to_string(),
+            text: format!(
+                "[Group \"{title}\": {names}. {from} wrote:]\n{text}\n\n[Your reply is shared with the group. Write @slug to bring one member in.]"
+            ),
         })
+        .collect()
+}
+
+fn anchor_all(room: &mut Value, dispatches: &[Dispatch]) {
+    if !room["anchors"].is_object() {
+        room["anchors"] = json!({});
+    }
+    for item in dispatches {
+        room["anchors"][&item.slug] = json!(item.message_id);
+    }
+}
+
+fn wants_everyone(text: &str) -> bool {
+    mention_words(text)
+        .iter()
+        .any(|w| matches!(w.as_str(), "all" | "everyone" | "team" | "group"))
+}
+
+/// The lowercase words that follow an `@`.
+fn mention_words(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let starts_word = i == 0 || !chars[i - 1].is_alphanumeric();
+        if chars[i] == '@' && starts_word {
+            let mut word = String::new();
+            let mut j = i + 1;
+            while j < chars.len() && (chars[j].is_alphanumeric() || chars[j] == '-' || chars[j] == '_') {
+                word.extend(chars[j].to_lowercase());
+                j += 1;
+            }
+            if !word.is_empty() {
+                out.push(word);
+            }
+            i = j;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// Members named with `@slug` or `@name` (the name without spaces), in room order.
+pub fn mentioned(members: &[Member], text: &str) -> Vec<usize> {
+    let words = mention_words(text);
+    members
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| {
+            let compact: String = m.title.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect();
+            words.iter().any(|w| *w == m.slug || *w == compact)
+        })
+        .map(|(i, _)| i)
         .collect()
 }
 
@@ -159,8 +437,28 @@ pub fn present(room: &Value, directory: &[Member]) -> Value {
     json!({
         "id": room["id"],
         "title": room["title"],
+        "description": room["description"].as_str().unwrap_or(""),
+        "color": room["color"].as_str().unwrap_or(&hbots_design::tokens().avatar.default),
+        "shape": room["shape"].as_str().unwrap_or("ball"),
         "members": members.iter().map(member_row).collect::<Vec<_>>(),
         "messages": room["messages"].as_array().cloned().unwrap_or_default(),
+    })
+}
+
+/// One row of the list: no messages, the last one as a preview.
+pub fn summary(room: &Value) -> Value {
+    let last = room["messages"]
+        .as_array()
+        .and_then(|l| l.last())
+        .map(|m| json!({ "name": m["name"], "text": m["text"], "at": m["at"] }));
+    json!({
+        "id": room["id"],
+        "title": room["title"],
+        "description": room["description"].as_str().unwrap_or(""),
+        "color": room["color"].as_str().unwrap_or(&hbots_design::tokens().avatar.default),
+        "shape": room["shape"].as_str().unwrap_or("ball"),
+        "members": room["members"],
+        "last": last,
     })
 }
 
@@ -330,7 +628,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let created = rooms
-            .create("Design", &["ada".into(), "bea".into()])
+            .create("Design", "", "", "", &["ada".into(), "bea".into()])
             .await
             .unwrap();
         let id = created["id"].as_str().unwrap().to_string();
@@ -347,7 +645,7 @@ mod tests {
         assert_eq!(dispatches[0].thread_id, "thread-ada");
         assert_eq!(dispatches[1].thread_id, "thread-bea");
 
-        let commands = dispatch_commands(&dispatches, "hello both");
+        let commands = dispatch_commands(&dispatches);
         assert_eq!(commands.len(), 2);
         assert_eq!(commands[0]["threadId"], "thread-ada");
         assert_eq!(commands[1]["threadId"], "thread-bea");
@@ -366,7 +664,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = rooms
-            .create("Design", &["ada".into(), "bea".into()])
+            .create("Design", "", "", "", &["ada".into(), "bea".into()])
             .await
             .unwrap()["id"]
             .as_str()
@@ -401,7 +699,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = rooms
-            .create("Design", &["ada".into(), "bea".into()])
+            .create("Design", "", "", "", &["ada".into(), "bea".into()])
             .await
             .unwrap()["id"]
             .as_str()
@@ -455,5 +753,240 @@ mod tests {
         assert_eq!(view["members"][1]["ready"], false);
         assert_eq!(view["members"][1]["state"], "asleep");
         assert_eq!(view["messages"].as_array().unwrap().len(), 3);
+    }
+
+    fn trio() -> Vec<Member> {
+        let mut m = directory();
+        m.push(Member {
+            slug: "cy".into(),
+            title: "Cy Park".into(),
+            thread_id: "thread-cy".into(),
+            working: false,
+        });
+        m
+    }
+
+    async fn trio_room(rooms: &Rooms) -> String {
+        rooms
+            .create("Team", "Plans the week", "blue", "hex", &["ada".into(), "bea".into(), "cy".into()])
+            .await
+            .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    }
+
+    fn slugs(dispatches: &[Dispatch]) -> Vec<&str> {
+        dispatches.iter().map(|d| d.slug.as_str()).collect()
+    }
+
+    #[tokio::test]
+    async fn a_group_keeps_its_description_and_avatar() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = trio_room(&rooms).await;
+        let room = rooms.get(&id).await.unwrap();
+        assert_eq!(room["description"], "Plans the week");
+        assert_eq!(room["color"], "blue");
+        assert_eq!(room["shape"], "hex");
+
+        let odd = rooms
+            .create("Odd", "", "not-a-colour", "not-a-shape", &["ada".into(), "bea".into()])
+            .await
+            .unwrap();
+        assert_eq!(odd["color"], hbots_design::tokens().avatar.default.as_str());
+        assert_eq!(odd["shape"], "ball", "an unknown shape falls back to the ball");
+
+        let view = present(&room, &trio());
+        assert_eq!(view["description"], "Plans the week");
+        assert_eq!(view["shape"], "hex");
+        let row = summary(&room);
+        assert!(row.get("messages").is_none(), "the list carries no transcript");
+        assert_eq!(row["last"], Value::Null);
+    }
+
+    #[tokio::test]
+    async fn create_needs_a_name_and_two_distinct_bots() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let ada = vec!["ada".to_string()];
+        assert!(rooms.create(" ", "", "", "", &["ada".into(), "bea".into()]).await.is_err());
+        assert!(rooms.create("Solo", "", "", "", &ada).await.is_err());
+        let twice = vec!["ada".to_string(), "ada".to_string()];
+        let err = rooms.create("Twin", "", "", "", &twice).await.unwrap_err();
+        assert_eq!(err.message, "A group needs two Bots.", "a duplicate is not a second Bot");
+    }
+
+    #[tokio::test]
+    async fn update_changes_fields_keeps_messages_and_refuses_one_member() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = trio_room(&rooms).await;
+        rooms.send(&id, &trio(), "hello", "m1", "t1").await.unwrap();
+        let updated = rooms
+            .update(&id, &json!({ "title": "Crew", "description": "", "color": "red", "members": ["ada", "cy"] }))
+            .await
+            .unwrap();
+        assert_eq!(updated["title"], "Crew");
+        assert_eq!(updated["description"], "");
+        assert_eq!(updated["color"], "red");
+        assert_eq!(updated["shape"], "hex", "an omitted field stays");
+        assert_eq!(updated["members"], json!(["ada", "cy"]));
+        assert_eq!(updated["messages"].as_array().unwrap().len(), 1);
+        assert!(rooms.update(&id, &json!({ "members": ["ada"] })).await.is_err());
+        assert!(rooms.update(&id, &json!({ "title": "  " })).await.is_err());
+        assert!(rooms.update("missing", &json!({ "title": "x" })).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn delete_removes_one_group_and_leaves_the_other() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let keep = trio_room(&rooms).await;
+        let drop = trio_room(&rooms).await;
+        rooms.delete(&drop).await.unwrap();
+        let left = rooms.list().await.unwrap();
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0]["id"], json!(keep));
+        assert!(rooms.delete(&drop).await.is_err(), "a second delete finds nothing");
+    }
+
+    #[test]
+    fn mentions_pick_members_by_slug_or_name_and_all_wakes_everyone() {
+        let m = trio();
+        assert_eq!(plan_dispatches(&m, "@ada and @bea please look", None), vec![0, 1]);
+        assert_eq!(plan_dispatches(&m, "@cypark can you check", None), vec![2], "a name without spaces");
+        assert_eq!(plan_dispatches(&m, "@Cy hi", None), vec![2], "case does not matter");
+        assert_eq!(plan_dispatches(&m, "@all stand up", None), vec![0, 1, 2]);
+        assert_eq!(plan_dispatches(&m, "@everyone", None), vec![0, 1, 2]);
+        assert_eq!(plan_dispatches(&m, "mail me at joe@example.com", None), vec![0, 1, 2], "an address is not a mention");
+        assert_eq!(plan_dispatches(&m, "hello", None), vec![0, 1, 2], "nobody has spoken yet");
+    }
+
+    #[test]
+    fn without_a_mention_the_last_speaker_answers() {
+        let m = trio();
+        assert_eq!(plan_dispatches(&m, "and then?", Some("bea")), vec![1]);
+        assert_eq!(plan_dispatches(&m, "@ada and then?", Some("bea")), vec![0], "a mention beats the last speaker");
+        assert_eq!(plan_dispatches(&m, "and then?", Some("gone")), vec![0, 1, 2]);
+    }
+
+    #[tokio::test]
+    async fn a_mention_wakes_only_that_member_and_frames_the_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = trio_room(&rooms).await;
+        let (_, woken) = rooms.send(&id, &trio(), "@bea draft the plan", "m1", "t1").await.unwrap();
+        assert_eq!(slugs(&woken), vec!["bea"]);
+        let text = &woken[0].text;
+        assert!(text.contains("Group \"Team\""));
+        assert!(text.contains("Ada (@ada)") && text.contains("Cy Park (@cy)"));
+        assert!(text.contains("You wrote:") && text.contains("draft the plan"));
+        let commands = dispatch_commands(&woken);
+        assert_eq!(commands[0]["messageId"], json!(woken[0].message_id));
+        assert_eq!(commands[0]["threadId"], "thread-bea");
+    }
+
+    fn thread(anchor: &str, replies: &[(&str, &str, bool)]) -> Vec<Value> {
+        let mut out = vec![json!({ "id": anchor, "role": "user", "text": "framed", "streaming": false, "at": "a0" })];
+        for (id, text, streaming) in replies {
+            out.push(json!({ "id": id, "role": "bot", "text": text, "streaming": streaming, "at": "a1" }));
+        }
+        out
+    }
+
+    #[tokio::test]
+    async fn replies_after_the_anchor_join_the_room_once_and_streaming_ones_wait() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = trio_room(&rooms).await;
+        let (_, woken) = rooms.send(&id, &trio(), "@ada hello", "m1", "t1").await.unwrap();
+        let anchor = woken[0].message_id.clone();
+        let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
+        threads.insert("ada".into(), thread(&anchor, &[("a1", "Hi there", false), ("a2", "Typing", true)]));
+
+        let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        assert!(wake.is_empty());
+        let messages = room["messages"].as_array().unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[1]["from"], "ada");
+        assert_eq!(messages[1]["text"], "Hi there");
+
+        let (again, _) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        assert_eq!(again["messages"].as_array().unwrap().len(), 2, "a second sync adds nothing");
+
+        threads.insert("ada".into(), thread(&anchor, &[("a1", "Hi there", false), ("a2", "Done typing", false)]));
+        let (done, _) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        assert_eq!(done["messages"].as_array().unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn a_thread_without_the_anchor_or_with_old_replies_is_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = trio_room(&rooms).await;
+        rooms.send(&id, &trio(), "@ada hello", "m1", "t1").await.unwrap();
+        let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
+        threads.insert(
+            "ada".into(),
+            vec![
+                json!({ "id": "old", "role": "bot", "text": "From before the group", "streaming": false }),
+                json!({ "id": "other", "role": "user", "text": "Not our message", "streaming": false }),
+            ],
+        );
+        let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        assert_eq!(room["messages"].as_array().unwrap().len(), 1, "only the person's message");
+        assert!(wake.is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_reply_that_mentions_another_member_wakes_only_that_member() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = trio_room(&rooms).await;
+        let (_, woken) = rooms.send(&id, &trio(), "@ada ask Cy for numbers", "m1", "t1").await.unwrap();
+        let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
+        threads.insert("ada".into(), thread(&woken[0].message_id, &[("a1", "@cy what are this week's numbers?", false)]));
+        let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        assert_eq!(slugs(&wake), vec!["cy"], "Bea stays asleep");
+        assert!(wake[0].text.contains("Ada wrote:"));
+        assert_eq!(room["hops"], 1);
+
+        // Cy answers back to Ada through the same path.
+        threads.insert("cy".into(), thread(&wake[0].message_id, &[("c1", "@ada 42 units", false)]));
+        let (_, back) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        assert_eq!(slugs(&back), vec!["ada"]);
+    }
+
+    #[tokio::test]
+    async fn bots_cannot_wake_each_other_forever() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = rooms
+            .create("Pair", "", "", "", &["ada".into(), "bea".into()])
+            .await
+            .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let (_, mut woken) = rooms.send(&id, &directory(), "@ada start", "m1", "t1").await.unwrap();
+        let mut turns = 0;
+        let mut counter = 0;
+        while let Some(next) = woken.pop() {
+            counter += 1;
+            turns += 1;
+            assert!(turns < 20, "the ping-pong never ends");
+            let other = if next.slug == "ada" { "@bea your turn" } else { "@ada your turn" };
+            let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
+            threads.insert(next.slug.clone(), thread(&next.message_id, &[(&format!("r{counter}"), other, false)]));
+            let (_, wake) = rooms.sync(&id, &directory(), &threads).await.unwrap();
+            woken.extend(wake);
+        }
+        assert_eq!(turns as u64, MAX_HOPS + 1, "the person's first wake-up, then at most {MAX_HOPS} more");
+        let room = rooms.get(&id).await.unwrap();
+        // A new message from the person resets the budget.
+        rooms.send(&id, &directory(), "@bea again", "m2", "t9").await.unwrap();
+        assert_eq!(rooms.get(&id).await.unwrap()["hops"], 0);
+        assert!(room["messages"].as_array().unwrap().len() > 1);
     }
 }
