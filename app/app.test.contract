@@ -152,6 +152,15 @@ test "reply quotes a line and pin toggles a row"
   expect tree missing "pin-m2"
   expect text "pin-missing" == "This message is not in view."
 
+test "a secondary click on a Bot message offers reply and pin"
+  at "/bot/fixture"
+  clock data
+  expect tree missing "message-menu"
+  tap "message-m2" contextmenu
+  expect tree has "message-menu"
+  expect tree has "menu-reply-m2"
+  expect tree has "menu-pin-m2"
+
 test "the open chat is clear and a hidden Bot keeps its mark"
   size 1440x900
   at "/bot/fixture"
