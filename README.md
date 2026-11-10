@@ -7,7 +7,7 @@
 Each Bot is a folder on your machine with its own memory, tools and thread.
 You talk to them from anywhere. Your keys never leave home.
 
-[Quick start](#quick-start) · [How it works](#how-it-works) · [Backends](#backends) · [Status](#status) · [Docs](docs/architecture.md)
+[Quick start](#quick-start) · [Development](#development) · [How it works](#how-it-works) · [Backends](#backends) · [Status](#status) · [Docs](docs/architecture.md)
 
 </div>
 
@@ -24,13 +24,14 @@ You talk to them from anywhere. Your keys never leave home.
 
 ## Quick start
 
-You need [Rust](https://rustup.rs) and a running harness. [T3 Code](https://github.com/pingdotgg/t3code) is the one wired today.
+You need a running [T3 Code](https://github.com/pingdotgg/t3code) harness and a published hbots release for your platform. Install the latest stable release:
 
 ```sh
-git clone https://github.com/Herklos/Bots && cd Bots
-cargo build --release
-./target/release/hbots up
+curl -fsSL https://raw.githubusercontent.com/Herklos/Bots/main/install.sh | sh
+~/.hbots/runtime/current/hbots up
 ```
+
+The installer selects the archive for your platform, verifies it against `SHA256SUMS`, and installs the binary and web files together. To install a specific release, download the script and run `sh install.sh --version VERSION`; add `HBOTS_RELEASE_BASE=<url>` to use a mirror.
 
 `hbots up` writes `~/.hbots/.env`, asks T3 Code for a token, installs a background service (launchd on macOS, systemd on Linux) and prints the address:
 
@@ -38,7 +39,7 @@ cargo build --release
 hbots 0.1.0 is running: http://127.0.0.1:3780
 ```
 
-Prefer a terminal-only run? `hbots up --no-service`, then `hbots serve`.
+Prefer a terminal-only run? Use `~/.hbots/runtime/current/hbots up --no-service`, then `~/.hbots/runtime/current/hbots serve`.
 
 <details>
 <summary><b><code>t3: command not found</code></b></summary>
@@ -52,6 +53,19 @@ The T3 Code desktop app doesn't always put its command line on your `PATH`. Try,
 `hbots up` looks on your `PATH`, then in `~/.t3/bin/t3`. If it finds nothing, it tells you to set `T3_TOKEN` yourself.
 </details>
 
+### Before you expose it
+
+Without a password the gateway listens on localhost and signs nobody in. Set `HBOTS_PASSWORD` (or a password in Settings) before using Tailscale or a tunnel.
+
+## Development
+
+To build from source, install [Rust](https://rustup.rs), start T3 Code, and clone the repository:
+
+```sh
+git clone https://github.com/Herklos/Bots && cd Bots
+cargo build --release
+```
+
 ### The web app
 
 The gateway serves the built client. Build it once (needs an [Exact](https://github.com/expo/exact) checkout; local path is in gitignored `.exact-path`, see `AGENTS.md`):
@@ -59,27 +73,11 @@ The gateway serves the built client. Build it once (needs an [Exact](https://git
 ```sh
 set -a; source .exact-path; set +a
 EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/web/build.mjs" bots-web   # → app/target/web-dist
-STATIC_DIR=$PWD/app/target/web-dist hbots serve
+./target/release/hbots up
 ```
 
 Release archives carry a `web/` folder next to the binary, and the gateway serves it with no setting.
 Native apps have no page address, so build them with `HBOTS_URL=https://your-gateway`.
-
-To install the latest published stable release:
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/Herklos/Bots/main/install.sh | sh
-~/.hbots/runtime/current/hbots up
-```
-
-The installer selects the archive for your platform, verifies it against `SHA256SUMS`, and
-installs the binary and web files together. T3 Code must be running separately. To install a
-specific release, download the script and run `sh install.sh --version VERSION`; add
-`HBOTS_RELEASE_BASE=<url>` to use a mirror.
-
-### Before you expose it
-
-Without a password the gateway listens on localhost and signs nobody in. Set `HBOTS_PASSWORD` (or a password in Settings) before using Tailscale or a tunnel.
 
 ## How it works
 
