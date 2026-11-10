@@ -13,6 +13,8 @@ pub enum Command {
     Systemd,
     Launchd,
     Restart,
+    Install,
+    Uninstall,
     Up,
     Rollback,
     Update {
@@ -60,8 +62,10 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
             Some("systemd") => Ok(Command::Systemd),
             Some("launchd") => Ok(Command::Launchd),
             Some("restart") => Ok(Command::Restart),
+            Some("install") => Ok(Command::Install),
+            Some("uninstall") => Ok(Command::Uninstall),
             _ => Err(format!(
-                "usage: hbots service systemd|launchd|restart\n\n{}",
+                "usage: hbots service install|uninstall|systemd|launchd|restart\n\n{}",
                 help_text()
             )),
         },
@@ -80,6 +84,7 @@ hbots — the gateway for the Exact client
                     install a release; --yes switches current and rolls back
                     if the new one does not answer /api/health
   hbots rollback    point current back at the previous version
+  hbots service install|uninstall   run `hbots serve` in the background (launchd on macOS, systemd on Linux)
   hbots service systemd|launchd|restart
                     print a user service that runs `hbots serve`, or restart it
   hbots version     print the version
@@ -235,6 +240,14 @@ mod tests {
                 preview: false,
                 version: Some(_)
             }
+        ));
+        assert!(matches!(
+            parse(&[arg("service"), arg("install")]),
+            Ok(Command::Install)
+        ));
+        assert!(matches!(
+            parse(&[arg("service"), arg("uninstall")]),
+            Ok(Command::Uninstall)
         ));
         assert!(parse(&[arg("service")]).is_err());
         assert!(parse(&[arg("nope")]).is_err());

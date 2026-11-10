@@ -23,6 +23,7 @@ mod provisioner;
 mod release; // T6b: self-update and rollback.
 mod remote_access; // T4: the scrypt password in access.json.
 mod routines; // T5: T3 scheduled tasks.
+mod service; // T6b: install and remove the background service.
 mod store;
 mod t3;
 mod thread_meta; // T5: reactions, voice calls, roster previews.
@@ -125,6 +126,17 @@ async fn main() -> anyhow::Result<()> {
         }
         Ok(cli::Command::Rollback) => {
             release::System::command_rollback(&cli::home_dir()).map_err(|e| anyhow::anyhow!(e))?;
+            return Ok(());
+        }
+        Ok(cli::Command::Install) => {
+            let spec = service_spec();
+            let file = service::install(&spec, std::env::consts::OS)?;
+            println!("hbots service installed: {}", file.display());
+            return Ok(());
+        }
+        Ok(cli::Command::Uninstall) => {
+            service::uninstall(&service_spec(), std::env::consts::OS)?;
+            println!("hbots service removed. Settings and Bots are kept.");
             return Ok(());
         }
         Ok(cli::Command::Restart) => {
@@ -250,6 +262,18 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
     Ok(())
+}
+
+/// The service for this install: the `current` link when there is one, else this binary.
+fn service_spec() -> service::ServiceSpec {
+    let home = cli::home_dir();
+    let linked = home.join("runtime/current/hbots");
+    let exe = if linked.exists() {
+        linked
+    } else {
+        std::env::current_exe().unwrap_or_else(|_| "hbots".into())
+    };
+    service::spec(exe, &home, &std::env::var("PATH").unwrap_or_default())
 }
 
 pub fn app(state: Arc<AppState>) -> Router {
