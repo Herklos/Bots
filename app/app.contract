@@ -463,6 +463,7 @@ component Bots
   // The right panel (the Bot's settings) opens and closes from the chat header's
   // Bot name. It opens by default when the window turns wide.
   state panelOpen = false
+  state panelTab = "details"
   // Each entry is `id\\tname` for a file waiting to go out with the next send.
   state pendingAttaches: string[] = []
   // The page the person is driving. Cleared after Release, including when they leave.
@@ -533,10 +534,12 @@ component Bots
   derive projectRemoveError = match projectRemoved { case some(r) => r.error, case none => "" }
   derive attachError = match attached { case some(r) => r.error, case none => "" }
   derive canSend = draft.trim() != "" or pendingAttaches.length > 0
-  derive onBot = panelOpen or top(nav).name == "library" or top(nav).name == "computer"
+  derive onBot = top(nav).name == "chat" or top(nav).name == "library" or top(nav).name == "computer"
+  derive onLibrary = top(nav).name == "library" or (top(nav).name == "chat" and panelTab == "library")
+  derive onComputer = top(nav).name == "computer" or (top(nav).name == "chat" and panelOpen and panelTab == "computer")
   derive detailGate = (onBot and slug != "") ? "1" : "0"
-  derive libraryGate = (top(nav).name == "library" and slug != "") ? "1" : "0"
-  derive computerGate = (top(nav).name == "computer" and slug != "") ? "1" : "0"
+  derive libraryGate = (onLibrary and slug != "") ? "1" : "0"
+  derive computerGate = (onComputer and slug != "") ? "1" : "0"
   derive usageGate = top(nav).name == "settings" ? "1" : "0"
   derive modelError = match modelSaved { case some(r) => r.error, case none => "" }
   derive routineSaveError = match routineSaved { case some(r) => r.error, case none => "" }
@@ -555,18 +558,27 @@ component Bots
   task fit mount
     every(200, fitView)
 
-  task letGo when holding and top(nav).name != "computer"
+  task letGo when holding and not onComputer
     after(1, releaseHeld)
 
   action fitView
     let box = frame("app-shell")
-    let w = not box.unavailable and box.width >= 1200
-    if w != wide
-      wide = w
-      panelOpen = w
+    // A missing measurement is not a resize. Keep the last stable layout.
+    if not box.unavailable and box.width > 0
+      let w = box.width >= 1200
+      if w != wide
+        wide = w
+        panelOpen = w
   action togglePanel
     panelOpen = not panelOpen
+    if failed(models)
+      refresh models
+    if failed(routines)
+      refresh routines
+  action pickPanelTab(tab: string)
+    panelTab = tab
   action openHidden(bslug: string)
+    panelTab = "details"
     panelOpen = true
     nav = go(nav, path("chat", bslug))
 
@@ -575,13 +587,11 @@ component Bots
     refresh chat
     if top(nav).name == "settings"
       refresh usage
-    if top(nav).name == "library"
+    if onLibrary
       refresh library
-    if top(nav).name == "computer"
+    if onComputer
       refresh computer
-    if onBot
-      refresh models
-      refresh routines
+    if onBot and panelOpen and panelTab == "details"
       refresh lineage
     if top(nav).name == "projects"
       refresh board
@@ -837,10 +847,15 @@ component Bots
                       Glyph(name="settings", size=20)
           else if e.name == "chat"
             column class=Screen navigationKey=`${e.id}` navigationScroll="transcript" position="absolute" inset=0 padding-right=((wide and panelOpen) ? "20rem" : "0px")
-              header class=PageHeader
-                button class=HeaderToggle appearance="none" press=togglePanel aria-label=(panelOpen ? "Hide Bot details" : "Show Bot details") title="Bot details" testId="panel-toggle"
-                  text nameOf(bots, e.params.slug) role="heading" aria-level=1 class=PageTitle
-                text (chat.working ? "Working…" : labelOf(bots, e.params.slug)) color="ink.muted" font="-exact-footnote" flex=1 min-width=0
+              header appearance="none" class=PageHeader position="relative" testId="chat-header"
+                button id="back" class=IconControl appearance="none" press=back aria-label="Back" title="Back" display=(wide ? "none" : "flex")
+                  column rotate="180deg"
+                    Glyph(name="chevron", size=20)
+                button class=HeaderToggle appearance="none" press=togglePanel aria-label=(panelOpen ? "Hide Bot details" : "Show Bot details") aria-expanded=panelOpen aria-controls="bot-panel" title="Bot settings" testId="panel-toggle" position="absolute" left="50%" translate="-50% 0" gap="space.sm" padding="0 space.md" max-width="75%"
+                  if nameOf(bots, e.params.slug) != ""
+                    column testId="chat-avatar"
+                      Face(shape="ball", color=faceColor(colorOf(bots, e.params.slug)), state=(chat.working ? "working" : "idle"), size=28, still=true)
+                  text nameOf(bots, e.params.slug) role="heading" aria-level=1 class=PageTitle overflow-wrap="anywhere" testId="chat-title" min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
               if failed(chat)
                 EmptyState(symbol="symbol:alert", title="Can’t Load This Conversation", message="Your messages haven’t loaded. Check the gateway, then try again.")
                   button press=pull testId="retry-chat"
@@ -918,9 +933,8 @@ component Bots
                 else
                   button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label="Send" testId="send"
                     Glyph(name="send", size=18)
-              if panelOpen
-                for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                  BotPanel(wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, hide=doHide, makeMain=doMain, drop=doDropBot, go=open, models=models, modelsDown=failed(models), routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), modelError=modelError, routineSaveError=routineSaveError, routineChangeError=routineChangeError, pickModel=doPickModel, addRoutine=doAddRoutine, toggleRoutine=doToggleRoutine, runRoutine=doRunRoutine, dropRoutine=doDropRoutine)
+              for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
+                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, pickTab=pickPanelTab, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, hide=doHide, makeMain=doMain, drop=doDropBot, go=open, models=models, modelsDown=failed(models), routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), modelError=modelError, routineSaveError=routineSaveError, routineChangeError=routineChangeError, pickModel=doPickModel, addRoutine=doAddRoutine, toggleRoutine=doToggleRoutine, runRoutine=doRunRoutine, dropRoutine=doDropRoutine, library=library, libraryDown=failed(library), itemError=libError, removeError=libRemoveError, connectorSaveError=connectorSaveError, connectorRemoveError=connectorRemoveError, saveItem=doSaveLibrary, dropItem=doDropLibrary, saveConnector=doSaveConnector, dropConnector=doDropConnector, computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease)
           else if e.name == "library"
             LibraryScreen(route=e.id, slug=e.params.slug, name=nameOf(bots, e.params.slug), color=colorOf(bots, e.params.slug), library=library, down=failed(library), itemError=libError, removeError=libRemoveError, connectorSaveError=connectorSaveError, connectorRemoveError=connectorRemoveError, saveItem=doSaveLibrary, dropItem=doDropLibrary, saveConnector=doSaveConnector, dropConnector=doDropConnector)
           else if e.name == "computer"
@@ -1041,9 +1055,8 @@ component Bots
                 button class=PrimaryButton buttonStyle="filled" press=create disabled=(newName.trim() == "" or pending(created)) flex=1 testId="create"
                   text (pending(created) ? "Creating…" : "Create Bot")
 
-// A Bot's own page, pushed from its chat or the inbox's Hidden section.
-// The Bot's editor: hero, identity, inbox and delete. Shared by the details
-// sheet (narrow screens) and the panel beside the chat (wide windows).
+// The Details tab: identity, inbox preferences, model, routines and activity.
+// Its state stays mounted while the panel is closed or another tab is shown.
 component BotEditor
   props
     bot: Bot
@@ -1083,12 +1096,6 @@ component BotEditor
       routineTitle = ""
   view
     column width="100%" gap="space.lg"
-      column align-items="center" gap="space.sm" padding="space.lg 0"
-        Face(shape="ball", color=faceColor(bot.color), state=(bot.hidden ? "asleep" : "idle"), size=88, still=false)
-        text bot.name font="-exact-title2" font-weight=600 testId="details-name" text-align="center" overflow-wrap="anywhere"
-        row class=Chip
-          column width=8 height=8 border-radius="radius.full" background-color=(bot.hidden ? "ink.muted" : "AccentColor")
-          text (bot.hidden ? "Hidden from your inbox" : bot.ready ? "Ready to chat" : "Getting set up…") color="ink.muted" testId="details-status"
       text "Identity" class=SectionLabel
       column class=GroupCard
         row align-items="center" gap="space.md" min-height=52
@@ -1123,24 +1130,6 @@ component BotEditor
           button class=ToggleControl appearance="none" role="switch" aria-checked=bot.hidden disabled=bot.main press=hide(bot.slug, not bot.hidden) aria-label="Hidden from the list" testId="hide-bot"
             row width=44 height=26 border-radius="radius.full" background-color=(bot.hidden ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.hidden ? "flex-end" : "flex-start")
               column width=20 height=20 margin="0 3px" border-radius="radius.full" background-color="ink.light"
-      text "With this Bot" class=SectionLabel
-      column class=GroupCard
-        button appearance="none" press=go(path("library", bot.slug)) width="100%" min-height=44 testId="open-library"
-          row gap="space.md" align-items="center" width="100%" min-height=44
-            column class=IconTile color="AccentColor"
-              Glyph(name="info", size=18)
-            column flex=1 gap="space.xs" min-width=0
-              text "Library" font="-exact-subheadline" font-weight=600 text-align="start"
-              text "Files, notes, and plans" color="ink.muted" font="-exact-footnote" text-align="start"
-            Glyph(name="chevron", size=18)
-        button appearance="none" press=go(path("computer", bot.slug)) width="100%" min-height=44 border-top="1px solid surface.line" testId="open-computer"
-          row gap="space.md" align-items="center" width="100%" min-height=44
-            column class=IconTile color="ink.muted"
-              Glyph(name="globe", size=18)
-            column flex=1 gap="space.xs" min-width=0
-              text "Computer" font="-exact-subheadline" font-weight=600 text-align="start"
-              text "Pages this Bot has open" color="ink.muted" font="-exact-footnote" text-align="start"
-            Glyph(name="chevron", size=18)
       text "Model" class=SectionLabel
       column class=GroupCard gap="space.sm" padding="space.md"
         if modelsDown
@@ -1232,6 +1221,10 @@ component BotEditor
 // below the header, so the name stays tappable to close it.
 component BotPanel
   props
+    working: bool
+    shown: bool
+    tab: string
+    pickTab: action
     wide: bool
     bot: Bot
     error: string
@@ -1255,11 +1248,46 @@ component BotPanel
     toggleRoutine: action
     runRoutine: action
     dropRoutine: action
+    library: Library
+    libraryDown: bool
+    itemError: string
+    removeError: string
+    connectorSaveError: string
+    connectorRemoveError: string
+    saveItem: action
+    dropItem: action
+    saveConnector: action
+    dropConnector: action
+    computer: Computer
+    computerDown: bool
+    heldTab: string
+    controlError: string
+    take: action
+    release: action
+  action tabKey(k: string, event: KeyboardEvent)
+    if not event.isComposing and (k == "ArrowRight" or k == "ArrowLeft" or k == "Home" or k == "End")
+      preventDefault()
+      let next = k == "Home" ? "details" : k == "End" ? "computer" : k == "ArrowRight" ? (tab == "details" ? "library" : tab == "library" ? "computer" : "details") : (tab == "details" ? "computer" : tab == "computer" ? "library" : "details")
+      pickTab(next)
+      focus(`panel-tab-${next}`)
   view
-    column position="absolute" top=(wide ? 0 : 72) right=0 bottom=0 width=(wide ? "20rem" : "100%") box-sizing="border-box" background-color="surface.canvas" border-left="1px solid surface.line" testId="bot-panel"
-      scroll id=`panel-${bot.slug}` flex=1 min-height=0
-        column width="100%" box-sizing="border-box" padding="space.lg"
-          BotEditor(bot=bot, error=error, rename=rename, recolour=recolour, hide=hide, makeMain=makeMain, drop=drop, go=go, models=models, modelsDown=modelsDown, routines=routines, routinesDown=routinesDown, lineage=lineage, lineageDown=lineageDown, modelError=modelError, routineSaveError=routineSaveError, routineChangeError=routineChangeError, pickModel=pickModel, addRoutine=addRoutine, toggleRoutine=toggleRoutine, runRoutine=runRoutine, dropRoutine=dropRoutine)
+    column id="bot-panel" display=(shown ? "flex" : "none") position="absolute" top=(wide ? 0 : 72) right=0 bottom=0 width=(wide ? "20rem" : "100%") box-sizing="border-box" background-color="surface.canvas" border-left="1px solid surface.line" testId="bot-panel"
+      column align-items="center" gap="space.xs" padding="space.lg"
+        Face(shape="ball", color=faceColor(bot.color), state=(bot.hidden ? "asleep" : working ? "working" : "idle"), size=64, still=(not working))
+        text bot.name font="-exact-headline" font-weight=600 testId="details-name" text-align="center" overflow-wrap="anywhere"
+        text (bot.hidden ? "Hidden from your inbox" : working ? "Working…" : bot.ready ? "Ready to chat" : "Getting set up…") color="ink.muted" font="-exact-footnote" testId="details-status"
+      row role="tablist" appearance="none" background-color="surface.canvas" aria-label="Bot sidebar" padding="space.sm" gap="space.xs" border-bottom="1px solid surface.line"
+        for t in ["details", "library", "computer"] key=t
+          button id=`panel-tab-${t}` key=tabKey tabindex=(tab == t ? 0 : -1) class=Segment appearance="none" role="tab" aria-selected=(tab == t) aria-controls=`bot-tab-${t}` press=pickTab(t) flex=1 min-width=0 min-height=44 padding="space.xs" testId=`panel-tab-${t}` background-color=(tab == t ? "surface.card" : "transparent") color=(tab == t ? "-exact-label" : "ink.muted")
+            text (t == "details" ? "Details" : t == "library" ? "Library" : "Computer") font="-exact-subheadline"
+      column id="bot-tab-details" role="tabpanel" aria-label="Details" display=(tab == "details" ? "flex" : "none") flex=1 min-height=0
+        scroll id=`panel-${bot.slug}` flex=1 min-height=0
+          column width="100%" box-sizing="border-box" padding="space.lg"
+            BotEditor(bot=bot, error=error, rename=rename, recolour=recolour, hide=hide, makeMain=makeMain, drop=drop, go=go, models=models, modelsDown=modelsDown, routines=routines, routinesDown=routinesDown, lineage=lineage, lineageDown=lineageDown, modelError=modelError, routineSaveError=routineSaveError, routineChangeError=routineChangeError, pickModel=pickModel, addRoutine=addRoutine, toggleRoutine=toggleRoutine, runRoutine=runRoutine, dropRoutine=dropRoutine)
+      column id="bot-tab-library" role="tabpanel" aria-label="Library" display=(tab == "library" ? "flex" : "none") flex=1 min-height=0
+        LibraryContent(inPanel=true, slug=bot.slug, name=bot.name, color=bot.color, library=library, down=libraryDown, itemError=itemError, removeError=removeError, connectorSaveError=connectorSaveError, connectorRemoveError=connectorRemoveError, saveItem=saveItem, dropItem=dropItem, saveConnector=saveConnector, dropConnector=dropConnector)
+      column id="bot-tab-computer" role="tabpanel" aria-label="Computer" display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0
+        ComputerContent(inPanel=true, slug=bot.slug, name=bot.name, color=bot.color, computer=computer, down=computerDown, heldTab=heldTab, controlError=controlError, take=take, release=release)
 
 // A Vault login's sheet. The password field starts empty: a saved password is shown only after Reveal.
 component LoginSheet
@@ -1473,6 +1501,28 @@ component LibraryScreen
     dropItem: action
     saveConnector: action
     dropConnector: action
+  view
+    column class=Screen navigationKey=`${route}` navigationScroll="library-scroll" position="absolute" inset=0
+      header class=PageHeader
+        text "Library" role="heading" aria-level=1 class=PageTitle flex=1
+      LibraryContent(inPanel=false, slug=slug, name=name, color=color, library=library, down=down, itemError=itemError, removeError=removeError, connectorSaveError=connectorSaveError, connectorRemoveError=connectorRemoveError, saveItem=saveItem, dropItem=dropItem, saveConnector=saveConnector, dropConnector=dropConnector)
+
+component LibraryContent
+  props
+    inPanel: bool
+    slug: string
+    name: string
+    color: string
+    library: Library
+    down: bool
+    itemError: string
+    removeError: string
+    connectorSaveError: string
+    connectorRemoveError: string
+    saveItem: action
+    dropItem: action
+    saveConnector: action
+    dropConnector: action
   state filter = "all"
   state kind = "note"
   state title = ""
@@ -1508,15 +1558,15 @@ component LibraryScreen
       cUrl = ""
       cSecret = ""
   view
-    column class=Screen navigationKey=`${route}` navigationScroll="library-scroll" position="absolute" inset=0
-      header class=PageHeader
-        text "Library" role="heading" aria-level=1 class=PageTitle flex=1
-      scroll id="library-scroll" flex=1 min-height=0
-        column width="100%" max-width="40rem" box-sizing="border-box" margin="0 auto" padding="space.lg space.xl space.xl" gap="space.lg"
-          if down or not library.ok
-            column align-items="center" justify-content="center" padding="space.xl" gap="space.md"
-              Face(shape="ball", color=faceColor(color), state="asleep", size=72, still=true)
-              text "Can’t open this library. Check that hbots is running, then try again." color="-exact-system-red" text-align="center" testId="library-status"
+    scroll id=(inPanel ? "panel-library-scroll" : "library-scroll") flex=1 min-height=0
+      column width="100%" max-width="40rem" box-sizing="border-box" margin="0 auto" padding="space.lg space.xl space.xl" gap="space.lg"
+        if down or not library.ok
+          column align-items="center" justify-content="center" padding="space.xl" gap="space.md"
+            Face(shape="ball", color=faceColor(color), state="asleep", size=72, still=true)
+            text "Can’t open this library. Check that hbots is running, then try again." color="-exact-system-red" text-align="center" testId="library-status"
+        else
+          if inPanel
+            text (library.entries.length == 0 ? "Files and notes shared with this Bot appear here." : libraryLine(library.entries.length, who)) color="ink.muted" font="-exact-footnote" testId="library-summary"
           else
             row gap="space.lg" align-items="center"
               Face(shape="ball", color=faceColor(color), state="idle", size=72, still=false)
@@ -1526,66 +1576,66 @@ component LibraryScreen
                   text `Files and pages shared with ${who} appear here.` color="ink.muted" testId="library-status"
                 else
                   text libraryLine(library.entries.length, who) color="ink.muted" testId="library-count"
-            row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label="Show"
-              for f in ["all", "page", "media", "link", "file", "project", "note", "task", "plan", "more"] key=f
-                button press=pickFilter(f) role="radio" aria-checked=(filter == f) class=Segment appearance="none" min-height=44 testId=`filter-${f}`
-                  background-color=(filter == f ? "AccentColor" : "transparent")
-                  color=(filter == f ? "AccentColorText" : "-exact-label")
-                  text filterLabel(f)
-            if library.entries.length > 0 and shown.length == 0
-              text `Nothing in ${filterLabel(filter)}.` color="ink.muted" testId="library-none"
-            else
-              column testId="library-list"
-                LibList(label="Today", entries=today, slug=slug, drop=dropItem)
-                LibList(label="This week", entries=week, slug=slug, drop=dropItem)
-                LibList(label="Older", entries=older, slug=slug, drop=dropItem)
-                LibList(label="", entries=undated, slug=slug, drop=dropItem)
-            text "Keep something" class=SectionLabel
-            column class=GroupCard gap="space.sm" padding="space.md"
-              select value=kind change=pickKind aria-label="Kind" testId="library-kind"
-                option "Note" value="note"
-                option "Task" value="task"
-                option "Plan" value="plan"
-                option "Project" value="project"
-                option "Link" value="link"
-                option "Repo" value="repo"
-                option "Machine" value="machine"
-                option "Service" value="service"
-              input appearance="none" class=Field value=title input=editTitle submit=addItem placeholder="Title" aria-label="Title" testId="library-title"
-              button press=addItem disabled=(title.trim() == "") buttonStyle="filled" min-height=44 testId="add-library"
-                text "Add"
-              if itemError != ""
-                text itemError color="-exact-system-red" testId="library-error"
-              if removeError != ""
-                text removeError color="-exact-system-red" testId="library-remove-error"
-            text "Connectors" class=SectionLabel
-            text "Applies when this Bot starts its next session." color="ink.muted" font="-exact-footnote" padding="0 space.md"
-            column class=GroupCard
-              for c in library.connectors key=c.name
-                row align-items="center" gap="space.md" min-height=64 border-top="1px solid surface.line" testId=`connector-${c.name}`
-                  column flex=1 gap="space.xs" min-width=0
-                    text c.name font-weight=600
-                    text c.url color="ink.muted" font="-exact-footnote" overflow-wrap="anywhere"
-                    if c.hasSecret and not c.locked
-                      text "A token is saved." color="ink.muted" font="-exact-footnote"
-                  if c.locked
-                    text "On" color="ink.muted" testId="connector-bot"
-                  else
-                    button class=ToggleControl appearance="none" role="switch" aria-checked=c.enabled press=saveConnector(slug, c.name, c.url, not c.enabled, "") aria-label=`Enabled ${c.name}` testId=`connector-on-${c.name}`
-                      row width=44 height=26 border-radius="radius.full" background-color=(c.enabled ? "AccentColor" : "surface.line") align-items="center" justify-content=(c.enabled ? "flex-end" : "flex-start")
-                        column width=20 height=20 margin="0 3px" border-radius="radius.full" background-color="ink.light"
-                    button class=IconControl appearance="none" press=dropConnector(slug, c.name) aria-label=`Remove ${c.name}` title="Remove" color="-exact-system-red" testId=`drop-connector-${c.name}`
-                      Glyph(name="trash", size=18)
-              column gap="space.sm" padding="space.sm 0"
-                input appearance="none" class=Field value=cName input=editConnector placeholder="Name" aria-label="Connector name" autocapitalize="none" testId="connector-name"
-                input appearance="none" class=Field value=cUrl input=editUrl placeholder="https://" aria-label="Connector URL" autocapitalize="none" testId="connector-url"
-                input appearance="none" class=Field type="password" value=cSecret input=editSecret placeholder="Token, if it asks" aria-label="Connector token" testId="connector-secret"
-                button press=addConnector disabled=(cName.trim() == "" or cUrl.trim() == "") buttonStyle="filled" min-height=44 testId="add-connector"
-                  text "Add Connector"
-                if connectorSaveError != ""
-                  text connectorSaveError color="-exact-system-red" testId="connector-error"
-                if connectorRemoveError != ""
-                  text connectorRemoveError color="-exact-system-red" testId="connector-remove-error"
+          row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label="Show"
+            for f in ["all", "page", "media", "link", "file", "project", "note", "task", "plan", "more"] key=f
+              button press=pickFilter(f) role="radio" aria-checked=(filter == f) class=Segment appearance="none" min-height=44 testId=`filter-${f}`
+                background-color=(filter == f ? "AccentColor" : "transparent")
+                color=(filter == f ? "AccentColorText" : "-exact-label")
+                text filterLabel(f)
+          if library.entries.length > 0 and shown.length == 0
+            text `Nothing in ${filterLabel(filter)}.` color="ink.muted" testId="library-none"
+          else
+            column testId="library-list"
+              LibList(label="Today", entries=today, slug=slug, drop=dropItem)
+              LibList(label="This week", entries=week, slug=slug, drop=dropItem)
+              LibList(label="Older", entries=older, slug=slug, drop=dropItem)
+              LibList(label="", entries=undated, slug=slug, drop=dropItem)
+          text "Keep something" class=SectionLabel
+          column class=GroupCard gap="space.sm" padding="space.md"
+            select value=kind change=pickKind aria-label="Kind" testId="library-kind"
+              option "Note" value="note"
+              option "Task" value="task"
+              option "Plan" value="plan"
+              option "Project" value="project"
+              option "Link" value="link"
+              option "Repo" value="repo"
+              option "Machine" value="machine"
+              option "Service" value="service"
+            input appearance="none" class=Field value=title input=editTitle submit=addItem placeholder="Title" aria-label="Title" testId="library-title"
+            button press=addItem disabled=(title.trim() == "") buttonStyle="filled" min-height=44 testId="add-library"
+              text "Add"
+            if itemError != ""
+              text itemError color="-exact-system-red" testId="library-error"
+            if removeError != ""
+              text removeError color="-exact-system-red" testId="library-remove-error"
+          text "Connectors" class=SectionLabel
+          text "Applies when this Bot starts its next session." color="ink.muted" font="-exact-footnote" padding="0 space.md"
+          column class=GroupCard
+            for c in library.connectors key=c.name
+              row align-items="center" gap="space.md" min-height=64 border-top="1px solid surface.line" testId=`connector-${c.name}`
+                column flex=1 gap="space.xs" min-width=0
+                  text c.name font-weight=600
+                  text c.url color="ink.muted" font="-exact-footnote" overflow-wrap="anywhere"
+                  if c.hasSecret and not c.locked
+                    text "A token is saved." color="ink.muted" font="-exact-footnote"
+                if c.locked
+                  text "On" color="ink.muted" testId="connector-bot"
+                else
+                  button class=ToggleControl appearance="none" role="switch" aria-checked=c.enabled press=saveConnector(slug, c.name, c.url, not c.enabled, "") aria-label=`Enabled ${c.name}` testId=`connector-on-${c.name}`
+                    row width=44 height=26 border-radius="radius.full" background-color=(c.enabled ? "AccentColor" : "surface.line") align-items="center" justify-content=(c.enabled ? "flex-end" : "flex-start")
+                      column width=20 height=20 margin="0 3px" border-radius="radius.full" background-color="ink.light"
+                  button class=IconControl appearance="none" press=dropConnector(slug, c.name) aria-label=`Remove ${c.name}` title="Remove" color="-exact-system-red" testId=`drop-connector-${c.name}`
+                    Glyph(name="trash", size=18)
+            column gap="space.sm" padding="space.sm 0"
+              input appearance="none" class=Field value=cName input=editConnector placeholder="Name" aria-label="Connector name" autocapitalize="none" testId="connector-name"
+              input appearance="none" class=Field value=cUrl input=editUrl placeholder="https://" aria-label="Connector URL" autocapitalize="none" testId="connector-url"
+              input appearance="none" class=Field type="password" value=cSecret input=editSecret placeholder="Token, if it asks" aria-label="Connector token" testId="connector-secret"
+              button press=addConnector disabled=(cName.trim() == "" or cUrl.trim() == "") buttonStyle="filled" min-height=44 testId="add-connector"
+                text "Add Connector"
+              if connectorSaveError != ""
+                text connectorSaveError color="-exact-system-red" testId="connector-error"
+              if connectorRemoveError != ""
+                text connectorRemoveError color="-exact-system-red" testId="connector-remove-error"
 
 // One page this Bot has open. Watching does not take the page. Release gives it back.
 component ComputerScreen
@@ -1600,39 +1650,56 @@ component ComputerScreen
     controlError: string
     take: action
     release: action
-  derive who = name != "" ? name : "this Bot"
-  derive page = match first(computer.tabs) { case some(t) => t, case none => PageTab(id="", title="", url="") }
   view
     column class=Screen navigationKey=`${route}` navigationScroll="computer-scroll" position="absolute" inset=0
       header class=PageHeader
         text "Computer" role="heading" aria-level=1 class=PageTitle flex=1
-      scroll id="computer-scroll" flex=1 min-height=0
-        column width="100%" max-width="40rem" box-sizing="border-box" margin="0 auto" padding="space.lg space.xl space.xl" gap="space.lg"
-          if down or not computer.ok
-            column align-items="center" gap="space.md" padding="space.xl"
-              Face(shape="ball", color=faceColor(color), state="asleep", size=72, still=true)
-              text "Can’t open this Bot’s browser. Check that hbots is running, then try again." color="-exact-system-red" text-align="center" testId="computer-status"
-          else if computer.tabs.length == 0
-            column align-items="center" gap="space.md" padding="space.xl"
+      ComputerContent(inPanel=false, slug=slug, name=name, color=color, computer=computer, down=down, heldTab=heldTab, controlError=controlError, take=take, release=release)
+
+component ComputerContent
+  props
+    inPanel: bool
+    slug: string
+    name: string
+    color: string
+    computer: Computer
+    down: bool
+    heldTab: string
+    controlError: string
+    take: action
+    release: action
+  derive who = name != "" ? name : "this Bot"
+  derive page = match first(computer.tabs) { case some(t) => t, case none => PageTab(id="", title="", url="") }
+  view
+    scroll id=(inPanel ? "panel-computer-scroll" : "computer-scroll") flex=1 min-height=0
+      column width="100%" max-width="40rem" box-sizing="border-box" margin="0 auto" padding="space.lg space.xl space.xl" gap="space.lg"
+        if down or not computer.ok
+          column align-items="center" gap="space.md" padding="space.xl"
+            Face(shape="ball", color=faceColor(color), state="asleep", size=72, still=true)
+            text "Can’t open this Bot’s browser. Check that hbots is running, then try again." color="-exact-system-red" text-align="center" testId="computer-status"
+        else if computer.tabs.length == 0
+          column align-items="center" gap="space.md" padding="space.xl"
+            if not inPanel
               Face(shape="ball", color=faceColor(color), state="idle", size=72, still=false)
               text who class=PageTitle
-              text (computer.error != "" ? computer.error : "This Bot has not opened a page.") color="ink.muted" text-align="center" testId="computer-status"
-          else
-            row gap="space.lg" align-items="center"
+            text (computer.error != "" ? computer.error : "This Bot has not opened a page.") color="ink.muted" text-align="center" testId="computer-status"
+        else
+          row gap="space.lg" align-items="center"
+            if not inPanel
               Face(shape="ball", color=faceColor(color), state=(heldTab != "" ? "working" : "idle"), size=44, still=false)
-              column flex=1 gap="space.xs" min-width=0
-                text page.title class=PageTitle overflow-wrap="anywhere" testId="computer-title"
-                text page.url color="ink.muted" font="-exact-footnote" overflow-wrap="anywhere"
-            if computer.image != ""
-              image `data:image/jpeg;base64,${computer.image}` aria-label=`Page open for ${who}` width="100%" border-radius="radius.md" testId="computer-frame"
-            if heldTab != ""
-              button press=release buttonStyle="filled" min-height=44 testId="release-computer"
-                text "Release"
-            else
-              button press=take(page.id) buttonStyle="filled" min-height=44 testId="take-computer"
-                text "Take Control"
-            text "Release when you are done, so the Bot can use the page." color="ink.muted" font="-exact-footnote"
-            if computer.error != ""
-              text computer.error color="ink.muted" testId="computer-frame-error"
-            if controlError != ""
-              text controlError color="-exact-system-red" testId="control-error"
+            column flex=1 gap="space.xs" min-width=0
+              text page.title class=PageTitle overflow-wrap="anywhere" testId="computer-title"
+              text page.url color="ink.muted" font="-exact-footnote" overflow-wrap="anywhere"
+          if computer.image != ""
+            image `data:image/jpeg;base64,${computer.image}` aria-label=`Page open for ${who}` width="100%" border-radius="radius.md" testId="computer-frame"
+          if heldTab != ""
+            button press=release buttonStyle="filled" min-height=44 testId="release-computer"
+              text "Release"
+          else
+            button press=take(page.id) buttonStyle="filled" min-height=44 testId="take-computer"
+              text "Take Control"
+          text "Release when you are done, so the Bot can use the page." color="ink.muted" font="-exact-footnote"
+          if computer.error != ""
+            text computer.error color="ink.muted" testId="computer-frame-error"
+          if controlError != ""
+            text controlError color="-exact-system-red" testId="control-error"

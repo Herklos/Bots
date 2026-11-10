@@ -345,6 +345,7 @@ type T46 = T9 | null;
 type T47 = T13 | null;
 type T48 = { "path": T1; "name": T1; "type": T1; "size": T13; "width": T47; "height": T47; "duration": T47; };
 type T49 = T48[];
+type T50 = { "key": T1; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; "code": T1; "repeat": T0; "isComposing": T0; };
 
 /** Sources called by compiled mutation sends. */
 export type MutationSource = "computerControl" | "createBot" | "deleteBot" | "deleteConnector" | "deleteLibraryItem" | "deleteLogin" | "deleteProject" | "deleteRoutine" | "hideBot" | "makeMainBot" | "recolourBot" | "renameBot" | "revealPassword" | "runRoutine" | "saveConnector" | "saveLibraryItem" | "saveLogin" | "saveProject" | "saveRoutine" | "sendMessage" | "setModel" | "setPassword" | "setProjects" | "setRoutineEnabled" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";

@@ -73,14 +73,18 @@ creation is a focused sheet. hbots keeps its own Face and Tide palette. Source:
 https://github.com/RokaSwK/threebot and https://bot.swk.tools/.
 
 The Bot's editor is the right panel, toggled by the Bot's name in the chat
-header; there is no detail button and no details sheet. On wide windows
+header; the centered toggle contains its Face and name, without a readiness
+subtitle. There is no detail button and no details sheet. On wide windows
 (1200 points and up) it sits in a 320-point pane beside the chat — a
 hand-built pane the compiler leaves alone beside the list — and opens by
 default; on narrower screens it overlays the conversation below the header,
 so the name stays tappable to close it. The editor is a hero (Face, name,
 status chip with a dot) over labelled sections in grouped cards with
 36-point icon tiles: Identity (name, colour swatches), Inbox (Main, Hide,
-Delete), With this Bot (Library, Computer), Model, Routines, Working on.
+Delete), Model, Routines, Working on. Details, Library, and Computer are
+sibling tabs below the persistent Face and name, above independently scrolling
+content, with arrow-key, Home,
+and End navigation. Their contents stay mounted across tab and panel toggles.
 Main, Hide and Delete use the same outline glyphs; Hide is a switch with a
 48 by 44-point control. Destructive actions retain descriptive text.
 Attachment chips show their filenames and a named remove control.

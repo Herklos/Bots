@@ -47,3 +47,11 @@ A file outside a marked region is generated whole. A region is the text between 
 - Generated files match `tokens.json` (`generated_files_are_in_step_with_the_tokens`), so CI catches a stale file.
 
 To change the brand, edit `tokens.json`, run `sync`, then run the tests and the app build. Do not edit a generated file by hand.
+
+## Sidebar regression checks
+
+Run `bun scripts/test-sidebar.mjs` from the repository root. It starts a read-only
+sample gateway, builds to `app/target/sidebar-test`, and verifies tab keyboard
+navigation, drafts surviving polling and panel toggles, and narrow layouts.
+It uses `.exact-path` (or `EXACT_DIR`) and an installed Chrome (or `CHROME`).
+The regular web build and real Bot data are left alone.

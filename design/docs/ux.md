@@ -24,7 +24,7 @@ Inbox ──┬── Bot chat ──┬── Library
 - The inbox is the root. On a phone it is a list; on a wide window it is a sidebar beside the chat.
 - The inbox bar carries a search field that filters the Bots as you type and shows an empty state when nothing matches. The open Bot's row is highlighted in the list; the main Bot carries a small star.
 - The inbox footer is the person's own chip (initials or a person glyph, their name from Settings, and the Bot count) and opens Settings. Vault is reached only from Settings, whose bar also carries a search field. The old Projects board is deferred and has no entry point. A Bot's own projects, notes, tasks, and plans live in that Bot's Library.
-- On a wide window (1200 points and up) the open Bot's editor sits in a 320-point panel beside the chat and opens on its own. On a narrower screen, tapping the Bot's name in the chat header opens the same editor over the conversation, and tapping it again closes it. A hidden Bot opens into that editor. Library and Computer are their own screens, reached from the editor.
+- On a wide window (1200 points and up) the open Bot's editor sits in a 320-point panel beside the chat and opens on its own. On a narrower screen, tapping the Bot's name in the chat header opens the same editor over the conversation, and tapping it again closes it. A hidden Bot opens into that editor. The panel has Details, Library, and Computer tabs. Switching tabs keeps the conversation open; the Library and Computer URLs also remain available as standalone screens.
 - Back is always the platform's back.
 - A Bot in the Hidden section stays reachable from the inbox's Hidden row.
 
@@ -44,7 +44,7 @@ Inbox ──┬── Bot chat ──┬── Library
 
 ### 3. Talk to a Bot
 
-1. Open the Bot. The header shows its Face, name and what it is doing (its label, or **Working…**). An empty conversation shows the Face, the name and three starter pills; the composer reads **Write a message…**.
+1. Open the Bot. The centered header shows its Face and name, without a readiness subtitle. An empty conversation shows the Face, the name and three starter pills; the composer reads **Write a message…**.
 2. Messages sit in bubbles: yours are Tide-filled with Night ink and a small tail corner on the last of a run; the Bot's are cards. Attached files show as a chip under the message.
 3. Send. The reply appears as a **Working…** bubble with the Face while the Bot runs, then as a message. **Stop** (a red circle in the composer) interrupts the running reply.
 4. If the Bot asks for something the app can't answer yet, the request is a card with an info glyph: "Answer this in T3 Code for now. It will show up here once the Bot can take your answer."
@@ -52,15 +52,15 @@ Inbox ──┬── Bot chat ──┬── Library
 ### 3b. Bot details
 
 1. The chat header's Bot name is the toggle (no detail button, no details sheet). On a narrow screen, tapping the name opens the editor over the conversation below the header, and tapping the name again closes it. On a wide window (1200 points and up) the same editor sits beside the chat and opens on its own; tapping the name closes it and the chat widens. A hidden Bot opens its chat with the editor open, from the Hidden row.
-2. The editor shows the large Face, the name, and a status chip (a dot and a word: Ready to chat, Working, Hidden from your inbox). Sections are labelled (**Identity**, **Inbox**, **With this Bot**, **Model**, **Routines**, **Working on**) and sit in grouped cards with icon tiles. Name and colour swatches are in Identity. Main Bot and Hide from inbox are rows in Inbox. Library and Computer are rows under With this Bot. Delete Bot is in its own card, disabled for the main Bot.
+2. The editor shows the large Face, the name, and a status chip (a dot and a word: Ready to chat, Working, Hidden from your inbox). The Details tab has labelled sections (**Identity**, **Inbox**, **Model**, **Routines**, **Working on**) and sit in grouped cards with icon tiles. Name and colour swatches are in Identity. Main Bot and Hide from inbox are rows in Inbox. Library and Computer are sibling tabs, not navigation rows. Delete Bot is in its own card, disabled for the main Bot.
 3. **Model** is a segmented choice. Haiku is the default for a new Bot. The list is Haiku, plus this Bot's current choice and the default from Settings when those differ.
 4. **Routines** start off. The person names one and picks Hourly, Daily at 09:00, or Once. Run, the switch, and Delete sit on the row. A Bot that has no conversation yet says "This Bot is still getting set up."
 5. **Working on** lists the other threads this Bot has started (a subagent, or work handed to another machine). A remote thread is labelled "On another machine". An empty list says "No other threads yet." Opening one of those threads is later.
-6. Tapping the name again closes the editor. The conversation is still there.
+6. Tapping the name again closes the editor. The conversation is still there. Tabs, scroll positions, and form drafts stay mounted when the panel closes. Static model and routine choices load on entry and refresh after edits; regular polling updates live activity without remounting the panel.
 
 ### 3c. Library
 
-1. From Bot details, **Library** opens that Bot's shelf. The Face sits beside one sentence: how many things are here, or "Files and pages shared with {name} appear here."
+1. The **Library** sidebar tab shows that Bot's shelf under its persistent Face and name, with one sentence: how many things are here, or "Files and pages shared with {name} appear here."
 2. Filters are pills: All, Pages, Media, Links, Files, Projects, Notes, Tasks, Plans, and More (repos, machines, services). Rows group into Today, This week, and Older.
 3. **Keep something** adds a note, task, plan, project, link, repo, machine, or service. Delete asks first: "It is removed from this Bot’s library. This can’t be undone."
 4. A file opens through the gateway. A link from the conversation opens in a new tab. The app does not fetch that page itself.
@@ -68,7 +68,7 @@ Inbox ──┬── Bot chat ──┬── Library
 
 ### 3d. Computer
 
-1. From Bot details, **Computer** watches one page this Bot has open. The Face sits beside the page title. An empty watch says "This Bot has not opened a page."
+1. The **Computer** sidebar tab watches one page this Bot has open. The Face sits beside the page title. An empty watch says "This Bot has not opened a page."
 2. **Take Control** is a second step. Watching does not take the page. **Release** gives it back, and leaving the screen releases it too, so the Bot can use the page.
 3. Mouse moves and typed text are not on this screen yet.
 
