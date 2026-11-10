@@ -369,6 +369,9 @@ shape Bot
   ready: bool
   working: bool
   unread: bool
+  parentSlug: string
+  prompt: string
+  inheritParentPrompt: bool
 
 // A file on a message: an image shows in place, audio plays, any other file is a card.
 shape FileRef
@@ -772,6 +775,12 @@ component Bots
   state panelOpen = false
   state panelTab = "details"
   state panelPage = "root"
+  state subSlug = ""
+  state subName = ""
+  state subShape = "ball"
+  state subColor = "brand.default"
+  state subPrompt = ""
+  state subInherit = false
   state usagePeriod = "7d"
   state usageView = "summary"
   state toast = ""
@@ -795,6 +804,7 @@ component Bots
   resource usage = loadUsage(usageGate, hostTime.locale) as shape Usage else empty()
   resource report = loadUsageReport(slug, usagePeriod, reportGate, hostTime.locale) as shape UsageReport else empty()
   resource models = loadModels(slug, detailGate, hostTime.locale) as shape ModelList else empty()
+  resource childModels = loadModels(subSlug, subGate, hostTime.locale) as shape ModelList else empty()
   resource routines = loadRoutines(slug, detailGate, hostTime.locale) as shape RoutineList else empty()
   resource lineage = loadLineage(slug, detailGate, hostTime.locale) as shape Lineage else empty()
   resource shelf = loadShelf(slug, libraryGate) as shape Shelf else empty()
@@ -807,6 +817,9 @@ component Bots
   mutation roomSent as shape Reply refreshes room, convos
   mutation groupGone as shape Reply refreshes convos
   mutation groupSaved as shape Reply refreshes room, convos
+  mutation subCreated as shape Reply refreshes bots then afterSubCreate
+  mutation subSaved as shape Reply refreshes bots then afterSubSave
+  mutation childRemoved as shape Reply refreshes bots then afterChildRemove
   mutation seen as shape Reply refreshes bots
   mutation noticeAsked as shape NotificationStatus
   mutation reacted as shape Reply refreshes chat
@@ -888,6 +901,10 @@ component Bots
   derive onLibrary = top(nav).name == "chat" and panelOpen and panelTab == "library"
   derive onComputer = top(nav).name == "chat" and panelOpen and panelTab == "computer"
   derive detailGate = (onBot and slug != "") ? "1" : "0"
+  derive subGate = (onBot and panelOpen and panelPage == "subagent" and subSlug != "") ? "1" : "0"
+  derive subError = match subCreated { case some(r) => r.error, case none => "" }
+  derive subSaveError = match subSaved { case some(r) => r.error, case none => "" }
+  derive childRemoveError = match childRemoved { case some(r) => r.error, case none => "" }
   derive reportGate = ((onBot and slug != "") or top(nav).name == "settings") ? "1" : "0"
   derive pickedModel = providers.filter(p => p.instanceId == prefs.defaultInstance).length > 0
   derive libraryGate = (onLibrary and slug != "") ? "1" : "0"
@@ -1328,6 +1345,51 @@ component Bots
   action afterBotRemove
     if botRemoveError == ""
       nav = go(nav, "/")
+  action openNewSub
+    subSlug = ""
+    subName = ""
+    subShape = shapeOf(bots, slug)
+    subColor = colorOf(bots, slug)
+    subPrompt = ""
+    subInherit = false
+    panelPage = "subagent"
+  action editSub(bslug: string, name: string, shape: string, color: string, prompt: string, inherit: bool)
+    subSlug = bslug
+    subName = name
+    subShape = shape
+    subColor = color
+    subPrompt = prompt
+    subInherit = inherit
+    panelPage = "subagent"
+  action editSubName(v: string)
+    subName = v
+  action editSubPrompt(v: string)
+    subPrompt = v
+  action pickSubColor(c: string)
+    subColor = c
+  action pickSubShape(s: string)
+    subShape = s
+  action toggleSubInherit
+    subInherit = not subInherit
+  action doCreateSub
+    if not pending(subCreated)
+      send subCreated = createSubagent(slug, subName.trim(), subShape, subColor, subPrompt, subInherit)
+  action afterSubCreate
+    if subError == ""
+      panelPage = "root"
+      subSlug = ""
+  action doSaveSub
+    if subSlug != "" and not pending(subSaved)
+      send subSaved = saveSubagent(subSlug, subName.trim(), subShape, subColor, subPrompt, subInherit)
+  action afterSubSave
+    if subSaveError == ""
+      panelPage = "root"
+  action doDropChild(bslug: string)
+    send childRemoved = deleteBot(bslug)
+  action afterChildRemove
+    if childRemoveError == ""
+      panelPage = "root"
+      subSlug = ""
 
   // Settings: name, theme, the Projects beta and the remote-access password.
   action doEditName(v: string)
@@ -1752,7 +1814,7 @@ component Bots
                       button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="send"
                         Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab)
+                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
           else if e.name == "group"
             column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="room-header"
@@ -2278,6 +2340,29 @@ component BotPanel
     release: action
     picked: string
     pick: action
+    bots: Bot[]
+    subSlug: string
+    subName: string
+    subShape: string
+    subColor: string
+    subPrompt: string
+    subInherit: bool
+    openNewSub: action
+    editSub: action
+    editSubName: action
+    editSubPrompt: action
+    pickSubColor: action
+    pickSubShape: action
+    toggleSubInherit: action
+    createSub: action
+    saveSub: action
+    dropChild: action
+    creating: bool
+    saving: bool
+    subError: string
+    childModels: ModelList
+    childModelsDown: bool
+  derive children = bots.filter(c => c.parentSlug == bot.slug)
   action tabKey(k: string, event: KeyboardEvent)
     if not event.isComposing and (k == "ArrowRight" or k == "ArrowLeft" or k == "Home" or k == "End")
       preventDefault()
@@ -2299,7 +2384,7 @@ component BotPanel
           button class=IconControl appearance="none" press=goRoot aria-label=t("common.back") title=t("common.back") testId="panel-back"
             column rotate="180deg"
               Glyph(name="chevron", size=20)
-          text (page == "model" ? t("panel.model") : page == "usage" ? t("panel.usage") : t("panel.edit")) role="heading" aria-level=2 class=PageTitle flex=1 testId="panel-page-title"
+          text (page == "model" ? t("panel.model") : page == "usage" ? t("panel.usage") : page == "subagent" ? (subSlug != "" ? t("subagent.page") : t("subagent.new")) : t("panel.edit")) role="heading" aria-level=2 class=PageTitle flex=1 testId="panel-page-title"
         else
           column flex=1
           button class=IconControl appearance="none" press=goEdit aria-label=t("panel.edit") title=t("panel.edit") testId="panel-edit"
@@ -2315,6 +2400,54 @@ component BotPanel
       else if page == "edit"
         scroll flex=1 min-height=0
           EditBotPage(bot=bot, error=error, rename=rename, recolour=recolour, reshape=reshape, pin=pin, hide=hide, makeMain=makeMain, drop=drop)
+      else if page == "subagent"
+        scroll flex=1 min-height=0
+          column gap="space.lg" padding="space.sm space.lg space.xl" testId="subagent-page"
+            column gap="space.sm"
+              text t("common.name") class=SectionLabel
+              input appearance="none" class=Field value=subName input=editSubName aria-label=t("common.name") placeholder=(subSlug == "" ? t("subagent.namePlaceholder") : "") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="subagent-name"
+            column gap="space.sm"
+              text t("edit.colour") class=SectionLabel
+              row gap="space.xs" flex-wrap="wrap"
+                for c in pickerColours() key=c
+                  button class=SwatchControl press=pickSubColor(c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(subColor == c) testId=`sub-colour-${c}` width=40 height=40 padding=0
+                    column width=30 height=30 box-sizing="border-box" border-radius="radius.full" background-color=c border=(subColor == c ? "3px solid AccentColor" : "3px solid transparent")
+            column gap="space.sm"
+              text t("edit.shape") class=SectionLabel
+              row gap="space.xs" flex-wrap="wrap"
+                for s in shapeNames() key=s
+                  button class=SwatchControl press=pickSubShape(s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(subShape == s) testId=`sub-shape-${s}` width=48 height=48 padding=0 border-radius="radius.md" background-color=(subShape == s ? "surface.raised" : "transparent")
+                    Avatar(shape=s, color=faceColor(subColor), state="idle", size=34, still=true, presence="")
+            column gap="space.sm"
+              text t("subagent.prompt") class=SectionLabel
+              input appearance="none" class=Field value=subPrompt input=editSubPrompt aria-label=t("subagent.prompt") placeholder=t("subagent.promptPlaceholder") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="subagent-prompt"
+            row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
+              column flex=1 gap="2px"
+                text t("subagent.inherit") font-weight=600
+                text t("subagent.inheritNote") color="ink.muted" font="-exact-footnote"
+              button class=ToggleControl appearance="none" role="switch" aria-checked=subInherit press=toggleSubInherit aria-label=t("subagent.inherit") testId="subagent-inherit"
+                row width=44 height=26 border-radius="radius.full" background-color=(subInherit ? "AccentColor" : "surface.line") align-items="center" justify-content=(subInherit ? "flex-end" : "flex-start")
+                  column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+            if subSlug != ""
+              text t("panel.model") class=SectionLabel
+              for c in children.filter(c => c.slug == subSlug) key=c.slug
+                ModelPage(models=childModels, down=childModelsDown, bot=c, pick=pickModel, makeDefault=makeDefault, isDefault=isDefault, error=modelError)
+            if subError != ""
+              text subError color="-exact-system-red" testId="subagent-error"
+            if subSlug == ""
+              button class=PrimaryButton buttonStyle="filled" press=createSub disabled=creating testId="subagent-create"
+                text (creating ? t("subagent.creating") : t("subagent.create"))
+            else
+              button class=PrimaryButton buttonStyle="filled" press=saveSub disabled=saving testId="subagent-save"
+                text (saving ? t("subagent.saving") : t("common.save"))
+              button class=IconControl appearance="none" commandfor=`drop-sub-${subSlug}` command="show-modal" aria-label=t("subagent.delete") title=t("subagent.delete") color="-exact-system-red" testId="delete-subagent"
+                Glyph(name="trash", size=20)
+              dialog id=`drop-sub-${subSlug}` role="alertdialog" aria-label=t("subagent.deleteNamed", name=subName)
+                text t("subagent.deleteBody")
+                button press=dropChild(subSlug) destructive=true commandfor=`drop-sub-${subSlug}` command="close" testId="drop-sub-ok"
+                  text t("common.delete")
+                button commandfor=`drop-sub-${subSlug}` command="close" testId="drop-sub-cancel"
+                  text t("common.cancel")
       else
         column align-items="center" gap="space.xs" padding="0 space.lg space.md"
           Avatar(shape=bot.shape, color=faceColor(bot.color), state=(bot.hidden ? "asleep" : working ? "working" : "idle"), size=72, still=(not working), presence="")
@@ -2373,6 +2506,22 @@ component BotPanel
                         text t("status.paused") color="ink.faint" font="-exact-footnote"
               if routines.error != "" and routines.tasks.length == 0
                 text routines.error color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="routine-setup"
+              text t("subagent.heading") class=SectionLabel
+              if children.length == 0
+                text t("subagent.empty") color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="subagent-empty"
+              else
+                column gap="2px"
+                  for c in children key=c.slug
+                    row align-items="center" gap="space.sm" padding="space.xs space.md" testId=`subagent-row-${c.slug}`
+                      link class=ConversationLink href=path("chat", c.slug) testId=`subagent-${c.slug}` flex=1 min-width=0
+                        row gap="space.md" align-items="center"
+                          Avatar(shape=c.shape, color=faceColor(c.color), state=(c.ready ? (c.working ? "working" : "idle") : "asleep"), size=32, still=(not c.working), presence="")
+                          text c.name font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=`subagent-name-${c.slug}`
+                      button class=QuietButton appearance="none" press=editSub(c.slug, c.name, c.shape, c.color, c.prompt, c.inheritParentPrompt) min-height=44 testId=`edit-subagent-${c.slug}`
+                        text t("subagent.edit")
+              if bot.parentSlug == ""
+                button class=QuietButton appearance="none" press=openNewSub testId="new-subagent"
+                  text t("subagent.new")
               text t("panel.workingOn") class=SectionLabel
               if lineageDown
                 text t("error.lineage") color="-exact-system-red" padding="0 space.md" testId="lineage-error"
