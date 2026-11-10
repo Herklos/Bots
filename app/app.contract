@@ -2261,14 +2261,14 @@ component InboxRow
           button class=TextControl appearance="none" press=chooseMain aria-label=t("edit.makeMain") width="100%" justify-content="flex-start"
             text t("edit.makeMain") testId=`menu-main-${row.id}`
 
-// One transcript message. Time, reply and pin stay in the tree so the keyboard
-// can focus them. They paint while the pointer is over the message, while a tap
-// has left them open, or while reply or pin is focused. The tap that opens them
+// One transcript message. Time and reply stay in the tree so the keyboard
+// can focus the action. They paint while the pointer is over the message, while a tap
+// has left them open, or while an action is focused. The tap that opens them
 // does not close them on the way up; the next tap does. On a device that can
 // hover, the pointer leaving the message closes them too. Hidden chrome takes
 // no taps. An applied reaction is a chip overlapping the bubble corner; the add control sits beside a Bot bubble only while that chrome (or the picker) is showing.
 // A secondary click or a long press (both a contextmenu) opens a menu inside this
-// message. It uses the same reply, pin and react actions as the hover chrome, and
+// message. It offers reply, pin and react actions, and
 // it goes away with that chrome or when a row is chosen. One message menu is open.
 component ChatMessage
   props
@@ -2328,11 +2328,11 @@ component ChatMessage
     else
       openPicker(row.id)
   action chromeFocus(e: FocusEvent)
-    focused = e.target == `reply-${row.id}` or e.target == `pin-message-${row.id}` or e.target == `menu-reply-${row.id}` or e.target == `menu-pin-${row.id}` or e.target == `menu-copy-${row.id}` or e.target == `menu-react-${row.id}`
+    focused = e.target == `reply-${row.id}` or e.target == `menu-reply-${row.id}` or e.target == `menu-pin-${row.id}` or e.target == `menu-copy-${row.id}` or e.target == `menu-react-${row.id}`
   action chromeBlur(e: FocusEvent)
     match e.relatedTarget
       case some(id)
-        focused = id == `reply-${row.id}` or id == `pin-message-${row.id}` or id == `menu-reply-${row.id}` or id == `menu-pin-${row.id}` or id == `menu-copy-${row.id}` or id == `menu-react-${row.id}`
+        focused = id == `reply-${row.id}` or id == `menu-reply-${row.id}` or id == `menu-pin-${row.id}` or id == `menu-copy-${row.id}` or id == `menu-react-${row.id}`
       case none
         focused = false
   view
@@ -2365,6 +2365,8 @@ component ChatMessage
             if not row.mine and row.react == ""
               button class=TextControl appearance="none" press=openPicker(row.id) aria-label=t("chat.react") title=t("chat.react") min-height=24 padding="0 space.xs" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none") testId=`add-react-${row.id}`
                 Glyph(name="smile", size=14)
+            button id=`reply-${row.id}` class=TextControl appearance="none" press=reply(row.id, row.text) aria-label=t("chat.reply") title=t("chat.reply") min-height=24 padding="0 space.xs" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none") testId=`reply-${row.id}`
+              Glyph(name="reply", size=14)
         for f in row.files key=f.id
           if f.kind == "image"
             link href=f.url target="_blank" aria-label=t("common.openNamed", name=f.name) testId=`image-${f.id}`
@@ -2387,10 +2389,6 @@ component ChatMessage
           row gap="space.xs" align-items="center" padding="0 space.xs"
             row gap="space.xs" align-items="center" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none")
               text row.time font="-exact-footnote" color="ink.faint"
-              button id=`reply-${row.id}` class=TextControl appearance="none" press=reply(row.id, row.text) aria-label=t("chat.reply") title=t("chat.reply") min-height=24 padding="0 space.xs" pointer-events=(showChrome ? "auto" : "none") testId=`reply-${row.id}`
-                text t("chat.reply") font="-exact-footnote"
-              button id=`pin-message-${row.id}` class=TextControl appearance="none" press=pin(row.id, row.text) aria-label=t("chat.pin") title=t("chat.pin") min-height=24 padding="0 space.xs" pointer-events=(showChrome ? "auto" : "none") testId=`pin-message-${row.id}`
-                text t("chat.pin") font="-exact-footnote"
         if menuOpen
           column role="menu" aria-label=t("chat.message") gap="2px" padding="space.xs" border-radius="radius.md" background-color="surface.card" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="message-menu"
             button id=`menu-reply-${row.id}` class=TextControl appearance="none" pointerdown=holdMenu press=chooseReply aria-label=t("chat.reply") testId=`menu-reply-${row.id}` width="100%" justify-content="flex-start"
