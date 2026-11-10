@@ -176,8 +176,14 @@ pub async fn list(s: &AppState, bots: Vec<Value>) -> Vec<Value> {
                 continue;
             }
         }
-        let latest = if !preview_id.is_empty() { preview_id } else { known };
-        bot["unread"] = json!(crate::thread_meta::inbox_unread(true, false, stored, latest));
+        let latest = if !preview_id.is_empty() {
+            preview_id
+        } else {
+            known
+        };
+        bot["unread"] = json!(crate::thread_meta::inbox_unread(
+            true, false, stored, latest
+        ));
     }
     rows
 }

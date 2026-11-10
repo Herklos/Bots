@@ -71,7 +71,9 @@ fn event_for(item: &Value, peers: &Peers, ordinal: i64) -> Option<Value> {
         .or(item["updatedAt"].as_str())
         .unwrap_or("");
     let line = |kind: &str, text: &str, title: &str, bot: Value| {
-        Some(json!({ "id": id, "ordinal": ordinal, "at": at, "kind": kind, "text": text, "title": title, "bot": bot }))
+        Some(
+            json!({ "id": id, "ordinal": ordinal, "at": at, "kind": kind, "text": text, "title": title, "bot": bot }),
+        )
     };
     match item["type"].as_str()? {
         "dynamic_tool" if item["status"] == "completed" => {
@@ -94,9 +96,12 @@ fn event_for(item: &Value, peers: &Peers, ordinal: i64) -> Option<Value> {
                 _ => None,
             }
         }
-        "user_message" if item["senderThreadId"].is_string() => {
-            line("from", "Message from", "", peer(peers, &item["senderThreadId"]))
-        }
+        "user_message" if item["senderThreadId"].is_string() => line(
+            "from",
+            "Message from",
+            "",
+            peer(peers, &item["senderThreadId"]),
+        ),
         "user_message" if item["scheduledTaskId"].is_string() => {
             line("ran", "Routine ran", "", Value::Null)
         }
@@ -115,7 +120,10 @@ fn event_for(item: &Value, peers: &Peers, ordinal: i64) -> Option<Value> {
 fn request_for(item: &Value) -> Value {
     let kind = item["type"].as_str().unwrap_or("");
     let item_id = item["id"].clone();
-    let id = item["requestId"].as_str().map(Value::from).unwrap_or_else(|| item_id.clone());
+    let id = item["requestId"]
+        .as_str()
+        .map(Value::from)
+        .unwrap_or_else(|| item_id.clone());
     match kind {
         "approval_request" => json!({
             "id": id, "itemId": item_id, "kind": kind, "runId": item["runId"],
@@ -154,7 +162,11 @@ pub fn without_group_turns(items: Vec<Value>) -> Vec<Value> {
     items
         .into_iter()
         .filter(|raw| {
-            let item = if raw["item"].is_object() { &raw["item"] } else { raw };
+            let item = if raw["item"].is_object() {
+                &raw["item"]
+            } else {
+                raw
+            };
             if item["type"] == "user_message" {
                 hidden = item["text"].as_str().is_some_and(is_group_prompt);
             }
@@ -235,9 +247,13 @@ pub fn transcript_for(projection: &Value, peers: &Peers) -> Value {
     json!({ "messages": messages, "events": events, "requests": requests, "working": working || active.is_some(), "activeRunId": active })
 }
 
+// Nothing in the gateway calls this yet.
+#[allow(dead_code)]
 pub const LOADED_SENTENCE: &str = "Search covers the loaded conversation.";
 
 /// Filters messages already loaded from a projection. Nothing else is searched.
+// Nothing in the gateway calls this yet.
+#[allow(dead_code)]
 pub fn search_messages(messages: &[Value], query: &str, partial: bool) -> Value {
     let query = query.trim().to_lowercase();
     let hits: Vec<Value> = if query.is_empty() {
@@ -262,7 +278,9 @@ pub fn search_messages(messages: &[Value], query: &str, partial: bool) -> Value 
 }
 
 pub fn projection_partial(projection: &Value) -> bool {
-    projection["truncated"] == true || projection["hasMore"] == true || projection["partial"] == true
+    projection["truncated"] == true
+        || projection["hasMore"] == true
+        || projection["partial"] == true
 }
 
 /// Adds a token line only where [`crate::usage::turn_token_line`] finds a shared id.
@@ -270,8 +288,8 @@ pub fn with_tokens(mut transcript: Value, projection: &Value) -> Value {
     if let Some(messages) = transcript.get_mut("messages").and_then(Value::as_array_mut) {
         for message in messages.iter_mut() {
             let id = message["id"].as_str().unwrap_or("");
-            message["tokens"] = crate::usage::turn_token_line(projection, id)
-                .unwrap_or(Value::Null);
+            message["tokens"] =
+                crate::usage::turn_token_line(projection, id).unwrap_or(Value::Null);
         }
     }
     transcript["partial"] = json!(projection_partial(projection));
@@ -315,7 +333,10 @@ pub async fn dispatch_stored_voice(
     at: &str,
 ) -> crate::error::ApiResult<Value> {
     let (meta, _) = crate::attachments::read_file(root, slug, attachment_id).await?;
-    let media = meta["mediaType"].as_str().unwrap_or("").to_ascii_lowercase();
+    let media = meta["mediaType"]
+        .as_str()
+        .unwrap_or("")
+        .to_ascii_lowercase();
     if !VOICE_TYPES.contains(&media.as_str()) {
         return Err(crate::error::ApiError::bad_request(
             "That file is not a voice clip.",
@@ -382,7 +403,9 @@ mod tests {
     }
 
     fn fixture(name: &str) -> Value {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/fixtures/t3").join(name);
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../tests/fixtures/t3")
+            .join(name);
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
     }
 
@@ -391,8 +414,14 @@ mod tests {
         let p = fixture("thread-projection.json");
         let t = transcript(&p["value"]);
         assert_eq!(t["messages"].as_array().unwrap().len(), 6);
-        assert!(t["messages"][0]["at"].as_str().unwrap().starts_with("2026-"));
-        assert!(t["events"].as_array().unwrap().is_empty(), "reads, commands and checkpoints are not lines");
+        assert!(t["messages"][0]["at"]
+            .as_str()
+            .unwrap()
+            .starts_with("2026-"));
+        assert!(
+            t["events"].as_array().unwrap().is_empty(),
+            "reads, commands and checkpoints are not lines"
+        );
         assert_eq!(t["working"], false);
     }
 
@@ -403,18 +432,27 @@ mod tests {
             "toolName": made["toolItem"]["toolName"], "input": made["toolItem"]["input"], "output": made["toolItem"]["output"] });
         let t = transcript(&json!({ "turnItems": [item] }));
         let e = &t["events"][0];
-        assert_eq!((e["kind"].as_str(), e["text"].as_str(), e["title"].as_str()), (Some("routine"), Some("Created routine"), Some("hbots test")));
+        assert_eq!(
+            (e["kind"].as_str(), e["text"].as_str(), e["title"].as_str()),
+            (Some("routine"), Some("Created routine"), Some("hbots test"))
+        );
         assert_eq!(e["ordinal"], 7);
         // An update carries the id of the routine it changes.
         let update = json!({ "id": "i2", "type": "dynamic_tool", "status": "completed", "toolName": "mcp__t3-code__schedule_task",
             "input": { "scheduledTaskId": "scheduled-task:1", "title": "Morning" } });
-        assert_eq!(transcript(&json!({ "turnItems": [update] }))["events"][0]["text"], "Updated routine");
+        assert_eq!(
+            transcript(&json!({ "turnItems": [update] }))["events"][0]["text"],
+            "Updated routine"
+        );
     }
 
     #[test]
     fn messages_between_bots_name_the_bot() {
         let mut peers = Peers::new();
-        peers.insert("thread-inbox".into(), json!({ "slug": "inbox", "name": "Inbox", "color": "brand.pink", "shape": "hex" }));
+        peers.insert(
+            "thread-inbox".into(),
+            json!({ "slug": "inbox", "name": "Inbox", "color": "brand.pink", "shape": "hex" }),
+        );
         let sent = json!({ "id": "a", "type": "dynamic_tool", "status": "completed", "toolName": "mcp__t3__t3_thread_send",
             "input": "{\"threadId\":\"thread-inbox\",\"message\":\"Draft ready\"}" });
         let got = json!({ "id": "b", "type": "user_message", "status": "completed", "text": "Sent you a file", "senderThreadId": "thread-inbox" });
@@ -424,17 +462,26 @@ mod tests {
         assert_eq!(t["events"][1]["text"], "Message from");
         assert_eq!(t["messages"][0]["from"]["slug"], "inbox");
         // A message from the person has no sender.
-        let mine = transcript(&json!({ "turnItems": [{ "id": "c", "type": "user_message", "status": "completed", "text": "hi" }] }));
+        let mine = transcript(
+            &json!({ "turnItems": [{ "id": "c", "type": "user_message", "status": "completed", "text": "hi" }] }),
+        );
         assert_eq!(mine["messages"][0]["from"], Value::Null);
     }
 
     #[test]
     fn a_retrying_error_and_a_routine_run_are_handled() {
         let made = fixture("routine-created.json");
-        let retry = json!({ "id": "e", "type": "error", "status": "completed", "retry": { "attempt": 4 } });
-        assert!(transcript(&json!({ "turnItems": [retry] }))["events"].as_array().unwrap().is_empty());
+        let retry =
+            json!({ "id": "e", "type": "error", "status": "completed", "retry": { "attempt": 4 } });
+        assert!(transcript(&json!({ "turnItems": [retry] }))["events"]
+            .as_array()
+            .unwrap()
+            .is_empty());
         let ran = json!({ "id": "r", "type": "user_message", "status": "completed", "text": "test only", "scheduledTaskId": made["taskRow"]["id"] });
-        assert_eq!(transcript(&json!({ "turnItems": [ran] }))["events"][0]["text"], "Routine ran");
+        assert_eq!(
+            transcript(&json!({ "turnItems": [ran] }))["events"][0]["text"],
+            "Routine ran"
+        );
     }
 
     #[test]
@@ -446,11 +493,28 @@ mod tests {
         let secret = json!({ "id": "item-3", "type": "secret_request", "status": "pending", "label": "API key", "reason": "To call the API", "placeholder": "sk-" });
         let t = transcript(&json!({ "turnItems": [approval, question, secret] }));
         let r = t["requests"].as_array().unwrap();
-        assert_eq!((r[0]["id"].as_str(), r[0]["itemId"].as_str(), r[0]["title"].as_str()), (Some("req-1"), Some("item-1"), Some("Run ls?")));
+        assert_eq!(
+            (
+                r[0]["id"].as_str(),
+                r[0]["itemId"].as_str(),
+                r[0]["title"].as_str()
+            ),
+            (Some("req-1"), Some("item-1"), Some("Run ls?"))
+        );
         assert_eq!(r[0]["options"][1]["decision"], "decline");
-        assert_eq!((r[1]["id"].as_str(), r[1]["title"].as_str()), (Some("req-2"), Some("Which one?")));
+        assert_eq!(
+            (r[1]["id"].as_str(), r[1]["title"].as_str()),
+            (Some("req-2"), Some("Which one?"))
+        );
         assert_eq!(r[1]["questions"][0]["id"], "q1");
-        assert_eq!((r[2]["id"].as_str(), r[2]["title"].as_str(), r[2]["placeholder"].as_str()), (Some("item-3"), Some("API key"), Some("sk-")));
+        assert_eq!(
+            (
+                r[2]["id"].as_str(),
+                r[2]["title"].as_str(),
+                r[2]["placeholder"].as_str()
+            ),
+            (Some("item-3"), Some("API key"), Some("sk-"))
+        );
     }
 
     #[test]
@@ -515,7 +579,9 @@ mod tests {
         assert_eq!(out["messages"][1]["tokens"]["inputTokens"], 10);
         assert_eq!(out["messages"][1]["tokens"]["cachedInputTokens"], 4);
         assert_ne!(
-            out["messages"][1]["tokens"]["inputTokens"].as_u64().unwrap(),
+            out["messages"][1]["tokens"]["inputTokens"]
+                .as_u64()
+                .unwrap(),
             14
         );
     }
@@ -584,11 +650,21 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let threads = crate::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
         let bytes = b"short-clip";
-        let out = store_voice_send(dir.path(), "ada", &threads, "thread-1", bytes, 4.2, "2026-11-10T00:00:00.000Z")
+        let out = store_voice_send(
+            dir.path(),
+            "ada",
+            &threads,
+            "thread-1",
+            bytes,
+            4.2,
+            "2026-11-10T00:00:00.000Z",
+        )
+        .await
+        .unwrap();
+        let id = out["attachment"]["id"].as_str().unwrap();
+        let (_meta, disk) = crate::attachments::read_file(dir.path(), "ada", id)
             .await
             .unwrap();
-        let id = out["attachment"]["id"].as_str().unwrap();
-        let (_meta, disk) = crate::attachments::read_file(dir.path(), "ada", id).await.unwrap();
         assert_eq!(disk, bytes);
         assert!(out["voiceCalls"].as_array().unwrap().is_empty());
         let raw = std::fs::read_to_string(dir.path().join("thread-meta.json")).unwrap();
@@ -603,9 +679,10 @@ mod tests {
     async fn a_stored_audio_file_is_dispatched_without_a_second_copy() {
         let dir = tempfile::tempdir().unwrap();
         let threads = crate::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
-        let meta = crate::attachments::write_file(dir.path(), "ada", "voice.m4a", "audio/mp4", b"once")
-            .await
-            .unwrap();
+        let meta =
+            crate::attachments::write_file(dir.path(), "ada", "voice.m4a", "audio/mp4", b"once")
+                .await
+                .unwrap();
         let id = meta["id"].as_str().unwrap().to_string();
         let out = dispatch_stored_voice(
             dir.path(),
@@ -619,7 +696,10 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(
-            crate::attachments::read_dir(dir.path(), "ada").await.unwrap().len(),
+            crate::attachments::read_dir(dir.path(), "ada")
+                .await
+                .unwrap()
+                .len(),
             1
         );
         assert_eq!(out["command"]["attachments"][0]["id"], id);
@@ -635,9 +715,10 @@ mod tests {
     async fn a_non_audio_file_is_refused_as_a_voice_clip() {
         let dir = tempfile::tempdir().unwrap();
         let threads = crate::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
-        let meta = crate::attachments::write_file(dir.path(), "ada", "note.txt", "text/plain", b"hi")
-            .await
-            .unwrap();
+        let meta =
+            crate::attachments::write_file(dir.path(), "ada", "note.txt", "text/plain", b"hi")
+                .await
+                .unwrap();
         let id = meta["id"].as_str().unwrap();
         let err = dispatch_stored_voice(
             dir.path(),
@@ -669,9 +750,17 @@ mod tests {
             { "id": "7", "type": "assistant_message", "text": "welcome", "status": "completed" },
         ]});
         let t = transcript(&p);
-        let texts: Vec<&str> = t["messages"].as_array().unwrap().iter().map(|m| m["text"].as_str().unwrap()).collect();
+        let texts: Vec<&str> = t["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|m| m["text"].as_str().unwrap())
+            .collect();
         assert_eq!(texts, vec!["hi", "hello", "thanks", "welcome"]);
-        assert!(t["events"].as_array().unwrap().is_empty(), "the Bot's messaging inside the group is hidden too");
+        assert!(
+            t["events"].as_array().unwrap().is_empty(),
+            "the Bot's messaging inside the group is hidden too"
+        );
 
         let padded = json!({ "turnItems": [
             { "id": "1", "type": "user_message", "text": "  [Group \"Duo\": Ada. You wrote:]\nhi\n\n[Your reply is shared with the group.]", "status": "completed" },
@@ -685,7 +774,11 @@ mod tests {
             .iter()
             .map(|m| m["text"].as_str().unwrap())
             .collect();
-        assert_eq!(texts, vec!["back"], "a padded group prompt stays out of the one-to-one chat");
+        assert_eq!(
+            texts,
+            vec!["back"],
+            "a padded group prompt stays out of the one-to-one chat"
+        );
     }
 
     fn family() -> Value {
@@ -723,7 +816,12 @@ mod tests {
                 Err(message) => assert_eq!(message, "That thread stays on the other machine."),
             }
         }
-        assert!(written.is_empty(), "a refused child does not write the parent");
-        assert!(written.iter().all(|command| command["threadId"] != "parent-thread"));
+        assert!(
+            written.is_empty(),
+            "a refused child does not write the parent"
+        );
+        assert!(written
+            .iter()
+            .all(|command| command["threadId"] != "parent-thread"));
     }
 }

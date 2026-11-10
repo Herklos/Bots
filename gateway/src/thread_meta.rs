@@ -47,6 +47,8 @@ static TOOL_SEPARATOR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"__|\.").u
 const MAX_STAMPS: usize = 200;
 /// Pins stay a short list. One past this is refused.
 pub const PIN_CAP: usize = 20;
+// Nothing in the gateway calls this yet.
+#[allow(dead_code)]
 pub const NOT_IN_VIEW: &str = "This message is not in view.";
 
 fn bad(message: &str) -> ApiError {
@@ -143,7 +145,10 @@ pub fn latest_preview(projection: &Value, names: &HashMap<String, String>) -> Op
                 };
                 let text = preview_text(&text_of(&item["text"]));
                 if !text.is_empty() {
-                    return Some(with_id(json!({ "kind": "text", "role": role, "text": text, "at": at }), &item));
+                    return Some(with_id(
+                        json!({ "kind": "text", "role": role, "text": text, "at": at }),
+                        &item,
+                    ));
                 }
                 if item["attachments"]
                     .as_array()
@@ -175,10 +180,13 @@ pub fn latest_preview(projection: &Value, names: &HashMap<String, String>) -> Op
                         .and_then(|id| names.get(id))
                         .map(String::as_str)
                         .unwrap_or("a Bot");
-                    return Some(with_id(json!({
-                        "kind": "sent", "role": "assistant",
-                        "text": format!("Messaged {name}: {text}"), "at": at
-                    }), &item));
+                    return Some(with_id(
+                        json!({
+                            "kind": "sent", "role": "assistant",
+                            "text": format!("Messaged {name}: {text}"), "at": at
+                        }),
+                        &item,
+                    ));
                 }
             }
             _ => {}
@@ -307,16 +315,23 @@ pub fn inbox_unread(hidden: bool, roster_unread: bool, last_read: &str, latest: 
 }
 
 /// Pins in stored order. An id that is not in the loaded messages stays, and says so.
+// Nothing in the gateway calls this yet.
+#[allow(dead_code)]
 pub fn pin_lines(pins: &[Value], messages: &[Value]) -> Vec<Value> {
     pins.iter()
         .filter_map(Value::as_str)
-        .map(|id| match messages.iter().find(|message| message["id"].as_str() == Some(id)) {
-            Some(message) => json!({
-                "id": id,
-                "text": message["text"].as_str().unwrap_or(""),
-                "missing": false,
-            }),
-            None => json!({ "id": id, "text": NOT_IN_VIEW, "missing": true }),
+        .map(|id| {
+            match messages
+                .iter()
+                .find(|message| message["id"].as_str() == Some(id))
+            {
+                Some(message) => json!({
+                    "id": id,
+                    "text": message["text"].as_str().unwrap_or(""),
+                    "missing": false,
+                }),
+                None => json!({ "id": id, "text": NOT_IN_VIEW, "missing": true }),
+            }
         })
         .collect()
 }
@@ -918,7 +933,10 @@ mod tests {
                 .await
                 .unwrap();
         }
-        let err = meta.toggle_pin(Some("t"), Some("overflow")).await.unwrap_err();
+        let err = meta
+            .toggle_pin(Some("t"), Some("overflow"))
+            .await
+            .unwrap_err();
         assert_eq!(err.status, axum::http::StatusCode::BAD_REQUEST);
         let saved = std::fs::read_to_string(&file).unwrap();
         assert!(!saved.contains("overflow"));
@@ -932,7 +950,9 @@ mod tests {
             seen["pins"].as_array().unwrap(),
             &[json!({ "id": "m1", "text": "Hello" })],
         );
-        assert!(lines.iter().any(|line| line["id"] == "m1" && line["missing"] == false));
+        assert!(lines
+            .iter()
+            .any(|line| line["id"] == "m1" && line["missing"] == false));
         assert!(lines.iter().any(|line| {
             line["id"] == "m2" && line["missing"] == true && line["text"] == NOT_IN_VIEW
         }));
@@ -983,7 +1003,11 @@ mod tests {
         assert!(!is_unread("m2", "m2", true, true));
         assert!(!inbox_unread(false, false, "", "m2"));
         assert!(inbox_unread(false, true, "m2", "m2"));
-        let item = message(1, "assistant_message", json!({ "id": "m2", "text": "Done" }));
+        let item = message(
+            1,
+            "assistant_message",
+            json!({ "id": "m2", "text": "Done" }),
+        );
         let preview = latest_preview(&json!({ "turnItems": [item] }), &HashMap::new()).unwrap();
         assert_eq!(preview["id"], "m2");
         assert_eq!(preview["text"], "Done");

@@ -73,6 +73,64 @@ fn obj(v: &Value) -> Map<String, Value> {
     v.as_object().cloned().unwrap_or_default()
 }
 
+fn is_subagent(bot: &Value) -> bool {
+    bot["role"] == "subagent" || bot["hideFromSidebar"] == true
+}
+
+fn parent_slug_of(bot: &Value) -> Option<String> {
+    match bot.get("parentSlug") {
+        Some(Value::String(slug)) => {
+            let slug = slug.trim();
+            if slug.is_empty() {
+                None
+            } else {
+                Some(slug.to_string())
+            }
+        }
+        _ => None,
+    }
+}
+
+fn parent_slug_value(value: &Value) -> ApiResult<Option<String>> {
+    if value.is_null() {
+        return Ok(None);
+    }
+    let slug = value
+        .as_str()
+        .ok_or_else(|| ApiError::bad_request("parentSlug must be a string"))?;
+    Ok(Some(slug.trim().to_string()).filter(|s| !s.is_empty()))
+}
+
+fn check_subagent_keys(fields: &Map<String, Value>) -> ApiResult<()> {
+    if fields.get("prompt").is_some_and(|v| !v.is_string()) {
+        return Err(ApiError::bad_request("subagent.prompt must be a string"));
+    }
+    if fields
+        .get("inheritParentPrompt")
+        .is_some_and(|v| !v.is_boolean())
+    {
+        return Err(ApiError::bad_request(
+            "subagent.inheritParentPrompt must be a boolean",
+        ));
+    }
+    Ok(())
+}
+
+/// Defaults, then the sent object, so a later unknown key is kept.
+fn child_subagent(input: &Value) -> ApiResult<Value> {
+    let mut base = Map::new();
+    base.insert("prompt".into(), json!(""));
+    base.insert("inheritParentPrompt".into(), json!(false));
+    if let Some(raw) = input.get("subagent").filter(|v| !v.is_null()) {
+        let fields = raw
+            .as_object()
+            .ok_or_else(|| ApiError::bad_request("subagent must be an object"))?;
+        check_subagent_keys(fields)?;
+        base.extend(fields.clone());
+    }
+    Ok(Value::Object(base))
+}
+
 impl Bots {
     pub fn new(root: PathBuf, mcp_url: String, mcp_token: String) -> Self {
         Self {
@@ -116,6 +174,7 @@ impl Bots {
             let mut bot = json!({
                 "label": "", "shape": "ball", "color": hbots_design::tokens().avatar.default, "section": null, "pinned": false,
                 "hidden": false, "primary": false, "notifications": true, "projectId": null, "mainThreadId": null,
+                "role": "bot", "parentSlug": null, "hideFromSidebar": false, "prompt": "", "subagent": null,
             })
             .as_object()
             .cloned()
@@ -179,12 +238,15 @@ impl Bots {
             .and_then(|s| s["slug"].as_str().map(String::from));
         let main = chosen
             .as_ref()
-            .filter(|c| bots.iter().any(|b| b["slug"] == c.as_str()))
+            .filter(|c| {
+                bots.iter()
+                    .any(|b| b["slug"] == c.as_str() && !is_subagent(b))
+            })
             .cloned()
             .or_else(|| {
                 if selection.is_none() {
                     bots.iter()
-                        .find(|b| b["hidden"] != true && b["primary"] == true)
+                        .find(|b| !is_subagent(b) && b["hidden"] != true && b["primary"] == true)
                         .and_then(|b| b["slug"].as_str().map(String::from))
                 } else {
                     None
@@ -192,8 +254,8 @@ impl Bots {
             })
             .or_else(|| {
                 bots.iter()
-                    .find(|b| b["hidden"] != true)
-                    .or(bots.first())
+                    .find(|b| !is_subagent(b) && b["hidden"] != true)
+                    .or_else(|| bots.iter().find(|b| !is_subagent(b)))
                     .and_then(|b| b["slug"].as_str().map(String::from))
             });
         if chosen != main {
@@ -235,6 +297,9 @@ impl Bots {
             .into_iter()
             .find(|b| b["slug"] == slug)
             .ok_or_else(|| ApiError::not_found("Bot not found"))?;
+        if is_subagent(&target) {
+            return Err(ApiError::new(409, "A subagent can't be the main Bot."));
+        }
         write_json(&self.selection_file(), &json!({ "slug": slug })).await?;
         if target["hidden"] == true {
             target["hidden"] = json!(false);
@@ -252,9 +317,65 @@ impl Bots {
             if current.is_none() && !create {
                 return Err(ApiError::not_found("Bot not found"));
             }
-            for key in ["primary", "hidden", "pinned"] {
+            for key in ["primary", "hidden", "pinned", "hideFromSidebar"] {
                 if patch.get(key).is_some_and(|v| !v.is_boolean()) {
                     return Err(ApiError::bad_request(format!("{key} must be a boolean")));
+                }
+            }
+            if patch.get("prompt").is_some_and(|v| !v.is_string()) {
+                return Err(ApiError::bad_request("prompt must be a string"));
+            }
+            if let Some(subagent) = patch.get("subagent") {
+                if subagent.is_null() {
+                    if current.as_ref().is_some_and(is_subagent) {
+                        return Err(ApiError::bad_request("subagent must be an object"));
+                    }
+                } else {
+                    let fields = subagent
+                        .as_object()
+                        .ok_or_else(|| ApiError::bad_request("subagent must be an object"))?;
+                    check_subagent_keys(fields)?;
+                }
+            }
+            if !create {
+                let child = current.as_ref().is_some_and(is_subagent);
+                if child {
+                    if patch.get("pinned").is_some() {
+                        return Err(ApiError::new(409, "A subagent can't be pinned."));
+                    }
+                    if patch.get("hidden").is_some() {
+                        return Err(ApiError::new(409, "A subagent can't be hidden."));
+                    }
+                    if patch.get("primary").is_some() {
+                        return Err(ApiError::new(409, "A subagent can't be the main Bot."));
+                    }
+                    if patch["hideFromSidebar"] == false {
+                        return Err(ApiError::new(409, "A subagent stays out of the inbox."));
+                    }
+                } else if patch["hideFromSidebar"] == true {
+                    return Err(ApiError::new(
+                        409,
+                        "Only a subagent is hidden from the sidebar.",
+                    ));
+                }
+                if let Some(role) = patch.get("role") {
+                    let role = role
+                        .as_str()
+                        .ok_or_else(|| ApiError::bad_request("role must be a string"))?;
+                    let current_role = current
+                        .as_ref()
+                        .and_then(|c| c["role"].as_str())
+                        .unwrap_or("bot");
+                    if role != current_role {
+                        return Err(ApiError::new(409, "A Bot's role is chosen once."));
+                    }
+                }
+                if let Some(next_parent) = patch.get("parentSlug") {
+                    let next_parent = parent_slug_value(next_parent)?;
+                    let current_parent = current.as_ref().and_then(parent_slug_of);
+                    if next_parent != current_parent {
+                        return Err(ApiError::new(409, "A subagent's parent is chosen once."));
+                    }
                 }
             }
             if let Some(shape) = patch.get("shape") {
@@ -316,6 +437,15 @@ impl Bots {
             .iter()
             .find(|b| b["slug"] == slug)
             .ok_or_else(|| ApiError::not_found("Bot not found"))?;
+        if bots
+            .iter()
+            .any(|b| parent_slug_of(b).as_deref() == Some(slug))
+        {
+            return Err(ApiError::new(
+                409,
+                "Delete this Bot's subagents before deleting this Bot.",
+            ));
+        }
         if current["primary"] == true && bots.len() > 1 {
             return Err(ApiError::new(
                 409,
@@ -332,21 +462,29 @@ impl Bots {
         self.reconcile().await
     }
 
-    /// A new Bot folder: memory, library and `bot.json`. The provisioner then gives it a T3
-    /// project and main thread.
+    /// A new Bot folder: memory, library, skills and `bot.json`. A `parentSlug` makes a
+    /// subagent of that Bot. The provisioner then gives it a T3 project and main thread.
     pub async fn create(&self, input: &Value) -> ApiResult<Value> {
-        let name = input["name"]
-            .as_str()
-            .map(str::trim)
-            .filter(|n| !n.is_empty())
-            .ok_or_else(|| ApiError::bad_request("A Bot needs a name."))?;
         if input
             .get("shape")
             .is_some_and(|v| !v.is_null() && v.as_str().and_then(shape_name).is_none())
         {
             return Err(ApiError::bad_request("Pick a shape from the list."));
         }
-        let base = slugify(name);
+        let parent = self.parent_for_create(input).await?;
+        if parent.is_none() && input["hideFromSidebar"] == true {
+            return Err(ApiError::new(
+                409,
+                "Only a subagent is hidden from the sidebar.",
+            ));
+        }
+        let name = self.fresh_name(input, parent.as_ref()).await?;
+        let prompt = match input.get("prompt") {
+            None | Some(Value::Null) => String::new(),
+            Some(Value::String(text)) => text.clone(),
+            Some(_) => return Err(ApiError::bad_request("prompt must be a string")),
+        };
+        let base = slugify(&name);
         let (mut slug, mut n) = (base.clone(), 2);
         while tokio::fs::try_exists(self.root.join(&slug))
             .await
@@ -358,6 +496,7 @@ impl Bots {
         let dir = self.dir(&slug)?;
         tokio::fs::create_dir_all(dir.join("memory")).await?;
         tokio::fs::create_dir_all(dir.join("library")).await?;
+        tokio::fs::create_dir_all(dir.join("skills")).await?;
         write_if_missing(
             &dir.join("memory").join("MEMORY.md"),
             &format!("# {name} memory\n\n"),
@@ -369,18 +508,107 @@ impl Bots {
             "# Shared facts (all Bots)\n\n",
         )
         .await?;
+        let default_color = hbots_design::tokens().avatar.default.as_str();
+        let shape = if let Some(shape) = input["shape"].as_str().and_then(shape_name) {
+            shape
+        } else if let Some(parent) = &parent {
+            parent["shape"]
+                .as_str()
+                .and_then(shape_name)
+                .unwrap_or_else(|| "ball".into())
+        } else {
+            "ball".into()
+        };
+        let color = if let Some(color) = input.get("color").filter(|v| !v.is_null()) {
+            color.as_str().unwrap_or(default_color).to_string()
+        } else if let Some(parent) = &parent {
+            parent["color"]
+                .as_str()
+                .unwrap_or(default_color)
+                .to_string()
+        } else {
+            default_color.to_string()
+        };
+        let (role, parent_slug, hide_from_sidebar, pinned, primary, subagent) =
+            if let Some(parent) = &parent {
+                (
+                    "subagent",
+                    json!(parent["slug"].as_str().unwrap_or_default()),
+                    true,
+                    false,
+                    false,
+                    child_subagent(input)?,
+                )
+            } else {
+                (
+                    "bot",
+                    Value::Null,
+                    false,
+                    input["pinned"] == true,
+                    input["primary"] == true,
+                    Value::Null,
+                )
+            };
         let text = |k: &str, d: &str| json!(input[k].as_str().unwrap_or(d));
         let bot = json!({
-            "name": name, "label": text("label", ""), "shape": input["shape"].as_str().and_then(shape_name).unwrap_or_else(|| "ball".into()), "color": text("color", &hbots_design::tokens().avatar.default),
-            "section": input["section"].as_str(), "pinned": input["pinned"] == true, "hidden": false,
-            "primary": input["primary"] == true, "notifications": true, "projectId": null, "mainThreadId": null,
+            "name": name, "label": text("label", ""), "shape": shape, "color": color,
+            "section": input["section"].as_str(), "pinned": pinned, "hidden": false,
+            "primary": primary, "notifications": true, "projectId": null, "mainThreadId": null,
             "model": input.get("model").cloned().unwrap_or(Value::Null),
             "brief": input["brief"].as_str(),
             "firstMessage": input["firstMessage"].as_str().map(str::trim).filter(|m| !m.is_empty()).map(|m| m.chars().take(2000).collect::<String>()),
             "createdAt": now_iso(),
             "lastSeenAt": now_iso(),
+            "role": role, "parentSlug": parent_slug, "hideFromSidebar": hide_from_sidebar,
+            "prompt": prompt, "subagent": subagent,
         });
         self.save(&slug, &bot, true).await
+    }
+
+    async fn parent_for_create(&self, input: &Value) -> ApiResult<Option<Value>> {
+        let Some(raw) = input.get("parentSlug") else {
+            return Ok(None);
+        };
+        if raw.is_null() {
+            return Ok(None);
+        }
+        let Some(slug) = parent_slug_value(raw)? else {
+            return Ok(None);
+        };
+        let parent = self
+            .load()
+            .await?
+            .into_iter()
+            .find(|b| b["slug"] == slug)
+            .ok_or_else(|| ApiError::bad_request("That parent Bot does not exist."))?;
+        if is_subagent(&parent) {
+            return Err(ApiError::new(409, "A subagent can't have a subagent."));
+        }
+        Ok(Some(parent))
+    }
+
+    async fn fresh_name(&self, input: &Value, parent: Option<&Value>) -> ApiResult<String> {
+        if let Some(name) = input["name"]
+            .as_str()
+            .map(str::trim)
+            .filter(|n| !n.is_empty())
+        {
+            return Ok(name.to_string());
+        }
+        let Some(parent) = parent else {
+            return Err(ApiError::bad_request("A Bot needs a name."));
+        };
+        let parent_name = parent["name"].as_str().unwrap_or("Bot");
+        for n in 1..=10_000 {
+            let name = format!("{parent_name} junior {n}");
+            if !tokio::fs::try_exists(self.root.join(slugify(&name)))
+                .await
+                .unwrap_or(false)
+            {
+                return Ok(name);
+            }
+        }
+        Err(ApiError::bad_request("A Bot needs a name."))
     }
 
     /// `.mcp.json`, `.codex/config.toml`, `.claude/settings.json` and the managed block of
@@ -747,5 +975,169 @@ mod tests {
         std::fs::write(&choice, "{not json").unwrap();
         assert!(bots.list().await.is_err());
         assert_eq!(std::fs::read_to_string(&choice).unwrap(), "{not json");
+    }
+
+    fn status_of(err: ApiError) -> u16 {
+        err.status.as_u16()
+    }
+
+    #[tokio::test]
+    async fn a_bot_record_defaults_role_and_keeps_a_prompt() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        let ada = bots
+            .create(&json!({ "name": "Ada", "prompt": "Be brief." }))
+            .await
+            .unwrap();
+        assert_eq!(ada["role"], "bot");
+        assert!(ada["parentSlug"].is_null());
+        assert_eq!(ada["hideFromSidebar"], false);
+        assert!(ada["subagent"].is_null());
+        assert_eq!(ada["prompt"], "Be brief.");
+        assert!(dir.path().join("ada/skills").is_dir());
+        assert_eq!(
+            std::fs::read_dir(dir.path().join("ada/skills"))
+                .unwrap()
+                .count(),
+            0
+        );
+        let saved = bots
+            .save("ada", &json!({ "prompt": "Be shorter." }), false)
+            .await
+            .unwrap();
+        assert_eq!(saved["prompt"], "Be shorter.");
+        assert!(bots
+            .save("ada", &json!({ "hideFromSidebar": true }), false)
+            .await
+            .is_err_and(|e| status_of(e) == 409));
+        assert!(bots.create(&json!({})).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn a_child_is_a_bot_with_a_parent_and_one_level() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        let ada = bots
+            .create(&json!({ "name": "Ada", "shape": "cloud", "color": "#3366cc" }))
+            .await
+            .unwrap();
+        let junior = bots
+            .create(&json!({
+                "parentSlug": "ada",
+                "pinned": true,
+                "primary": true,
+                "subagent": { "prompt": "Look things up.", "inheritParentPrompt": true, "toolAllow": ["read"] }
+            }))
+            .await
+            .unwrap();
+        assert_eq!(junior["name"], "Ada junior 1");
+        assert_eq!(junior["slug"], "ada-junior-1");
+        assert_eq!(junior["role"], "subagent");
+        assert_eq!(junior["parentSlug"], "ada");
+        assert_eq!(junior["hideFromSidebar"], true);
+        assert_eq!(junior["hidden"], false);
+        assert_eq!(junior["pinned"], false);
+        assert_eq!(junior["primary"], false);
+        assert_eq!(junior["shape"], "cloud");
+        assert_eq!(junior["color"], "#3366cc");
+        assert_eq!(junior["subagent"]["prompt"], "Look things up.");
+        assert_eq!(junior["subagent"]["inheritParentPrompt"], true);
+        assert_eq!(junior["subagent"]["toolAllow"], json!(["read"]));
+        assert!(dir.path().join("ada-junior-1/skills").is_dir());
+        assert_eq!(ada["primary"], true);
+
+        let named = bots
+            .create(&json!({ "name": "Research", "parentSlug": "ada", "shape": "hex", "color": "#111111" }))
+            .await
+            .unwrap();
+        assert_eq!(named["name"], "Research");
+        assert_eq!(named["slug"], "research");
+        assert_eq!(named["shape"], "hex");
+        assert_eq!(named["color"], "#111111");
+
+        let second = bots.create(&json!({ "parentSlug": "ada" })).await.unwrap();
+        assert_eq!(second["name"], "Ada junior 2");
+        let taken = bots
+            .create(&json!({ "name": "Ada junior 1", "parentSlug": "ada" }))
+            .await
+            .unwrap();
+        assert_eq!(taken["slug"], "ada-junior-1-2");
+
+        let nested = bots
+            .create(&json!({ "name": "Nope", "parentSlug": "ada-junior-1" }))
+            .await
+            .unwrap_err();
+        assert_eq!(status_of(nested), 409);
+        let missing = bots
+            .create(&json!({ "name": "Nope", "parentSlug": "missing" }))
+            .await
+            .unwrap_err();
+        assert_eq!(status_of(missing), 400);
+
+        let replaced = bots
+            .save(
+                "ada-junior-1",
+                &json!({ "subagent": { "prompt": "New.", "cap": 3 } }),
+                false,
+            )
+            .await
+            .unwrap();
+        assert_eq!(replaced["subagent"]["prompt"], "New.");
+        assert_eq!(replaced["subagent"]["cap"], 3);
+        assert!(replaced["subagent"].get("toolAllow").is_none());
+        assert!(replaced["subagent"].get("inheritParentPrompt").is_none());
+
+        for patch in [
+            json!({ "pinned": true }),
+            json!({ "hidden": true }),
+            json!({ "primary": true }),
+            json!({ "hideFromSidebar": false }),
+            json!({ "parentSlug": "research" }),
+            json!({ "role": "bot" }),
+        ] {
+            let err = bots.save("ada-junior-1", &patch, false).await.unwrap_err();
+            assert_eq!(status_of(err), 409, "{patch}");
+        }
+        let same = bots
+            .save(
+                "ada-junior-1",
+                &json!({ "role": "subagent", "parentSlug": "ada", "hideFromSidebar": true, "name": "Scout" }),
+                false,
+            )
+            .await
+            .unwrap();
+        assert_eq!(same["name"], "Scout");
+        assert_eq!(same["parentSlug"], "ada");
+
+        assert_eq!(
+            status_of(bots.select("ada-junior-1").await.unwrap_err()),
+            409
+        );
+        assert_eq!(status_of(bots.remove("ada").await.unwrap_err()), 409);
+        bots.remove("ada-junior-1").await.unwrap();
+        bots.remove("research").await.unwrap();
+        bots.remove("ada-junior-2").await.unwrap();
+        bots.remove(taken["slug"].as_str().unwrap()).await.unwrap();
+        assert!(bots.remove("ada").await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn reconcile_does_not_make_a_child_the_main_bot() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        bots.create(&json!({ "name": "Ada" })).await.unwrap();
+        bots.create(&json!({ "parentSlug": "ada" })).await.unwrap();
+        std::fs::write(
+            dir.path().join(".botapp/main-bot.json"),
+            r#"{"slug":"ada-junior-1"}"#,
+        )
+        .unwrap();
+        let list = bots.list().await.unwrap();
+        let main = list.iter().find(|b| b["primary"] == true).unwrap();
+        assert_eq!(main["slug"], "ada");
+        assert_eq!(
+            list.iter().find(|b| b["slug"] == "ada-junior-1").unwrap()["primary"],
+            false
+        );
     }
 }

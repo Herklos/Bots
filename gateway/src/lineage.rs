@@ -123,7 +123,11 @@ pub fn open_child(row: &Value, parent: &str) -> Option<String> {
 /// The thread a send, stop, voice clip, or request answer uses.
 /// No child means the parent. A local child is that thread. A remote child, or the parent id
 /// passed as the child, is refused. This writes nothing.
-pub fn thread_for(rows: &[Value], parent: &str, asked: Option<&str>) -> Result<String, &'static str> {
+pub fn thread_for(
+    rows: &[Value],
+    parent: &str,
+    asked: Option<&str>,
+) -> Result<String, &'static str> {
     let Some(child) = asked.map(str::trim).filter(|id| !id.is_empty()) else {
         return Ok(parent.to_string());
     };
@@ -270,10 +274,22 @@ mod tests {
         let listed = rows(&projection);
         let remote = listed.iter().find(|row| row["remote"] == true).unwrap();
         let local = listed.iter().find(|row| row["remote"] == false).unwrap();
-        assert_eq!(open_child(local, "parent-thread").as_deref(), Some("child-thread"));
+        assert_eq!(
+            open_child(local, "parent-thread").as_deref(),
+            Some("child-thread")
+        );
         assert_eq!(open_child(remote, "parent-thread"), None);
-        assert_ne!(open_child(remote, "parent-thread").as_deref(), Some("parent-thread"));
-        assert_eq!(open_child(&json!({ "remote": false, "threadId": "parent-thread" }), "parent-thread"), None);
+        assert_ne!(
+            open_child(remote, "parent-thread").as_deref(),
+            Some("parent-thread")
+        );
+        assert_eq!(
+            open_child(
+                &json!({ "remote": false, "threadId": "parent-thread" }),
+                "parent-thread"
+            ),
+            None
+        );
     }
 
     fn family() -> Value {
@@ -303,8 +319,14 @@ mod tests {
             thread_for(&rows, "parent-thread", Some("child-thread")).as_deref(),
             Ok("child-thread")
         );
-        assert_eq!(thread_for(&rows, "parent-thread", None).as_deref(), Ok("parent-thread"));
-        assert_eq!(thread_for(&rows, "parent-thread", Some("  ")).as_deref(), Ok("parent-thread"));
+        assert_eq!(
+            thread_for(&rows, "parent-thread", None).as_deref(),
+            Ok("parent-thread")
+        );
+        assert_eq!(
+            thread_for(&rows, "parent-thread", Some("  ")).as_deref(),
+            Ok("parent-thread")
+        );
         assert!(thread_for(&rows, "parent-thread", Some("remote-1")).is_err());
         assert!(thread_for(&rows, "parent-thread", Some("parent-thread")).is_err());
         assert_ne!(
