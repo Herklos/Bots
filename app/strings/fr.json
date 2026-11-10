@@ -92,6 +92,7 @@
   "edit.makeMain": "Définir comme Bot principal",
   "edit.pin": "Épingler en haut",
   "edit.pinNote": "S’affiche comme une tuile au-dessus de la liste.",
+  "edit.unpin": "Désépingler",
   "edit.shape": "Forme",
   "edit.shapeNamed": "Forme {name}",
   "error.chatHint": "Vos messages ne se sont pas chargés. Vérifiez la passerelle, puis réessayez.",

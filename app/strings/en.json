@@ -92,6 +92,7 @@
   "edit.makeMain": "Make main Bot",
   "edit.pin": "Pin to the top",
   "edit.pinNote": "Shows as a tile above the list.",
+  "edit.unpin": "Unpin",
   "edit.shape": "Shape",
   "edit.shapeNamed": "Shape {name}",
   "error.chatHint": "Your messages haven’t loaded. Check the gateway, then try again.",
