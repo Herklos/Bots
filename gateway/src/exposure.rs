@@ -280,9 +280,7 @@ mod tests {
         assert_eq!(preferred.tailnet_port, 3790);
         assert!(!Exposure::from_env(env_map(&[("PUBLIC_LANDING_ONLY", "1")])).landing_only);
         assert!(Exposure::from_env(env_map(&[("PUBLIC_LANDING_ONLY", "true")])).landing_only);
-        assert!(
-            Exposure::from_env(env_map(&[("HBOTS_PUBLIC_LANDING_ONLY", "true")])).landing_only
-        );
+        assert!(Exposure::from_env(env_map(&[("HBOTS_PUBLIC_LANDING_ONLY", "true")])).landing_only);
     }
 
     #[test]

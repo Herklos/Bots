@@ -10,6 +10,7 @@ name = "hbots"
 path = "src/main.rs"
 
 [dependencies]
+hbots-design = { path = "../design" }
 aes-gcm = "0.10"
 anyhow = "1"
 axum = { version = "0.8", features = ["ws", "macros"] }

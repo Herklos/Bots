@@ -13,6 +13,7 @@ use std::{
 
 const HELP: &str = "\
 hbots VERSION
+TAGLINE
 
 Usage: hbots <command> [options]
 
@@ -50,7 +51,11 @@ pub async fn run(args: &[String]) -> Option<i32> {
     let (flags, rest) = parse_args(&args[1..]);
     let result = match command.as_str() {
         "help" | "--help" | "-h" => {
-            print!("{}", HELP.replace("VERSION", release::VERSION));
+            print!(
+                "{}",
+                HELP.replace("VERSION", release::VERSION)
+                    .replace("TAGLINE", &hbots_design::tokens().brand.tagline)
+            );
             Ok(())
         }
         "up" => up(&flags).await,

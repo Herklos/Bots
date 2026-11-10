@@ -1,0 +1,14 @@
+[package]
+name = "hbots-design"
+description = "The hbots brand: design tokens, guidelines, user experience and the files generated from them"
+edition.workspace = true
+license.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "hbots-design"
+path = "src/main.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }

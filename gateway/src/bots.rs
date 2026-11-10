@@ -102,7 +102,7 @@ impl Bots {
                 continue;
             };
             let mut bot = json!({
-                "label": "", "shape": "sphere", "color": "teal", "section": null, "pinned": false,
+                "label": "", "shape": "sphere", "color": hbots_design::tokens().avatar.default, "section": null, "pinned": false,
                 "hidden": false, "primary": false, "notifications": true, "projectId": null, "mainThreadId": null,
             })
             .as_object()
@@ -327,7 +327,7 @@ impl Bots {
         .await?;
         let text = |k: &str, d: &str| json!(input[k].as_str().unwrap_or(d));
         let bot = json!({
-            "name": name, "label": text("label", ""), "shape": text("shape", "sphere"), "color": text("color", "teal"),
+            "name": name, "label": text("label", ""), "shape": text("shape", "sphere"), "color": text("color", &hbots_design::tokens().avatar.default),
             "section": input["section"].as_str(), "pinned": input["pinned"] == true, "hidden": false,
             "primary": input["primary"] == true, "notifications": true, "projectId": null, "mainThreadId": null,
             "model": input.get("model").cloned().unwrap_or(Value::Null),

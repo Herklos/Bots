@@ -1167,6 +1167,17 @@ async fn static_files(State(s): S, uri: Uri, req: Request) -> Response {
     } else {
         candidate
     };
+    // A web build with no icon of its own gets the brand's mark.
+    if matches!(path, "favicon.ico" | "favicon.svg") && serve_index {
+        return (
+            [
+                (header::CONTENT_TYPE, "image/svg+xml"),
+                (header::CACHE_CONTROL, "public, max-age=86400"),
+            ],
+            hbots_design::FAVICON_SVG,
+        )
+            .into_response();
+    }
     if !target.is_file() {
         return (StatusCode::NOT_FOUND, WEB_APP_MISSING).into_response();
     }

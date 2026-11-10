@@ -6,6 +6,7 @@
   "display": "standalone",
   "theme_color": "#1cc3b0",
   "background_color": "#ffffff",
+  "icons": [{ "src": "assets/icon-1024.png", "sizes": "1024x1024", "type": "image/png" }],
   "app": { "id": "software.drakkar.hbots", "name": "hbots" },
   "env": ["HBOTS_URL"],
   "host": {

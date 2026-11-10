@@ -19,11 +19,17 @@ keyframes faceBlink
   95% opacity=0.12
   98% opacity=1
 
-fn faceHex(color: string): string = color.startsWith("#") ? color : color == "black" ? "light-dark(#000000, #FFFFFF)" : color == "white" ? "#f2f2f0" : color == "brown" ? "#936439" : color == "red" ? "#FF263C" : color == "orange" ? "#FF6700" : color == "amber" ? "#FFAF38" : color == "yellow" ? "#FF9800" : color == "green" ? "#00C972" : color == "cyan" ? "#00BCA6" : color == "blue" ? "#1084FE" : color == "purple" ? "#A97EFE" : color == "violet" ? "#9159FE" : color == "pink" ? "#FF5EB1" : color == "magenta" ? "#FF309B" : color == "gray" ? "#777777" : "#1CC3B0"
+// Colours come from design/tokens.json: change them there.
+// design:begin colours
+fn faceHex(color: string): string = color.startsWith("#") ? color : color == "black" ? "light-dark(#000000, #ffffff)" : color == "white" ? "#f2f2f0" : color == "brown" ? "#936439" : color == "red" ? "#ff263c" : color == "orange" ? "#ff6700" : color == "amber" ? "#ffaf38" : color == "yellow" ? "#ff9800" : color == "green" ? "#00c972" : color == "cyan" ? "#00bca6" : color == "blue" ? "#1084fe" : color == "purple" ? "#a97efe" : color == "violet" ? "#9159fe" : color == "pink" ? "#ff5eb1" : color == "magenta" ? "#ff309b" : color == "gray" ? "#777777" : "#1cc3b0"
 
 // A fill that would vanish into the page gets an outline. Only white
 // does: it sits close to the light canvas, so it takes a grey edge there. Black is white in dark mode.
 fn faceEdge(color: string): string = color == "white" ? "light-dark(#8f8da0, #f2f2f0)" : "none"
+
+// The eyes are cut-outs: they take the canvas colour of the scheme.
+fn faceEye(): string = "light-dark(#f9f8fd, #16141f)"
+// design:end colours
 
 fn eyeGap(state: string): number = state == "working" ? 12.9 : state == "storm" || state == "asleep" ? 13.7 : 12.1
 fn eyeWidth(state: string): number = state == "asleep" ? 18.5 : state == "working" ? 8.1 : state == "storm" ? 8.9 : 9
@@ -56,4 +62,4 @@ component Face
       g transform-box="fill-box" transform-origin="center" animation=(still ? "none" : state == "working" ? "faceRock 2.4s ease-in-out infinite" : state == "storm" ? "faceShake 0.3s linear infinite" : state == "asleep" ? "faceBreathe 4s ease-in-out infinite" : "faceBreathe 3s ease-in-out infinite")
         circle cx=50 cy=50 r=46 fill=faceHex(color) stroke=faceEdge(color) stroke-width=1.25
         for side in [-1, 1] key=side
-          rect x=(50 + side * eyeGap(state) - eyeWidth(state) / 2) y=(eyeY(state) - eyeLength(state) / 2) width=eyeWidth(state) height=eyeLength(state) rx=4.5 fill="light-dark(#f9f8fd, #16141f)" transform=`rotate(${eyeTilt(state, side)} ${50 + side * eyeGap(state)} ${eyeY(state)})` animation=(still || state == "asleep" ? "none" : `faceBlink 4.2s ease-in-out infinite`)
+          rect x=(50 + side * eyeGap(state) - eyeWidth(state) / 2) y=(eyeY(state) - eyeLength(state) / 2) width=eyeWidth(state) height=eyeLength(state) rx=4.5 fill=faceEye() transform=`rotate(${eyeTilt(state, side)} ${50 + side * eyeGap(state)} ${eyeY(state)})` animation=(still || state == "asleep" ? "none" : `faceBlink 4.2s ease-in-out infinite`)
