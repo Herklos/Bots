@@ -69,6 +69,28 @@ pub fn project_model_update(project_id: &str, selection: &Value) -> Value {
     })
 }
 
+/// The thread list already shows this Bot: same title, same favicon, and no project icon.
+pub fn face_in_sync(project: Option<&Value>, name: &str, favicon: &str) -> bool {
+    let Some(project) = project else {
+        return false;
+    };
+    project["title"].as_str() == Some(name)
+        && project["faviconPath"].as_str() == Some(favicon)
+        && project["projectIcon"].is_null()
+}
+
+/// `projects.mutate` payload that sets the project title and favicon to this Bot's face.
+pub fn project_face_update(project_id: &str, name: &str, favicon: &str) -> Value {
+    json!({
+        "type": "project.update",
+        "commandId": uuid::Uuid::new_v4().to_string(),
+        "projectId": project_id,
+        "title": name,
+        "faviconPath": favicon,
+        "projectIcon": null,
+    })
+}
+
 pub fn thread_model_command(thread_id: &str, selection: &Value) -> Value {
     json!({
         "type": "thread.model-selection.set",
@@ -159,6 +181,29 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
                 id
             }
         };
+        let workspace = bot["workspaceRoot"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        let shape = bot["shape"].as_str().unwrap_or("ball").to_string();
+        let color = bot["color"].as_str().unwrap_or_default().to_string();
+        let favicon = tokio::task::spawn_blocking(move || {
+            crate::face_icon::write_face(std::path::Path::new(&workspace), &shape, &color)
+        })
+        .await
+        .map_err(|e| anyhow::anyhow!("face write task: {e}"))?
+        .map_err(|e| anyhow::anyhow!("face write: {e}"))?;
+        let listed = projects
+            .iter()
+            .find(|p| p["id"].as_str() == Some(project_id.as_str()));
+        let name = bot["name"].as_str().unwrap_or_default();
+        if !face_in_sync(listed, name, &favicon) {
+            rpc.call(
+                "projects.mutate",
+                project_face_update(&project_id, name, &favicon),
+            )
+            .await?;
+        }
         let thread = match bot["mainThreadId"].as_str() {
             Some(t) => t.to_string(),
             None => {
@@ -248,6 +293,42 @@ mod tests {
             thread_model_command("t", &default_model())["type"],
             "thread.model-selection.set"
         );
+    }
+
+    fn listed(title: &str, favicon: Option<&str>, icon: Option<&str>) -> Value {
+        json!({
+            "id": "p",
+            "title": title,
+            "faviconPath": favicon,
+            "projectIcon": icon,
+        })
+    }
+
+    #[test]
+    fn a_matching_face_is_left_alone_and_any_drift_updates_the_project() {
+        let path = ".bot/avatar-abc.svg";
+        let project = listed("Ada", Some(path), None);
+        assert!(face_in_sync(Some(&project), "Ada", path));
+
+        let cases = [
+            listed("Scout", Some(path), None),
+            listed("Ada", Some(".bot/avatar-def.svg"), None),
+            json!({ "id": "p", "title": "Ada", "projectIcon": null }),
+            listed("Ada", Some(path), Some("icon")),
+        ];
+        for drifted in &cases {
+            assert!(!face_in_sync(Some(drifted), "Ada", path));
+            let update = project_face_update("p", "Ada", path);
+            assert_eq!(update["type"], "project.update");
+            assert_eq!(update["projectId"], "p");
+            assert_eq!(update["title"], "Ada");
+            assert_eq!(update["faviconPath"], path);
+            assert!(update["projectIcon"].is_null());
+            assert!(update["commandId"]
+                .as_str()
+                .is_some_and(|id| !id.is_empty()));
+        }
+        assert!(!face_in_sync(None, "Ada", path));
     }
 
     #[test]
