@@ -1584,11 +1584,6 @@ component Bots
                               if showUnread(b.unread, slug == b.slug, b.hidden)
                                 column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${b.slug}`
               column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
-                link class=ConversationLink href="/vault" aria-label=t("vault.title") testId="sidebar-vault" padding="space.xs space.md"
-                  row align-items="center" gap="space.md"
-                    column color="ink.muted" width=32 align-items="center"
-                      Glyph(name="lock", size=18)
-                    text t("vault.title") font-weight=500
                 link class=ConversationLink href="/settings" aria-label=t("settings.title") title=t("settings.title") testId="open-settings" padding="space.sm space.md"
                   row align-items="center" gap="space.md"
                     column width=32 height=32 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
@@ -1598,7 +1593,6 @@ component Bots
                         Glyph(name="person", size=16)
                     column flex=1 min-width=0 gap="2px"
                       text (prefs.userName != "" ? prefs.userName : t("settings.you")) font-weight=500 overflow-wrap="break-word" testId="you-name"
-                      text botCountLabel(bots.length, t("bots.one"), t("bots.many", n=bots.length)) color="ink.muted" font="-exact-footnote"
           else if e.name == "chat"
             column class=Screen navigationKey=`${e.id}` navigationScroll="transcript" drop=filesDropped position="absolute" inset=0 padding-right=((wide and panelOpen) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="chat-header"
