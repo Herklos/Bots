@@ -1,3 +1,9 @@
 {
-  "purpose.microphone": "Records a voice clip to send."
+  "purpose.microphone": "Records a voice clip to send.",
+  "inbox.tagline": "Your own Bots, in one place.",
+  "settings.title": "Settings",
+  "auth.signIn": "Sign In",
+  "auth.signingIn": "Signing in…",
+  "vault.title": "Vault",
+  "common.cancel": "Cancel"
 }

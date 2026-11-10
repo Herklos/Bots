@@ -1,0 +1,9 @@
+{
+  "purpose.microphone": "Enregistre un message vocal à envoyer.",
+  "inbox.tagline": "Vos Bots, au même endroit.",
+  "settings.title": "Réglages",
+  "auth.signIn": "Connexion",
+  "auth.signingIn": "Connexion…",
+  "vault.title": "Coffre",
+  "common.cancel": "Annuler"
+}
