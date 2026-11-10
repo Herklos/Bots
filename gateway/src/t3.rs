@@ -20,7 +20,20 @@ use std::{
 use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message as WsMsg};
 
-type Pending = Arc<Mutex<HashMap<String, oneshot::Sender<anyhow::Result<Value>>>>>;
+/// One stream item, or the Exit that ended the request.
+enum Note {
+    Chunk(Value),
+    Ended(anyhow::Result<Value>),
+}
+
+enum Waiter {
+    /// First chunk, or the Exit when a call has no chunks.
+    Once(oneshot::Sender<anyhow::Result<Value>>),
+    /// Every chunk until the caller interrupts the request.
+    Many(mpsc::UnboundedSender<Note>),
+}
+
+type Pending = Arc<Mutex<HashMap<String, Waiter>>>;
 
 pub struct T3Client {
     out: mpsc::UnboundedSender<WsMsg>,
@@ -131,27 +144,44 @@ impl T3Client {
                             let _ = acks.send(WsMsg::text(
                                 json!({ "_tag": "Ack", "requestId": id }).to_string(),
                             ));
-                            // A stream's first item answers a one-shot read (scheduledTasks.subscribe).
                             let value = msg.get("value").cloned().or_else(|| {
                                 msg.get("values")
                                     .and_then(Value::as_array)
                                     .and_then(|items| items.first().cloned())
                             });
-                            if let Some(value) = value {
-                                if let Some(tx) = p.lock().await.remove(&id) {
+                            let Some(value) = value else { continue };
+                            let mut guard = p.lock().await;
+                            let Some(waiter) = guard.remove(&id) else {
+                                continue;
+                            };
+                            match waiter {
+                                Waiter::Once(tx) => {
                                     let _ = tx.send(Ok(value));
+                                }
+                                Waiter::Many(tx) => {
+                                    if tx.send(Note::Chunk(value)).is_ok() {
+                                        guard.insert(id.clone(), Waiter::Many(tx));
+                                    }
                                 }
                             }
                         }
                         Some("Exit") => {
-                            if let Some(tx) = p.lock().await.remove(&id) {
-                                let exit = &msg["exit"];
-                                let result = if exit["_tag"] == "Success" {
-                                    Ok(exit["value"].clone())
-                                } else {
-                                    Err(anyhow!(describe_cause(&exit["cause"])))
-                                };
-                                let _ = tx.send(result);
+                            let Some(waiter) = p.lock().await.remove(&id) else {
+                                continue;
+                            };
+                            let exit = &msg["exit"];
+                            let result = if exit["_tag"] == "Success" {
+                                Ok(exit["value"].clone())
+                            } else {
+                                Err(anyhow!(describe_cause(&exit["cause"])))
+                            };
+                            match waiter {
+                                Waiter::Once(tx) => {
+                                    let _ = tx.send(result);
+                                }
+                                Waiter::Many(tx) => {
+                                    let _ = tx.send(Note::Ended(result));
+                                }
                             }
                         }
                         _ => {}
@@ -159,8 +189,16 @@ impl T3Client {
                 }
             }
             c.store(true, Ordering::SeqCst);
-            for (_, tx) in p.lock().await.drain() {
-                let _ = tx.send(Err(anyhow!("T3 closed the connection")));
+            for (_, waiter) in p.lock().await.drain() {
+                let err = Err(anyhow!("T3 closed the connection"));
+                match waiter {
+                    Waiter::Once(tx) => {
+                        let _ = tx.send(err);
+                    }
+                    Waiter::Many(tx) => {
+                        let _ = tx.send(Note::Ended(err));
+                    }
+                }
             }
         });
         Ok(Self {
@@ -179,7 +217,10 @@ impl T3Client {
     pub async fn call(&self, tag: &str, payload: Value) -> anyhow::Result<Value> {
         let id = self.next.fetch_add(1, Ordering::SeqCst).to_string();
         let (tx, rx) = oneshot::channel();
-        self.pending.lock().await.insert(id.clone(), tx);
+        self.pending
+            .lock()
+            .await
+            .insert(id.clone(), Waiter::Once(tx));
         self.out
             .send(WsMsg::text(json!({ "_tag": "Request", "id": id, "tag": tag, "payload": payload, "headers": [] }).to_string()))
             .map_err(|_| anyhow!("T3 closed the connection"))?;
@@ -187,6 +228,52 @@ impl T3Client {
             .await
             .context("T3 timed out")?
             .map_err(|_| anyhow!("T3 closed the connection"))?
+    }
+
+    /// Read a stream until `keep` accepts one item, then interrupt it.
+    /// A staying-open subscribe (`orchestration.subscribeShell`,
+    /// `scheduledTasks.subscribe`) must not be left running: the next read
+    /// would add another one.
+    pub async fn read_until<F>(
+        &self,
+        tag: &str,
+        payload: Value,
+        mut keep: F,
+    ) -> anyhow::Result<Value>
+    where
+        F: FnMut(&Value) -> bool,
+    {
+        let id = self.next.fetch_add(1, Ordering::SeqCst).to_string();
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        self.pending
+            .lock()
+            .await
+            .insert(id.clone(), Waiter::Many(tx));
+        self.out
+            .send(WsMsg::text(
+                json!({ "_tag": "Request", "id": id, "tag": tag, "payload": payload, "headers": [] }).to_string(),
+            ))
+            .map_err(|_| anyhow!("T3 closed the connection"))?;
+        let result = tokio::time::timeout(Duration::from_secs(30), async {
+            while let Some(note) = rx.recv().await {
+                match note {
+                    Note::Chunk(value) if keep(&value) => return Ok(value),
+                    Note::Chunk(_) => {}
+                    Note::Ended(Ok(_)) => {
+                        return Err(anyhow!("T3 ended the stream before a matching item"));
+                    }
+                    Note::Ended(Err(error)) => return Err(error),
+                }
+            }
+            Err(anyhow!("T3 closed the connection"))
+        })
+        .await;
+        // Interrupt even when the read timed out or failed, so the server drops it.
+        let _ = self.out.send(WsMsg::text(
+            json!({ "_tag": "Interrupt", "requestId": id, "interruptors": [] }).to_string(),
+        ));
+        self.pending.lock().await.remove(&id);
+        result.context("T3 timed out")?
     }
 
     /// `orchestration.dispatchCommand` with a fresh commandId unless the command has one.

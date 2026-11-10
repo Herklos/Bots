@@ -5,7 +5,9 @@
 //! `scheduledTasks.subscribe`, `scheduledTasks.upsert`, `scheduledTasks.setEnabled`,
 //! `scheduledTasks.delete`, `scheduledTasks.runNow`. `subscribe` is a stream; its first
 //! item is `{ tasks }` (`ScheduledTaskListResult` in `packages/contracts/src/scheduledTask.ts`).
-//! The gateway keeps a short local history of the changes it made.
+//! The gateway takes that chunk and interrupts the subscription. Task objects already
+//! carry `lastRunAt`, `lastRunStatus`, `lastRunError` and `runCount`. There is no
+//! `scheduledTasks.listRuns`. The gateway keeps a short local history of the changes it made.
 use crate::error::ApiResult;
 use crate::t3::T3;
 use serde_json::{json, Value};
@@ -52,7 +54,11 @@ impl RoutineHistory {
 }
 
 pub async fn list(t3: &T3) -> ApiResult<Value> {
-    let value = t3.rpc().await?.call(LIST, json!({})).await?;
+    let value = t3
+        .rpc()
+        .await?
+        .read_until(LIST, json!({}), |_| true)
+        .await?;
     Ok(value)
 }
 

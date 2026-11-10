@@ -183,27 +183,6 @@ const sources: Sources = {
       return { ok: false, id: '', name: '', error: 'Can’t read that file. Try another one.' };
     }
   },
-  loadApps: async (_args, store): Promise<Result<'loadApps'>> => {
-    const body = await read(store, '/api/apps');
-    return (body.apps as any[] ?? []).map((a) => ({
-      id: String(a.id), name: String(a.name ?? ''), url: String(a.url ?? ''),
-    }));
-  },
-  loadConfig: async (_args, store): Promise<Result<'loadConfig'>> => {
-    const body = await read(store, '/api/config');
-    return { executorUrl: typeof body.executorUrl === 'string' ? body.executorUrl : '' };
-  },
-  addConnectedApp: async ([id, name, url], store) => {
-    const body = await read(store, '/api/apps');
-    const apps = Array.isArray(body.apps) ? [...body.apps] : [];
-    apps.push({ id, name, url });
-    return reply(await call(store, '/api/apps', { method: 'PUT', body: JSON.stringify({ apps }) }));
-  },
-  removeConnectedApp: async ([id], store) => {
-    const body = await read(store, '/api/apps');
-    const apps = (Array.isArray(body.apps) ? body.apps : []).filter((a: any) => String(a.id) !== id);
-    return reply(await call(store, '/api/apps', { method: 'PUT', body: JSON.stringify({ apps }) }));
-  },
   stopRun: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/stop`, { method: 'POST', body: '{}' })),
 };
 export const answer: Answer = (source, args, store, storage, native) => sources[source](args, store, storage, native);

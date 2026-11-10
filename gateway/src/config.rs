@@ -25,8 +25,6 @@ pub struct Config {
     pub access_aud: String,
     /// Empty allows any email on a token that already passed the other checks.
     pub access_emails: Vec<String>,
-    /// Where a connected-app executor is, when `HBOTS_EXECUTOR_URL` is an http(s) URL.
-    pub executor_url: String,
 }
 
 fn env(name: &str) -> Option<String> {
@@ -119,7 +117,6 @@ impl Config {
                         .collect()
                 })
                 .unwrap_or_default(),
-            executor_url: crate::apps::executor_url(&env("HBOTS_EXECUTOR_URL").unwrap_or_default()),
             data_root,
             bots_root,
         })

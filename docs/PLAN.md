@@ -4,12 +4,13 @@
 
 The product, the crate (`hbots`), the binary (`hbots`), configuration, and these docs use the name hbots.
 Home defaults to `~/.hbots`. Environment: `HBOTS_HOME`, `HBOTS_PASSWORD`, `HBOTS_ROOT`, `HBOTS_MCP_URL`,
-`HBOTS_MCP_TOKEN`, `HBOTS_EXECUTOR_URL`, `HBOTS_TAILSCALE_PATH`, `HBOTS_CLOUDFLARED_PATH`,
+`HBOTS_MCP_TOKEN`, `HBOTS_TAILSCALE_PATH`, `HBOTS_CLOUDFLARED_PATH`,
 `HBOTS_TAILNET_PORT`, `HBOTS_TAILNET_USERS`, `HBOTS_PUBLIC_LANDING_ONLY` (legacy unprefixed Tailscale/tunnel
 names still accepted). The Exact client reads `HBOTS_URL` at build time. Do not introduce another product name.
 
-**Known gap (A6):** `release::busy_threads` cannot yet read T3's `orchestration.subscribeShell` stream, so
-auto-update will not install while that stays unimplemented.
+**A6:** `release::busy_threads` reads T3's `orchestration.subscribeShell` stream until a snapshot,
+counts threads a restart would interrupt, and interrupts the subscription. Auto-update still
+waits when that read fails, including when T3 answers `snapshot-required`.
 
 ## Shape
 
@@ -124,11 +125,11 @@ Gateway parts that do not need `contract` or the Node checkout, landed on main o
 - Site icons. `GET /api/icons/{host}` fetches a public favicon and caches it under `HBOTS_HOME/icons`. Private and loopback addresses are refused.
 - Attachments. Files live in `bots/<slug>/.bot/attachments`. A chat send can name them. The bytes stay on disk; `message.dispatch` carries the file record. The T3 contracts checkout is not here, so that record is the gateway's shape, not a verified T3 schema.
 - Usage. `GET /api/usage` reads `bots/.botapp/usage.json` (messages, attachments, vault writes, icon fetches, by UTC day). Nothing is sent off the machine.
-- Connected apps. `GET`/`PUT /api/apps` stores an https list in `bots/.botapp/apps.json`. `HBOTS_EXECUTOR_URL`, when it is an http(s) URL, is `executorUrl` on `GET /api/config`.
+- Connected apps. Postponed. The Settings list and `GET`/`PUT /api/apps` are removed. `HBOTS_EXECUTOR_URL` is not read.
 
 Skipped, because they still need `contract` or the Node server checkout (neither was searched for again; `contract` is not on `PATH`, and the Node checkout at the path in the working agreement is absent):
 
-- Executor protocol. How the gateway drives a connected-app process is in that Node checkout. The list and the URL above are the part that does not need it.
+- Executor protocol. How the gateway drives a connected-app process is in that Node checkout. The list and the URL are postponed with the feature.
 - Remote usage telemetry. A destination and event schema are not in this repo. The local count is what the gateway can do.
 - Voice capture and playback. The call log already shipped in T5 (`POST /api/threads/{thread}/voice`). Microphone, streaming and playback need the Exact client.
 - Avatar drawing flow. `avatarDrawingModel` is already a settings field. The prompt, the model call and the saved image are the Node server's flow.

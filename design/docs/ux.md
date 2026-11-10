@@ -63,7 +63,7 @@ Projects has no navigation entry or beta toggle while the feature is deferred.
 
 ### 7. Settings
 
-- Name, Appearance (System, Light, Dark), Vault, Remote access, Connected apps.
+- Name, Appearance (System, Light, Dark), Vault, Remote access. Connected apps is postponed.
 - Changing Appearance applies at once, with no Save.
 
 ## Empty and failure states

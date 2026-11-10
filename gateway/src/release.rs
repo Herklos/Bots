@@ -1068,10 +1068,72 @@ pub async fn start(state: Arc<AppState>) {
 }
 
 /// Bot threads a restart would interrupt. T3 Code is the harness wired today; other backends
-/// may be added. Reading T3's thread list (`orchestration.subscribeShell`, a stream) is not
-/// in this client yet, so this is an error and nothing installs automatically until it is.
-async fn busy_threads(_state: &AppState) -> Result<usize> {
-    bail!("reading T3's thread list (orchestration.subscribeShell) isn't ported yet")
+/// may be added. `orchestration.subscribeShell` stays open, so the read waits for one
+/// snapshot and then interrupts it.
+async fn busy_threads(state: &AppState) -> Result<usize> {
+    read_busy(&state.t3).await
+}
+
+const SHELL: &str = "orchestration.subscribeShell";
+
+async fn read_busy(t3: &crate::t3::T3) -> Result<usize> {
+    let client = t3.rpc().await.context("couldn't reach T3")?;
+    let item = client
+        .read_until(SHELL, json!({}), |item| {
+            matches!(
+                item.get("kind").and_then(Value::as_str),
+                Some("snapshot") | Some("snapshot-required")
+            )
+        })
+        .await
+        .context("couldn't read the busy Bot threads")?;
+    if item.get("kind").and_then(Value::as_str) == Some("snapshot-required") {
+        bail!("T3 asked for an HTTP snapshot before the shell stream; auto-update will wait");
+    }
+    Ok(busy_in_snapshot(
+        item.get("snapshot").unwrap_or(&Value::Null),
+    ))
+}
+
+/// Threads a restart would interrupt, counted once across `threads` and `archivedThreads`.
+/// Live run statuses are `queued`, `preparing`, `starting`, `running` and `waiting`.
+/// A settled thread still counts when it has live activity, a pending runtime request,
+/// or a pending background task.
+fn busy_in_snapshot(snapshot: &Value) -> usize {
+    ["threads", "archivedThreads"]
+        .into_iter()
+        .filter_map(|key| snapshot.get(key).and_then(Value::as_array))
+        .flatten()
+        .filter(|thread| thread_is_busy(thread))
+        .count()
+}
+
+fn thread_is_busy(thread: &Value) -> bool {
+    const LIVE: &[&str] = &["queued", "preparing", "starting", "running", "waiting"];
+    if thread
+        .get("status")
+        .and_then(Value::as_str)
+        .is_some_and(|status| LIVE.contains(&status))
+    {
+        return true;
+    }
+    if thread
+        .get("activityRunStatus")
+        .and_then(Value::as_str)
+        .is_some_and(|status| matches!(status, "preparing" | "starting" | "running" | "waiting"))
+    {
+        return true;
+    }
+    if thread
+        .get("pendingRuntimeRequest")
+        .is_some_and(|value| !value.is_null())
+    {
+        return true;
+    }
+    thread
+        .get("pendingBackgroundTasks")
+        .and_then(Value::as_array)
+        .is_some_and(|tasks| !tasks.is_empty())
 }
 
 // ---------- routes ----------
@@ -1465,6 +1527,48 @@ mod tests {
         );
         assert_eq!(state.pending.as_ref().unwrap().to, "1.1.0");
         assert!(state.waiting.is_none());
+    }
+
+    #[test]
+    fn a_shell_snapshot_counts_threads_a_restart_would_interrupt() {
+        let snapshot = json!({
+            "threads": [
+                { "status": "idle" },
+                { "status": "running" },
+                { "status": "completed", "activityRunStatus": "waiting" },
+                { "status": "idle", "pendingRuntimeRequest": { "id": "r" } },
+                { "status": "idle", "pendingBackgroundTasks": ["t"] },
+                { "status": "failed" }
+            ],
+            "archivedThreads": [
+                { "status": "queued" },
+                { "status": "idle" }
+            ]
+        });
+        assert_eq!(busy_in_snapshot(&snapshot), 5);
+    }
+
+    /// Live T3. Not part of the default run: it needs `~/.hbots/t3-token` and T3 on :3773.
+    #[tokio::test]
+    #[ignore]
+    async fn probe_shell() {
+        let token = std::fs::read_to_string(format!(
+            "{}/.hbots/t3-token",
+            std::env::var("HOME").unwrap_or_default()
+        ))
+        .expect("t3 token")
+        .trim()
+        .to_string();
+        assert!(!token.is_empty());
+        let t3 = crate::t3::T3::new("http://127.0.0.1:3773".into(), token);
+        let busy = read_busy(&t3).await.expect("shell snapshot");
+        let tasks = crate::routines::list(&t3).await.expect("routines");
+        let n = tasks
+            .get("tasks")
+            .and_then(Value::as_array)
+            .map(Vec::len)
+            .expect("tasks array");
+        eprintln!("busy={busy} tasks={n}");
     }
 
     #[test]

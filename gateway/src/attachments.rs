@@ -1,10 +1,8 @@
 //! Files a person attaches to a Bot's chat.
 //!
 //! The bytes live in `bots/<slug>/.bot/attachments/<id>.bin` (mode 600) with a small JSON
-//! sidecar. `message.dispatch` already has an `attachments` array; each entry names the file
-//! the gateway stored. T3 Code is the harness wired today; other backends may be added. The
-//! T3 contracts checkout is not on this machine, so the entry is this gateway's record
-//! (`type`, `attachmentId`, `name`, `mediaType`, `bytes`) and not a verified T3 schema.
+//! sidecar. `message.dispatch` takes T3's chat attachment (`type`, `id`, `name`, `mimeType`,
+//! `sizeBytes`). `type` is `image` when the media type starts with `image/`, otherwise `file`.
 //! The bytes themselves are not copied into the command.
 
 use crate::error::{ApiError, ApiResult};
@@ -159,12 +157,20 @@ pub fn clean_media(media: &str) -> ApiResult<String> {
 }
 
 pub fn command_part(meta: &Value) -> Value {
+    let media = meta["mediaType"]
+        .as_str()
+        .unwrap_or("application/octet-stream");
+    let kind = if media.to_ascii_lowercase().starts_with("image/") {
+        "image"
+    } else {
+        "file"
+    };
     json!({
-        "type": "file",
-        "attachmentId": meta["id"],
+        "type": kind,
+        "id": meta["id"],
         "name": meta["name"],
-        "mediaType": meta["mediaType"],
-        "bytes": meta["bytes"],
+        "mimeType": media,
+        "sizeBytes": meta["bytes"],
     })
 }
 
@@ -351,9 +357,17 @@ mod tests {
             assert_eq!(mode.mode() & 0o777, 0o600);
         }
         let part = command_part(&meta);
-        assert_eq!(part["type"], "file");
-        assert_eq!(part["attachmentId"], id);
+        assert_eq!(part["type"], "image");
+        assert_eq!(part["id"], id);
+        assert_eq!(part["mimeType"], "image/png");
+        assert_eq!(part["sizeBytes"], b"png-bytes".len());
         assert!(part.get("data").is_none());
+        let text = command_part(&json!({
+            "id": id, "name": "notes.txt", "mediaType": "text/plain", "bytes": 4,
+        }));
+        assert_eq!(text["type"], "file");
+        assert_eq!(text["mimeType"], "text/plain");
+        assert_eq!(text["sizeBytes"], 4);
         let listed = read_dir(dir.path(), "ada").await.unwrap();
         assert_eq!(listed.len(), 1);
         let send = for_send(dir.path(), "ada", &json!({ "attachmentIds": [id] }))

@@ -10,8 +10,8 @@ keys: the Exact clone's `README.md` (quick start, section 3 "Run it natively"), 
 |---|---|---|---|
 | Web | 2026-11-10 on this Mac: Exact from `.exact-path`, `EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/web/build.mjs" bots-web` → `app/target/web-dist`; gateway serves it on :3780. Face screenshots via `tests/face/screenshot.sh` + system Chrome. | OK | Keep rebuilding after Contract changes. |
 | Linux | Earlier: Hermes install for `x86_64-unknown-linux-gnu` failed (`UnknownIssuer`). No Bots linux crate under `app/linux/`. | BLOCKED here | Needs a Linux host with Hermes; `"linux": {}` is in `app/app.json`. |
-| macOS | 2026-11-10: `EXACT_APP_DIR=<hbots>/app bun "$EXACT_DIR/host/apple/build.mjs"` (no `--run`). Finished `host-dev`; wrote `app/target/clients/…/macos/hbots.app` (arm64). Note: no Metal toolchain → Canvas 2D uses Core Graphics (`xcodebuild -downloadComponent MetalToolchain`). | OK (build) | Launch with `scripts/run-macos.sh` (starts the gateway, opens the `.app`). The in-app shell that starts `hbots serve` is not built. |
-| iOS | Same apple host script with `--ios --run` (Simulator) or `--device --run`. | Not run | Needs Simulator/device. `host.ios` `minimumOS` 17.0; ATS for `http:` as below. |
+| macOS | 2026-11-10: `EXACT_APP_DIR=<hbots>/app bun "$EXACT_DIR/host/apple/build.mjs"` (no `--run`). Finished `host-dev`; wrote `app/target/clients/…/macos/hbots.app` (arm64). Note: no Metal toolchain → Canvas 2D uses Core Graphics (`xcodebuild -downloadComponent MetalToolchain`). | OK (build) | Launch with `scripts/run-macos.sh`. The in-app shell is not built. The host will own the gateway child and stop it in `willQuit`. |
+| iOS | 2026-11-10: Argent `list-devices` returned no iOS simulator. Xcode is installed and the iOS 27.1 runtime is present, with no simulator device created. | Not run | Create an iPhone simulator, then run the apple host with `--ios --run`. `host.ios` `minimumOS` 17.0; ATS for `http:` as below. The phone does not own the gateway. |
 
 ## Requirements (from the Exact docs)
 
@@ -36,12 +36,12 @@ Built: a dev script, `scripts/run-macos.sh`. Not built: the in-app shell.
 - opens the newest `app/target/clients/*/*/macos/hbots.app` if one exists. Opening leaves the gateway running, and the bundle keeps the `HBOTS_URL` it was built with;
 - otherwise runs the Exact apple host with `--run` (`EXACT_DIR` from `.exact-path`, `HBOTS_URL` passed to the build). It stops the gateway it started when the app quits.
 
-**Not built (the in-app shell).**
+**Not built (the in-app shell).** The choice of owner is made. The shell itself is not built.
 
-- The Exact host, in the `.app`, does not start or stop the gateway. The script is the only starter.
-- `HBOTS_URL` is inlined at build (`app/app.ts`, `env` in `app/app.json`), so one bundle serves one gateway. A per-launch URL needs another mechanism, which is not chosen.
-- Candidate routes, undecided: Exact's `willQuit(done:)` native-module hook, which runs before quit and is where a child is stopped (`docs/reference.md`, around line 336); and `@exact/child-process` (`docs/reference.md`, "Child processes"). The second is for app data code under grant lines (`process.spawn`, origin `"app"`), not a host API, so it may not fit a host-owned child. Neither has been tried.
-- The shell must still wait for `/api/health` before it shows the app, and stop the child on quit.
+- The Exact host, in the `.app`, does not start or stop the gateway yet. The script is the only starter.
+- `HBOTS_URL` stays inlined at build (`app/app.ts`, `env` in `app/app.json`). This shell uses that one gateway. A per-launch URL is a later mechanism.
+- The host owns the gateway child. It starts `hbots serve` when the app launches, waits for `/api/health`, then shows the window. A native module stops that child in `willQuit(done:)` (SIGTERM, then `done`) and force-ends it in `destroy()` if the five-second quit deadline expires (`docs/reference.md`, around line 336). iOS never calls `willQuit`. The phone is a client of the baked `HBOTS_URL`, not an owner of the gateway.
+- `@exact/child-process` is not the owner. A child there lives only while a Contract resource holds it, a start that is not the person's input or the app's own code fails `person-required`, and iOS rejects the package (`docs/reference.md`, "Child processes"). The gateway has to outlive a data reload and die with the Mac app, which is host work.
 
 ## Phone access (design, not built)
 

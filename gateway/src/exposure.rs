@@ -358,7 +358,6 @@ mod tests {
             access_team: String::new(),
             access_aud: String::new(),
             access_emails: vec![],
-            executor_url: String::new(),
         };
         let tailnet = Arc::new(Tailnet::new());
         Arc::new(AppState {
@@ -377,7 +376,6 @@ mod tests {
             ),
             icons: crate::icons::Icons::new(dir.join("icons")),
             usage: crate::usage::Usage::new(app_dir.join("usage.json")),
-            apps: crate::apps::Apps::new(app_dir.join("apps.json")),
             system: crate::release::System::new(cfg.data_root.clone(), cfg.app_dir()),
             mcp_token: "fixture-only".into(),
             provision_now: tokio::sync::Notify::new(),

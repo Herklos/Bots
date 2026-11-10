@@ -158,7 +158,7 @@ tests/e2e.sh        # mock T3 + gateway + Chromium: create a Bot, chat, see the 
 
 - macOS, iOS and Linux native Exact hosts (tools ready; full apple build not finished here)
 - the release workflow on GitHub Actions
-- pin Exact with the `EXACT_REF` repo variable (defaults to `main`)
+- GitHub Actions release has not run. `EXACT_REF` is pinned to `956ae33a35ffa5313d7be3cebc55ed84f9480e0a`
 
 Everything else, and what comes later (connected apps, voice, the full avatar system), is tracked in [docs/PLAN.md](docs/PLAN.md).
 

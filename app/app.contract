@@ -63,6 +63,9 @@ style IconControl
   border-radius="radius.md"
   color="ink.muted"
   background-color="transparent"
+  :disabled
+    opacity=0.4
+    color="ink.muted"
   :hover
     background-color="surface.soft"
   :active
@@ -88,6 +91,23 @@ style SendControl
   :disabled
     background-color="surface.line"
     color="ink.muted"
+
+style ToggleControl
+  display="flex"
+  align-items="center"
+  justify-content="center"
+  width=48
+  height=44
+  padding=0
+  border="none"
+  border-radius="radius.sm"
+  background-color="transparent"
+  :checked
+    background-color="transparent"
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+  :disabled
+    opacity=0.4
 
 style SwatchControl
   width=44
@@ -184,15 +204,6 @@ shape Prefs
   theme: string
   projects: bool
 
-// A connected app the gateway stores; the executor protocol is not spoken here.
-shape App
-  id: string
-  name: string
-  url: string
-
-shape Config
-  executorUrl: string
-
 // Result of uploading one chat attachment to the gateway.
 shape Attached
   ok: bool
@@ -232,6 +243,7 @@ fn avatarInk(c: string): string = c == "brand.black" || c == "brand.brown" || c 
 // design:end colours
 fn colorOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.color, case none => "brand.default" }
 fn kindTitle(k: string): string = k == "project" ? "Projects" : k == "task" ? "Tasks" : k == "machine" ? "Machines" : k == "service" ? "Services" : k == "repo" ? "Repos" : k == "note" ? "Notes" : "Links"
+fn attachmentName(entry: string): string = match entry.split("\\t").at(-1) { case some(name) => name, case none => "Attachment" }
 fn themeLabel(t: string): string = t == "system" ? "System" : t == "dark" ? "Dark" : "Light"
 // Face colours are plain names; Bot colours are brand.* tokens from the design package.
 fn faceColor(c: string): string = c == "brand.default" ? "teal" : c == "brand.blue" ? "blue" : c == "brand.violet" ? "violet" : c == "brand.pink" ? "pink" : c == "brand.orange" ? "orange" : c == "brand.green" ? "green" : c == "brand.black" ? "black" : c == "brand.white" ? "white" : c == "brand.brown" ? "brown" : c == "brand.red" ? "red" : c == "brand.amber" ? "amber" : c == "brand.yellow" ? "yellow" : c == "brand.cyan" ? "cyan" : c == "brand.purple" ? "purple" : c == "brand.magenta" ? "magenta" : c == "brand.gray" ? "gray" : "teal"
@@ -246,17 +258,12 @@ component Bots
   state newPassword = ""
   // Each entry is `id\\tname` for a file waiting to go out with the next send.
   state pendingAttaches: string[] = []
-  state appId = ""
-  state appName = ""
-  state appUrl = ""
   resource session = loadSession() as shape Session else empty()
   resource bots = loadBots() as shape Bot[] else empty()
   resource chat = loadChat(slug) as shape Chat else empty()
   resource prefs = loadPrefs() as shape Prefs else empty()
   resource vault = loadVault() as shape Login[] else empty()
   resource board = loadProjects() as shape Project[] else empty()
-  resource apps = loadApps() as shape App[] else empty()
-  resource config = loadConfig() as shape Config else empty()
   mutation signedIn as shape Reply refreshes session, bots
   mutation signedOut as shape Reply refreshes session, bots
   mutation created as shape Reply refreshes bots then afterCreate
@@ -275,7 +282,6 @@ component Bots
   mutation projectSaved as shape Reply refreshes board then afterProjectSave
   mutation projectRemoved as shape Reply refreshes board then afterProjectRemove
   mutation attached as shape Attached then afterAttach
-  mutation appsSaved as shape Reply refreshes apps then afterAppsSave
   derive slug = match stack(nav).filter(e => e.name == "chat").at(-1) { case some(e) => e.params.slug, case none => "" }
   derive signInError = match signedIn { case some(r) => r.error, case none => "" }
   derive createError = match created { case some(r) => r.error, case none => "" }
@@ -299,7 +305,6 @@ component Bots
   derive projectError = match projectSaved { case some(r) => r.error, case none => "" }
   derive projectRemoveError = match projectRemoved { case some(r) => r.error, case none => "" }
   derive attachError = match attached { case some(r) => r.error, case none => "" }
-  derive appsError = match appsSaved { case some(r) => r.error, case none => "" }
   derive canSend = draft.trim() != "" or pendingAttaches.length > 0
 
   // Chats are read while they are open; the inbox while it is.
@@ -311,9 +316,6 @@ component Bots
     refresh chat
     if top(nav).name == "projects"
       refresh board
-    if top(nav).name == "settings"
-      refresh apps
-      refresh config
   action editPassword(v: string)
     password = v
   action login
@@ -374,24 +376,6 @@ component Bots
     send stopped = stopRun(slug)
   action toEnd
     scrollIntoView("transcript", lastId, block="end")
-  action editAppId(v: string)
-    appId = v
-  action editAppName(v: string)
-    appName = v
-  action editAppUrl(v: string)
-    appUrl = v
-  action addApp
-    if appId.trim() != "" and appName.trim() != "" and appUrl.trim() != "" and not pending(appsSaved)
-      send appsSaved = addConnectedApp(appId.trim(), appName.trim(), appUrl.trim())
-  action removeApp(id: string)
-    if not pending(appsSaved)
-      send appsSaved = removeConnectedApp(id)
-  action afterAppsSave
-    if appsError == ""
-      appId = ""
-      appName = ""
-      appUrl = ""
-
   // Bot details: a Bot's name, colour, visibility and main status, and its deletion.
   action doRename(bslug: string, name: string)
     if name.trim() != ""
@@ -484,8 +468,8 @@ component Bots
             column class=Screen background-color="surface.sidebar" navigationSplit="288" navigationKey=`${e.id}` navigationScroll="bots-list" position="absolute" inset=0
               header class=PageHeader background-color="surface.sidebar"
                 text "hbots" role="heading" aria-level=1 font-size=22 font-weight=700 letter-spacing="-0.6px" flex=1
-                button class=TextControl appearance="none" press=openNew aria-label="New Bot" testId="new-bot" color="AccentColor"
-                  text "New Bot"
+                button class=IconControl appearance="none" press=openNew aria-label="New Bot" title="New Bot" testId="new-bot" color="AccentColor" background-color="surface.soft"
+                  Glyph(name="add", size=20)
               column navigationSplit="placeholder" flex=1 align-items="center" justify-content="center" gap="space.lg" padding="space.xl"
                 Face(shape="ball", color="teal", state="idle", size=72, still=false)
                 text "Your Bots, at home." class=HeroTitle text-align="center"
@@ -520,8 +504,8 @@ component Bots
                           Face(shape="ball", color=faceColor(b.color), state="asleep", size=32, still=true)
                           text b.name flex=1 color="ink.muted"
               row padding="space.sm space.md" border-top="1px solid surface.line"
-                button class=TextControl appearance="none" press=open("/settings") testId="open-settings" flex=1 text-align="start"
-                  text "Settings"
+                button class=IconControl appearance="none" press=open("/settings") aria-label="Settings" title="Settings" testId="open-settings"
+                  Glyph(name="settings", size=20)
           else if e.name == "chat"
             column class=Screen navigationKey=`${e.id}` navigationScroll="transcript" position="absolute" inset=0
               header class=PageHeader
@@ -531,8 +515,8 @@ component Bots
                   text nameOf(bots, e.params.slug) role="heading" aria-level=1 class=PageTitle
                   if chat.working
                     text "Working…" color="ink.muted" font="-exact-footnote"
-                button class=TextControl appearance="none" press=open(path("details", e.params.slug)) aria-label="Conversation details"
-                  text "Bot details"
+                button class=IconControl appearance="none" press=open(path("details", e.params.slug)) aria-label="Bot details" title="Bot details" testId="open-bot-details"
+                  Glyph(name="info", size=20)
               if failed(chat)
                 EmptyState(symbol="symbol:alert", title="Can’t Load This Conversation", message="Your messages haven’t loaded. Check the gateway, then try again.")
                   button press=pull testId="retry-chat"
@@ -583,8 +567,11 @@ component Bots
               if pendingAttaches.length > 0
                 row gap="space.sm" flex-wrap="wrap" padding="0 space.md" testId="pending-files"
                   for entry in pendingAttaches key=entry
-                    button press=dropPending(entry) buttonStyle="bordered" testId="pending-file"
-                      text "Remove attachment"
+                    row gap="space.sm" align-items="center" padding="space.xs space.sm space.xs space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" max-width="100%" box-sizing="border-box"
+                      Glyph(name="attach", size=16)
+                      text attachmentName(entry) font="-exact-footnote" overflow-wrap="anywhere" flex=1 min-width=0
+                      button class=IconControl appearance="none" press=dropPending(entry) aria-label=`Remove ${attachmentName(entry)}` title="Remove attachment" testId="pending-file"
+                        Glyph(name="close", size=16)
               row align-items="flex-end" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.md space.lg space.xl" padding="space.xs space.sm" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line"
                 button class=IconControl press=pickFiles disabled=(slug == "" or pending(attached) or pendingAttaches.length >= 8) appearance="none" aria-label="Attach a file" testId="attach"
                   Glyph(name="attach", size=20)
@@ -598,7 +585,7 @@ component Bots
                     Glyph(name="send", size=20)
           else if e.name == "details"
             for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-              BotDetails(route=e.id, bot=b, error=botError, rename=doRename, recolour=doRecolour, hide=doHide, makeMain=doMain, drop=doDropBot)
+              BotDetails(route=e.id, bot=b, error=botError, rename=doRename, recolour=doRecolour, hide=doHide, makeMain=doMain, drop=doDropBot, cancel=back)
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader
@@ -635,35 +622,6 @@ component Bots
                     text (session.passwordRequired ? "Change Password" : "Set Password")
                   footer
                     text "Anyone who opens hbots from another device signs in with this password."
-                section
-                  header
-                    text "Connected apps"
-                  if failed(apps)
-                    text "Can’t load connected apps. Check that `hbots` is running." color="-exact-system-red"
-                  else if apps.length == 0 and not pending(apps)
-                    text "No connected apps yet. Add an https app the Bots can use." color="-exact-secondary-label" font="-exact-footnote"
-                  for a in apps key=a.id
-                    row gap="space.md" align-items="center" testId=`app-${a.id}`
-                      column flex=1 min-width=0
-                        text a.name font-weight=600
-                        text a.url color="-exact-secondary-label" font="-exact-footnote"
-                      button press=removeApp(a.id) disabled=pending(appsSaved) aria-label=`Remove ${a.name}` testId=`remove-app-${a.id}`
-                        Glyph(name="trash", size=20)
-                  row
-                    text "Id"
-                    input appearance="none" class=Field value=appId input=editAppId placeholder="short-name" aria-label="App id" text-align="end" flex=1 min-width=0 testId="app-id"
-                  row
-                    text "Name"
-                    input appearance="none" class=Field value=appName input=editAppName placeholder="What you call it" aria-label="App name" text-align="end" flex=1 min-width=0 testId="app-name"
-                  row
-                    text "URL"
-                    input appearance="none" class=Field value=appUrl input=editAppUrl placeholder="https://…" aria-label="App URL" text-align="end" flex=1 min-width=0 testId="app-url"
-                  if appsError != "" and not pending(appsSaved)
-                    text appsError color="-exact-system-red" testId="apps-error"
-                  button press=addApp disabled=(appId.trim() == "" or appName.trim() == "" or appUrl.trim() == "" or pending(appsSaved)) testId="add-app"
-                    text "Add App"
-                  footer
-                    text (config.executorUrl != "" ? `Executor: ${config.executorUrl}. The list is stored on this machine.` : "The list is stored on this machine. The gateway does not speak the executor protocol yet.")
                 if session.passwordRequired
                   section
                     button press=logout testId="sign-out"
@@ -672,7 +630,7 @@ component Bots
             column class=Screen navigationKey=`${e.id}` navigationScroll="vault-list" position="absolute" inset=0
               header class=PageHeader
                 text "Vault" role="heading" aria-level=1 class=PageTitle flex=1
-                button press=open("/vault/new") aria-label="New Login" testId="new-login"
+                button class=IconControl appearance="none" press=open("/vault/new") aria-label="New Login" title="New Login" testId="new-login"
                   Glyph(name="add", size=20)
               if failed(vault)
                 EmptyState(symbol="symbol:alert", title="Can’t Open the Vault", message="Check that `hbots` is running, then try again.")
@@ -699,8 +657,8 @@ component Bots
           else
             column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="new-form" position="absolute" inset=0
               header class=PageHeader
-                button class=TextControl appearance="none" press=back testId="new-cancel"
-                  text "Cancel"
+                button class=IconControl appearance="none" press=back aria-label="Cancel" title="Cancel" testId="new-cancel"
+                  Glyph(name="close", size=20)
                 text "New Bot" role="heading" aria-level=1 class=PageTitle flex=1
               scroll id="new-form" flex=1 min-height=0
                 column width="100%" max-width="25rem" box-sizing="border-box" margin="0 auto" padding="space.xl" gap="space.xl"
@@ -733,49 +691,63 @@ component BotDetails
     hide: action
     makeMain: action
     drop: action
+    cancel: action
   state name = bot.name
   action edit(v: string)
     name = v
   view
-    column class=Screen navigationKey=`${route}` navigationScroll="details" position="absolute" inset=0
-      header class=PageHeader
+    column class=Screen navigationKey=`${route}` navigationPresentation="modal" navigationScroll="details" position="absolute" inset=0
+      header appearance="none" class=PageHeader
         text "Bot Details" role="heading" aria-level=1 class=PageTitle flex=1
-      list id="details" class=FormList appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
-        section
-          column align-items="center" gap="space.sm" padding="space.lg"
-            Face(shape="ball", color=faceColor(bot.color), state=(bot.hidden ? "asleep" : "idle"), size=72, still=false)
-            text bot.name class=PageTitle testId="details-name"
-            text (bot.main ? "Your main Bot" : "Make this Bot your own") color="ink.muted" font="-exact-footnote"
-        section
-          row
-            text "Name"
-            input appearance="none" class=Field value=name input=edit change=rename(bot.slug) aria-label="Name" text-align="end" flex=1 min-width=0 testId="bot-name"
-        section
-          header
-            text "Colour"
-          row gap="space.sm" flex-wrap="wrap"
-            for c in pickerColours() key=c
-              button press=recolour(bot.slug, c) appearance="none" aria-label=`Colour ${c}` aria-pressed=(bot.color == c) testId=`colour-${c}`
-                column width=44 height=44 border-radius=22 background-color=c border=(bot.color == c ? "3px solid -exact-label" : "3px solid transparent")
-        section
-          row
-            text "Main Bot"
-            if bot.main
-              text "Yes" color="-exact-secondary-label" testId="is-main"
-            else
-              button press=makeMain(bot.slug) buttonStyle="bordered" testId="make-main"
-                text "Make Main"
-          row
-            text "Hidden from the list"
-            input type="checkbox" switch checked=bot.hidden disabled=bot.main change=hide(bot.slug) aria-label="Hidden from the list" testId="hide-bot"
-          footer
-            text (bot.main ? "The main Bot can’t be hidden or deleted. Make another Bot main first." : "A hidden Bot moves to the Hidden section of the list.")
-        if error != ""
-          section
+        button class=IconControl appearance="none" press=cancel aria-label="Close Bot details" title="Close" testId="details-close"
+          Glyph(name="close", size=20)
+      scroll id="details" testId="details-scroll" flex=1 min-height=0
+        column width="100%" max-width="27rem" box-sizing="border-box" margin="0 auto" padding="space.xl" gap="space.xl"
+          column align-items="center" gap="space.md" padding="space.lg 0"
+            Face(shape="ball", color=faceColor(bot.color), state=(bot.hidden ? "asleep" : "idle"), size=88, still=false)
+            text bot.name font="-exact-title2" font-weight=600 testId="details-name" text-align="center" overflow-wrap="anywhere"
+            text (bot.hidden ? "Hidden from your inbox" : bot.ready ? "Ready to chat" : "Getting set up…") color="ink.muted" font="-exact-footnote" testId="details-status"
+          column gap="space.sm"
+            text "Name" font="-exact-subheadline" font-weight=600
+            input appearance="none" class=Field value=name input=edit change=rename(bot.slug) aria-label="Name" padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="bot-name"
+          column gap="space.md"
+            text "Colour" font="-exact-subheadline" font-weight=600
+            row gap="space.xs" flex-wrap="wrap"
+              for c in pickerColours() key=c
+                button class=SwatchControl press=recolour(bot.slug, c) appearance="none" aria-label=`Colour ${faceColor(c)}` aria-pressed=(bot.color == c) testId=`colour-${c}`
+                  column width=36 height=36 box-sizing="border-box" margin="space.xs" border-radius="radius.full" background-color=c border=(bot.color == c ? "3px solid -exact-label" : "3px solid transparent")
+          column border="1px solid surface.line" border-radius="radius.md" padding="space.xs space.md" background-color="surface.card"
+            row align-items="center" gap="space.md" min-height=64
+              column color="AccentColor"
+                Glyph(name="star", size=20)
+              column flex=1 gap="space.xs"
+                text "Main Bot" font="-exact-subheadline" font-weight=600
+                text (bot.main ? "Your default Bot" : "Make this your default Bot") color="ink.muted" font="-exact-footnote"
+              if bot.main
+                column color="AccentColor" aria-label="Main Bot" testId="is-main"
+                  Glyph(name="check", size=20)
+              else
+                button class=IconControl appearance="none" press=makeMain(bot.slug) aria-label="Make main Bot" title="Make main Bot" testId="make-main"
+                  Glyph(name="star", size=20)
+            row align-items="center" gap="space.md" min-height=64 border-top="1px solid surface.line"
+              column color="ink.muted"
+                Glyph(name="eye-off", size=20)
+              column flex=1 gap="space.xs"
+                text "Hide from inbox" font="-exact-subheadline" font-weight=600
+                text "Keep this conversation tucked away" color="ink.muted" font="-exact-footnote"
+              button class=ToggleControl appearance="none" role="switch" aria-checked=bot.hidden disabled=bot.main press=hide(bot.slug, not bot.hidden) aria-label="Hidden from the list" testId="hide-bot"
+                row width=44 height=26 border-radius="radius.full" background-color=(bot.hidden ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.hidden ? "flex-end" : "flex-start")
+                  column width=20 height=20 margin="0 3px" border-radius="radius.full" background-color="ink.light"
+          if bot.main
+            text "Your main Bot stays in the inbox. Choose another main Bot before hiding or deleting this one." color="ink.muted" font="-exact-footnote"
+          if error != ""
             text error color="-exact-system-red" testId="bot-error"
-        section
-          button commandfor="drop-bot" command="show-modal" disabled=bot.main testId="delete-bot"
-            text "Delete Bot"
+          row align-items="center" gap="space.md" padding="space.sm 0" border-top="1px solid surface.line"
+            column flex=1 gap="space.xs"
+              text "Delete Bot" font="-exact-subheadline" color=(bot.main ? "ink.muted" : "-exact-system-red")
+              text "Moves its folder to the trash" color="ink.muted" font="-exact-footnote"
+            button class=IconControl appearance="none" commandfor="drop-bot" command="show-modal" disabled=bot.main aria-label="Delete Bot" title="Delete Bot" color="-exact-system-red" testId="delete-bot"
+              Glyph(name="trash", size=20)
       dialog id="drop-bot" role="alertdialog" aria-label=`Delete ${bot.name}?`
         text "Its folder moves to the trash. This can’t be undone from here."
         button press=drop(bot.slug) destructive=true commandfor="drop-bot" command="close" testId="drop-bot-ok"

@@ -4,23 +4,19 @@
 // What app.ts writes, in brief (the declarations follow): `sources: Sources` has one
 // function per source, given its arguments as an array (then store, storage, native) and
 // answering its shape, or a Promise of it.
-//   addConnectedApp: (args: [string, string, string]) => Reply
 //   createBot: (args: [string, string]) => Reply
 //   deleteBot: (args: [string]) => Reply
 //   deleteLogin: (args: [string]) => Reply
 //   deleteProject: (args: [string]) => Reply
 //   hideBot: (args: [string, boolean]) => Reply
-//   loadApps: (args: []) => App[]
 //   loadBots: (args: []) => Bot[]
 //   loadChat: (args: [string]) => Chat
-//   loadConfig: (args: []) => Config
 //   loadPrefs: (args: []) => Prefs
 //   loadProjects: (args: []) => Project[]
 //   loadSession: (args: []) => Session
 //   loadVault: (args: []) => Login[]
 //   makeMainBot: (args: [string]) => Reply
 //   recolourBot: (args: [string, string]) => Reply
-//   removeConnectedApp: (args: [string]) => Reply
 //   renameBot: (args: [string, string]) => Reply
 //   revealPassword: (args: [string]) => Revealed
 //   saveLogin: (args: [string, string, string, string, string, string]) => Reply
@@ -34,15 +30,13 @@
 //   signOut: (args: []) => Reply
 //   stopRun: (args: [string]) => Reply
 //   uploadAttachment: (args: [string, string, string, string]) => Attached
-// The shapes. None is exported: name one by its source, `type Reply = Result<'addConnectedApp'>`.
+// The shapes. None is exported: name one by its source, `type Reply = Result<'createBot'>`.
 //   Reply = { ok: boolean; error: string }
 //   Session = { authenticated: boolean; passwordRequired: boolean }
 //   Bot = { slug: string; name: string; label: string; initials: string; color: string; main: boolean; hidden: boolean; ready: boolean }
 //   Row = { id: string; kind: string; mine: boolean; text: string; files: string }
 //   Chat = { slug: string; rows: Row[]; working: boolean }
 //   Prefs = { userName: string; theme: string; projects: boolean }
-//   App = { id: string; name: string; url: string }
-//   Config = { executorUrl: string }
 //   Attached = { ok: boolean; id: string; name: string; error: string }
 //   Login = { id: string; title: string; website: string; username: string; hasPassword: boolean; hints: string }
 //   Revealed = { ok: boolean; id: string; password: string; error: string }
@@ -282,56 +276,49 @@ type T5 = { "id": T1; "kind": T1; "mine": T0; "text": T1; "files": T1; };
 type T6 = T5[];
 type T7 = { "slug": T1; "rows": T6; "working": T0; };
 type T8 = { "userName": T1; "theme": T1; "projects": T0; };
-type T9 = { "id": T1; "name": T1; "url": T1; };
-type T10 = { "executorUrl": T1; };
-type T11 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
-type T12 = { "id": T1; "title": T1; "website": T1; "username": T1; "hasPassword": T0; "hints": T1; };
-type T13 = { "ok": T0; "id": T1; "password": T1; "error": T1; };
-type T14 = { "id": T1; "kind": T1; "title": T1; "status": T1; "area": T1; "body": T1; };
-type T15 = { "accessibilityTextSize": T0; };
-type T16 = { "prefersContrast": T1; };
-type T17 = number;
-type T18 = { "slug": T1; "id": T1; };
-type T19 = { "id": T17; "name": T1; "url": T1; "tab": T1; "params": T18; "fragment": T1; };
+type T9 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
+type T10 = { "id": T1; "title": T1; "website": T1; "username": T1; "hasPassword": T0; "hints": T1; };
+type T11 = { "ok": T0; "id": T1; "password": T1; "error": T1; };
+type T12 = { "id": T1; "kind": T1; "title": T1; "status": T1; "area": T1; "body": T1; };
+type T13 = { "accessibilityTextSize": T0; };
+type T14 = { "prefersContrast": T1; };
+type T15 = number;
+type T16 = { "slug": T1; "id": T1; };
+type T17 = { "id": T15; "name": T1; "url": T1; "tab": T1; "params": T16; "fragment": T1; };
+type T18 = T17[];
+type T19 = { "name": T1; "stack": T18; };
 type T20 = T19[];
-type T21 = { "name": T1; "stack": T20; };
-type T22 = T21[];
-type T23 = { "tab": T1; "tabs": T22; "next": T17; };
-type T24 = T1[];
-type T25 = T4[];
-type T26 = T12[];
-type T27 = T14[];
-type T28 = T9[];
-type T29 = T2 | null;
-type T30 = T13 | null;
-type T31 = T11 | null;
-type T32 = T17 | null;
-type T33 = { "path": T1; "name": T1; "type": T1; "size": T17; "width": T32; "height": T32; "duration": T32; };
-type T34 = T33[];
+type T21 = { "tab": T1; "tabs": T20; "next": T15; };
+type T22 = T1[];
+type T23 = T4[];
+type T24 = T10[];
+type T25 = T12[];
+type T26 = T2 | null;
+type T27 = T11 | null;
+type T28 = T9 | null;
+type T29 = T15 | null;
+type T30 = { "path": T1; "name": T1; "type": T1; "size": T15; "width": T29; "height": T29; "duration": T29; };
+type T31 = T30[];
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "addConnectedApp" | "createBot" | "deleteBot" | "deleteLogin" | "deleteProject" | "hideBot" | "makeMainBot" | "recolourBot" | "removeConnectedApp" | "renameBot" | "revealPassword" | "saveLogin" | "saveProject" | "sendMessage" | "setPassword" | "setProjects" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";
+export type MutationSource = "createBot" | "deleteBot" | "deleteLogin" | "deleteProject" | "hideBot" | "makeMainBot" | "recolourBot" | "renameBot" | "revealPassword" | "saveLogin" | "saveProject" | "sendMessage" | "setPassword" | "setProjects" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";
 
 export interface SourceMap {
-  "addConnectedApp": { args: [T1, T1, T1]; result: T2 };
   "createBot": { args: [T1, T1]; result: T2 };
   "deleteBot": { args: [T1]; result: T2 };
   "deleteLogin": { args: [T1]; result: T2 };
   "deleteProject": { args: [T1]; result: T2 };
   "hideBot": { args: [T1, T0]; result: T2 };
-  "loadApps": { args: []; result: T28 };
-  "loadBots": { args: []; result: T25 };
+  "loadBots": { args: []; result: T23 };
   "loadChat": { args: [T1]; result: T7 };
-  "loadConfig": { args: []; result: T10 };
   "loadPrefs": { args: []; result: T8 };
-  "loadProjects": { args: []; result: T27 };
+  "loadProjects": { args: []; result: T25 };
   "loadSession": { args: []; result: T3 };
-  "loadVault": { args: []; result: T26 };
+  "loadVault": { args: []; result: T24 };
   "makeMainBot": { args: [T1]; result: T2 };
   "recolourBot": { args: [T1, T1]; result: T2 };
-  "removeConnectedApp": { args: [T1]; result: T2 };
   "renameBot": { args: [T1, T1]; result: T2 };
-  "revealPassword": { args: [T1]; result: T13 };
+  "revealPassword": { args: [T1]; result: T11 };
   "saveLogin": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "saveProject": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "sendMessage": { args: [T1, T1, T1]; result: T2 };
@@ -342,7 +329,7 @@ export interface SourceMap {
   "signIn": { args: [T1]; result: T2 };
   "signOut": { args: []; result: T2 };
   "stopRun": { args: [T1]; result: T2 };
-  "uploadAttachment": { args: [T1, T1, T1, T1]; result: T11 };
+  "uploadAttachment": { args: [T1, T1, T1, T1]; result: T9 };
 }
 
 export type Source = keyof SourceMap;

@@ -2,7 +2,7 @@
 test "Settings owns the Vault and does not expose Projects"
   expect tree missing "open-vault"
   expect tree missing "open-projects"
-  tap "open-settings"
+  tap "Settings"
   clock data
   expect tree has "user-name"
   expect tree missing "beta-projects"
@@ -13,7 +13,7 @@ test "Settings owns the Vault and does not expose Projects"
   expect enabled "save-password"
 
 test "a login is reached through Settings and needs a title or website"
-  tap "open-settings"
+  tap "Settings"
   clock data
   tap "open-vault"
   clock data
@@ -37,3 +37,9 @@ test "creating a Bot works on a narrow screen"
   type "new-name" "Milo"
   tap "colour-brand.violet"
   expect enabled "create"
+  tap "Cancel"
+  clock settle
+  expect tree missing "new-name"
+  tap "New Bot"
+  clock settle
+  expect disabled "create"

@@ -62,7 +62,7 @@ On phones, the same routes push with the platform’s Back action. The colour pi
 wraps to keep every swatch available on narrow screens.
 
 Controls use the rounded line glyphs in `app/glyph.contract` at 20 points, with
-44-point targets. Settings and Bot details use text labels. The inbox has no
+44-point targets. New Bot, Settings and Bot details use icon buttons with accessible names and hover labels. The inbox has no
 utility buttons or grouped cards; Vault lives under Settings and Projects is
 not exposed. Headers share a minimum height and the same horizontal insets.
 
@@ -70,3 +70,9 @@ Threebot's source and demo informed the second pass: short conversations sit
 above the composer, long conversations retain virtualized scrolling, and Bot
 creation is a focused sheet. hbots keeps its own Face and Tide palette. Source:
 https://github.com/RokaSwK/threebot and https://bot.swk.tools/.
+
+Bot details opens as an identity sheet over the conversation. The close icon
+stays in the header, and the name and colour fields share the creation sheet’s
+spacing. Main, Hide and Delete use the same outline glyphs; Hide is a switch
+with a 48 by 44-point control. Destructive actions retain descriptive text.
+Attachment chips show their filenames and a named remove control.

@@ -33,9 +33,9 @@ Open http://127.0.0.1:3780. Settings: `~/.hbots/.env` + `~/.hbots/t3-token`.
 
 Env prefix is `HBOTS_*` (`HBOTS_HOME`, `HBOTS_PASSWORD`, `HBOTS_TAILSCALE_PATH`, `HBOTS_CLOUDFLARED_PATH`, `HBOTS_TAILNET_PORT`, `HBOTS_TAILNET_USERS`, `HBOTS_PUBLIC_LANDING_ONLY`, …). Legacy unprefixed Tailscale/tunnel names still work.
 
-**A6 gap:** auto-update will not install while `busy_threads` cannot read T3's `orchestration.subscribeShell` stream (`gateway/src/release.rs`).
+**A6:** `busy_threads` reads one `orchestration.subscribeShell` snapshot, counts threads a restart would interrupt, and interrupts the subscription (`gateway/src/release.rs`, `gateway/src/t3.rs`). Routine list does the same for `scheduledTasks.subscribe`. Auto-update still waits when that read fails, including a `snapshot-required` reply.
 
-Release: set GitHub repo variable `EXACT_REF` to a pinned Exact commit/tag (workflow defaults to `main`). Pack locally with `HBOTS_VERSION=… sh scripts/pack-release.sh`; install with `install.sh --version … --from <tarball> --sums SHA256SUMS`.
+Release: GitHub repo variable `EXACT_REF` is `956ae33a35ffa5313d7be3cebc55ed84f9480e0a` (the workflow still falls back to `main` if the variable is unset). Pack locally with `HBOTS_VERSION=… sh scripts/pack-release.sh`; install with `install.sh --version … --from <tarball> --sums SHA256SUMS`.
 
 macOS native client: `EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/apple/build.mjs"` → `app/target/clients/…/macos/hbots.app` (gitignored under `app/target`).
 
