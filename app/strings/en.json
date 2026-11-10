@@ -62,6 +62,8 @@
   "common.send": "Send",
   "common.stop": "Stop",
   "common.tryAgain": "Try again",
+  "computer.close": "Close",
+  "computer.enlarge": "Show {name}’s page large",
   "computer.held": "You have this page. Release it so the Bot can use it again.",
   "computer.none": "{name} has not opened a page.",
   "computer.pageFor": "Page open for {name}",

@@ -373,6 +373,28 @@ test "one server tab shows its title once"
   expect tree has "computer-take"
   expect tree missing "computer-frame"
 
+test "tapping the page picture covers the screen until close"
+  size 340x740
+  at "/bot/frame"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-computer"
+  clock data
+  expect tree has "computer-frame"
+  expect tree missing "computer-overlay"
+  expect tree has "computer-take"
+  expect tree missing "tab-only"
+  expect text "computer-status" == "Frame’s screen"
+  tap "computer-frame"
+  expect tree has "computer-overlay"
+  expect tree has "computer-large"
+  expect tree has "computer-close"
+  expect tree has "computer-take"
+  tap "computer-close"
+  expect tree missing "computer-overlay"
+  expect tree has "computer-frame"
+  expect tree has "computer-take"
+
 test "two server tabs are listed and the second can be chosen"
   size 340x740
   at "/bot/tabs"

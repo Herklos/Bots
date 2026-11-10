@@ -461,7 +461,7 @@ function draftRows(raw: string | null): { stamp: string; texts: string[]; files:
 }
 
 // The contract runner's slugs. A real Bot still notifies.
-const FIXTURE_SLUG = (slug: string): boolean => slug === 'fixture' || slug === 'bea' || slug === 'tabs';
+const FIXTURE_SLUG = (slug: string): boolean => slug === 'fixture' || slug === 'bea' || slug === 'tabs' || slug === 'frame';
 
 async function noticeGranted(): Promise<boolean> {
   try {
@@ -518,9 +518,11 @@ const sources: Sources = {
   loadBots: async ([focus], store): Promise<Result<'loadBots'>> => {
     // Reserved slugs for the contract runner, which has no gateway. A real inbox still fetches.
     // `bea` is the second fixture Bot, so a draft test can open her and come back without a gateway.
-    if (focus === 'tabs') {
+    if (focus === 'tabs' || focus === 'frame') {
+      const slug = focus === 'frame' ? 'frame' : 'tabs';
+      const name = focus === 'frame' ? 'Frame' : 'Tabs';
       return [
-        { slug: 'tabs', name: 'Tabs', label: '', initials: 'T', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', prompt: '', inheritParentPrompt: false },
+        { slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', prompt: '', inheritParentPrompt: false },
       ];
     }
     if (focus === 'fixture' || focus === 'bea') {
@@ -701,6 +703,7 @@ const sources: Sources = {
     if (slug === 'fixture') return fixtureChat(child);
     if (slug === 'bea') return blankChat('bea');
     if (slug === 'tabs') return blankChat('tabs');
+    if (slug === 'frame') return blankChat('frame');
     const query = child !== '' ? `?child=${encodeURIComponent(child)}` : '';
     const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat${query}`);
     const threadId = String(body.threadId ?? '');
@@ -888,6 +891,15 @@ const sources: Sources = {
     const none = { ok: true, tabs: [] as { id: string; title: string; url: string }[], image: '', error: '', selected: '' };
     if (slug === '' || gate !== '1') return none;
     // Two server pages for the contract runner. A real Bot still asks the gateway.
+    if (slug === 'frame') {
+      return {
+        ok: true,
+        selected: 'only',
+        image: '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAj/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCfAAH/2Q==',
+        error: '',
+        tabs: [{ id: 'only', title: 'Only', url: 'https://only.example' }],
+      };
+    }
     if (slug === 'page') {
       return {
         ok: true,

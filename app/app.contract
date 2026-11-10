@@ -2828,6 +2828,11 @@ component ScreenCard
     picked: string
     pick: action
   derive current = tabId(computer.tabs, picked, computer.selected)
+  state enlarged = false
+  action showLarge()
+    enlarged = true
+  action hideLarge()
+    enlarged = false
   view
     column gap="space.md" padding="0 space.lg space.xl" testId="screen"
       if down or not computer.ok
@@ -2840,7 +2845,8 @@ component ScreenCard
       else
         column border-radius="radius.md" overflow="hidden" border="1px solid surface.line" background-color="surface.card"
           if computer.image != ""
-            image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=name) width="100%" testId="computer-frame"
+            button appearance="none" press=showLarge padding=0 border="none" background-color="transparent" width="100%" aria-label=t("computer.enlarge", name=name) testId="computer-frame"
+              image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=name) width="100%"
           else
             column align-items="center" justify-content="center" height=140 color="ink.faint"
               Glyph(name="monitor", size=28)
@@ -2864,6 +2870,11 @@ component ScreenCard
           text t("computer.watching") color="ink.muted" font="-exact-footnote" text-align="center"
         if controlError != ""
           text controlError color="-exact-system-red" testId="computer-error"
+        if enlarged and computer.image != ""
+          column position="fixed" inset=0 z-index=40 align-items="center" justify-content="center" background-color="brand.black" testId="computer-overlay"
+            button class=IconControl appearance="none" press=hideLarge aria-label=t("computer.close") title=t("computer.close") testId="computer-close" position="absolute" top=12 right=12 z-index=1 color="ink.light" width=44 height=44
+              Glyph(name="close", size=22)
+            image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=name) width="100%" height="100%" object-fit="contain" testId="computer-large"
 
 // Everything about a Bot that is not what it is doing: its name, colour and shape, and where it sits.
 component EditBotPage

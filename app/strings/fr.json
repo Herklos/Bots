@@ -62,6 +62,8 @@
   "common.send": "Envoyer",
   "common.stop": "Arrêter",
   "common.tryAgain": "Réessayer",
+  "computer.close": "Fermer",
+  "computer.enlarge": "Afficher la page de {name} en grand",
   "computer.held": "Vous avez cette page. Relâchez-la pour que le Bot puisse s’en servir à nouveau.",
   "computer.none": "{name} n’a pas ouvert de page.",
   "computer.pageFor": "Page ouverte pour {name}",
