@@ -521,7 +521,7 @@ mod tests {
             (
                 json!({ "id": "h", "type": "subagent", "status": "completed", "title": "Lookup" }),
                 "started",
-                "Started",
+                "Started child thread",
             ),
         ];
         for (item, kind, text) in cases {

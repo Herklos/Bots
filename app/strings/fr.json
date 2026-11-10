@@ -134,7 +134,7 @@
   "event.routineDeleted": "Routine supprimée",
   "event.routineUpdated": "Routine mise à jour",
   "event.sent": "A écrit",
-  "event.started": "A démarré",
+  "event.started": "A démarré un fil enfant",
   "group.aboutPlaceholder": "Facultatif. Sur quoi le groupe travaille.",
   "group.aboutPlaceholderShort": "Sur quoi le groupe travaille",
   "group.botsCount": "Bots, {n}",

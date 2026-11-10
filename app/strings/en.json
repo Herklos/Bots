@@ -134,7 +134,7 @@
   "event.routineDeleted": "Deleted routine",
   "event.routineUpdated": "Updated routine",
   "event.sent": "Messaged",
-  "event.started": "Started",
+  "event.started": "Started child thread",
   "group.aboutPlaceholder": "Optional. What the group works on.",
   "group.aboutPlaceholderShort": "What the group works on",
   "group.botsCount": "Bots, {n}",
