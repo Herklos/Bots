@@ -4,9 +4,51 @@ on:
   push:
     tags: ["v*"]
 
+permissions:
+  contents: read
+
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        name: Tag matches Cargo.toml
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' Cargo.toml | head -n 1)"
+          [ "v$version" = "$GITHUB_REF_NAME" ] || { echo "Tag $GITHUB_REF_NAME doesn't match Cargo.toml $version"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  web:
+    # The Exact web app, built once and packed into every target's archive.
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: expo/exact
+          # Set the repository variable EXACT_REF to a reviewed commit or tag; main is used until it is set.
+          ref: ${{ vars.EXACT_REF || 'main' }}
+          path: exact
+      - uses: oven-sh/setup-bun@v2
+      - name: Set up Exact (toolchains and tools; the first run takes a few minutes)
+        run: cd exact && bun scripts/exact.mjs setup
+      - name: Build the web app
+        run: EXACT_APP_DIR="$PWD/app" bun exact/host/web/build.mjs bots-web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: app/target/web-dist
+          if-no-files-found: error
+
   package:
     name: ${{ matrix.target }}
+    needs: [verify, web]
     strategy:
       fail-fast: false
       matrix:
@@ -17,7 +59,8 @@ jobs:
             target: aarch64-unknown-linux-gnu
           - os: macos-latest
             target: aarch64-apple-darwin
-          - os: macos-13
+          # Built on the arm64 runner with the x86_64 Rust target.
+          - os: macos-latest
             target: x86_64-apple-darwin
     runs-on: ${{ matrix.os }}
     steps:
@@ -25,13 +68,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web-dist
       - name: build hbots
         run: cargo build --release --locked --target ${{ matrix.target }}
       - name: pack
         env:
           HBOTS_BIN: target/${{ matrix.target }}/release/hbots
           HBOTS_TARGET: ${{ matrix.target }}
-          HBOTS_VERSION: ${{ github.ref_name }}
+          HBOTS_VERSION: ${{ needs.verify.outputs.version }}
+          STATIC_DIR: web-dist
         run: scripts/pack-release.sh
       - uses: actions/upload-artifact@v4
         with:
@@ -39,3 +87,31 @@ jobs:
           path: |
             dist/*.tar.gz
             dist/SHA256SUMS
+          if-no-files-found: error
+
+  publish:
+    needs: [verify, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hbots-*
+          path: parts
+      - name: Collect the archives and one SHA256SUMS
+        run: |
+          mkdir -p release
+          for d in parts/*/; do cp "$d"hbots-*.tar.gz release/; cat "$d"SHA256SUMS >> release/SHA256SUMS; done
+          sort -k2 -o release/SHA256SUMS release/SHA256SUMS
+          cat release/SHA256SUMS
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          prerelease=""
+          case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" release/*.tar.gz release/SHA256SUMS \
+            --title "hbots ${GITHUB_REF_NAME#v}" --generate-notes $prerelease

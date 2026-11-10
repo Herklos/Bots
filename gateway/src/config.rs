@@ -38,6 +38,16 @@ fn home() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
+/// The web app an installed release carries: `web/` next to the binary. A checkout falls back to
+/// `app/dist`.
+fn default_static_dir() -> PathBuf {
+    std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|d| d.join("web")))
+        .filter(|d| d.join("index.html").is_file())
+        .unwrap_or_else(|| PathBuf::from("app/dist"))
+}
+
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         let data_root = env("HBOTS_HOME")
@@ -74,7 +84,7 @@ impl Config {
             t3_token,
             static_dir: env("STATIC_DIR")
                 .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("app/dist")),
+                .unwrap_or_else(default_static_dir),
             password: env("HBOTS_PASSWORD").unwrap_or_default(),
             vault_file: env("VAULT_FILE")
                 .map(PathBuf::from)
