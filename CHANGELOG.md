@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.5
+
+- Fixed build-time rendering of the host clock.
+
 ## 0.1.4
 
 - Made Exact packages available to the release web build.

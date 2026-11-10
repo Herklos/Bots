@@ -44,6 +44,8 @@ jobs:
         env:
           CHROME: ${{ steps.chrome.outputs.chrome-path }}
         run: cd exact && bun scripts/exact.mjs setup
+      - name: Patch Exact server rendering
+        run: git -C exact apply "$GITHUB_WORKSPACE/scripts/exact-server-time.patch"
       - name: Link Exact app packages
         run: |
           mkdir -p app/node_modules/@exact
