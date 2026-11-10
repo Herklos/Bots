@@ -1,11 +1,12 @@
 [workspace]
 resolver = "2"
 members = ["gateway", "design"]
+exclude = ["exact/vendor/ibex/crates/hermes-lean-sys-installer"]
 
 [workspace.package]
 edition = "2021"
 license = "MIT"
-version = "0.1.0"
+version = "0.1.1"
 
 [profile.release]
 lto = "thin"

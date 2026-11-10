@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Fixed release packaging when Exact is checked out inside the Rust workspace.
+
 ## 0.1.0
 
 Initial version of hbots.
