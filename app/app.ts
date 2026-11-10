@@ -888,6 +888,15 @@ const sources: Sources = {
     const none = { ok: true, tabs: [] as { id: string; title: string; url: string }[], image: '', error: '', selected: '' };
     if (slug === '' || gate !== '1') return none;
     // Two server pages for the contract runner. A real Bot still asks the gateway.
+    if (slug === 'page') {
+      return {
+        ok: true,
+        selected: 'only',
+        image: '',
+        error: '',
+        tabs: [{ id: 'only', title: 'Only', url: 'https://only.example' }],
+      };
+    }
     if (slug === 'tabs') {
       const selected = tab === 'two' ? 'two' : 'one';
       return {
