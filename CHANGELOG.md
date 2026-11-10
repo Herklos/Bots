@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- Made Exact packages available to the release web build.
+
 ## 0.1.3
 
 - Corrected the Chrome path passed to release setup.

@@ -44,6 +44,12 @@ jobs:
         env:
           CHROME: ${{ steps.chrome.outputs.chrome-path }}
         run: cd exact && bun scripts/exact.mjs setup
+      - name: Link Exact app packages
+        run: |
+          mkdir -p app/node_modules/@exact
+          for package in media-capture notifications recording; do
+            ln -s "$GITHUB_WORKSPACE/exact/packages/$package" "app/node_modules/@exact/$package"
+          done
       - name: Build the web app
         run: EXACT_APP_DIR="$PWD/app" bun exact/host/web/build.mjs bots-web
       - name: Check web build
