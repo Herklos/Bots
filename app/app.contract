@@ -808,6 +808,7 @@ component Bots
   state heldTab = ""
   // Empty follows the server's selected tab. A pick refetches that page.
   state computerTab = ""
+  state computerEnlarged = false
   resource hostTime = exactTime() as shape HostTime
   resource pointerFacts = exactViewport() as shape PointerFacts
   resource session = loadSession(hostTime.locale) as shape Session else empty()
@@ -974,6 +975,7 @@ component Bots
         wide = w
         panelOpen = w
   action togglePanel
+    computerEnlarged = false
     let next = not panelOpen
     panelOpen = next
     if next and panelTab == "details"
@@ -989,6 +991,7 @@ component Bots
   action retryUsage
     refresh usage
   action pickPanelTab(tab: string)
+    computerEnlarged = false
     panelTab = tab
   action openPage(page: string)
     panelPage = page
@@ -1035,11 +1038,13 @@ component Bots
   // A wide window shows the list beside the open chat. Opening another Bot
   // replaces that chat, so the conversation swaps instead of stacking.
   action open(url: string)
+    computerEnlarged = false
     childThread = ""
     panelPage = "root"
     computerTab = ""
     nav = top(nav).name == "chat" and url.startsWith("/bot/") ? replace(nav, url) : go(nav, url)
   action back
+    computerEnlarged = false
     if childThread != ""
       childThread = ""
     else
@@ -1504,8 +1509,38 @@ component Bots
     if holding and heldTab != "" and kind != ""
       send driven = computerInput(slug, kind, x, y, boxW, boxH, delta, text)
 
+  action showComputerLarge
+    computerEnlarged = true
+  action focusComputerFrame
+    focus("computer-frame")
+  task aimComputerFrame when holding and not computerEnlarged
+    after(1, focusComputerFrame)
+  action focusLarge
+    focus("computer-large")
+  task aimComputerLarge when holding and computerEnlarged
+    after(1, focusLarge)
+  action largePageKey(k: string, event: KeyboardEvent)
+    if holding and not event.isComposing
+      let kind = pageKeyKind(k)
+      if kind != ""
+        preventDefault()
+        doDrive(kind, 0, 0, 0, 0, 0, k)
+  action largePoint(e: PointerEvent)
+    if holding and e.button == 0
+      let area = frame("computer-large")
+      if not area.unavailable and not area.provisional and area.width > 0 and area.height > 0
+        doDrive("click", e.offsetX, e.offsetY, area.width, area.height, 0, "")
+  action largeWheel(e: WheelEvent)
+    if holding
+      preventDefault()
+      let area = frame("computer-large")
+      if not area.unavailable and not area.provisional and area.width > 0 and area.height > 0
+        doDrive("wheel", e.offsetX, e.offsetY, area.width, area.height, e.deltaY, "")
+  action hideComputerLarge
+    computerEnlarged = false
+
   view
-    main id="app-shell" class=Screen navigationKey=`${top(nav).id}` navigationBack="back" navigate=open interactive-widget="resizes-content" width="100%" height="100%" testId="app"
+    main id="app-shell" class=Screen navigationKey=`${top(nav).id}` navigationBack="back" navigate=open interactive-widget="resizes-content" position="relative" width="100%" height="100%" testId="app"
       if locked
         column flex=1 justify-content="center" align-items="center" padding="space.xl" testId="sign-in"
           column width="100%" max-width="22rem" gap="space.lg" box-sizing="border-box" padding="space.xl" border="1px solid surface.line" border-radius="radius.lg" background-color="surface.card"
@@ -1787,7 +1822,7 @@ component Bots
                       button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="send"
                         Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
+                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, makeDefault=doMakeDefault, isDefault=(prefs.defaultInstance == models.instanceId and prefs.defaultModel == models.current), modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), showComputerLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
           else if e.name == "group"
             column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="room-header"
@@ -2026,6 +2061,12 @@ component Bots
                             column flex=1 gap="2px" min-width=0
                               text s.name font-weight=600
                               text s.about color="ink.muted" font="-exact-footnote"
+      if computerEnlarged and not locked and onComputer and computer.image != ""
+        column position="absolute" inset=0 z-index=40 align-items="center" justify-content="center" background-color="brand.black" testId="computer-overlay"
+          button class=IconControl appearance="none" press=hideComputerLarge aria-label=t("computer.close") title=t("computer.close") testId="computer-close" position="absolute" top=12 right=12 z-index=1 color="ink.light" width=44 height=44
+            Glyph(name="close", size=22)
+          column id="computer-large" tabindex=(holding ? 0 : -1) key=largePageKey pointerdown=largePoint wheel=largeWheel touch-action="none" width="100%" height="100%" testId="computer-large"
+            image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=nameOf(bots, slug)) width="100%" height="100%" object-fit="contain"
       if toast != ""
         row position="absolute" bottom=88 left="50%" translate="-50% 0" padding="space.md space.lg" border-radius="radius.full" background-color="-exact-label" color="surface.canvas" max-width="90%" box-sizing="border-box" testId="toast" role="status" aria-live="polite"
           text toast font="-exact-subheadline" font-weight=500
@@ -2404,6 +2445,7 @@ component BotPanel
     shelfDown: bool
     computer: Computer
     computerDown: bool
+    showComputerLarge: action
     heldTab: string
     controlError: string
     driveError: string
@@ -2613,7 +2655,7 @@ component BotPanel
             BotShelf(shelf=shelf, down=shelfDown, name=bot.name)
         column id="bot-tab-computer" role="tabpanel" aria-label=t("panel.computer") display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0
           scroll id="panel-computer-scroll" flex=1 min-height=0
-            ScreenCard(name=bot.name, computer=computer, down=computerDown, heldTab=heldTab, controlError=controlError, driveError=driveError, live=live, drive=drive, take=take, release=release, picked=picked, pick=pick)
+            ScreenCard(name=bot.name, computer=computer, down=computerDown, showLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=live, drive=drive, take=take, release=release, picked=picked, pick=pick)
 
 // Pick the provider, the model and how hard it thinks. Each choice applies to the Bot's next message.
 // Provider, model and effort as one picker. The Bot's panel and Settings both use it.
@@ -2833,6 +2875,7 @@ component ScreenCard
     name: string
     computer: Computer
     down: bool
+    showLarge: action
     heldTab: string
     controlError: string
     driveError: string
@@ -2843,17 +2886,6 @@ component ScreenCard
     picked: string
     pick: action
   derive current = tabId(computer.tabs, picked, computer.selected)
-  state enlarged = false
-  action showLarge()
-    enlarged = true
-  action hideLarge()
-    enlarged = false
-  action focusPicture()
-    focus(enlarged ? "computer-large" : "computer-frame")
-  task aim when live
-    after(1, focusPicture)
-  task aimLarge when live and enlarged
-    after(1, focusPicture)
   action pageKey(k: string, event: KeyboardEvent)
     if live and not event.isComposing
       let kind = pageKeyKind(k)
@@ -2873,12 +2905,8 @@ component ScreenCard
         drive("wheel", e.offsetX, e.offsetY, area.width, area.height, e.deltaY, "")
   action thumbPoint(e: PointerEvent)
     point("computer-frame", e)
-  action largePoint(e: PointerEvent)
-    point("computer-large", e)
   action thumbWheel(e: WheelEvent)
     roll("computer-frame", e)
-  action largeWheel(e: WheelEvent)
-    roll("computer-large", e)
   view
     column gap="space.md" padding="0 space.lg space.xl" testId="screen"
       if down or not computer.ok
@@ -2924,12 +2952,6 @@ component ScreenCard
           text controlError color="-exact-system-red" testId="computer-error"
         else if driveError != ""
           text driveError color="-exact-system-red" testId="computer-error"
-        if enlarged and computer.image != ""
-          column position="fixed" inset=0 z-index=40 align-items="center" justify-content="center" background-color="brand.black" testId="computer-overlay"
-            button class=IconControl appearance="none" press=hideLarge aria-label=t("computer.close") title=t("computer.close") testId="computer-close" position="absolute" top=12 right=12 z-index=1 color="ink.light" width=44 height=44
-              Glyph(name="close", size=22)
-            column id="computer-large" tabindex=(live ? 0 : -1) key=pageKey pointerdown=largePoint wheel=largeWheel touch-action="none" width="100%" height="100%" testId="computer-large"
-              image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=name) width="100%" height="100%" object-fit="contain"
 
 // Everything about a Bot that is not what it is doing: its name, colour and shape, and where it sits.
 component EditBotPage
