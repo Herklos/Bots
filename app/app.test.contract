@@ -129,6 +129,7 @@ test "search filters the loaded conversation"
   at "/bot/fixture"
   clock data
   expect tree has "message-m1"
+  tap "chat-search-open"
   type "chat-search" "there"
   expect tree missing "message-m1"
   expect tree has "message-m2"
