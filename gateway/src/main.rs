@@ -30,6 +30,7 @@ mod roster; // What an inbox row needs: preview, working, unread.
 mod routines; // T5: T3 scheduled tasks.
 mod service; // T6b: install and remove the background service.
 mod store;
+mod subagent_tools;
 mod suggestions; // New Bot starting points.
 mod t3;
 mod thread_meta; // T5: reactions, voice calls, roster previews.
