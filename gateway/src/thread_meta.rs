@@ -47,6 +47,8 @@ static TOOL_SEPARATOR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"__|\.").u
 const MAX_STAMPS: usize = 200;
 /// Pins stay a short list. One past this is refused.
 pub const PIN_CAP: usize = 20;
+// Nothing in the gateway calls this yet.
+#[allow(dead_code)]
 pub const NOT_IN_VIEW: &str = "This message is not in view.";
 
 fn bad(message: &str) -> ApiError {
@@ -313,6 +315,8 @@ pub fn inbox_unread(hidden: bool, roster_unread: bool, last_read: &str, latest: 
 }
 
 /// Pins in stored order. An id that is not in the loaded messages stays, and says so.
+// Nothing in the gateway calls this yet.
+#[allow(dead_code)]
 pub fn pin_lines(pins: &[Value], messages: &[Value]) -> Vec<Value> {
     pins.iter()
         .filter_map(Value::as_str)

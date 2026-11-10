@@ -84,7 +84,7 @@ pub fn web_links(text: &str) -> Vec<String> {
             })
             .unwrap_or(tail.len());
         let mut href = tail[..end]
-            .trim_end_matches(|c: char| matches!(c, ')' | ',' | '.' | ';' | '!' | '?' | ']'))
+            .trim_end_matches([')', ',', '.', ';', '!', '?', ']'])
             .to_string();
         if href.parse::<url::Url>().is_ok() && !out.contains(&href) {
             out.push(std::mem::take(&mut href));
@@ -1074,7 +1074,7 @@ mod tests {
         assert!(toml.contains("https://mcp.example/z"));
         let claude = claude_settings(
             &json!({}),
-            &json!([
+            json!([
                 { "name": "notes", "enabled": false },
                 { "name": "zebra", "enabled": true },
                 { "name": "bot", "enabled": false }

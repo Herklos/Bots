@@ -521,7 +521,7 @@ pub fn report(
         })
         .collect();
     let mut models: Vec<(String, Sum)> = by_model.into_iter().collect();
-    models.sort_by(|a, b| (b.1.input + b.1.output).cmp(&(a.1.input + a.1.output)));
+    models.sort_by_key(|a| std::cmp::Reverse(a.1.input + a.1.output));
     json!({
         "ok": true,
         "totals": { "messages": msgs, "attachments": atts, "turns": total.turns, "input": total.input, "output": total.output,

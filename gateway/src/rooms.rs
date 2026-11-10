@@ -741,7 +741,7 @@ mod tests {
             .await
             .unwrap();
         let id = created["id"].as_str().unwrap().to_string();
-        assert!(rooms.list().await.unwrap().is_empty() == false);
+        assert!(!rooms.list().await.unwrap().is_empty());
 
         let (stored, dispatches) = rooms
             .send(&id, &directory(), "hello both", "m1", "t1")
