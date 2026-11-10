@@ -698,6 +698,10 @@ shape DraftPack
 shape HostTime
   locale: string
 
+// Whether the primary pointer can hover. A phone is "none"; a mouse is "hover".
+shape PointerFacts
+  hover: string
+
 fn nameOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.name, case none => "" }
 fn labelOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.ready ? (b.label != "" ? b.label : "Ready to chat") : "Getting set up…", case none => "" }
 fn initialsOf(name: string): string = name.trim().split(" ").filter(w => w != "").slice(0, 2).map(w => w.slice(0, 1).toUpperCase()).join("")
@@ -734,25 +738,41 @@ fn bitState(faces: FaceBit[], n: number): string = match faces.at(n) { case some
 fn memberFaces(bots: Bot[], members: RoomMember[]): FaceBit[] = members.slice(0, 3).map(m => FaceBit(shape=shapeOf(bots, m.slug), color=colorOf(bots, m.slug), state=m.state))
 fn pickedFaces(bots: Bot[], slugs: string[]): FaceBit[] = slugs.slice(0, 3).map(slug => FaceBit(shape=shapeOf(bots, slug), color=colorOf(bots, slug), state="idle"))
 
-// One transcript message. Time, reply and pin stay in the tree so they can take
-// keyboard focus, and they paint only while the pointer is over this message,
-// while it is held down, or while one of those controls is focused.
+// One transcript message. Time, reply and pin stay in the tree so the keyboard
+// can focus them. They paint while the pointer is over the message, while a tap
+// has left them open, or while reply or pin is focused. The tap that opens them
+// does not close them on the way up; the next tap does. On a device that can
+// hover, the pointer leaving the message closes them too. Hidden chrome takes
+// no taps.
 component ChatMessage
   props
     row: Row
+    canHover: bool
     picking: bool
     react: action
     openPicker: action
     reply: action
     pin: action
   state over = false
-  state held = false
+  state latched = false
+  state closeOnLift = false
   state focused = false
-  derive showChrome = over or held or focused
+  derive showChrome = over or latched or focused
   action setOver(on: bool)
     over = on
-  action setHeld(on: bool)
-    held = on
+    if not on and canHover
+      latched = false
+      closeOnLift = false
+  action tapDown()
+    if latched
+      closeOnLift = true
+    else
+      latched = true
+      closeOnLift = false
+  action tapUp()
+    if closeOnLift
+      latched = false
+      closeOnLift = false
   action chromeFocus(e: FocusEvent)
     focused = e.target == `reply-${row.id}` or e.target == `pin-message-${row.id}`
   action chromeBlur(e: FocusEvent)
@@ -763,7 +783,7 @@ component ChatMessage
         focused = false
   view
     row justify-content=(row.mine ? "flex-end" : "flex-start") padding=(row.head ? "space.sm space.lg 2px" : "2px space.lg")
-      column gap="2px" max-width="82%" align-items=(row.mine ? "flex-end" : "flex-start") hover=setOver pointerdown=setHeld(true) pointerup=setHeld(false) focusin=chromeFocus focusout=chromeBlur
+      column gap="2px" max-width="82%" align-items=(row.mine ? "flex-end" : "flex-start") hover=setOver pointerdown=tapDown pointerup=tapUp focusin=chromeFocus focusout=chromeBlur
         if row.quote != ""
           text row.quote color="ink.muted" font="-exact-footnote" testId=`quote-${row.id}`
         if row.text != "" and row.mine
@@ -802,11 +822,11 @@ component ChatMessage
           text row.tokens color="ink.muted" font="-exact-footnote" testId=`tokens-${row.id}`
         if row.tail and row.time != ""
           row gap="space.xs" align-items="center" padding="0 space.xs"
-            row gap="space.xs" align-items="center" opacity=(showChrome ? 1 : 0)
+            row gap="space.xs" align-items="center" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none")
               text row.time font="-exact-footnote" color="ink.faint"
-              button id=`reply-${row.id}` class=TextControl appearance="none" press=reply(row.id, row.text) aria-label=t("chat.reply") title=t("chat.reply") min-height=24 padding="0 space.xs" testId=`reply-${row.id}`
+              button id=`reply-${row.id}` class=TextControl appearance="none" press=reply(row.id, row.text) aria-label=t("chat.reply") title=t("chat.reply") min-height=24 padding="0 space.xs" pointer-events=(showChrome ? "auto" : "none") testId=`reply-${row.id}`
                 text t("chat.reply") font="-exact-footnote"
-              button id=`pin-message-${row.id}` class=TextControl appearance="none" press=pin(row.id, row.text) aria-label=t("chat.pin") title=t("chat.pin") min-height=24 padding="0 space.xs" testId=`pin-message-${row.id}`
+              button id=`pin-message-${row.id}` class=TextControl appearance="none" press=pin(row.id, row.text) aria-label=t("chat.pin") title=t("chat.pin") min-height=24 padding="0 space.xs" pointer-events=(showChrome ? "auto" : "none") testId=`pin-message-${row.id}`
                 text t("chat.pin") font="-exact-footnote"
             if row.react != ""
               button class=TextControl appearance="none" press=react(row.id, row.react) aria-label=t("chat.removeReaction") min-height=24 padding="0 space.xs" testId=`react-${row.id}`
@@ -883,6 +903,7 @@ component Bots
   // Empty follows the server's selected tab. A pick refetches that page.
   state computerTab = ""
   resource hostTime = exactTime() as shape HostTime
+  resource pointerFacts = exactViewport() as shape PointerFacts
   resource session = loadSession(hostTime.locale) as shape Session else empty()
   resource keptDrafts = loadDrafts() as shape DraftPack else empty()
   resource bots = loadBots(slug != "" ? slug : roomId) as shape Bot[] else empty()
@@ -1742,7 +1763,7 @@ component Bots
                                   Glyph(name=(m.variant == "routine" ? "clock" : "check"), size=14)
                                 text m.title font="-exact-footnote" color="-exact-label"
                         else if m.kind == "message"
-                          ChatMessage(row=m, picking=(reactFor == m.id), react=doReact, openPicker=openReact, reply=startReply, pin=doPinMessage)
+                          ChatMessage(row=m, canHover=(pointerFacts.hover == "hover"), picking=(reactFor == m.id), react=doReact, openPicker=openReact, reply=startReply, pin=doPinMessage)
                         else if m.kind == "request"
                           row padding="space.sm space.lg"
                             column gap="space.sm" padding="space.md space.lg" border-radius="radius.lg" background-color="surface.bubble" flex=1 max-width="32rem" testId=`request-${m.id}`
