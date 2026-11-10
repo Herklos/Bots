@@ -116,6 +116,58 @@ function libraryEntry(slug: string, e: any) {
   };
 }
 
+
+const compact = (n: number): string => (n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M` : n >= 1e3 ? `${(n / 1e3).toFixed(n >= 1e4 ? 0 : 1)}k` : String(n)).replace('.0', '');
+// "claude-opus-5-5" as "Claude Opus 5.5" when T3 gave no name.
+const prettyModel = (slug: string): string => slug.split('-').filter(Boolean).map((w, i, all) => (/^\d+$/.test(w) && /^\d+$/.test(all[i + 1] ?? '') ? `${w}.` : w.charAt(0).toUpperCase() + w.slice(1))).join(' ').replace(/\. /g, '.');
+const dayOf = (day: string): Date => new Date(Number(day.slice(0, 4)), Number(day.slice(5, 7)) - 1, Number(day.slice(8, 10)));
+// When a routine runs next: the clock today or tomorrow, then the weekday.
+function nextLabel(at: unknown, now: number): string {
+  if (typeof at !== 'string' || at === '' || !(now > 0)) return '';
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return '';
+  const days = Math.round((dayStart(d.getTime()) - dayStart(now)) / 86_400_000);
+  const day = days <= 0 ? 'Today' : days === 1 ? 'Tomorrow' : days < 7 ? DAYS[d.getDay()]! : `${MONTHS[d.getMonth()]} ${d.getDate()}`;
+  return `Next: ${day} ${clock(d)}`;
+}
+const PERIODS: Record<string, string> = { today: 'Today', '7d': '7 days', '30d': '30 days', all: 'All time' };
+function emptyReport(error: string) {
+  return { ok: error === '', error, period: '', periodLabel: '', messages: '0', attachments: '0', turns: '0', tokens: '0', input: '0', output: '0', cached: '0', cacheWrite: '0', hit: '', sentence: '', days: [] as any[], rows: [] as any[], models: [] as any[], bots: [] as any[], empty: true, first: '', last: '' };
+}
+// The gateway's usage report as the panel and Settings show it: figures as words, bars as heights.
+function usageReport(b: any) {
+  const t = b.totals ?? {};
+  const series = ((b.series ?? []) as any[]);
+  const peak = Math.max(1, ...series.map((d) => Number(d.input) + Number(d.output)));
+  const days = series.map((d) => {
+    const tokens = Number(d.input) + Number(d.output);
+    const date = dayOf(String(d.day));
+    return { day: String(d.day), label: `${DAYS[date.getDay()]!.slice(0, 3)} ${date.getDate()}`, short: String(date.getDate()), tokens: compact(tokens), input: compact(Number(d.input)), output: compact(Number(d.output)), cached: compact(Number(d.cached)), cacheWrite: compact(Number(d.cacheWrite)),
+      turns: String(d.turns), messages: String(d.messages), px: tokens === 0 ? 2 : Math.max(4, Math.round((tokens / peak) * 88)), spx: tokens === 0 ? 2 : Math.max(3, Math.round((tokens / peak) * 28)) };
+  });
+  const models = ((b.byModel ?? []) as any[]);
+  const top = Math.max(1, ...models.map((m) => Number(m.tokens)));
+  const bots = ((b.byBot ?? []) as any[]).filter((x) => Number(x.tokens) + Number(x.messages) > 0);
+  const botTop = Math.max(1, ...bots.map((x) => Number(x.tokens)));
+  const input = Number(t.input ?? 0);
+  return {
+    ok: true, error: String(b.error ?? ''), period: String(b.period ?? ''), periodLabel: PERIODS[String(b.period)] ?? '',
+    messages: compact(Number(t.messages ?? 0)), attachments: compact(Number(t.attachments ?? 0)), turns: compact(Number(t.turns ?? 0)),
+    tokens: compact(Number(t.tokens ?? 0)), input: compact(input), output: compact(Number(t.output ?? 0)), cached: compact(Number(t.cached ?? 0)), cacheWrite: compact(Number(t.cacheWrite ?? 0)),
+    hit: input > 0 ? `${Math.round((Number(t.cached ?? 0) / input) * 100)}%` : '',
+    sentence: input > 0 ? `${Math.round((Number(t.cached ?? 0) / input) * 100)}% of input came from cache.` : (Number(t.messages ?? 0) > 0 ? '' : 'Nothing counted in this period.'),
+    days, empty: Number(t.tokens ?? 0) === 0 && Number(t.messages ?? 0) === 0,
+    first: days[0]?.label ?? '', last: days[days.length - 1]?.label ?? '',
+    rows: [...days].reverse().filter((d) => d.tokens !== '0' || d.messages !== '0'),
+    models: models.map((m) => ({ name: prettyModel(String(m.model || 'Unknown')), tokens: compact(Number(m.tokens)), turns: String(m.turns), share: Math.max(4, Math.round((Number(m.tokens) / top) * 100)) })),
+    bots: bots.map((x) => ({ slug: String(x.slug), name: String(x.name), color: fill(x.color), shape: String(x.shape ?? 'ball'), tokens: compact(Number(x.tokens)), turns: String(x.turns), messages: String(x.messages), share: Math.max(4, Math.round((Number(x.tokens) / botTop) * 100)) })),
+  };
+}
+
+// What the gateway last said the time was, and each Bot's last computer frame. A data module may keep
+// values like these between reads; the store only keeps the session.
+let lastNow = 0;
+const frames: Record<string, string> = {};
 const GAP = 60 * 60_000;
 const fileSize = (n: number): string => (n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`);
 // A day mark: the clock today, then "Yesterday 9:41 AM", the weekday for a week, then the date.
@@ -190,6 +242,7 @@ const sources: Sources = {
   signOut: async (_args, store) => { store.set('session', ''); return { ok: true, error: '' }; },
   loadBots: async (_args, store): Promise<Result<'loadBots'>> => {
     const body = await read(store, '/api/bots');
+    if (Number(body.now) > 0) lastNow = Number(body.now);
     const at = (b: any): string => (typeof b.preview?.at === 'string' ? b.preview.at : '');
     // The main Bot first, then the most recent conversation; a Bot with none goes last.
     const sorted = [...(body.bots as any[])].sort((a, b) => (b.primary === true ? 1 : 0) - (a.primary === true ? 1 : 0) || at(b).localeCompare(at(a)));
@@ -204,14 +257,15 @@ const sources: Sources = {
   recolourBot: async ([slug, color], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ color }) })),
   hideBot: async ([slug, hidden], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ hidden }) })),
   makeMainBot: async ([slug], store) => reply(await call(store, '/api/main-bot', { method: 'PUT', body: JSON.stringify({ slug }) })),
+  reshapeBot: async ([slug, shape], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ shape }) })),
+  pinBot: async ([slug, pinned], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ pinned }) })),
   deleteBot: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'DELETE' })),
   loadPrefs: async (_args, store): Promise<Result<'loadPrefs'>> => {
     const body = await read(store, '/api/settings');
-    return { userName: String(body.userName ?? ''), theme: String(body.theme ?? 'system'), projects: body.beta?.projects === true };
+    return { userName: String(body.userName ?? ''), theme: String(body.theme ?? 'system'), defaultInstance: String(body.defaultModel?.instanceId ?? ''), defaultModel: String(body.defaultModel?.model ?? '') };
   },
   setUserName: async ([userName], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ userName }) })),
   setTheme: async ([theme], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ theme }) })),
-  setProjects: async ([on], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ beta: { projects: on } }) })),
   setPassword: async ([password], store) => reply(await call(store, '/api/access/password', { method: 'PUT', body: JSON.stringify({ password }) })),
   loadVault: async (_args, store): Promise<Result<'loadVault'>> => {
     const body = await read(store, '/api/vault');
@@ -234,20 +288,6 @@ const sources: Sources = {
     return reply(r);
   },
   deleteLogin: async ([id], store) => reply(await call(store, `/api/vault/${encodeURIComponent(id)}`, { method: 'DELETE' })),
-  loadProjects: async (_args, store): Promise<Result<'loadProjects'>> => {
-    const body = await read(store, '/api/projects');
-    // The gateway answers an empty board with beta false while the Projects beta is off; the page shows that as its off state.
-    if (body.beta === false) throw new Error('Projects beta is off');
-    return (body.items as any[]).map((p) => ({
-      id: String(p.id), kind: String(p.kind), title: String(p.title ?? ''), status: String(p.status ?? ''),
-      area: String(p.area ?? ''), body: String(p.body ?? ''),
-    }));
-  },
-  saveProject: async ([id, kind, title, status, area, body], store) => {
-    const item = { ...(id !== '' ? { id } : { kind }), title, status, area, body };
-    return reply(await call(store, '/api/projects/items', { method: 'POST', body: JSON.stringify({ items: [item] }) }));
-  },
-  deleteProject: async ([id], store) => reply(await call(store, '/api/projects/delete', { method: 'POST', body: JSON.stringify({ ids: [id] }) })),
   createBot: async ([name, color], store) => reply(await call(store, '/api/bots', { method: 'POST', body: JSON.stringify({ name, color }) })),
   markSeen: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/seen`, { method: 'POST', body: '{}' })),
   loadChat: async ([slug], store): Promise<Result<'loadChat'>> => {
@@ -312,44 +352,34 @@ const sources: Sources = {
       return { ...blank, error: explain(e instanceof Error ? e.message : String(e), 'usage') };
     }
   },
-  loadBotUsage: async ([slug, gate], store): Promise<Result<'loadBotUsage'>> => {
-    const blank = { ok: true, error: '', messages: 0, attachments: 0, turns: 0, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, cacheCreationTokens: 0, tokensKnown: false };
-    if (slug === '' || gate !== '1') return blank;
-    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/usage`);
-    if (!r.ok) return { ...blank, ok: false, error: explain(r.error, 'usage') };
-    const n = (key: string): number => (typeof r.body[key] === 'number' ? r.body[key] : 0);
-    return {
-      ok: true,
-      error: String(r.body.error ?? ''),
-      messages: n('messages'),
-      attachments: n('attachments'),
-      turns: n('turns'),
-      inputTokens: n('inputTokens'),
-      outputTokens: n('outputTokens'),
-      cachedInputTokens: n('cachedInputTokens'),
-      cacheCreationTokens: n('cacheCreationTokens'),
-      tokensKnown: r.body.tokensKnown === true,
-    };
-  },
   loadModels: async ([slug, gate], store): Promise<Result<'loadModels'>> => {
-    if (slug === '' || gate !== '1') return { ok: true, error: '', current: '', instanceId: '', choices: [] };
-    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/model`);
-    if (!r.ok) return { ok: false, error: explain(r.error, 'models'), current: '', instanceId: '', choices: [] };
-    const choices = Array.isArray(r.body.choices) ? r.body.choices : [];
-    return {
-      ok: true,
-      error: '',
-      current: String(r.body.current ?? ''),
-      instanceId: String(r.body.instanceId ?? ''),
-      choices: choices.map((c: any) => ({
-        instanceId: String(c.instanceId ?? ''),
-        model: String(c.model ?? ''),
-        label: String(c.label ?? c.model ?? ''),
+    const none = { ok: true, error: '', current: '', instanceId: '', effort: '', currentName: '', providerName: '', effortLabel: '', efforts: [], providers: [] };
+    if (slug === '' || gate !== '1') return none;
+    const [m, p] = await Promise.all([call(store, `/api/bots/${encodeURIComponent(slug)}/model`), call(store, '/api/providers')]);
+    if (!m.ok) return { ...none, ok: false, error: explain(m.error, 'models') };
+    const providers = (p.ok && Array.isArray(p.body.providers) ? p.body.providers : []).map((x: any) => ({
+      instanceId: String(x.instanceId), name: String(x.displayName ?? x.instanceId), account: String(x.account ?? ''),
+      models: ((x.models ?? []) as any[]).map((o) => ({
+        slug: String(o.slug), name: String(o.name ?? o.slug), recommended: o.recommended === true, effort: String(o.effort ?? ''),
+        efforts: ((o.efforts ?? []) as any[]).map((e) => ({ id: String(e.id), label: String(e.label ?? e.id) })),
       })),
+    }));
+    const instanceId = String(m.body.instanceId ?? '');
+    const current = String(m.body.current ?? '');
+    const effort = String(m.body.effort ?? '');
+    const prov = providers.find((x: any) => x.instanceId === instanceId);
+    const mod = prov?.models.find((o: any) => o.slug === current);
+    return {
+      ok: true, error: p.ok ? '' : explain(p.error, 'providers'), current, instanceId, effort,
+      currentName: mod?.name ?? prettyModel(current), providerName: prov?.name ?? instanceId,
+      effortLabel: mod?.efforts.find((e: any) => e.id === effort)?.label ?? '', efforts: mod?.efforts ?? [], providers,
     };
   },
-  setModel: async ([slug, instanceId, model], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/model`, {
-    method: 'PUT', body: JSON.stringify({ instanceId, model }),
+  setModel: async ([slug, instanceId, model, effort], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/model`, {
+    method: 'PUT', body: JSON.stringify({ instanceId, model, ...(effort !== '' ? { effort } : {}) }),
+  })),
+  setDefaultModel: async ([instanceId, model, effort], store) => reply(await call(store, '/api/settings', {
+    method: 'PUT', body: JSON.stringify({ defaultModel: { instanceId, model, ...(effort !== '' ? { effort } : {}) } }),
   })),
   loadRoutines: async ([slug, gate], store): Promise<Result<'loadRoutines'>> => {
     if (slug === '' || gate !== '1') return { ok: true, tasks: [], error: '' };
@@ -361,29 +391,20 @@ const sources: Sources = {
       return { ok: false, tasks: [], error: explain(r.error, 'routines') };
     }
     const tasks = Array.isArray(r.body.tasks) ? r.body.tasks : [];
+    const now = lastNow;
     return {
       ok: true,
       error: String(r.body.error ?? ''),
       tasks: tasks.map((t: any) => ({
         id: String(t.id ?? ''),
         title: String(t.title ?? ''),
-        enabled: t.enabled === true,
+        paused: t.paused === true,
         schedule: String(t.schedule ?? ''),
+        next: t.paused === true ? 'Paused' : nextLabel(t.nextRunAt, now),
+        failed: t.lastStatus === 'failed',
       })),
     };
   },
-  saveRoutine: async ([slug, title, kind], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/routines`, {
-    method: 'POST', body: JSON.stringify({ title, kind }),
-  })),
-  setRoutineEnabled: async ([slug, id, enabled], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/routines/enabled`, {
-    method: 'POST', body: JSON.stringify({ id, enabled }),
-  })),
-  deleteRoutine: async ([slug, id], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/routines/delete`, {
-    method: 'POST', body: JSON.stringify({ id }),
-  })),
-  runRoutine: async ([slug, id], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/routines/run`, {
-    method: 'POST', body: JSON.stringify({ id }),
-  })),
   loadLineage: async ([slug, gate], store): Promise<Result<'loadLineage'>> => {
     if (slug === '' || gate !== '1') return { ok: true, rows: [], error: '' };
     const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/lineage`);
@@ -406,37 +427,19 @@ const sources: Sources = {
       })),
     };
   },
-  loadLibrary: async ([slug, gate], store): Promise<Result<'loadLibrary'>> => {
-    if (slug === '' || gate !== '1') return { ok: true, entries: [], connectors: [] };
-    const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/library`);
-    const entries = Array.isArray(body.entries) ? body.entries : [];
-    const connectors = Array.isArray(body.connectors) ? body.connectors : [];
-    return {
-      ok: body.ok !== false,
-      entries: entries.map((e: any) => libraryEntry(slug, e)),
-      connectors: connectors.map((c: any) => ({
-        name: String(c.name ?? ''),
-        url: String(c.url ?? ''),
-        enabled: c.enabled === true,
-        locked: c.locked === true,
-        hasSecret: c.hasSecret === true,
-      })),
-    };
+  loadShelf: async ([slug, gate], store): Promise<Result<'loadShelf'>> => {
+    const none = { ok: true, total: 0, pictures: [], files: [], links: [] };
+    if (slug === '' || gate !== '1') return none;
+    const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/shelf`);
+    const item = (x: any) => ({ id: String(x.id), title: String(x.title ?? ''), detail: String(x.detail ?? ''), url: String(x.url ?? '').startsWith('/') ? `${API}${x.url}` : String(x.url ?? '') });
+    const list = (k: string) => ((body[k] ?? []) as any[]).map(item);
+    return { ok: true, total: Number(body.counts?.pictures ?? 0) + Number(body.counts?.files ?? 0) + Number(body.counts?.links ?? 0), pictures: list('pictures'), files: list('files'), links: list('links') };
   },
-  saveLibraryItem: async ([slug, id, kind, title, status, body], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/library`, {
-    method: 'POST',
-    body: JSON.stringify({ ...(id !== '' ? { id } : {}), kind, title, status, body }),
-  })),
-  deleteLibraryItem: async ([slug, id], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/library/items/${encodeURIComponent(id)}`, { method: 'DELETE' })),
-  saveConnector: async ([slug, name, url, enabled, secret], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/connectors`, {
-    method: 'POST', body: JSON.stringify({ name, url, enabled, ...(secret !== '' ? { secret } : {}) }),
-  })),
-  deleteConnector: async ([slug, name], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/connectors`, {
-    method: 'DELETE', body: JSON.stringify({ name }),
-  })),
   loadComputer: async ([slug, gate], store): Promise<Result<'loadComputer'>> => {
     if (slug === '' || gate !== '1') return { ok: true, tabs: [], image: '', error: '' };
-    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/computer`);
+    const kept = frames[slug] ?? '';
+    const [tag, image] = kept === '' ? ['', ''] : [kept.slice(0, kept.indexOf(':')), kept.slice(kept.indexOf(':') + 1)];
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/computer${tag !== '' ? `?since=${encodeURIComponent(tag)}` : ''}`);
     if (!r.ok) {
       if (r.error.includes('no conversation') || r.error.includes('getting set up')) {
         return { ok: true, tabs: [], image: '', error: 'This Bot is still getting set up.' };
@@ -444,12 +447,23 @@ const sources: Sources = {
       throw new Error(r.error);
     }
     const tabs = Array.isArray(r.body.tabs) ? r.body.tabs : [];
+    // An unchanged frame is not sent again: keep the one the app has.
+    const shown = r.body.unchanged === true ? image : String(r.body.image ?? '');
+    if (typeof r.body.etag === 'string' && shown !== '') frames[slug] = `${r.body.etag}:${shown}`;
     return {
       ok: true,
-      image: String(r.body.image ?? ''),
+      image: shown,
       error: String(r.body.error ?? ''),
       tabs: tabs.map((t: any) => ({ id: String(t.id ?? ''), title: String(t.title ?? ''), url: String(t.url ?? '') })),
     };
+  },
+  loadUsageReport: async ([slug, period, gate], store): Promise<Result<'loadUsageReport'>> => {
+    if (gate !== '1') return emptyReport('');
+    const now = lastNow;
+    const offset = now > 0 ? -new Date(now).getTimezoneOffset() : 0;
+    const r = await call(store, `/api/usage/report?period=${encodeURIComponent(period)}&bot=${encodeURIComponent(slug === '' ? 'all' : slug)}&offset=${offset}`);
+    if (!r.ok) return emptyReport(explain(r.error, 'usage'));
+    return usageReport(r.body);
   },
   computerControl: async ([slug, tabId, action], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/control`, {
     method: 'POST', body: JSON.stringify({ tabId, action }),

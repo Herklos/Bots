@@ -1,73 +1,112 @@
-// Run with: bun scripts/test-sidebar.mjs. Uses only its local sample gateway.
-test "the header restores the current Bot avatar and has no readiness subtitle"
+// Run with: bun scripts/test-sidebar.mjs. Uses only its local sample gateway (scripts/preview/sample.mjs).
+test "the header shows the open Bot's Face and name, and the panel opens on Details"
   size 1440x900
-  tap "bot-ada"
+  tap "bot-ship"
   clock +600
   clock data
   expect tree has "chat-avatar"
-  expect text "chat-title" == "Ada"
-  expect text "chat-header" == "Ada"
+  expect text "chat-title" == "Ship"
+  expect text "chat-header" == "Ship"
   expect state panelOpen == true
   expect tree has "panel-tab-details"
   expect tree has "panel-tab-library"
   expect tree has "panel-tab-computer"
+  expect tree has "model-row"
+  expect tree has "usage-card"
 
-test "sidebar drafts survive polling, tabs, and closing the panel"
+test "a draft belongs to its Bot and survives polling, tabs, and closing the panel"
   size 1440x900
-  tap "bot-ada"
+  tap "bot-ship"
   clock +600
   clock data
-  type "routine-title" "Keep this routine draft"
+  type "composer" "Keep this draft"
   clock +6000
   clock data
-  expect text "routine-title" == "Keep this routine draft"
+  expect text "composer" == "Keep this draft"
   tap "panel-tab-library"
   clock data
-  type "library-title" "Keep this note draft"
   tap "panel-tab-details"
-  expect text "routine-title" == "Keep this routine draft"
   tap "panel-toggle"
   clock +3000
   clock data
   expect state panelOpen == false
   tap "panel-toggle"
-  expect text "routine-title" == "Keep this routine draft"
-  tap "panel-tab-library"
-  expect text "library-title" == "Keep this note draft"
-  expect text "chat-title" == "Ada"
+  expect text "composer" == "Keep this draft"
+  tap "bot-scout"
+  clock +600
+  clock data
+  expect text "composer" == ""
+  tap "bot-ship"
+  clock +600
+  clock data
+  expect text "composer" == "Keep this draft"
 
 test "sidebar tabs support arrow keys, Home, and End"
   size 1440x900
-  tap "bot-ada"
+  tap "bot-ship"
   clock +600
   clock data
   type "panel-tab-details" key "ArrowRight"
   clock data
   expect state panelTab == "library"
+  expect tree has "library-count"
   type "panel-tab-library" key "End"
   clock data
   expect state panelTab == "computer"
   expect tree has "computer-status"
   type "panel-tab-computer" key "Home"
   expect state panelTab == "details"
-  expect tree has "bot-name"
+  expect tree has "model-row"
+
+test "the model page lists providers and models, and a choice goes to the gateway"
+  size 1440x900
+  tap "bot-ship"
+  clock +600
+  clock data
+  tap "model-row"
+  clock data
+  expect state panelPage == "model"
+  expect tree has "provider-claudeAgent"
+  expect tree has "provider-codex"
+  expect tree has "model-claude-opus-5-5"
+  tap "provider-codex"
+  clock data
+  expect tree has "model-gpt-5.5"
+  tap "panel-back"
+  expect state panelPage == "root"
+
+test "the usage page switches period and view"
+  size 1440x900
+  tap "bot-ship"
+  clock +600
+  clock data
+  tap "usage-card"
+  clock data
+  expect state panelPage == "usage"
+  expect tree has "figure-tokens"
+  tap "period-30d"
+  clock data
+  expect state usagePeriod == "30d"
+  tap "view-detail"
+  clock data
+  expect tree has "usage-detail"
+  tap "panel-back"
+  expect state panelPage == "root"
 
 test "a narrow panel switches tabs without leaving the conversation"
   size 340x740
-  tap "bot-ada"
+  tap "bot-ship"
   clock +600
   clock data
   tap "panel-toggle"
   expect state panelOpen == true
   tap "panel-tab-library"
   clock data
-  type "library-title" "A phone draft"
+  expect tree has "library-count"
   tap "panel-tab-computer"
   clock data
   expect tree has "computer-status"
-  tap "panel-tab-library"
-  expect text "library-title" == "A phone draft"
   tap "panel-toggle"
   expect state panelOpen == false
   expect tree has "composer"
-  expect text "chat-title" == "Ada"
+  expect text "chat-title" == "Ship"

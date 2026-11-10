@@ -7,42 +7,33 @@
 //   computerControl: (args: [string, string, string]) => Reply
 //   createBot: (args: [string, string]) => Reply
 //   deleteBot: (args: [string]) => Reply
-//   deleteConnector: (args: [string, string]) => Reply
-//   deleteLibraryItem: (args: [string, string]) => Reply
 //   deleteLogin: (args: [string]) => Reply
-//   deleteProject: (args: [string]) => Reply
-//   deleteRoutine: (args: [string, string]) => Reply
 //   hideBot: (args: [string, boolean]) => Reply
-//   loadBotUsage: (args: [string, string]) => BotUsage
 //   loadBots: (args: []) => Bot[]
 //   loadChat: (args: [string]) => Chat
 //   loadComputer: (args: [string, string]) => Computer
-//   loadLibrary: (args: [string, string]) => Library
 //   loadLineage: (args: [string, string]) => Lineage
 //   loadModels: (args: [string, string]) => ModelList
 //   loadPrefs: (args: []) => Prefs
-//   loadProjects: (args: []) => Project[]
 //   loadRoutines: (args: [string, string]) => RoutineList
 //   loadSession: (args: []) => Session
+//   loadShelf: (args: [string, string]) => Shelf
 //   loadUsage: (args: [string]) => Usage
+//   loadUsageReport: (args: [string, string, string]) => UsageReport
 //   loadVault: (args: []) => Login[]
 //   makeMainBot: (args: [string]) => Reply
 //   markSeen: (args: [string]) => Reply
+//   pinBot: (args: [string, boolean]) => Reply
 //   recolourBot: (args: [string, string]) => Reply
 //   renameBot: (args: [string, string]) => Reply
+//   reshapeBot: (args: [string, string]) => Reply
 //   respondRequest: (args: [string, string, string, string, string]) => Reply
 //   revealPassword: (args: [string]) => Revealed
-//   runRoutine: (args: [string, string]) => Reply
-//   saveConnector: (args: [string, string, string, boolean, string]) => Reply
-//   saveLibraryItem: (args: [string, string, string, string, string, string]) => Reply
 //   saveLogin: (args: [string, string, string, string, string, string]) => Reply
-//   saveProject: (args: [string, string, string, string, string, string]) => Reply
-//   saveRoutine: (args: [string, string, string]) => Reply
 //   sendMessage: (args: [string, string, string]) => Reply
-//   setModel: (args: [string, string, string]) => Reply
+//   setDefaultModel: (args: [string, string, string]) => Reply
+//   setModel: (args: [string, string, string, string]) => Reply
 //   setPassword: (args: [string]) => Reply
-//   setProjects: (args: [boolean]) => Reply
-//   setRoutineEnabled: (args: [string, string, boolean]) => Reply
 //   setTheme: (args: [string]) => Reply
 //   setUserName: (args: [string]) => Reply
 //   signIn: (args: [string]) => Reply
@@ -57,22 +48,25 @@
 //   Choice = { label: string; value: string; key: string; warn: string }
 //   Row = { id: string; kind: string; mine: boolean; text: string; title: string; time: string; head: boolean; tail: boolean; variant: string; files: FileRef[]; botSlug: string; botName: string; botColor: string; botShape: string; choices: Choice[]; placeholder: string; key: string }
 //   Chat = { slug: string; rows: Row[]; working: boolean }
-//   Prefs = { userName: string; theme: string; projects: boolean }
+//   Prefs = { userName: string; theme: string; defaultInstance: string; defaultModel: string }
 //   Attached = { ok: boolean; id: string; name: string; error: string }
 //   Login = { id: string; title: string; website: string; username: string; hasPassword: boolean; hints: string }
 //   Revealed = { ok: boolean; id: string; password: string; error: string }
-//   Project = { id: string; kind: string; title: string; status: string; area: string; body: string }
 //   Usage = { ok: boolean; error: string; messages: number; attachments: number; vaultWrites: number; iconFetches: number }
-//   BotUsage = { ok: boolean; error: string; messages: number; attachments: number; turns: number; inputTokens: number; outputTokens: number; cachedInputTokens: number; cacheCreationTokens: number; tokensKnown: boolean }
-//   ModelChoice = { instanceId: string; model: string; label: string }
-//   ModelList = { ok: boolean; error: string; current: string; instanceId: string; choices: ModelChoice[] }
-//   Routine = { id: string; title: string; enabled: boolean; schedule: string }
+//   Effort = { id: string; label: string }
+//   ModelOption = { slug: string; name: string; recommended: boolean; effort: string; efforts: Effort[] }
+//   Provider = { instanceId: string; name: string; account: string; models: ModelOption[] }
+//   ModelList = { ok: boolean; error: string; current: string; instanceId: string; effort: string; currentName: string; providerName: string; effortLabel: string; efforts: Effort[]; providers: Provider[] }
+//   Routine = { id: string; title: string; paused: boolean; schedule: string; next: string; failed: boolean }
 //   RoutineList = { ok: boolean; tasks: Routine[]; error: string }
 //   LineRow = { id: string; title: string; status: string; remote: boolean; threadId: string }
 //   Lineage = { ok: boolean; rows: LineRow[]; error: string }
-//   LibEntry = { id: string; kind: string; title: string; detail: string; group: string; status: string; body: string; path: string; open: string }
-//   Connector = { name: string; url: string; enabled: boolean; locked: boolean; hasSecret: boolean }
-//   Library = { ok: boolean; entries: LibEntry[]; connectors: Connector[] }
+//   DayRow = { day: string; label: string; short: string; tokens: string; input: string; output: string; cached: string; cacheWrite: string; turns: string; messages: string; px: number; spx: number }
+//   ModelRow = { name: string; tokens: string; turns: string; share: number }
+//   BotShare = { slug: string; name: string; color: string; shape: string; tokens: string; turns: string; messages: string; share: number }
+//   UsageReport = { ok: boolean; error: string; period: string; periodLabel: string; messages: string; attachments: string; turns: string; tokens: string; input: string; output: string; cached: string; cacheWrite: string; hit: string; sentence: string; days: DayRow[]; rows: DayRow[]; models: ModelRow[]; bots: BotShare[]; empty: boolean; first: string; last: string }
+//   ShelfItem = { id: string; title: string; detail: string; url: string }
+//   Shelf = { ok: boolean; total: number; pictures: ShelfItem[]; files: ShelfItem[]; links: ShelfItem[] }
 //   PageTab = { id: string; title: string; url: string }
 //   Computer = { ok: boolean; tabs: PageTab[]; image: string; error: string }
 
@@ -313,94 +307,91 @@ type T8 = T6[];
 type T9 = { "id": T1; "kind": T1; "mine": T0; "text": T1; "title": T1; "time": T1; "head": T0; "tail": T0; "variant": T1; "files": T7; "botSlug": T1; "botName": T1; "botColor": T1; "botShape": T1; "choices": T8; "placeholder": T1; "key": T1; };
 type T10 = T9[];
 type T11 = { "slug": T1; "rows": T10; "working": T0; };
-type T12 = { "userName": T1; "theme": T1; "projects": T0; };
+type T12 = { "userName": T1; "theme": T1; "defaultInstance": T1; "defaultModel": T1; };
 type T13 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
 type T14 = { "id": T1; "title": T1; "website": T1; "username": T1; "hasPassword": T0; "hints": T1; };
 type T15 = { "ok": T0; "id": T1; "password": T1; "error": T1; };
-type T16 = { "id": T1; "kind": T1; "title": T1; "status": T1; "area": T1; "body": T1; };
-type T17 = number;
-type T18 = { "ok": T0; "error": T1; "messages": T17; "attachments": T17; "vaultWrites": T17; "iconFetches": T17; };
-type T19 = { "ok": T0; "error": T1; "messages": T17; "attachments": T17; "turns": T17; "inputTokens": T17; "outputTokens": T17; "cachedInputTokens": T17; "cacheCreationTokens": T17; "tokensKnown": T0; };
-type T20 = { "instanceId": T1; "model": T1; "label": T1; };
+type T16 = number;
+type T17 = { "ok": T0; "error": T1; "messages": T16; "attachments": T16; "vaultWrites": T16; "iconFetches": T16; };
+type T18 = { "id": T1; "label": T1; };
+type T19 = T18[];
+type T20 = { "slug": T1; "name": T1; "recommended": T0; "effort": T1; "efforts": T19; };
 type T21 = T20[];
-type T22 = { "ok": T0; "error": T1; "current": T1; "instanceId": T1; "choices": T21; };
-type T23 = { "id": T1; "title": T1; "enabled": T0; "schedule": T1; };
-type T24 = T23[];
-type T25 = { "ok": T0; "tasks": T24; "error": T1; };
-type T26 = { "id": T1; "title": T1; "status": T1; "remote": T0; "threadId": T1; };
-type T27 = T26[];
-type T28 = { "ok": T0; "rows": T27; "error": T1; };
-type T29 = { "id": T1; "kind": T1; "title": T1; "detail": T1; "group": T1; "status": T1; "body": T1; "path": T1; "open": T1; };
-type T30 = { "name": T1; "url": T1; "enabled": T0; "locked": T0; "hasSecret": T0; };
-type T31 = T29[];
-type T32 = T30[];
-type T33 = { "ok": T0; "entries": T31; "connectors": T32; };
-type T34 = { "id": T1; "title": T1; "url": T1; };
-type T35 = T34[];
-type T36 = { "ok": T0; "tabs": T35; "image": T1; "error": T1; };
-type T37 = { "accessibilityTextSize": T0; };
-type T38 = { "prefersContrast": T1; };
-type T39 = { "slug": T1; "id": T1; };
-type T40 = { "id": T17; "name": T1; "url": T1; "tab": T1; "params": T39; "fragment": T1; };
-type T41 = T40[];
-type T42 = { "name": T1; "stack": T41; };
-type T43 = T42[];
-type T44 = { "tab": T1; "tabs": T43; "next": T17; };
-type T45 = T1[];
-type T46 = T4[];
-type T47 = T14[];
-type T48 = T16[];
-type T49 = T2 | null;
-type T50 = T15 | null;
-type T51 = T13 | null;
-type T52 = T17 | null;
-type T53 = { "path": T1; "name": T1; "type": T1; "size": T17; "width": T52; "height": T52; "duration": T52; };
-type T54 = T53[];
-type T55 = { "key": T1; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; "code": T1; "repeat": T0; "isComposing": T0; };
+type T22 = { "instanceId": T1; "name": T1; "account": T1; "models": T21; };
+type T23 = T22[];
+type T24 = { "ok": T0; "error": T1; "current": T1; "instanceId": T1; "effort": T1; "currentName": T1; "providerName": T1; "effortLabel": T1; "efforts": T19; "providers": T23; };
+type T25 = { "id": T1; "title": T1; "paused": T0; "schedule": T1; "next": T1; "failed": T0; };
+type T26 = T25[];
+type T27 = { "ok": T0; "tasks": T26; "error": T1; };
+type T28 = { "id": T1; "title": T1; "status": T1; "remote": T0; "threadId": T1; };
+type T29 = T28[];
+type T30 = { "ok": T0; "rows": T29; "error": T1; };
+type T31 = { "day": T1; "label": T1; "short": T1; "tokens": T1; "input": T1; "output": T1; "cached": T1; "cacheWrite": T1; "turns": T1; "messages": T1; "px": T16; "spx": T16; };
+type T32 = { "name": T1; "tokens": T1; "turns": T1; "share": T16; };
+type T33 = { "slug": T1; "name": T1; "color": T1; "shape": T1; "tokens": T1; "turns": T1; "messages": T1; "share": T16; };
+type T34 = T31[];
+type T35 = T32[];
+type T36 = T33[];
+type T37 = { "ok": T0; "error": T1; "period": T1; "periodLabel": T1; "messages": T1; "attachments": T1; "turns": T1; "tokens": T1; "input": T1; "output": T1; "cached": T1; "cacheWrite": T1; "hit": T1; "sentence": T1; "days": T34; "rows": T34; "models": T35; "bots": T36; "empty": T0; "first": T1; "last": T1; };
+type T38 = { "id": T1; "title": T1; "detail": T1; "url": T1; };
+type T39 = T38[];
+type T40 = { "ok": T0; "total": T16; "pictures": T39; "files": T39; "links": T39; };
+type T41 = { "id": T1; "title": T1; "url": T1; };
+type T42 = T41[];
+type T43 = { "ok": T0; "tabs": T42; "image": T1; "error": T1; };
+type T44 = { "accessibilityTextSize": T0; };
+type T45 = { "prefersContrast": T1; };
+type T46 = { "slug": T1; "id": T1; };
+type T47 = { "id": T16; "name": T1; "url": T1; "tab": T1; "params": T46; "fragment": T1; };
+type T48 = T47[];
+type T49 = { "name": T1; "stack": T48; };
+type T50 = T49[];
+type T51 = { "tab": T1; "tabs": T50; "next": T16; };
+type T52 = T1[];
+type T53 = T4[];
+type T54 = T14[];
+type T55 = T2 | null;
+type T56 = T15 | null;
+type T57 = T13 | null;
+type T58 = T16 | null;
+type T59 = { "path": T1; "name": T1; "type": T1; "size": T16; "width": T58; "height": T58; "duration": T58; };
+type T60 = T59[];
+type T61 = { "key": T1; "shiftKey": T0; "ctrlKey": T0; "altKey": T0; "metaKey": T0; "code": T1; "repeat": T0; "isComposing": T0; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "computerControl" | "createBot" | "deleteBot" | "deleteConnector" | "deleteLibraryItem" | "deleteLogin" | "deleteProject" | "deleteRoutine" | "hideBot" | "makeMainBot" | "markSeen" | "recolourBot" | "renameBot" | "respondRequest" | "revealPassword" | "runRoutine" | "saveConnector" | "saveLibraryItem" | "saveLogin" | "saveProject" | "saveRoutine" | "sendMessage" | "setModel" | "setPassword" | "setProjects" | "setRoutineEnabled" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";
+export type MutationSource = "computerControl" | "createBot" | "deleteBot" | "deleteLogin" | "hideBot" | "makeMainBot" | "markSeen" | "pinBot" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveLogin" | "sendMessage" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stopRun" | "uploadAttachment";
 
 export interface SourceMap {
   "computerControl": { args: [T1, T1, T1]; result: T2 };
   "createBot": { args: [T1, T1]; result: T2 };
   "deleteBot": { args: [T1]; result: T2 };
-  "deleteConnector": { args: [T1, T1]; result: T2 };
-  "deleteLibraryItem": { args: [T1, T1]; result: T2 };
   "deleteLogin": { args: [T1]; result: T2 };
-  "deleteProject": { args: [T1]; result: T2 };
-  "deleteRoutine": { args: [T1, T1]; result: T2 };
   "hideBot": { args: [T1, T0]; result: T2 };
-  "loadBotUsage": { args: [T1, T1]; result: T19 };
-  "loadBots": { args: []; result: T46 };
+  "loadBots": { args: []; result: T53 };
   "loadChat": { args: [T1]; result: T11 };
-  "loadComputer": { args: [T1, T1]; result: T36 };
-  "loadLibrary": { args: [T1, T1]; result: T33 };
-  "loadLineage": { args: [T1, T1]; result: T28 };
-  "loadModels": { args: [T1, T1]; result: T22 };
+  "loadComputer": { args: [T1, T1]; result: T43 };
+  "loadLineage": { args: [T1, T1]; result: T30 };
+  "loadModels": { args: [T1, T1]; result: T24 };
   "loadPrefs": { args: []; result: T12 };
-  "loadProjects": { args: []; result: T48 };
-  "loadRoutines": { args: [T1, T1]; result: T25 };
+  "loadRoutines": { args: [T1, T1]; result: T27 };
   "loadSession": { args: []; result: T3 };
-  "loadUsage": { args: [T1]; result: T18 };
-  "loadVault": { args: []; result: T47 };
+  "loadShelf": { args: [T1, T1]; result: T40 };
+  "loadUsage": { args: [T1]; result: T17 };
+  "loadUsageReport": { args: [T1, T1, T1]; result: T37 };
+  "loadVault": { args: []; result: T54 };
   "makeMainBot": { args: [T1]; result: T2 };
   "markSeen": { args: [T1]; result: T2 };
+  "pinBot": { args: [T1, T0]; result: T2 };
   "recolourBot": { args: [T1, T1]; result: T2 };
   "renameBot": { args: [T1, T1]; result: T2 };
+  "reshapeBot": { args: [T1, T1]; result: T2 };
   "respondRequest": { args: [T1, T1, T1, T1, T1]; result: T2 };
   "revealPassword": { args: [T1]; result: T15 };
-  "runRoutine": { args: [T1, T1]; result: T2 };
-  "saveConnector": { args: [T1, T1, T1, T0, T1]; result: T2 };
-  "saveLibraryItem": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "saveLogin": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
-  "saveProject": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
-  "saveRoutine": { args: [T1, T1, T1]; result: T2 };
   "sendMessage": { args: [T1, T1, T1]; result: T2 };
-  "setModel": { args: [T1, T1, T1]; result: T2 };
+  "setDefaultModel": { args: [T1, T1, T1]; result: T2 };
+  "setModel": { args: [T1, T1, T1, T1]; result: T2 };
   "setPassword": { args: [T1]; result: T2 };
-  "setProjects": { args: [T0]; result: T2 };
-  "setRoutineEnabled": { args: [T1, T1, T0]; result: T2 };
   "setTheme": { args: [T1]; result: T2 };
   "setUserName": { args: [T1]; result: T2 };
   "signIn": { args: [T1]; result: T2 };

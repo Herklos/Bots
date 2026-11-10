@@ -430,6 +430,12 @@ pub fn shapes_region() -> String {
         "fn shapeK(shape: string): number = {}",
         arms(&|_, _, k| num(k), &num(k0))
     );
+    let list = names
+        .iter()
+        .map(|n| format!("\"{n}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let _ = writeln!(s, "fn shapeNames(): string[] = [{list}]");
     s
 }
 

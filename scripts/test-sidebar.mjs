@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-// Exercise sidebar lifetime and keyboard navigation against a read-only sample
-// gateway. A separate build keeps its sample origin out of the normal web app.
+// Exercise sidebar lifetime and keyboard navigation against the sample gateway
+// (scripts/preview/sample.mjs, in memory, nothing real). A separate build keeps its sample origin out of the normal web app.
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,32 +11,21 @@ const exact = process.env.EXACT_DIR || (existsSync(pathFile)
   ? readFileSync(pathFile, 'utf8').match(/^EXACT_DIR=(.+)$/m)?.[1].trim().replace(/^['"]|['"]$/g, '') : null);
 if (!exact) throw new Error('Set EXACT_DIR or configure .exact-path before running the sidebar tests.');
 const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
-const bot = { slug: 'ada', name: 'Ada', color: 'violet', primary: true, hidden: false, mainThreadId: 'sample-thread' };
+import { sample } from './preview/sample.mjs';
 const headers = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 const gateway = Bun.serve({
   hostname: '127.0.0.1', port: 0,
-  fetch(req) {
+  async fetch(req) {
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
-    if (req.method !== 'GET') return new Response('Sample gateway is read-only', { status: 405, headers });
-    const path = new URL(req.url).pathname;
-    let body;
-    if (path === '/api/session') body = { authenticated: true, passwordRequired: false };
-    else if (path === '/api/bots') body = { bots: [bot] };
-    else if (path === '/api/settings') body = { userName: 'Alex', theme: 'system', beta: { projects: false } };
-    else if (path === '/api/vault') body = { items: [] };
-    else if (path === '/api/projects') body = { beta: true, items: [] };
-    else if (path.endsWith('/chat')) body = { messages: [{ id: 'hello', role: 'assistant', text: 'Hello, Alex.' }], requests: [], working: false };
-    else if (path.endsWith('/model')) body = { current: 'claude-haiku-5-5', instanceId: 'claudeAgent', choices: [{ instanceId: 'claudeAgent', model: 'claude-haiku-5-5', label: 'Haiku' }] };
-    else if (path.endsWith('/routines')) body = { tasks: [], error: '' };
-    else if (path.endsWith('/lineage')) body = { rows: [], error: '' };
-    else if (path.endsWith('/library')) body = { ok: true, entries: [], connectors: [] };
-    else if (path.endsWith('/computer')) body = { tabs: [], image: '', error: '' };
-    else return new Response('Unknown sample endpoint', { status: 404, headers });
-    return Response.json(body, { headers });
+    const url = new URL(req.url);
+    const body = req.method === 'GET' ? null : await req.json().catch(() => ({}));
+    const out = sample(req.method, url.pathname, url.searchParams, body);
+    if (out === undefined) return new Response('Unknown sample endpoint', { status: 404, headers });
+    return Response.json(out, { headers });
   },
 });
 const env = {
