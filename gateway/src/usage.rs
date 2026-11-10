@@ -117,6 +117,41 @@ pub fn tokens_from_projection(projection: &Value) -> (TokenTotals, bool) {
     (totals, known)
 }
 
+/// One turn's token line, only when that turn and the message already share an id.
+/// Cache stays separate from input and output. Unavailable turns and local commands contribute nothing.
+pub fn turn_token_line(projection: &Value, message_id: &str) -> Option<Value> {
+    if message_id.is_empty() {
+        return None;
+    }
+    let turns = projection.get("providerTurns")?.as_array()?;
+    for turn in turns {
+        if !shares_message(turn, message_id) {
+            continue;
+        }
+        let usage = turn.get("turnTokenUsage").filter(|item| item.is_object())?;
+        if usage.get("usageStatus").and_then(Value::as_str) == Some("unavailable")
+            || usage.get("localCommand") == Some(&Value::Bool(true))
+        {
+            return None;
+        }
+        let input = count_u64(&usage["inputTokens"]);
+        let cached = count_u64(&usage["cachedInputTokens"]);
+        return Some(json!({
+            "inputTokens": input,
+            "outputTokens": count_u64(&usage["outputTokens"]),
+            "cachedInputTokens": cached,
+            "cacheCreationTokens": count_u64(&usage["cacheCreationTokens"]),
+        }));
+    }
+    None
+}
+
+fn shares_message(turn: &Value, message_id: &str) -> bool {
+    [turn.get("messageId"), turn.get("assistantMessageId"), turn.get("id")]
+        .into_iter()
+        .any(|value| value.and_then(Value::as_str) == Some(message_id))
+}
+
 pub fn bot_payload(
     messages: u64,
     attachments: u64,
@@ -368,6 +403,71 @@ mod tests {
         assert_eq!(body["messages"], 2);
         assert_eq!(body["tokensKnown"], true);
         assert_eq!(body["error"], "");
+    }
+
+    #[test]
+    fn a_token_line_matches_one_turn_only_when_the_ids_match() {
+        let projection = json!({
+            "providerTurns": [
+                {
+                    "id": "m2",
+                    "turnTokenUsage": {
+                        "inputTokens": 10,
+                        "outputTokens": 2,
+                        "cachedInputTokens": 4,
+                        "cacheCreationTokens": 1
+                    }
+                },
+                {
+                    "id": "other",
+                    "turnTokenUsage": {
+                        "inputTokens": 99,
+                        "outputTokens": 99,
+                        "cachedInputTokens": 99,
+                        "cacheCreationTokens": 99
+                    }
+                },
+                {
+                    "id": "bad",
+                    "turnTokenUsage": {
+                        "usageStatus": "unavailable",
+                        "inputTokens": 5,
+                        "outputTokens": 5,
+                        "cachedInputTokens": 5,
+                        "cacheCreationTokens": 5
+                    }
+                },
+                {
+                    "messageId": "local",
+                    "turnTokenUsage": {
+                        "localCommand": true,
+                        "inputTokens": 7,
+                        "outputTokens": 7,
+                        "cachedInputTokens": 1,
+                        "cacheCreationTokens": 1
+                    }
+                },
+                {
+                    "turnTokenUsage": {
+                        "inputTokens": 3,
+                        "outputTokens": 3,
+                        "cachedInputTokens": 0,
+                        "cacheCreationTokens": 0
+                    }
+                }
+            ]
+        });
+        let line = turn_token_line(&projection, "m2").unwrap();
+        assert_eq!(line["inputTokens"], 10);
+        assert_eq!(line["outputTokens"], 2);
+        assert_eq!(line["cachedInputTokens"], 4);
+        assert_eq!(line["cacheCreationTokens"], 1);
+        assert_ne!(line["inputTokens"].as_u64().unwrap(), 10 + 4);
+        assert!(turn_token_line(&projection, "other").unwrap()["inputTokens"] == 99);
+        assert!(turn_token_line(&projection, "no-such-id").is_none());
+        assert!(turn_token_line(&projection, "bad").is_none());
+        assert!(turn_token_line(&projection, "local").is_none());
+        assert!(turn_token_line(&projection, "").is_none());
     }
 
     #[tokio::test]
