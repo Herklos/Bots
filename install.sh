@@ -10,8 +10,9 @@ archive=
 sums=
 
 usage() {
+  echo "usage: install.sh [--version <version>]" >&2
   echo "usage: install.sh --version <version> --from <tarball> --sums <SHA256SUMS>" >&2
-  echo "       install.sh --version <version>   # download from \$HBOTS_RELEASE_BASE" >&2
+  echo "       HBOTS_RELEASE_BASE=<url> install.sh --version <version>" >&2
   exit 2
 }
 
@@ -26,9 +27,20 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -z "$version" ]; then
-  usage
+  if [ -n "$archive" ] || [ -n "$sums" ] || [ -n "${HBOTS_RELEASE_BASE:-}" ]; then
+    echo "install.sh: --version is required with --from, --sums, or HBOTS_RELEASE_BASE" >&2
+    exit 1
+  fi
+  latest=$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/Herklos/Bots/releases/latest)
+  case "$latest" in
+    https://github.com/Herklos/Bots/releases/tag/v*) version=${latest##*/} ;;
+    *) echo "install.sh: could not resolve the latest release: $latest" >&2; exit 1 ;;
+  esac
 fi
 version=${version#v}
+case "$version" in
+  ''|*[!a-zA-Z0-9.+-]*) echo "install.sh: invalid version: $version" >&2; exit 1 ;;
+esac
 
 os=$(uname -s)
 mach=$(uname -m)
@@ -45,11 +57,7 @@ workdir=$(mktemp -d)
 trap 'rm -rf "$workdir"' EXIT
 
 if [ -z "$archive" ]; then
-  base=${HBOTS_RELEASE_BASE:-}
-  if [ -z "$base" ]; then
-    echo "install.sh: set HBOTS_RELEASE_BASE or pass --from and --sums" >&2
-    exit 1
-  fi
+  base=${HBOTS_RELEASE_BASE:-https://github.com/Herklos/Bots/releases/download/v$version}
   base=${base%/}
   archive=$workdir/$name
   sums=$workdir/SHA256SUMS

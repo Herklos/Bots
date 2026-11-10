@@ -65,6 +65,18 @@ STATIC_DIR=$PWD/app/target/web-dist hbots serve
 Release archives carry a `web/` folder next to the binary, and the gateway serves it with no setting.
 Native apps have no page address, so build them with `HBOTS_URL=https://your-gateway`.
 
+To install the latest published stable release:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Herklos/Bots/main/install.sh | sh
+~/.hbots/runtime/current/hbots up
+```
+
+The installer selects the archive for your platform, verifies it against `SHA256SUMS`, and
+installs the binary and web files together. T3 Code must be running separately. To install a
+specific release, download the script and run `sh install.sh --version VERSION`; add
+`HBOTS_RELEASE_BASE=<url>` to use a mirror.
+
 ### Before you expose it
 
 Without a password the gateway listens on localhost and signs nobody in. Set `HBOTS_PASSWORD` (or a password in Settings) before using Tailscale or a tunnel.
