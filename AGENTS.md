@@ -47,3 +47,7 @@ Exact is not in this repo. Path is in **`.exact-path`** (gitignored):
 - `EXACT_DIR_REL` — relative to repo root (`../../contrib/exact`)
 
 Contract colour docs: `$EXACT_DIR/docs/contract-for-agents.md`.
+
+## Chrome strings
+
+On-screen wording lives in `app/strings/en.json` and `app/strings/fr.json`. The host locale picks the table: `fr` uses French, anything else uses English. New chrome (labels, buttons, placeholders, empty states, aria-labels, titles, and errors the client shows) goes through those tables. Do not add a new hardcoded English sentence in the contract. The names hbots and T3 Code stay as written. Bot messages, names a person typed, Vault secrets, and gateway text the client does not remap stay as stored.

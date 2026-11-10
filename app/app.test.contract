@@ -1,3 +1,5 @@
+locale "en-US"
+
 // Navigation reflects the features available today. No live gateway is used.
 test "Settings owns the Vault and does not expose Projects"
   expect tree missing "open-vault"
@@ -328,3 +330,14 @@ test "a group has a details panel like a Bot, and deleting lives inside it"
   tap "group-panel-back"
   expect tree missing "group-edit-name"
   tap "group-panel-close"
+
+test "the library says when it cannot open, in French"
+  locale "fr"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-library"
+  clock data
+  expect tree has "library-error"
+  expect text "library-error" == "Impossible d’ouvrir cette bibliothèque. Vérifiez qu’hbots tourne, puis réessayez."
