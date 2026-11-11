@@ -5,7 +5,9 @@
 //! room. `notifications` is the mute switch: missing means on. Mute does not clear unread.
 //!
 //! A send is stored here, then dispatched to the members it wakes: everyone named with `@`,
-//! `@all` for everyone, a single plain name, otherwise the room's answer policy. `last` (the
+//! `@everyone` or `@all` for the whole group, a single plain name, otherwise the room's answer
+//! policy. `@team` and `@group` are not whole-group wake words. A member whose slug or name is
+//! `everyone` or `all` is that member. `last` (the
 //! default, and what a room without the field does) wakes whoever spoke last, or everyone while
 //! no Bot has spoken. `everyone` wakes every member. `chief` wakes only the chief, and that
 //! dispatch carries the chief line. Each dispatch remembers the message id it created, its
@@ -365,6 +367,7 @@ impl Rooms {
             text,
             targets(&members, &chosen),
             chief_line,
+            wants_everyone(&members, text),
         );
         push_message(room, &message(id, at, "user", "You", text))?;
         room["hops"] = json!(0);
@@ -466,6 +469,7 @@ impl Rooms {
                     .filter(|m| m.slug != member.slug)
                     .cloned()
                     .collect();
+                // A Bot's own `@everyone` or `@all` is not a wake-up. Only a named member is.
                 let named = mentioned(&others, text);
                 let mut chosen = targets(&others, &named);
                 chosen.truncate(usize::try_from(budget - hops).unwrap_or(0));
@@ -473,7 +477,15 @@ impl Rooms {
                     continue;
                 }
                 room["hops"] = json!(hops + u64::try_from(chosen.len()).unwrap_or(0));
-                let framed = frame(&title, &members, &member.title, text, chosen, chief_line);
+                let framed = frame(
+                    &title,
+                    &members,
+                    &member.title,
+                    text,
+                    chosen,
+                    chief_line,
+                    false,
+                );
                 anchor_all(room, &framed);
                 wake.extend(framed);
                 changed = true;
@@ -549,12 +561,13 @@ pub(crate) fn plan_dispatches(
     policy: AnswerPolicy,
     chief: Option<&str>,
 ) -> Vec<usize> {
-    if wants_everyone(text) {
-        return (0..members.len()).collect();
-    }
+    // A real member named `everyone` or `all` wins over the whole-group wake word.
     let named = mentioned(members, text);
-    if !named.is_empty() {
+    if !named.is_empty() && !wants_everyone(members, text) {
         return named;
+    }
+    if wants_everyone(members, text) {
+        return (0..members.len()).collect();
     }
     if let Some(index) = named_one(members, text) {
         return vec![index];
@@ -601,6 +614,7 @@ fn frame(
     text: &str,
     targets: Vec<(String, String)>,
     chief: Option<&str>,
+    everyone: bool,
 ) -> Vec<Dispatch> {
     let names = members
         .iter()
@@ -620,12 +634,18 @@ fn frame(
             } else {
                 ""
             };
+            let wrote = if everyone { "wrote to everyone" } else { "wrote" };
+            let everyone_line = if everyone {
+                "\nEveryone is being asked, so answer for yourself."
+            } else {
+                ""
+            };
             Dispatch {
                 slug,
                 thread_id,
                 message_id: uuid::Uuid::new_v4().to_string(),
                 text: format!(
-                    "[Group \"{title}\": {names}. {from} wrote:]{chief_line}\n{text}\n\n[Your reply is shared with the group. To ask one member for something, write @ and their slug ({slugs}). Do not mention anyone to agree, thank, or acknowledge.]"
+                    "[Group \"{title}\": {names}. {from} {wrote}:]{chief_line}{everyone_line}\n{text}\n\n[Your reply is shared with the group. To ask one member for something, write @ and their slug ({slugs}). Do not mention anyone to agree, thank, or acknowledge.]"
                 ),
             }
         })
@@ -696,10 +716,23 @@ fn anchor_all(room: &mut Value, dispatches: &[Dispatch]) {
     }
 }
 
-fn wants_everyone(text: &str) -> bool {
-    mention_words(text)
-        .iter()
-        .any(|w| matches!(w.as_str(), "all" | "everyone" | "team" | "group"))
+/// `@everyone` and `@all` ask the whole group. `@team` and `@group` do not.
+/// A token that [`mentioned`] would claim as a member is that member, not this wake.
+fn wants_everyone(members: &[Member], text: &str) -> bool {
+    mention_words(text).iter().any(|word| {
+        matches!(word.as_str(), "all" | "everyone")
+            && !members.iter().any(|member| mention_matches(member, word))
+    })
+}
+
+fn mention_matches(member: &Member, word: &str) -> bool {
+    let compact: String = member
+        .title
+        .to_lowercase()
+        .chars()
+        .filter(|c| c.is_alphanumeric())
+        .collect();
+    word == member.slug.to_lowercase() || word == compact
 }
 
 /// The lowercase words that follow an `@`.
@@ -735,15 +768,7 @@ pub(crate) fn mentioned(members: &[Member], text: &str) -> Vec<usize> {
     members
         .iter()
         .enumerate()
-        .filter(|(_, m)| {
-            let compact: String = m
-                .title
-                .to_lowercase()
-                .chars()
-                .filter(|c| c.is_alphanumeric())
-                .collect();
-            words.iter().any(|w| *w == m.slug || *w == compact)
-        })
+        .filter(|(_, member)| words.iter().any(|word| mention_matches(member, word)))
         .map(|(i, _)| i)
         .collect()
 }
@@ -1660,6 +1685,99 @@ mod tests {
         );
     }
 
+    #[test]
+    fn everyone_wakes_the_whole_group_and_a_member_slug_wins() {
+        let m = trio();
+        let all = vec![0, 1, 2];
+        assert_eq!(
+            plan_dispatches(&m, "@everyone", Some("bea"), AnswerPolicy::Last, None),
+            all,
+            "an earlier speaker does not narrow @everyone"
+        );
+        assert_eq!(
+            plan_dispatches(&m, "@ada @everyone", Some("bea"), AnswerPolicy::Last, None),
+            all,
+            "a named member beside @everyone still asks the group"
+        );
+        assert_eq!(
+            plan_dispatches(
+                &m,
+                "please weigh in, @everyone, before lunch",
+                Some("cy"),
+                AnswerPolicy::Last,
+                None
+            ),
+            all,
+            "@everyone counts anywhere in the text"
+        );
+        assert_eq!(
+            plan_dispatches(&m, "@team status", Some("bea"), AnswerPolicy::Last, None),
+            vec![1],
+            "@team is not a whole-group wake"
+        );
+        assert_eq!(
+            plan_dispatches(&m, "@group status", Some("bea"), AnswerPolicy::Last, None),
+            vec![1],
+            "@group is not a whole-group wake"
+        );
+
+        let mut named_everyone = m.clone();
+        named_everyone[1].slug = "everyone".into();
+        assert_eq!(
+            plan_dispatches(
+                &named_everyone,
+                "@everyone",
+                Some("ada"),
+                AnswerPolicy::Last,
+                None
+            ),
+            vec![1],
+            "a member whose slug is everyone is that member"
+        );
+        let mut named_all = trio();
+        named_all[2].slug = "all".into();
+        assert_eq!(
+            plan_dispatches(&named_all, "@all", Some("bea"), AnswerPolicy::Last, None),
+            vec![2],
+            "a member whose slug is all is that member"
+        );
+    }
+
+    #[tokio::test]
+    async fn everyone_send_frames_the_whole_group() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = trio_room(&rooms).await;
+        rooms
+            .send(&id, &trio(), "@bea first", "m0", "t0", AnswerPolicy::Last)
+            .await
+            .unwrap();
+        let mut threads = HashMap::new();
+        let room = rooms.get(&id).await.unwrap();
+        let anchor = room["anchors"]["bea"].as_str().unwrap().to_string();
+        threads.insert("bea".into(), thread(&anchor, &[("b1", "I started", false)]));
+        rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
+
+        let (_, woken) = rooms
+            .send(
+                &id,
+                &trio(),
+                "thoughts @everyone?",
+                "m1",
+                "t1",
+                AnswerPolicy::Last,
+            )
+            .await
+            .unwrap();
+        assert_eq!(slugs(&woken), vec!["ada", "bea", "cy"]);
+        let text = &woken[0].text;
+        assert!(text.contains("You wrote to everyone:"));
+        assert!(text.contains("Everyone is being asked, so answer for yourself."));
+    }
+
     #[tokio::test]
     async fn a_mention_wakes_only_that_member_and_frames_the_message() {
         let dir = tempfile::tempdir().unwrap();
@@ -1872,6 +1990,36 @@ mod tests {
                 .any(|m| m["text"].as_str() == Some("@ada 42 units")),
             "Cy's answer still lands in the room"
         );
+    }
+
+    #[tokio::test]
+    async fn a_bot_reply_containing_everyone_wakes_nobody() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = trio_room(&rooms).await;
+        let (_, woken) = rooms
+            .send(&id, &trio(), "@ada start", "m1", "t1", AnswerPolicy::Last)
+            .await
+            .unwrap();
+        let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
+        threads.insert(
+            "ada".into(),
+            thread(
+                &woken[0].message_id,
+                &[("a1", "I am asking @everyone to look at this", false)],
+            ),
+        );
+        let (room, wake) = rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
+        assert!(wake.is_empty(), "a Bot's own @everyone is not a wake-up");
+        assert_eq!(room["hops"], 0);
+        assert!(room["messages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| { m["text"].as_str() == Some("I am asking @everyone to look at this") }));
     }
 
     #[tokio::test]

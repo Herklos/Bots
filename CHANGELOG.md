@@ -5,6 +5,7 @@
 ### New features
 
 - Choose where hbots listens in Settings → Access → Network: this device, the local network, or Tailscale Serve. A password is required beyond this device, and a listener change applies on the next start. `HBOTS_NETWORK_ACCESS` overrides the setting and locks it.
+- `@everyone` and `@all` in a group ask every member to answer for themselves. A member whose name is `everyone` or `all` is that member, and a Bot's own `@everyone` does not wake the group.
 - Choose who answers in a group when nobody is named: the last speaker (`last`, the default), every member (`everyone`), or a chief (`chief`). Settings stores the default as `groupAnswerPolicy`. A group can override it with `answerPolicy`, and can name its `chief`. `@mention`, `@all`, and a single plain name still choose the recipients. Chief mode allows one fewer Bot-to-Bot handoff than there are members. Rooms saved before these fields keep today's last-speaker behavior.
 
 ## 0.1.6
