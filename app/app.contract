@@ -1175,9 +1175,14 @@ component Bots
   derive driveError = match driven { case some(r) => r.error, case none => "" }
   derive holding = wantHold and controlError == "" and not pending(controlled)
 
-  // Chats are read while they are open; the inbox while it is.
-  task poll mount
+  // The inbox list refreshes on the inbox, and a chat refreshes on that chat.
+  // A wide window keeps the list beside the open conversation, so the list still refreshes.
+  // A hidden page waits about ten seconds. Sending, answering, or stopping skips the poll.
+  task poll when page.visibilityState == "visible" and not pending(sent) and not pending(answered) and not pending(stopped)
     every(1500, pull)
+
+  task pollHidden when page.visibilityState != "visible" and not pending(sent) and not pending(answered) and not pending(stopped)
+    every(10000, pull)
 
   task fadeToast when toast != ""
     after(3000, clearToast)
@@ -1313,10 +1318,12 @@ component Bots
 
   action pull
     refresh bots
-    refresh convos
-    refresh chat
-    if top(nav).name == "chat" and openUnread and not pending(seen)
-      send seen = markSeen(slug)
+    if top(nav).name == "inbox" or wide
+      refresh convos
+    if top(nav).name == "chat"
+      refresh chat
+      if openUnread and not pending(seen)
+        send seen = markSeen(slug)
     if top(nav).name == "group"
       refresh room
       if roomId != "" and not pending(roomSeen)
