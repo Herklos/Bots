@@ -7,6 +7,8 @@ Two programs. They do not share a process.
 
 The gateway speaks to a harness backend. T3 Code is the one implemented today (`gateway/src/t3.rs`, `T3_URL`, `T3_TOKEN`). Another backend would be another module beside that one. This note does not add that module.
 
+A Bot's prompt is injected as the `## Instructions` section of the managed block in that Bot's `AGENTS.md`. The gateway rewrites that block when the Bot is created or saved. Threads that are not a Bot's are left alone. There is no separate per-thread instructions field on the harness calls hbots already makes.
+
 Each Bot's thread is created on that local T3. Choosing a linked computer, from Settings and from the Bot's own config, is specified in [the execution environment design](bot-execution-environment.md). That design keeps this one broker and selects among links T3 already has. The model list follows the computer the Bot is set to. None of that is built yet.
 
 The client holds an hbots session. The harness token stays on the gateway.

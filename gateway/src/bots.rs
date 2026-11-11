@@ -1,11 +1,13 @@
 //! Bots on disk: `bots/<slug>/.bot/bot.json` per Bot, the main-Bot
 //! choice in `bots/.botapp/main-bot.json`, deleted Bots under `bots/.botapp/trash`.
 use crate::{
+    agent_context::{self, MemorySnapshot},
     error::{ApiError, ApiResult},
     store::{read_json, write_json},
     vault::now_iso,
 };
 use serde_json::{json, Map, Value};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use tokio::sync::Mutex;
 
@@ -68,6 +70,8 @@ pub struct Bots {
     pub mcp_url: String,
     pub mcp_token: String,
     lock: Mutex<()>,
+    /// Slugs already warned because `CLAUDE.md` is a real file, not a symlink.
+    claude_file_warned: std::sync::Mutex<HashSet<String>>,
 }
 
 fn obj(v: &Value) -> Map<String, Value> {
@@ -103,8 +107,11 @@ fn parent_slug_value(value: &Value) -> ApiResult<Option<String>> {
 }
 
 fn check_subagent_keys(fields: &Map<String, Value>) -> ApiResult<()> {
-    if fields.get("prompt").is_some_and(|v| !v.is_string()) {
-        return Err(ApiError::bad_request("subagent.prompt must be a string"));
+    if let Some(prompt) = fields.get("prompt") {
+        let Some(text) = prompt.as_str() else {
+            return Err(ApiError::bad_request("subagent.prompt must be a string"));
+        };
+        agent_context::ensure_prompt_limit(text)?;
     }
     if fields
         .get("inheritParentPrompt")
@@ -139,6 +146,7 @@ impl Bots {
             mcp_url,
             mcp_token,
             lock: Mutex::new(()),
+            claude_file_warned: std::sync::Mutex::new(HashSet::new()),
         }
     }
 
@@ -333,8 +341,11 @@ impl Bots {
                     return Err(ApiError::bad_request(format!("{key} must be a boolean")));
                 }
             }
-            if patch.get("prompt").is_some_and(|v| !v.is_string()) {
-                return Err(ApiError::bad_request("prompt must be a string"));
+            if let Some(prompt) = patch.get("prompt") {
+                let Some(text) = prompt.as_str() else {
+                    return Err(ApiError::bad_request("prompt must be a string"));
+                };
+                agent_context::ensure_prompt_limit(text)?;
             }
             if let Some(mode) = patch.get("runtimeMode") {
                 if !matches!(
@@ -448,11 +459,22 @@ impl Bots {
         };
         self.write_instructions(&saved).await?;
         // A child's name is part of the parent's list, so the same rewrite runs for the parent.
+        // A parent's prompt is part of each child that inherits it, so a parent save rewrites them.
         if is_subagent(&saved) {
             if let Some(parent_slug) = parent_slug_of(&saved) {
                 if let Some(parent) = self.get(&parent_slug).await? {
                     self.write_instructions(&parent).await?;
                 }
+            }
+        } else {
+            let slug = saved["slug"].as_str().unwrap_or("").to_string();
+            let family = self.load().await?;
+            let children: Vec<Value> = family
+                .into_iter()
+                .filter(|other| parent_slug_of(other).as_deref() == Some(slug.as_str()))
+                .collect();
+            for child in children {
+                self.write_instructions(&child).await?;
             }
         }
         Ok(saved)
@@ -525,6 +547,7 @@ impl Bots {
             Some(Value::String(text)) => text.clone(),
             Some(_) => return Err(ApiError::bad_request("prompt must be a string")),
         };
+        agent_context::ensure_prompt_limit(&prompt)?;
         let runtime_mode = match input.get("runtimeMode") {
             None | Some(Value::Null) => None,
             Some(Value::String(mode))
@@ -737,7 +760,7 @@ impl Bots {
         write_json(&claude_settings, &cs).await?;
 
         let agents = dir.join("AGENTS.md");
-        let existing = tokio::fs::read_to_string(&agents).await.unwrap_or_default();
+        let existing_agents = tokio::fs::read_to_string(&agents).await.unwrap_or_default();
         let family = self.load().await?;
         let parent = parent_slug_of(bot).and_then(|slug| {
             family
@@ -759,22 +782,57 @@ impl Bots {
             });
             children
         };
-        tokio::fs::write(
-            &agents,
-            merge_managed(
-                &existing,
-                &render_agents_md(bot, &self.root, parent, &children),
-            ),
-        )
-        .await?;
-        #[cfg(unix)]
-        {
-            let claude = dir.join("CLAUDE.md");
-            if tokio::fs::symlink_metadata(&claude).await.is_err() {
-                let _ = tokio::fs::symlink("AGENTS.md", &claude).await;
-            }
+        let block = render_agents_md(
+            bot,
+            &self.root,
+            parent,
+            &children,
+            &MemorySnapshot::default(),
+        );
+        let merged = merge_managed(&existing_agents, &block);
+        if merged != existing_agents {
+            crate::store::write_atomic(&agents, merged.as_bytes(), None).await?;
         }
+        #[cfg(unix)]
+        self.merge_claude_md(&dir, slug, &block).await?;
         Ok(())
+    }
+
+    /// `CLAUDE.md` is a symlink to `AGENTS.md` when it is absent. A regular file keeps its
+    /// own text and receives the same managed block, with one warning per Bot.
+    #[cfg(unix)]
+    async fn merge_claude_md(&self, dir: &Path, slug: &str, block: &str) -> ApiResult<()> {
+        let claude = dir.join("CLAUDE.md");
+        match tokio::fs::symlink_metadata(&claude).await {
+            Err(_) => {
+                let _ = tokio::fs::symlink("AGENTS.md", &claude).await;
+                Ok(())
+            }
+            Ok(meta) if meta.file_type().is_symlink() => Ok(()),
+            Ok(meta) if meta.file_type().is_file() => {
+                self.warn_claude_file_once(slug);
+                let existing = tokio::fs::read_to_string(&claude).await.unwrap_or_default();
+                let merged = merge_managed(&existing, block);
+                if merged != existing {
+                    crate::store::write_atomic(&claude, merged.as_bytes(), None).await?;
+                }
+                Ok(())
+            }
+            Ok(_) => Ok(()),
+        }
+    }
+
+    #[cfg(unix)]
+    fn warn_claude_file_once(&self, slug: &str) {
+        let mut seen = self
+            .claude_file_warned
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if seen.insert(slug.to_string()) {
+            tracing::warn!(
+                "CLAUDE.md for {slug} is a regular file; merging the managed block into it"
+            );
+        }
     }
 }
 
@@ -815,7 +873,10 @@ pub(crate) fn render_agents_md(
     root: &Path,
     parent: Option<&Value>,
     children: &[&Value],
+    memory: &MemorySnapshot,
 ) -> String {
+    // An empty snapshot adds no section. A filled snapshot is rendered in a later change.
+    let _ = memory.is_empty();
     let name = bot["name"].as_str().unwrap_or("Bot");
     let label = bot["label"]
         .as_str()
@@ -832,9 +893,7 @@ pub(crate) fn render_agents_md(
         .unwrap_or_else(|| "its parent".into());
     let goal = bot["goal"]
         .as_str()
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-        .map(|text| format!("\n## Goal\n\n{}\n", plain_prompt(text)))
+        .map(|text| agent_context::prompt_section("Goal", text))
         .unwrap_or_default();
     let intro = if child {
         format!("You are {name}, a subagent of {parent_name}. {parent_name} assigns your work.")
@@ -849,25 +908,25 @@ pub(crate) fn render_agents_md(
         ""
     };
     let own_prompt = if child {
-        let prompt = bot["subagent"]["prompt"].as_str().unwrap_or("").trim();
-        if prompt.is_empty() {
-            String::new()
-        } else {
-            format!("\n## Your prompt\n\n{}\n", plain_prompt(prompt))
-        }
+        agent_context::prompt_section(
+            "Your prompt",
+            bot["subagent"]["prompt"].as_str().unwrap_or(""),
+        )
     } else {
         String::new()
     };
     let inherited = if child && bot["subagent"]["inheritParentPrompt"] == true {
-        let prompt = plain_prompt(parent.and_then(|p| p["prompt"].as_str()).unwrap_or(""));
-        let prompt = prompt.trim();
-        if prompt.is_empty() {
-            String::new()
-        } else {
-            format!("\n## Parent prompt\n\n{prompt}\n")
-        }
+        agent_context::prompt_section(
+            "Parent prompt",
+            parent.and_then(|p| p["prompt"].as_str()).unwrap_or(""),
+        )
     } else {
         String::new()
+    };
+    let instructions = if child {
+        String::new()
+    } else {
+        agent_context::prompt_section("Instructions", bot["prompt"].as_str().unwrap_or(""))
     };
     let subagents = if child {
         String::new()
@@ -891,15 +950,11 @@ pub(crate) fn render_agents_md(
     format!(
         "{MANAGED_START}\n# {name}{label}\n\n\
 {intro}\n{goal}\n\
-## Memory\n\n- Your notes: `memory/MEMORY.md`. Keep durable facts there, short and current.\n- Your work log: `memory/log.md`.\n{own_folders}- Facts shared by every Bot: {}.\n- Files you keep for the person: `library/`.\n{own_prompt}{inherited}\n\
+## Memory\n\n- Your notes: `memory/MEMORY.md`. Keep durable facts there, short and current.\n- Your work log: `memory/log.md`.\n{own_folders}- Facts shared by every Bot: {}.\n- Files you keep for the person: `library/`.\n{instructions}{own_prompt}{inherited}\n\
 ## Tools\n\nThe `bot` MCP server gives you the Vault (`vault_list`) and the Projects board (`projects_*`). Never read the vault files on disk.\n\n\
 ## Routines\n\nTo run something on a schedule, use your `schedule_task` tool. Weekdays count from 0 for Sunday to 6 for Saturday, and times are local. The person sees your routines in the app but can't change them there, so say what you set up.\n\n## Computer\n\nThe person can open or close your browser from the Computer panel. A message framed `[Computer]` means open a page (resume where you left off, or https://www.google.com) or close your browser tabs with your browser tools, without asking, and stay quiet in chat.\n\n## Other Bots\n\nTo message another Bot, use `t3_thread_send`. Say who you are and what you need.\n{subagents}\n## Writing\n\nAvoid Markdown tables. Prefer bullet lists.\n\n## Asking first\n\nAsk before anything that leaves this machine or can't be undone.\n{MANAGED_END}\n",
         shared.display()
     )
-}
-
-fn plain_prompt(text: &str) -> String {
-    text.replace(MANAGED_START, "").replace(MANAGED_END, "")
 }
 
 pub(crate) fn merge_managed(existing: &str, block: &str) -> String {
@@ -920,6 +975,7 @@ pub(crate) fn merge_managed(existing: &str, block: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent_context::{self, MemorySnapshot};
 
     #[test]
     fn slugs() {
@@ -1138,6 +1194,7 @@ mod tests {
             std::path::Path::new("/bots"),
             None,
             &[],
+            &MemorySnapshot::default(),
         );
         assert!(text.contains("schedule_task") && text.contains("t3_thread_send"));
         assert!(text.contains("Avoid Markdown tables. Prefer bullet lists."));
@@ -1467,7 +1524,13 @@ mod tests {
             "parentSlug": "ada",
             "subagent": { "prompt": "Look things up.", "inheritParentPrompt": false }
         });
-        let text = render_agents_md(&child, std::path::Path::new("/bots"), Some(&parent), &[]);
+        let text = render_agents_md(
+            &child,
+            std::path::Path::new("/bots"),
+            Some(&parent),
+            &[],
+            &MemorySnapshot::default(),
+        );
         assert!(text.starts_with(MANAGED_START) && text.contains(MANAGED_END));
         assert!(text.contains("a subagent of Ada"));
         assert!(text.contains("Ada assigns your work"));
@@ -1488,7 +1551,13 @@ mod tests {
             "parentSlug": "ada",
             "subagent": { "inheritParentPrompt": true, "prompt": "Look things up." }
         });
-        let text = render_agents_md(&child, std::path::Path::new("/bots"), Some(&parent), &[]);
+        let text = render_agents_md(
+            &child,
+            std::path::Path::new("/bots"),
+            Some(&parent),
+            &[],
+            &MemorySnapshot::default(),
+        );
         assert!(text.contains("Be brief. This is the prompt field."));
         let quiet = json!({
             "name": "Scout",
@@ -1496,7 +1565,13 @@ mod tests {
             "parentSlug": "ada",
             "subagent": { "inheritParentPrompt": false }
         });
-        let without = render_agents_md(&quiet, std::path::Path::new("/bots"), Some(&parent), &[]);
+        let without = render_agents_md(
+            &quiet,
+            std::path::Path::new("/bots"),
+            Some(&parent),
+            &[],
+            &MemorySnapshot::default(),
+        );
         assert!(!without.contains("Be brief."));
     }
 
@@ -1510,13 +1585,20 @@ mod tests {
             std::path::Path::new("/bots"),
             None,
             &[&scout, &lookup],
+            &MemorySnapshot::default(),
         );
         assert!(text.contains("- Scout (`scout`)"));
         assert!(text.contains("- Lookup (`lookup`)"));
         assert!(text.contains("`subagent_list`") && text.contains("`subagent_create`"));
         assert!(text.contains("T3 child thread"));
         assert!(!text.contains("subagent_send"));
-        let alone = render_agents_md(&ada, std::path::Path::new("/bots"), None, &[]);
+        let alone = render_agents_md(
+            &ada,
+            std::path::Path::new("/bots"),
+            None,
+            &[],
+            &MemorySnapshot::default(),
+        );
         assert!(alone.contains("no lasting helpers yet"));
         assert!(alone.contains("`subagent_list`") && alone.contains("`subagent_create`"));
         assert!(alone.contains("T3 child thread"));
@@ -1570,7 +1652,13 @@ mod tests {
             "parentSlug": "ada",
             "subagent": { "prompt": "  Look things up.  ", "inheritParentPrompt": true }
         });
-        let text = render_agents_md(&child, std::path::Path::new("/bots"), Some(&parent), &[]);
+        let text = render_agents_md(
+            &child,
+            std::path::Path::new("/bots"),
+            Some(&parent),
+            &[],
+            &MemorySnapshot::default(),
+        );
         assert!(text.contains("## Your prompt\n\nLook things up."));
         assert!(text.contains("## Parent prompt\n\nBe brief."));
         let empty = json!({
@@ -1579,7 +1667,13 @@ mod tests {
             "parentSlug": "ada",
             "subagent": { "prompt": "   ", "inheritParentPrompt": false }
         });
-        let without = render_agents_md(&empty, std::path::Path::new("/bots"), Some(&parent), &[]);
+        let without = render_agents_md(
+            &empty,
+            std::path::Path::new("/bots"),
+            Some(&parent),
+            &[],
+            &MemorySnapshot::default(),
+        );
         assert!(!without.contains("## Your prompt"));
         assert!(!without.contains("Be brief."));
     }
@@ -1593,7 +1687,13 @@ mod tests {
             "parentSlug": "ada",
             "subagent": { "prompt": "" }
         });
-        let text = render_agents_md(&child, std::path::Path::new("/bots"), Some(&parent), &[]);
+        let text = render_agents_md(
+            &child,
+            std::path::Path::new("/bots"),
+            Some(&parent),
+            &[],
+            &MemorySnapshot::default(),
+        );
         assert!(text.contains("a subagent of Ada"));
         assert!(!text.contains("subagent_send"));
     }
@@ -1607,7 +1707,13 @@ mod tests {
             "parentSlug": "ada",
             "subagent": { "prompt": "Look things up.", "inheritParentPrompt": true }
         });
-        let text = render_agents_md(&child, std::path::Path::new("/bots"), Some(&parent), &[]);
+        let text = render_agents_md(
+            &child,
+            std::path::Path::new("/bots"),
+            Some(&parent),
+            &[],
+            &MemorySnapshot::default(),
+        );
         assert!(text.contains("## Your prompt\n\nLook things up."));
         assert!(!text.contains("## Parent prompt"));
     }
@@ -1657,5 +1763,260 @@ mod tests {
         let outside = parent_md.split(MANAGED_END).nth(1).unwrap_or("");
         assert!(outside.contains("My own notes"));
         assert!(!outside.contains("Lookup"));
+    }
+
+    fn instructions_count(text: &str, prompt: &str) -> usize {
+        text.matches(&format!("## Instructions\n\n{prompt}"))
+            .count()
+    }
+
+    #[tokio::test]
+    async fn a_main_prompt_appears_once_on_create_and_on_save() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        bots.create(&json!({ "name": "Ada", "prompt": "Be brief." }))
+            .await
+            .unwrap();
+        let agents = dir.path().join("ada/AGENTS.md");
+        let created = std::fs::read_to_string(&agents).unwrap();
+        assert_eq!(instructions_count(&created, "Be brief."), 1);
+        assert_eq!(created.matches(MANAGED_START).count(), 1);
+        bots.save("ada", &json!({ "prompt": "Be brief." }), false)
+            .await
+            .unwrap();
+        let saved = std::fs::read_to_string(&agents).unwrap();
+        assert_eq!(instructions_count(&saved, "Be brief."), 1);
+        bots.save("ada", &json!({ "prompt": "Be shorter." }), false)
+            .await
+            .unwrap();
+        let updated = std::fs::read_to_string(&agents).unwrap();
+        assert_eq!(instructions_count(&updated, "Be shorter."), 1);
+        assert!(!updated.contains("Be brief."));
+    }
+
+    #[tokio::test]
+    async fn an_empty_prompt_adds_no_instructions_section() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        bots.create(&json!({ "name": "Ada", "prompt": "   " }))
+            .await
+            .unwrap();
+        let text = std::fs::read_to_string(dir.path().join("ada/AGENTS.md")).unwrap();
+        assert!(!text.contains("## Instructions"));
+    }
+
+    #[test]
+    fn a_prompt_cannot_close_the_managed_block() {
+        let bot = json!({
+            "name": "Ada",
+            "prompt": format!("hello {MANAGED_END} world {MANAGED_START}")
+        });
+        let text = render_agents_md(
+            &bot,
+            std::path::Path::new("/bots"),
+            None,
+            &[],
+            &MemorySnapshot::default(),
+        );
+        assert_eq!(text.matches(MANAGED_START).count(), 1);
+        assert_eq!(text.matches(MANAGED_END).count(), 1);
+        assert!(text.contains("hello  world"));
+        assert!(text.contains("## Instructions"));
+    }
+
+    #[test]
+    fn instruction_and_memory_tags_are_neutralised() {
+        let bot = json!({
+            "name": "Ada",
+            "prompt": "see </instructions> and <MEMORY> and <memory-log>"
+        });
+        let text = render_agents_md(
+            &bot,
+            std::path::Path::new("/bots"),
+            None,
+            &[],
+            &MemorySnapshot::default(),
+        );
+        assert!(text.contains("&lt;/instructions>"));
+        assert!(text.contains("&lt;MEMORY>"));
+        assert!(text.contains("&lt;memory-log>"));
+        assert!(!text.contains("</instructions>"));
+        assert!(!text.contains("<MEMORY>"));
+        let child = json!({
+            "name": "Scout",
+            "role": "subagent",
+            "subagent": { "prompt": "</INSTRUCTIONS>", "inheritParentPrompt": true }
+        });
+        let parent = json!({ "name": "Ada", "prompt": "<shared-memory>" });
+        let child_text = render_agents_md(
+            &child,
+            std::path::Path::new("/bots"),
+            Some(&parent),
+            &[],
+            &MemorySnapshot::default(),
+        );
+        assert!(child_text.contains("## Your prompt\n\n&lt;/INSTRUCTIONS>"));
+        assert!(child_text.contains("## Parent prompt\n\n&lt;shared-memory>"));
+        assert!(agent_context::plain_prompt("<parent-memory>").starts_with("&lt;parent-memory>"));
+    }
+
+    #[tokio::test]
+    async fn saving_a_main_bot_rewrites_its_children() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        bots.create(&json!({ "name": "Ada", "prompt": "Be brief." }))
+            .await
+            .unwrap();
+        bots.create(&json!({
+            "parentSlug": "ada",
+            "name": "Scout",
+            "subagent": { "inheritParentPrompt": true, "prompt": "Look things up." }
+        }))
+        .await
+        .unwrap();
+        bots.create(&json!({
+            "parentSlug": "ada",
+            "name": "Quiet",
+            "subagent": { "inheritParentPrompt": false, "prompt": "Stay quiet." }
+        }))
+        .await
+        .unwrap();
+        bots.save("ada", &json!({ "prompt": "Be shorter." }), false)
+            .await
+            .unwrap();
+        let scout = std::fs::read_to_string(dir.path().join("scout/AGENTS.md")).unwrap();
+        let quiet = std::fs::read_to_string(dir.path().join("quiet/AGENTS.md")).unwrap();
+        assert!(scout.contains("## Parent prompt\n\nBe shorter."));
+        assert!(!scout.contains("Be brief."));
+        assert!(!quiet.contains("Be shorter."));
+        assert!(!quiet.contains("Be brief."));
+        assert!(quiet.contains("## Your prompt\n\nStay quiet."));
+        assert!(!quiet.contains("## Parent prompt"));
+    }
+
+    #[tokio::test]
+    async fn a_second_write_instructions_does_not_change_mtime() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        let ada = bots
+            .create(&json!({ "name": "Ada", "prompt": "Be brief." }))
+            .await
+            .unwrap();
+        let agents = dir.path().join("ada/AGENTS.md");
+        let mut text = std::fs::read_to_string(&agents).unwrap();
+        text.push_str("\nMy own notes\n");
+        std::fs::write(&agents, &text).unwrap();
+        bots.write_instructions(&ada).await.unwrap();
+        let kept = std::fs::read_to_string(&agents).unwrap();
+        assert!(kept.contains("My own notes"));
+        assert!(kept.contains("## Instructions\n\nBe brief."));
+        let outside = kept.split(MANAGED_END).nth(1).unwrap_or("");
+        assert!(outside.contains("My own notes"));
+        let mtime = std::fs::metadata(&agents).unwrap().modified().unwrap();
+        bots.write_instructions(&ada).await.unwrap();
+        let again = std::fs::metadata(&agents).unwrap().modified().unwrap();
+        assert_eq!(mtime, again);
+        assert_eq!(std::fs::read_to_string(&agents).unwrap(), kept);
+    }
+
+    #[tokio::test]
+    async fn a_real_claude_md_file_receives_the_managed_block() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        let ada = bots
+            .create(&json!({ "name": "Ada", "prompt": "Be brief." }))
+            .await
+            .unwrap();
+        let claude = dir.path().join("ada/CLAUDE.md");
+        std::fs::remove_file(&claude).unwrap();
+        std::fs::write(&claude, "Claude notes\n").unwrap();
+        bots.write_instructions(&ada).await.unwrap();
+        let text = std::fs::read_to_string(&claude).unwrap();
+        assert!(text.contains(MANAGED_START) && text.contains(MANAGED_END));
+        assert!(text.contains("## Instructions\n\nBe brief."));
+        assert!(text.contains("Claude notes"));
+        assert!(std::fs::symlink_metadata(&claude)
+            .unwrap()
+            .file_type()
+            .is_file());
+        let agents = std::fs::read_to_string(dir.path().join("ada/AGENTS.md")).unwrap();
+        assert!(agents.contains("## Instructions\n\nBe brief."));
+    }
+
+    #[tokio::test]
+    async fn a_prompt_over_16_kib_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        let too_long = "x".repeat(agent_context::PROMPT_MAX + 1);
+        let err = bots
+            .create(&json!({ "name": "Ada", "prompt": too_long }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.status.as_u16(), 400);
+        assert_eq!(err.message, "prompt is too long (max 16 KiB)");
+        let ada = bots.create(&json!({ "name": "Ada" })).await.unwrap();
+        let err = bots
+            .save(
+                "ada",
+                &json!({ "prompt": "y".repeat(agent_context::PROMPT_MAX + 1) }),
+                false,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(err.status.as_u16(), 400);
+        assert_eq!(err.message, "prompt is too long (max 16 KiB)");
+        assert_eq!(ada["prompt"], "");
+        let err = bots
+            .create(&json!({
+                "parentSlug": "ada",
+                "name": "Scout",
+                "subagent": { "prompt": "z".repeat(agent_context::PROMPT_MAX + 1) }
+            }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.status.as_u16(), 400);
+        assert_eq!(err.message, "prompt is too long (max 16 KiB)");
+        let exact = "q".repeat(agent_context::PROMPT_MAX);
+        assert!(bots
+            .save("ada", &json!({ "prompt": exact }), false)
+            .await
+            .is_ok());
+    }
+
+    #[test]
+    fn broken_markers_do_not_duplicate_beyond_merge_managed() {
+        let block = render_agents_md(
+            &json!({ "name": "Ada", "prompt": "Be brief." }),
+            std::path::Path::new("/bots"),
+            None,
+            &[],
+            &MemorySnapshot::default(),
+        );
+        let missing_end = format!("notes before\n{MANAGED_START}\nno end\n");
+        let once = merge_managed(&missing_end, &block);
+        let twice = merge_managed(&once, &block);
+        assert_eq!(twice, once);
+        assert_eq!(twice.matches(MANAGED_END).count(), 1);
+        assert!(twice.contains("notes before"));
+        assert!(twice.contains("## Instructions\n\nBe brief."));
+
+        let missing_start = format!("notes before\n{MANAGED_END}\n");
+        let first = merge_managed(&missing_start, &block);
+        let second = merge_managed(&first, &block);
+        assert_eq!(second, first);
+        assert_eq!(second.matches("## Instructions\n\nBe brief.").count(), 1);
+        assert!(second.contains("notes before"));
+
+        let reversed = format!("{MANAGED_END}\nnotes between\n{MANAGED_START}\n");
+        let once_reversed = merge_managed(&reversed, &block);
+        let twice_reversed = merge_managed(&once_reversed, &block);
+        assert_eq!(twice_reversed, once_reversed);
+        assert_eq!(
+            twice_reversed
+                .matches("## Instructions\n\nBe brief.")
+                .count(),
+            1
+        );
+        assert!(twice_reversed.contains("notes between"));
     }
 }

@@ -18,6 +18,7 @@
     reason = "base64 0.22/0.23, cpufeatures 0.2/0.3, and getrandom 0.2/0.3/0.4 are upstream pins this repo cannot collapse, and the same graph keeps the other duplicate crates"
 )]
 mod access; // T4: Cloudflare Access JWTs.
+mod agent_context; // The managed block of AGENTS.md: prompt text, and later a memory snapshot.
 mod approvals; // T5: answering a pending request.
 mod attachments; // Chat files stored on the Bot.
 mod auth;
