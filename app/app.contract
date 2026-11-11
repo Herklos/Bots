@@ -815,8 +815,12 @@ shape Computer
 // The tab on screen: the one the person picked, else the server's choice, else the first.
 fn tabId(tabs: PageTab[], picked: string, selected: string): string = match first(tabs.filter(t => t.id == (picked != "" ? picked : selected))) { case some(t) => t.id, case none => match first(tabs) { case some(t) => t.id, case none => "" } }
 fn tabTitle(tabs: PageTab[], id: string): string = match first(tabs.filter(t => t.id == id)) { case some(t) => t.title, case none => "" }
-// Navigation and editing keys go as keys. One character goes as text. Escape does not.
-fn pageKeyKind(k: string): string = k == "ArrowUp" or k == "ArrowDown" or k == "ArrowLeft" or k == "ArrowRight" or k == "Tab" or k == "Enter" or k == "Backspace" or k == "Delete" or k == "Home" or k == "End" or k == "PageUp" or k == "PageDown" ? "key" : (k.length == 1 ? "text" : "")
+// Navigation and editing keys go as keys, including with Shift, Alt or Ctrl. One character goes as text. Escape and Meta do not.
+fn pageKeyKind(k: string, ctrl: bool, meta: bool): string = meta ? "" : (k == "Enter" or k == "Tab" or k == "Backspace" or k == "Delete" or k == "ArrowLeft" or k == "ArrowUp" or k == "ArrowRight" or k == "ArrowDown" or k == "Home" or k == "End" or k == "PageUp" or k == "PageDown" ? "key" : (k.length == 1 and not ctrl ? "text" : ""))
+// Windows virtual key codes for the keys the page stream understands. Anything else is 0.
+fn pageKeyCode(k: string): number = k == "Enter" ? 13 : k == "Tab" ? 9 : k == "Backspace" ? 8 : k == "Delete" ? 46 : k == "ArrowLeft" ? 37 : k == "ArrowUp" ? 38 : k == "ArrowRight" ? 39 : k == "ArrowDown" ? 40 : k == "Home" ? 36 : k == "End" ? 35 : k == "PageUp" ? 33 : k == "PageDown" ? 34 : 0
+// CDP bits: Alt 1, Ctrl 2, Shift 8. Meta is the copy, cut and select-all path.
+fn pageModifiers(shift: bool, alt: bool, ctrl: bool): number = (shift ? 8 : 0) + (alt ? 1 : 0) + (ctrl ? 2 : 0)
 // ⌘/Ctrl chords that the held page understands. Paste uses the paste event instead.
 fn pageChord(k: string, meta: bool, ctrl: bool): string = meta or ctrl ? (k.toLowerCase() == "c" ? "copy" : k.toLowerCase() == "x" ? "cut" : k.toLowerCase() == "a" ? "selectAll" : "") : ""
 
@@ -1900,9 +1904,9 @@ component Bots
     else if holding
       focus("computer-frame")
   // Clicks, the wheel and keys reach the page only while this take is held.
-  action doDrive(kind: string, x: number, y: number, boxW: number, boxH: number, delta: number, text: string)
+  action doDrive(kind: string, x: number, y: number, boxW: number, boxH: number, delta: number, text: string, keyCode: number, modifiers: number)
     if holding and heldTab != "" and kind != ""
-      send driven = computerInput(slug, kind, x, y, boxW, boxH, delta, text)
+      send driven = computerInput(slug, kind, x, y, boxW, boxH, delta, text, keyCode, modifiers)
 
   action doOpenBrowser
     if slug != "" and not pending(openedBrowser) and not wantOpen
@@ -1952,27 +1956,30 @@ component Bots
       let chord = pageChord(k, event.metaKey, event.ctrlKey)
       if chord != ""
         preventDefault()
-        doDrive(chord, 0, 0, 0, 0, 0, "")
-      else if not event.metaKey and not event.ctrlKey
-        let kind = pageKeyKind(k)
-        if kind != ""
+        doDrive(chord, 0, 0, 0, 0, 0, "", 0, 0)
+      else
+        let kind = pageKeyKind(k, event.ctrlKey, event.metaKey)
+        if kind == "key"
           preventDefault()
-          doDrive(kind, 0, 0, 0, 0, 0, k)
+          doDrive(kind, 0, 0, 0, 0, 0, k, pageKeyCode(k), pageModifiers(event.shiftKey, event.altKey, event.ctrlKey))
+        else if kind == "text"
+          preventDefault()
+          doDrive(kind, 0, 0, 0, 0, 0, k, 0, 0)
   action largePoint(e: PointerEvent)
     if holding and e.button == 0
       let area = frame("computer-large")
       if not area.unavailable and not area.provisional and area.width > 0 and area.height > 0
-        doDrive("click", e.offsetX, e.offsetY, area.width, area.height, 0, "")
+        doDrive("click", e.offsetX, e.offsetY, area.width, area.height, 0, "", 0, 0)
   action largeWheel(e: WheelEvent)
     if holding
       preventDefault()
       let area = frame("computer-large")
       if not area.unavailable and not area.provisional and area.width > 0 and area.height > 0
-        doDrive("wheel", e.offsetX, e.offsetY, area.width, area.height, e.deltaY, "")
+        doDrive("wheel", e.offsetX, e.offsetY, area.width, area.height, e.deltaY, "", 0, 0)
   action largePaste(e: ClipboardEvent)
     if holding and e.text != ""
       preventDefault()
-      doDrive("text", 0, 0, 0, 0, 0, e.text)
+      doDrive("text", 0, 0, 0, 0, 0, e.text, 0, 0)
   action hideComputerLarge
     computerEnlarged = false
 

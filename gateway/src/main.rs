@@ -2032,8 +2032,23 @@ async fn computer_input(
                 .map_err(ApiError::bad_request)?
         }
         "key" => {
-            let messages = vec![computer::key_message(body["key"].as_str().unwrap_or(""))
-                .map_err(ApiError::bad_request)?];
+            let modifiers = match body.get("modifiers") {
+                None | Some(serde_json::Value::Null) => 0,
+                Some(value) => value
+                    .as_i64()
+                    .ok_or_else(|| ApiError::bad_request("Those modifiers are not sent."))?,
+            };
+            let message = computer::key_message(body["key"].as_str().unwrap_or(""), modifiers)
+                .map_err(ApiError::bad_request)?;
+            if let Some(sent) = body.get("keyCode").filter(|value| !value.is_null()) {
+                let sent = sent
+                    .as_i64()
+                    .ok_or_else(|| ApiError::bad_request("That key is not sent."))?;
+                if sent != message["keyCode"].as_i64().unwrap_or(sent) {
+                    return Err(ApiError::bad_request("That key is not sent."));
+                }
+            }
+            let messages = vec![message];
             computer::send_input(&s.t3, &thread, &hold.tab, &messages)
                 .await
                 .map_err(ApiError::bad_request)?

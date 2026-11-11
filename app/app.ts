@@ -1252,7 +1252,7 @@ const sources: Sources = {
       method: 'POST', body: JSON.stringify({ tabId, action }),
     }));
   },
-  computerInput: async ([slug, kind, x, y, boxW, boxH, deltaY, text], store) => {
+  computerInput: async ([slug, kind, x, y, boxW, boxH, deltaY, text, keyCode, modifiers], store) => {
     if (slug === 'frame' || slug === 'page' || slug === 'tabs') return { ok: true, error: '', text: '' };
     const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/computer/input`, {
       method: 'POST',
@@ -1260,6 +1260,8 @@ const sources: Sources = {
         kind, x, y, boxW, boxH, deltaY,
         text: kind === 'text' ? text : '',
         key: kind === 'key' ? text : '',
+        keyCode: kind === 'key' ? keyCode : 0,
+        modifiers: kind === 'key' ? modifiers : 0,
       }),
     });
     if (!r.ok) return { ok: false, error: localize(r.error), text: '' };
