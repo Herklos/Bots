@@ -15,6 +15,7 @@ pub(crate) const COOKIE: &str = "bot_session";
 const SESSION_MS: u128 = 30 * 24 * 3600 * 1000;
 const LOCKOUT: Duration = Duration::from_secs(15 * 60);
 
+#[derive(Debug)]
 pub struct Auth {
     secret: Mutex<String>,
     secret_path: PathBuf,

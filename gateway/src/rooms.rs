@@ -42,6 +42,7 @@ pub struct Dispatch {
     pub text: String,
 }
 
+#[derive(Debug)]
 pub struct Rooms {
     path: PathBuf,
     lock: Mutex<()>,

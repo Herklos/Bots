@@ -606,6 +606,7 @@ pub(crate) fn find_quick_url(text: &str) -> Option<String> {
 }
 
 /// A running quick tunnel: its link, and the task that owns the process.
+#[derive(Debug)]
 struct Running {
     id: u64,
     url: String,
@@ -711,6 +712,7 @@ pub struct RemoteConfig {
     pub tailscale_bin: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct RemoteAccess {
     cfg: RemoteConfig,
     tailnet: Arc<Tailnet>,

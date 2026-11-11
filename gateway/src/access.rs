@@ -21,6 +21,7 @@ const FORCE_MIN_GAP: Duration = Duration::from_secs(30);
 const SKEW_SECS: i64 = 30;
 const MAX_TOKEN_LEN: usize = 8192;
 
+#[derive(Debug)]
 pub struct Access {
     issuer: String,
     certs_url: String,
@@ -30,7 +31,7 @@ pub struct Access {
     client: reqwest::Client,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 struct Keys {
     by_kid: HashMap<String, RsaPublicKey>,
     fetched_at: Option<Instant>,

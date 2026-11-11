@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 
 const KEEP_DAYS: usize = 400;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum Event {
     Message,
     Attachment,
@@ -32,6 +32,7 @@ impl Event {
     }
 }
 
+#[derive(Debug)]
 pub struct Usage {
     path: PathBuf,
     lock: Mutex<()>,

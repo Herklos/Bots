@@ -11,7 +11,7 @@ use std::{
 const KEEP: Duration = Duration::from_secs(30);
 
 /// The provider list, read from T3 at most every 30 seconds.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Providers {
     cached: Mutex<Option<(Instant, Value)>>,
 }

@@ -21,6 +21,7 @@ const CONTACT_FIELDS: &[&str] = &[
     "title", "label", "name", "street", "apt", "city", "state", "zip", "country", "kind", "hints",
 ];
 
+#[derive(Debug)]
 pub struct Vault {
     file: PathBuf,
     key_file: PathBuf,

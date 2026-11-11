@@ -35,7 +35,7 @@ pub(crate) fn safe_rel(rel: &str) -> io::Result<()> {
 }
 
 #[async_trait]
-pub trait Workspace: Send + Sync {
+pub trait Workspace: std::fmt::Debug + Send + Sync {
     async fn read(&self, rel: &str) -> io::Result<Vec<u8>>;
     async fn write(&self, rel: &str, bytes: &[u8], mode: Option<u32>) -> io::Result<()>;
     async fn list(&self, rel: &str) -> io::Result<Vec<DirEntry>>;
@@ -43,6 +43,7 @@ pub trait Workspace: Send + Sync {
     fn root_for_harness(&self, slug: &str) -> String;
 }
 
+#[derive(Debug)]
 pub(crate) struct LocalDisk {
     root: PathBuf,
 }
@@ -114,6 +115,7 @@ impl Workspace for LocalDisk {
 
 /// In-memory store for tests. Keys are the relative paths `safe_rel` accepts.
 #[cfg(test)]
+#[derive(Debug)]
 pub(crate) struct MemoryWorkspace {
     files: Mutex<HashMap<String, (Vec<u8>, u64)>>,
 }

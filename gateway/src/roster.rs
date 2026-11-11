@@ -21,7 +21,7 @@ pub struct Fact {
 }
 
 /// The shell snapshot, read at most once every 1.5 seconds however many clients poll.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Roster {
     cached: Mutex<Option<(Instant, HashMap<String, Fact>)>>,
 }

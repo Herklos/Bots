@@ -101,6 +101,7 @@ fn detail_host(href: &str) -> String {
         .unwrap_or_default()
 }
 
+#[derive(Debug)]
 pub struct Library {
     ws: Arc<dyn Workspace>,
     mcp_url: String,

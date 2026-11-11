@@ -569,6 +569,7 @@ pub fn lockup_svg() -> String {
 // ---------- keeping the files in step ----------
 
 /// One file this crate writes, relative to the repository root.
+#[derive(Debug)]
 pub struct Output {
     pub path: &'static str,
     /// `None`: the whole file. `Some(name)`: the lines between `// design:begin name` and

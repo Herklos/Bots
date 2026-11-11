@@ -74,12 +74,13 @@ pub(crate) enum Surface {
 }
 
 /// The loopback listener for Tailscale Serve. It is open only while a tailnet user is allowed.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Tailnet {
     listener: Mutex<Option<Listener>>,
     users: Mutex<Vec<String>>,
 }
 
+#[derive(Debug)]
 struct Listener {
     port: u16,
     task: JoinHandle<()>,
