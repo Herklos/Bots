@@ -895,6 +895,18 @@ fn botMentions(bots: Bot[]): MentionHit[] = bots.filter(b => not b.hideFromSideb
 fn roomMentions(bots: Bot[], members: RoomMember[], allName: string): MentionHit[] = [MentionHit(slug="all", name=allName, color="brand.default", shape="ball")].concat(members.map(m => MentionHit(slug=m.slug, name=m.name, color=colorOf(bots, m.slug), shape=shapeOf(bots, m.slug))))
 fn filterMentions(hits: MentionHit[], q: string): MentionHit[] = hits.filter(h => q == "" or h.slug.toLowerCase().startsWith(q) or h.name.toLowerCase().startsWith(q) or h.name.toLowerCase().replaceAll(" ", "").startsWith(q)).slice(0, 8)
 
+keyframes dot
+  from opacity=0.3, translate="0 0"
+  40% opacity=1, translate="0 -3px"
+  to opacity=0.3, translate="0 0"
+
+// The three working marks. Each one lags the last. Reduced motion is the host's job.
+component WorkingDots
+  view
+    row gap="6px" align-items="center"
+      for n in [0, 1, 2] key=n
+        column width=7 height=7 border-radius="radius.full" background-color="ink.muted" animation=`dot 1.2s ease-in-out infinite ${n * 0.16}s`
+
 component Bots
   state password = ""
   state draftTexts: string[] = []
@@ -2201,8 +2213,7 @@ component Bots
                           row padding="space.sm space.lg" gap="space.sm" align-items="center" testId="working"
                             Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="working", size=24, still=false)
                             row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working")
-                              for n in [0, 1, 2] key=n
-                                column width=7 height=7 border-radius="radius.full" background-color="ink.muted" opacity=0.6
+                              WorkingDots
                   if pending(sent) and lastText != ""
                     row justify-content="flex-end" padding="2px space.lg" testId="sending"
                       text lastText class=Bubble opacity=0.6 background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" max-width="82%"
@@ -2304,8 +2315,7 @@ component Bots
                               for m in workingMembers key=m.slug
                                 Face(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state="working", size=24, still=false)
                               row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working") testId="room-working-dots"
-                                for n in [0, 1, 2] key=n
-                                  column width=7 height=7 border-radius="radius.full" background-color="ink.muted" opacity=0.6
+                                WorkingDots
                           else
                             row justify-content=(msg.from == "user" ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="1px 0" testId=`room-msg-${msg.id}`
                               if msg.from != "user"
