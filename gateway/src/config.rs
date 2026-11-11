@@ -11,6 +11,8 @@ pub struct Config {
     pub t3_token: String,
     pub data_root: PathBuf,
     pub bots_root: PathBuf,
+    /// Environment locks for storage. The key text is not kept here.
+    pub storage: crate::storage_settings::ProcessEnv,
     /// The built Exact web app, served at `/`. An installed release uses `web/` next to the binary.
     /// A checkout uses `app/target/web-dist`.
     pub static_dir: PathBuf,
@@ -75,9 +77,10 @@ impl Config {
         if t3_token.is_empty() {
             anyhow::bail!("No T3 token: set T3_TOKEN or T3_TOKEN_FILE (t3 auth session issue --ttl 365d --label hbots --token-only)");
         }
-        let bots_root = env("HBOTS_ROOT")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| data_root.join("bots"));
+        // Environment, then ~/.hbots/storage.json, then the default folder.
+        // A bad saved folder falls back to the default and does not stop startup.
+        let storage = crate::storage_settings::ProcessEnv::capture();
+        let bots_root = crate::storage_settings::resolve_root(&data_root, &storage);
         Ok(Self {
             host: env("HOST").unwrap_or_else(|| "127.0.0.1".into()),
             port,
@@ -124,6 +127,7 @@ impl Config {
                 .unwrap_or_default(),
             data_root,
             bots_root,
+            storage,
         })
     }
 

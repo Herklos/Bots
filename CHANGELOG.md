@@ -4,6 +4,7 @@
 
 ### Improvements
 
+- Settings can record where Bots are stored. The file system stays the default.
 - Run the contract check again on a clean checkout.
 - Bots receive their prompt in every thread.
 - Post unread notices when the roster changes, using the notification settings and permission already on screen. A chat reuses thread reactions and pins for about ten seconds, until a new last message, a reaction, or a pin.

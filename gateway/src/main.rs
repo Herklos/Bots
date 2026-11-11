@@ -58,6 +58,7 @@ mod rooms; // Local rooms. A send is stored here, then dispatched to each member
 mod roster; // What an inbox row needs: preview, working, unread.
 mod routines; // T5: T3 scheduled tasks.
 mod service; // T6b: install and remove the background service.
+mod storage_settings;
 mod store;
 mod subagent_tools;
 mod suggestions; // New Bot starting points.
@@ -488,6 +489,20 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/access/password", put(access_password))
         .route("/api/access/network", put(access_network))
         .route("/api/access/network/restart", post(access_network_restart))
+        .route(
+            "/api/storage",
+            get(storage_settings::get_storage).put(storage_settings::put_storage),
+        )
+        .route("/api/storage/test", post(storage_settings::test_storage))
+        .route("/api/storage/copy", post(storage_settings::copy_storage))
+        .route(
+            "/api/storage/restart",
+            post(storage_settings::restart_storage),
+        )
+        .route(
+            "/api/storage/key",
+            put(storage_settings::put_storage_key).delete(storage_settings::delete_storage_key),
+        )
         .route("/api/access/tailscale", post(access_tailscale))
         .route("/api/access/tunnel", post(access_tunnel))
         .route("/api/thread-previews", post(thread_previews))
@@ -2828,6 +2843,7 @@ mod tests {
             access_team: String::new(),
             access_aud: String::new(),
             access_emails: vec![],
+            storage: storage_settings::ProcessEnv::default(),
         };
         let tailnet = Arc::new(exposure::Tailnet::new());
         Arc::new(AppState {
