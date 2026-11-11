@@ -302,6 +302,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
     provisioner::start(state.clone());
+    agent_context::start(state.clone());
     release::start(state.clone()).await;
 
     let applied = network::apply(
