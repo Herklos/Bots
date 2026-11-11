@@ -966,8 +966,10 @@ component Bots
   mutation subSaved as shape Reply refreshes bots then afterSubSave
   mutation childRemoved as shape Reply refreshes bots then afterChildRemove
   mutation seen as shape Reply refreshes bots
+  mutation roomSeen as shape Reply refreshes convos, room
   mutation noticeAsked as shape NotificationStatus then afterNotice
   mutation noticeEnabled as shape Reply
+  mutation noticeSaved as shape Reply refreshes prefs
   mutation reacted as shape Reply refreshes chat
   mutation messagePinned as shape Reply refreshes chat
   mutation sent as shape Reply refreshes chat then afterSend
