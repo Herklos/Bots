@@ -387,7 +387,7 @@ function dayLabel(at: string, now: number): string {
   const day = days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : days < 7 ? DAYS[d.getDay()]! : `${MONTHS[d.getMonth()]} ${d.getDate()}`;
   return `${day} ${clock(d)}`;
 }
-const blank = { quote: '', tokens: '', react: '', key: '', time: '', title: '', files: [] as any[], botSlug: '', botName: '', botColor: 'brand.default', botShape: 'ball', variant: '', choices: [] as any[], placeholder: '' };
+const blank = { quote: '', tokens: '', react: '', key: '', time: '', title: '', files: [] as any[], botSlug: '', botName: '', botColor: 'brand.default', botShape: 'ball', variant: '', choices: [] as any[], placeholder: '', resetAt: '' };
 
 // The transcript as rows: day marks, messages in runs, the lines between them, what the Bot is
 // waiting on, and the working line. A run is one sender's messages with no break between them.
@@ -412,7 +412,9 @@ function chatRows(slug: string, body: any, now: number, reactions: Record<string
     }
     if (Number.isFinite(t)) last = t;
     if (item._t === 'event') {
-      rows.push({ ...blank, ...peer(item.bot), id: String(item.id), kind: 'event', mine: false, text: String(item.text ?? ''), title: String(item.title ?? ''), head: true, tail: true, variant: String(item.kind ?? '') });
+      const reset = typeof item.failure?.resetAt === 'string' ? item.failure.resetAt : '';
+      const resetAt = reset !== '' && Number.isFinite(Date.parse(reset)) ? clock(new Date(reset)) : '';
+      rows.push({ ...blank, ...peer(item.bot), id: String(item.id), kind: 'event', mine: false, text: String(item.text ?? ''), title: String(item.title ?? ''), head: true, tail: true, variant: String(item.kind ?? ''), ...(resetAt !== '' ? { resetAt } : {}) });
       prev = null;
       continue;
     }

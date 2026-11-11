@@ -5,6 +5,7 @@
 ### Improvements
 
 - Record a terminal provider failure on the thread transcript as a rate limit, a transport failure, or another provider error. A retry that is still in progress stays off the transcript.
+- Show a terminal provider rate limit or provider error in the chat, and when the limit resets.
 
 ## 0.2.0
 

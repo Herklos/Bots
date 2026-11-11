@@ -501,6 +501,7 @@ shape Row
   react: string
   quote: string
   tokens: string
+  resetAt: string
 
 shape Suggestion
   name: string
@@ -879,7 +880,7 @@ fn modelEfforts(providers: Provider[], instanceId: string, model: string): Effor
 // Face colours are plain names; Bot colours are brand.* tokens from the design package.
 fn faceColor(c: string): string = c == "brand.default" ? "teal" : c == "brand.blue" ? "blue" : c == "brand.violet" ? "violet" : c == "brand.pink" ? "pink" : c == "brand.orange" ? "orange" : c == "brand.green" ? "green" : c == "brand.black" ? "black" : c == "brand.white" ? "white" : c == "brand.brown" ? "brown" : c == "brand.red" ? "red" : c == "brand.amber" ? "amber" : c == "brand.yellow" ? "yellow" : c == "brand.cyan" ? "cyan" : c == "brand.purple" ? "purple" : c == "brand.magenta" ? "magenta" : c == "brand.gray" ? "gray" : "teal"
 // A tool line's verb. Known ids come from the string table (passed in: a top-level `fn` cannot call `t`). Anything else keeps the stored sentence.
-fn eventVerb(id: string, stored: string, sent: string, routineCreated: string, routineUpdated: string, routineDeleted: string, from: string, ran: string, started: string): string = id == "sent" ? sent : id == "routine-created" ? routineCreated : id == "routine-updated" ? routineUpdated : id == "routine-deleted" ? routineDeleted : id == "from" ? from : id == "ran" ? ran : id == "started" ? started : stored
+fn eventVerb(id: string, stored: string, sent: string, routineCreated: string, routineUpdated: string, routineDeleted: string, from: string, ran: string, started: string, providerLimit: string, providerError: string): string = id == "sent" ? sent : id == "routine-created" ? routineCreated : id == "routine-updated" ? routineUpdated : id == "routine-deleted" ? routineDeleted : id == "from" ? from : id == "ran" ? ran : id == "started" ? started : id == "provider-limit" ? providerLimit : id == "provider-error" ? providerError : stored
 // The open chat is clear. A hidden Bot keeps the mark until that chat is the open one.
 fn showUnread(unread: bool, open: bool, hidden: bool): bool = unread and not open and (hidden or not hidden)
 fn bitShape(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.shape, case none => "ball" }
@@ -891,9 +892,9 @@ fn withWorking(messages: RoomMessage[], working: bool): RoomMessage[] = working 
 // The person's text, shown at the end of the room log until the sent row arrives.
 fn withRoomPending(messages: RoomMessage[], text: string): RoomMessage[] = text == "" ? messages : messages.concat([RoomMessage(id="room-pending", name="", text=text, from="user")])
 // Room lines use the same row shape as the Bot transcript. The group view reads kind, mine, and the bot fields.
-fn roomLine(msg: RoomMessage): Row = Row(id=msg.id, kind=(msg.id == "working" ? "working" : (msg.id == "room-pending" ? "pending" : "message")), mine=(msg.from == "user"), text=msg.text, title="", time="", head=true, tail=true, variant="", files=[], botSlug=(msg.from == "user" ? "" : msg.from), botName=msg.name, botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="")
+fn roomLine(msg: RoomMessage): Row = Row(id=msg.id, kind=(msg.id == "working" ? "working" : (msg.id == "room-pending" ? "pending" : "message")), mine=(msg.from == "user"), text=msg.text, title="", time="", head=true, tail=true, variant="", files=[], botSlug=(msg.from == "user" ? "" : msg.from), botName=msg.name, botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="")
 // A local transcript row for text that is still sending or failed. It is not a gateway row.
-fn pendingRow(text: string, failed: bool): Row = Row(id="pending", kind="pending", mine=true, text=text, title="", time="", head=true, tail=true, variant=(failed ? "failed" : ""), files=[], botSlug="", botName="", botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="")
+fn pendingRow(text: string, failed: bool): Row = Row(id="pending", kind="pending", mine=true, text=text, title="", time="", head=true, tail=true, variant=(failed ? "failed" : ""), files=[], botSlug="", botName="", botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="")
 // True when the last character can continue a word, so `joe@mail` is not a mention.
 fn wordChar(c: string): bool = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".includes(c)
 fn mentionReplace(text: string, q: string, slug: string): string = `${text.slice(0, text.length - q.length)}${slug} `
@@ -2258,11 +2259,13 @@ component Bots
                           row justify-content="center" padding="space.sm space.lg"
                             row gap="space.xs" align-items="center" padding="2px space.sm 2px 2px" border-radius="radius.full" background-color="surface.bubble" testId=`event-${m.id}`
                               Face(shape=(m.botSlug != "" ? m.botShape : shapeOf(bots, e.params.slug)), color=faceColor(m.botSlug != "" ? m.botColor : colorOf(bots, e.params.slug)), state="idle", size=18, still=true)
-                              text eventVerb(m.variant, m.text, t("event.sent"), t("event.routineCreated"), t("event.routineUpdated"), t("event.routineDeleted"), t("event.from"), t("event.ran"), t("event.started")) font="-exact-footnote" color="-exact-label" testId=`event-verb-${m.id}`
+                              text eventVerb(m.variant, m.text, t("event.sent"), t("event.routineCreated"), t("event.routineUpdated"), t("event.routineDeleted"), t("event.from"), t("event.ran"), t("event.started"), t("event.providerLimit"), t("event.providerError")) font="-exact-footnote" color="-exact-label" testId=`event-verb-${m.id}`
                               if m.botName != ""
                                 text m.botName font="-exact-footnote" color="-exact-label" testId=`event-bot-${m.id}`
                               if m.title != ""
                                 text m.title font="-exact-footnote" color="-exact-label" testId=`event-title-${m.id}`
+                              if m.resetAt != ""
+                                text t("event.resetsAt", time=m.resetAt) font="-exact-footnote" color="-exact-label" testId=`event-reset-${m.id}`
                         else if m.kind == "message"
                           ChatMessage(row=m, canHover=(pointerFacts.hover == "hover"), picking=(reactFor == m.id), menuOpen=(messageMenu == m.id), react=doReact, openPicker=openReact, reply=startReply, pin=doPinMessage, openMenu=openMessageMenu, closeMenu=closeMessageMenu)
                         else if m.kind == "pending"
