@@ -2,13 +2,13 @@
 
 | Field | Value |
 | Author | hbots design |
-| Date | 2026-11-10 |
+| Date | 2026-11-10, revised 2026-11-11 |
 | Status | Draft |
-| Scope | Where a Bot's T3 project and main thread are created |
+| Scope | Where a Bot's T3 project and main thread are created, and which models that computer offers |
 
 ## Overview
 
-hbots talks to one local T3 Code and creates each Bot's project and main thread with no environment id. The person cannot say "run this Bot on that linked computer." This design adds that choice at three layers (app default, Bot, durable child Bot), records the environment of a turn-scoped T3 child when T3 reports one, and adds an optional fallback that stays off unless the person turns it on.
+hbots talks to one local T3 Code and creates each Bot's project and main thread with no environment id. The person cannot say "run this Bot on that linked computer." This design adds that choice at three layers (app default, Bot, durable child Bot), records the environment of a turn-scoped T3 child when T3 reports one, and adds an optional fallback that stays off unless the person turns it on. Settings is where the default computer is set. A Bot's details page, and a durable child's edit sheet, show the computer the conversation is on and the computer it is set to, and can change the setting. The model picker lists the providers of the computer that Bot is set to, not the providers of whatever machine hbots itself is talking to.
 
 The local T3 remains the only broker. hbots keeps one session token and selects among links T3 already has. A remote placement does not copy the Bot folder. On this computer the workspace stays the Bot folder, as it is today. On a linked computer, T3 creates its own project repository, or uses a folder path the person typed for that machine. Remote execution is blocked until T3 accepts the existing hbots token for an environment-scoped create and launch. That gap was observed, and it is requirement R1 below, not a method this document invents.
 
@@ -100,18 +100,19 @@ A Bot that should run on a server either runs on the laptop or does not run. The
 
 ### Goals
 
-1. An app-level default execution environment in the existing settings document.
-2. A per-Bot environment in that Bot's `bot.json`.
+1. An app-level default execution environment, stored in the existing settings document and set from the Settings screen.
+2. A per-Bot environment in that Bot's `bot.json`, changed from that Bot's details page, which also shows the computer the live conversation is on.
 3. Environment config for both kinds of child, kept distinct:
    - Durable child Bots (subagents): their own `bot.json`, default inherit the parent.
    - Turn-scoped T3 child threads: the parent's placement is what hbots can enforce; a remote child id is recorded and not opened.
 4. Optional fallback when the chosen environment is unavailable. Off unless the person turns it on, per app and per Bot.
 5. A picker of linked environments, both locales, with explicit empty, loading, offline, and unknown-id states.
 6. One Bot's dead environment does not fail `tick` for the others, once the feature flag is on.
+7. The providers and models offered for a Bot are those of the computer that Bot is set to. A model the laptop has and that computer does not is not offered, and is not used to launch.
 
 ### Non-goals
 
-- Changing `default_model()`, `settings.defaultModel`, or the Haiku selection.
+- Changing `default_model()` or the Haiku selection it returns. What changes is which catalog a picker and `checked_selection` consult. Haiku is still the fallback only when that catalog lists it.
 - Reworking groups, rooms, vault crypto, or the project board. Board `environmentId` stays the link field it already is. The existing room path still has to skip a remote-bound member (see the bound-id guard). That is a refusal, not a new room model.
 - Pairing UX. hbots does not call `peerLinks.link` and does not ask the person to paste a code. New links are made in T3 Code, Settings, Environments (`/settings/connections`). Labs remains the T3 switch `linkedEnvironmentsEnabled`.
 - Copying or mounting the Bot folder on the linked computer.
@@ -132,8 +133,9 @@ A Bot that should run on a server either runs on the laptop or does not run. The
 7. One token. The local T3 brokers the link. hbots stores no per-environment token and does not read `connection-catalog.json`.
 8. `beta.environments` defaults to false. It gates remote placement and per-bot error isolation. Launch retry and R1 upkeep run only when this flag is true and `forwarding_supported()` is true: `orchestration.launchThread` into a stored `projectId`, environment-scoped `message.dispatch` of `pendingBrief` and `firstMessage`, and `push_model`. Flag off, rollback, and forwarding false stop after the local-match skip: no launch, no brief dispatch, no `push_model`. The flag does not gate the refusal to local-create a Bot whose desired id is a link. That refusal stays on in every flag state, from PR 1, so `willRun: false` matches `tick`. The bound-id guard that skips the local match and refuses local handlers is also not flag-gated.
 9. Per-bot failure isolation is gated on that flag. With the flag off, a Bot that is actually provisioning locally still uses today's `?`. The bound-elsewhere skip and the link-desired skip are `continue`, not that `?`. With the flag on, one Bot's error is a warning and the pass continues. The local broker being down still stops the pass.
-10. Haiku stays the model default. Remote create uses the same resolved `defaultModelSelection` as the local create. No new model path.
+10. The model picker follows the computer the Bot is set to (its desired id, after inherit). `Providers::list` today calls `server.getConfig` with `{}` and caches one list (`gateway/src/providers.rs`). On this Nightly that RPC's payload is an empty struct, so it is the broker's catalog only. A link's catalog is a second read of the same tag once the payload accepts `environmentId`. Until that field exists, a Bot set to a link does not show the laptop's providers as if they would run there. `default_model()` stays Haiku. Launch uses Haiku, or `settings.defaultModel`, or `bot.model`, only when the chosen computer's catalog contains that selection. A missing model does not fall through to a model from another computer.
 11. The roster row gains `placement`: `local`, `remote`, or `waiting`. `shape Bot` grows by that one field. `lineOf` and `ready` read it. A remote `mainThreadId` is not "ready to chat." Missing `placement` means `local`, so current fixtures stay valid.
+12. Settings and the Bot details page are the two places a person sets a computer. A durable child's config screen is the subagent sheet that `editSub` already opens (`panelPage = "subagent"`). That sheet shows the same current computer and the same three radios. It is not a second storage shape.
 
 ### Resolution cascade
 
@@ -545,7 +547,19 @@ Chrome strings live only in `app/strings/en.json` and `app/strings/fr.json`. The
 
 Chrome strings live only in `app/strings/en.json` and `app/strings/fr.json`. The host locale picks the table, `fr` for French and English otherwise. `app/app.contract` references keys, the same way it references `settings.defaultModel` and `settings.defaultAccess`. No new English sentence in the contract. The names hbots and T3 Code stay as written.
 
-Placement. The app default, the fallback switch, and the beta switch go on the models domain, next to the approval radios and the `ModelPicker`. Not a new settings domain. Bot details get a row under the model row, opening a page patterned on `ModelPage`: three radios (app default or parent, this computer, a link), the fallback override, and the optional path. The path control is hidden when the radio is not a link. The subagent create sheet gets the same three radios, worded as inherit-this-Bot, this computer, linked computer, plus the fallback bool.
+Placement. The app default, the fallback switch, and the beta switch go on the Settings screen, models domain, next to the approval radios and the `ModelPicker`. Not a new settings domain. That is the only place the app default is set. The control shows the saved computer's label, or `settings.environmentThisComputer` when `defaultEnvironmentId` is null. Changing it writes `PUT /api/settings`. It does not move Bots that already have a thread.
+
+Bot details, the config screen for a normal Bot, get a row under the model row. The row's value is the live computer: `panel.environmentCurrent` with the label of `boundEnvironmentId`, or this computer when that key is absent. Opening it is a page patterned on `ModelPage`. The page repeats that live line, then `panel.environmentDesired` when the setting differs (`needsMove`). The radios are the setting: app default or parent, this computer, a link. Then the fallback override and the optional path. The path control is hidden when the radio is not a link. Saving the radios does not move the thread. Stay and Move stay on this page.
+
+A durable child uses the subagent sheet, not a second details route. `hideFromSidebar` keeps the child out of the inbox. `editSub` already opens `panelPage = "subagent"`. That sheet gains the same live line (`panel.environmentCurrent` from the child's bound id; a child with no thread uses `panel.environmentWaiting` or the parent's label when it inherits) and the same three radios, worded inherit-this-Bot, this computer, linked computer, plus the fallback bool. Create (`openNewSub`) has no live thread. The inherit radio shows the parent's desired label (`subagent.environmentParent`, "Ada is set to {label}"). Save on an existing child writes the same `PUT /api/bots/{slug}/environment` as the parent page.
+
+Models follow that setting. `ModelPage` and the Settings default `ModelPicker` keep today's `GET /api/providers` only when the computer in question is this one: the Bot's desired id is null, or Settings' `defaultEnvironmentId` is null. `GET /api/providers?environmentId={id}` is the catalog for a link. The handler calls `Providers::list` for that id. The cache key is the id, or `local`, not one process-wide list. `from_config` is unchanged. The response adds `catalog`: `local`, `remote`, or `unavailable`, plus `label`.
+
+`server.getConfig` on this Nightly takes an empty payload and returns the broker's `ServerConfig`. It cannot name a link. That read is requirement R2, the same kind of gap as R1: the existing tag grows optional `environmentId`, or another tag that was observed to return that link's `ServerConfig` is named before hbots calls it. Until R2, `catalog` is `unavailable`, `providers` is `[]`, and the picker is replaced by `panel.environmentModels`. The laptop list is not shown. `setModel` and `setDefaultModel` return `environment_models` if the body picks a provider while the catalog is unavailable. The stored selection is left as it is.
+
+When the catalog loads, `ModelPicker` receives only that list. A stored model absent from it stays visible as the current choice, with `panel.environmentModelMissing`, and is not a successful radio in the list. Saving a new model uses `checked_selection` against that catalog. Settings' default model uses the catalog of `defaultEnvironmentId`, so a default computer that is a link does not store a laptop-only model.
+
+`tick` resolves the model as it does now (`bot.model`, else `settings.defaultModel`, else `default_model()`), then checks it against the desired computer's catalog. This computer uses the broker catalog, and Haiku remains the fallback when that catalog lists it. A link with `catalog: unavailable` does not launch. A link whose catalog omits the resolved model does not launch and warns `environment_model` for that Bot. It does not substitute a model from another computer. The subagent sheet's model control, for an existing child, is the same `ModelPicker` and the same `setModel` call, fed by the catalog of the radio currently selected on that sheet. Changing the radio reloads the list before a model can be saved.
 
 The link radio's choices are `GET /api/environments` `links`, showing `label`, `env.status.*`, and `env.access.*`. The person does not type an id in the normal path. The advanced id field (`settings.environmentAdvanced`) renders only when that GET fails. It stays hidden during loading and when the list is empty. Empty uses `settings.environmentEmpty` and points at T3 Code. A typed id is stored only if it passes `env_id`. It still does not place until a later list contains it.
 
@@ -572,6 +586,10 @@ String keys:
 | `settings.environmentAdvanced` | Computer id | Identifiant de l'ordinateur |
 | `settings.environmentAdvancedHelp` | Use this only when the list could not be loaded. | À n'utiliser que lorsque la liste n'a pas pu être chargée. |
 | `panel.environment` | Computer | Ordinateur |
+| `panel.environmentCurrent` | Running on {label} | En cours sur {label} |
+| `panel.environmentDesired` | Set to {label} | Réglé sur {label} |
+| `panel.environmentModels` | Models for that computer are not available yet. | Les modèles de cet ordinateur ne sont pas encore disponibles. |
+| `panel.environmentModelMissing` | {name} is not available on {label}. | {name} n'est pas disponible sur {label}. |
 | `panel.environmentInheritApp` | Use the app default | Utiliser le réglage de l'app |
 | `panel.environmentInheritParent` | Use the parent Bot's computer | Utiliser l'ordinateur du Bot parent |
 | `panel.environmentLocal` | This computer | Cet ordinateur |
@@ -598,6 +616,9 @@ String keys:
 | `subagent.environmentLocal` | This computer | Cet ordinateur |
 | `subagent.environmentPinned` | Linked computer | Ordinateur lié |
 | `subagent.environmentFallback` | If that computer is down, run on this computer | Si cet ordinateur est arrêté, s'exécuter sur cet ordinateur |
+| `subagent.environmentParent` | {name} is set to {label} | {name} est réglé sur {label} |
+| `error.environmentModels` | Models for that computer are not available yet. | Les modèles de cet ordinateur ne sont pas encore disponibles. |
+| `error.environmentModel` | That model is not available on this Bot's computer. | Ce modèle n'est pas disponible sur l'ordinateur de ce Bot. |
 | `inbox.environmentRemote` | On a linked computer | Sur un ordinateur lié |
 | `inbox.environmentWaiting` | Waiting for its computer | En attente de son ordinateur |
 | `error.environmentUnavailable` | That computer is not available. | Cet ordinateur n'est pas disponible. |
@@ -645,7 +666,9 @@ String keys:
 | `lineage::open_child`, `thread_for` | No change. |
 | `projects::clean_link` | No change. Duplicate the charset check rather than coupling the modules in the first PR. |
 | `render_agents_md` | One local sentence about one-off children. |
-| `app/app.contract`, `app/app.ts` | Picker, details page, subagent radios, banners, `placement` on `shape Bot`, `lineOf`, `ready`, `call` / `localize` / `explain` code map. No new literal English. |
+| `app/app.contract`, `app/app.ts` | Settings models domain, Bot details page, subagent sheet (`editSub` / `openNewSub`), `ModelPicker` fed by the chosen computer, banners, `placement` on `shape Bot`, `lineOf`, `ready`, `call` / `localize` / `explain` code map. No new literal English. |
+| `providers::Providers::list` | Cache key is `local` or a link id. `server.getConfig` stays `{}` until R2. `from_config` is unchanged. |
+| `main::providers_get`, `main::checked_selection`, `main::model_put` | `GET /api/providers?environmentId=` and Bot `setModel` use the desired computer's catalog. |
 | `app/strings/en.json`, `app/strings/fr.json` | The table above. |
 
 ### Data Model Changes
@@ -754,7 +777,8 @@ Feature-flag matrix:
 3. For a typed `executionWorkspace`, will T3 create missing directories even if hbots sends `createWorkspaceRootIfMissing: false`? If a later build documents that it will, hbots still refuses `://`. If operators need create-on-demand, that is a separate switch, default off.
 4. The one-time transcript note is English from the gateway. Should the client pass a localized sentence into a local-only "note" API instead? No such API was verified. v1 uses the English note when R1 send exists, plus the localized banner always.
 5. Will `preview.list` and `scheduledTasks.subscribe` grow `environmentId` in the same T3 change as R1? They were not seen to accept it. Until they do, roster preview stays empty and routines show `panel.environmentRoutines`.
-6. Should a parent Move dialog offer to mark idle inheriting children as `moveRequested`? v1 says no. Each child has its own conversation. Revisit if the details page makes drift too easy to miss. The child page shows `needsMove` on its own.
+6. Should a parent Move dialog offer to mark idle inheriting children as `moveRequested`? v1 says no. Each child has its own conversation. Revisit if the subagent sheet makes drift too easy to miss. The child sheet shows `needsMove` on its own.
+7. R2. `server.getConfig` on this Nightly (`WsServerGetConfigRpc`) takes an empty payload and returns the broker `ServerConfig`. Will that payload grow optional `environmentId`, or does an already-observed read return the link's `ServerConfig`? Until one of those is true, a Bot set to a link does not list the laptop's providers. Do not send `environmentId` on `server.getConfig` against this Nightly.
 
 ## Risks
 
@@ -768,6 +792,7 @@ Feature-flag matrix:
 | `retiredThreads` grows without a UI | Low | Cap 5. Restore UI is a non-goal. |
 | French and English keys drift | Medium | One table in this doc. PR 3 adds both files in the same change. Contract references keys only. |
 | Face or model push against a remote id errors and, before isolation, fails the pass | Medium | Guard those calls in the same PR as the bound-id check, before placement exists. |
+| A laptop model is saved for a Bot that will run on a link, or Haiku is launched where that computer does not list it | High | PR 3 returns `catalog: unavailable` and refuses `setModel` from the local list. PR 5 checks the link catalog in `tick` and does not substitute another computer's model. |
 
 ## References
 
@@ -816,7 +841,7 @@ Files: `app/app.contract`, `app/app.ts`, `app/strings/en.json`, `app/strings/fr.
 
 Dependencies: PR 1 and PR 2.
 
-Description: This is the first PR that lets a person set the fields from the app. Settings models domain, next to the approval radios and the `ModelPicker`: default computer, fallback copy that names this computer and not a third machine, beta switch, default off. Bot details page patterned on `ModelPage`. `GET` and `PUT /api/bots/{slug}/environment` include `willRun`, defined so false means `tick` will not create, including not locally. Remote radios disabled while `forwarding` is false. `shape Bot` gains optional `placement`. `lineOf` and `ready` use `inbox.environmentRemote` and `inbox.environmentWaiting` instead of `Ready to chat`. `call` / `localize` / `explain` map `code` before the `"t3"` heuristic. Advanced id only when the list GET fails. Empty, loading, offline, and unknown-id strings from the table in both locales. No hardcoded English in the contract. `tick` still does not place on a link. It already refuses to place that pin on the laptop (PR 1).
+Description: This is the first PR that lets a person set the fields from the app. Settings, models domain, next to the approval radios and the `ModelPicker`: default computer (the saved label, or this computer), fallback copy that names this computer and not a third machine, beta switch, default off. Bot details page patterned on `ModelPage`, with `panel.environmentCurrent` (where the thread is) and `panel.environmentDesired` when the setting differs. The subagent sheet (`editSub` and `openNewSub`) shows the same live line and the same radios. `GET` and `PUT /api/bots/{slug}/environment` include `willRun`, defined so false means `tick` will not create, including not locally. Remote radios disabled while `forwarding` is false. `GET /api/providers?environmentId=` returns `catalog: unavailable` and an empty provider list for a link, and the broker list when the id is omitted. A Bot set to a link does not render the laptop `ModelPicker`. `setModel` returns `environment_models` rather than storing a laptop model for that Bot. This computer still uses today's provider list. `shape Bot` gains optional `placement`. `lineOf` and `ready` use `inbox.environmentRemote` and `inbox.environmentWaiting` instead of `Ready to chat`. `call` / `localize` / `explain` map `code` before the `"t3"` heuristic. Advanced id only when the list GET fails. Empty, loading, offline, and unknown-id strings from the table in both locales. No hardcoded English in the contract. `tick` still does not place on a link. It already refuses to place that pin on the laptop (PR 1).
 
 ### PR 4. Isolate one Bot's failure inside tick
 
@@ -828,11 +853,11 @@ Description: When `beta.environments` is true, a Bot that is allowed to place an
 
 ### PR 5. First placement on a link, behind R1
 
-Files: `gateway/src/provisioner.rs`, `gateway/src/environments.rs`, `gateway/src/t3.rs`, `gateway/src/main.rs` (`send_chat`, `read_chat`).
+Files: `gateway/src/provisioner.rs`, `gateway/src/environments.rs`, `gateway/src/providers.rs`, `gateway/src/t3.rs`, `gateway/src/main.rs` (`send_chat`, `read_chat`, `providers_get`, `checked_selection`).
 
 Dependencies: PR 2, PR 3, PR 4, and a verified R1 on the targeted T3 build.
 
-Description: `forwarding_supported()` flips only with that verification. Remote create, launch retry, and R1 upkeep run only when that function is true and `beta.environments` is true. Flag off stops after the local-match skip: no launch, no brief dispatch, no `push_model`. The empty-thread refusal to local-create a link pin stays on in every flag state. For a Bot with no `projectId`, and only while the flag is on, place on the desired machine or follow the fallback chain onto this computer only. Local Bots still use `projects.mutate` `project.create` with `title` and the Bot folder, and `orchestration.launchThread`, with no `environmentId`. Remote no-path create is `projects.createNew` with `environmentId`. Remote typed path is `project.create` with `environmentId` and `createWorkspaceRootIfMissing: false`. Do not fall from a typed path back to `projects.createNew`. Persist `projectId` and `boundEnvironmentId` in one `save` before launch. If launch fails, the next `tick` calls `orchestration.launchThread` once into that `projectId` with the environment id and does not create a project, and only while the flag is still on. Test that case with `beta.environments` true. Test that the flag off does not launch. When `mainThreadId` is set, desired equals bound, and the flag is on, dispatch `pendingBrief` and `firstMessage` with an environment-scoped `message.dispatch`, and call `push_model` with that environment id. Do not call `project_face_update`. `send_chat` and `read_chat` pass `boundEnvironmentId` on the same broker. A link-down send returns `environment_unavailable` (`chat.environmentDown` from `code`). If a thread already exists, do not create another. Do not merge a payload the installed asar does not accept.
+Description: `forwarding_supported()` flips only with that verification. Remote create, launch retry, and R1 upkeep run only when that function is true and `beta.environments` is true. Flag off stops after the local-match skip: no launch, no brief dispatch, no `push_model`. The empty-thread refusal to local-create a link pin stays on in every flag state. For a Bot with no `projectId`, and only while the flag is on, place on the desired machine or follow the fallback chain onto this computer only. Local Bots still use `projects.mutate` `project.create` with `title` and the Bot folder, and `orchestration.launchThread`, with no `environmentId`. Remote no-path create is `projects.createNew` with `environmentId`. Remote typed path is `project.create` with `environmentId` and `createWorkspaceRootIfMissing: false`. Do not fall from a typed path back to `projects.createNew`. Persist `projectId` and `boundEnvironmentId` in one `save` before launch. If launch fails, the next `tick` calls `orchestration.launchThread` once into that `projectId` with the environment id and does not create a project, and only while the flag is still on. Test that case with `beta.environments` true. Test that the flag off does not launch. When `mainThreadId` is set, desired equals bound, and the flag is on, dispatch `pendingBrief` and `firstMessage` with an environment-scoped `message.dispatch`, and call `push_model` with that environment id. Do not call `project_face_update`. `send_chat` and `read_chat` pass `boundEnvironmentId` on the same broker. A link-down send returns `environment_unavailable` (`chat.environmentDown` from `code`). If a thread already exists, do not create another. Do not merge a payload the installed asar does not accept. R2 is the same gate for models: `server.getConfig` accepts `environmentId`, or another observed read returns that link's `ServerConfig`. Then `GET /api/providers?environmentId=` returns `catalog: remote` and `ModelPicker` lists only those providers, on the Bot page, on the subagent sheet, and on Settings when the default computer is that link. `tick` refuses `environment_model` when the resolved selection is absent from that catalog, and does not substitute Haiku from the laptop. Until R2, the unavailable picker from PR 3 stays.
 
 ### PR 6. Stay and Move
 
@@ -848,4 +873,4 @@ Files: `app/app.contract`, `app/app.ts`, `app/strings/en.json`, `app/strings/fr.
 
 Dependencies: PR 3 for the sheet. PR 1 for MCP storage. Placement behavior depends on PR 5 being present, but this PR does not add a second create path.
 
-Description: Subagent create sheet: inherit this Bot, this computer, linked computer, and the fallback bool. `subagent_list` returns `environmentMode`, `environmentId`, `boundEnvironmentId`, and `environmentFallback`. `render_agents_md` adds one sentence that a one-off child stays on this machine unless the person asked. Lineage open behavior is unchanged. `panel.remote` is unchanged.
+Description: Subagent sheet, both create and edit: inherit this Bot (with the parent's desired label), this computer, linked computer, the fallback bool, and `panel.environmentCurrent` on edit. The model control on an existing child is `ModelPicker` fed by the catalog of the radio selected on that sheet, the same rule as PR 3 and PR 5. `subagent_list` returns `environmentMode`, `environmentId`, `boundEnvironmentId`, and `environmentFallback`. `render_agents_md` adds one sentence that a one-off child stays on this machine unless the person asked. Lineage open behavior is unchanged. `panel.remote` is unchanged.
