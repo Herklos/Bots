@@ -8,6 +8,10 @@
 - `@everyone` and `@all` in a group ask every member to answer for themselves. A member whose name is `everyone` or `all` is that member, and a Bot's own `@everyone` does not wake the group.
 - Choose who answers in a group when nobody is named: the last speaker (`last`, the default), every member (`everyone`), or a chief (`chief`). Settings stores the default as `groupAnswerPolicy`. A group can override it with `answerPolicy`, and can name its `chief`. `@mention`, `@all`, and a single plain name still choose the recipients. Chief mode allows one fewer Bot-to-Bot handoff than there are members. Rooms saved before these fields keep today's last-speaker behavior.
 
+### Improvements
+
+- Group chat uses the same jump-to-end control and follow behavior as a Bot chat, including replies that arrive while you are already at the end.
+
 ## 0.1.6
 
 This release makes conversations easier to navigate on small screens and adds faster ways to mention Bots.
