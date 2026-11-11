@@ -153,6 +153,8 @@ function botsBody(store: any): Promise<any> {
   return botsInflight;
 }
 const reply = (r: Answered) => (r.ok ? { ok: true, error: '' } : { ok: false, error: localize(r.error) });
+// The first read on the About tab asks GitHub. Later refreshes use the stored answer.
+let systemChecked = false;
 
 // POST /api/bots returns the saved Bot. `reply` keeps only ok and error, which drops slug.
 function madeFromBot(r: Answered): { ok: boolean; id: string; error: string } {
@@ -906,6 +908,41 @@ const sources: Sources = {
     const r = await call(store, '/api/config');
     if (!r.ok) return { ok: false, version: '', harness: '', connected: false };
     return { ok: true, version: String(r.body.version ?? ''), harness: String(r.body.harness?.name ?? 'T3 Code'), connected: r.body.harness?.connected === true };
+  },
+  loadSystem: async ([gate], store): Promise<Result<'loadSystem'>> => {
+    const blank: Result<'loadSystem'> = { ok: false, installed: false, service: false, version: '', latest: '', updateAvailable: false, error: '' };
+    if (gate !== '1') {
+      systemChecked = false;
+      return blank;
+    }
+    const path = systemChecked ? '/api/system' : '/api/system?check=1';
+    systemChecked = true;
+    const r = await call(store, path);
+    if (!r.ok) return blank;
+    const latest = r.body.latest;
+    return {
+      ok: true,
+      installed: r.body.installed === true,
+      service: r.body.service === true,
+      version: String(r.body.version ?? ''),
+      latest: latest && typeof latest === 'object' && typeof latest.version === 'string' ? latest.version : '',
+      updateAvailable: r.body.updateAvailable === true,
+      error: typeof r.body.error === 'string' ? r.body.error : '',
+    };
+  },
+  startUpdate: async (_args, store): Promise<Result<'startUpdate'>> => {
+    const r = await call(store, '/api/system/update', { method: 'POST', body: '{}' });
+    if (!r.ok) return { ok: false, version: '', error: localize(r.error) };
+    return { ok: true, version: String(r.body.version ?? ''), error: '' };
+  },
+  readHealth: async (_args, store): Promise<Result<'readHealth'>> => {
+    const r = await call(store, '/api/health');
+    if (!r.ok) return { ok: false, version: '' };
+    return { ok: true, version: String(r.body.version ?? '') };
+  },
+  reloadPage: () => {
+    location.reload();
+    return { ok: true, error: '' };
   },
   loadSuggestions: async (_args, store): Promise<Result<'loadSuggestions'>> => {
     const r = await call(store, '/api/suggestions');

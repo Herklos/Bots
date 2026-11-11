@@ -504,6 +504,25 @@ shape About
   harness: string
   connected: bool
 
+// The update card. A failed read is a blank (ok false), the same as About.
+shape SystemStatus
+  ok: bool
+  installed: bool
+  service: bool
+  version: string
+  latest: string
+  updateAvailable: bool
+  error: string
+
+shape UpdateStart
+  ok: bool
+  version: string
+  error: string
+
+shape Health
+  ok: bool
+  version: string
+
 shape Pin
   id: string
   text: string
@@ -891,6 +910,11 @@ component Bots
   state nameEditing = false
   // Settings opens on User. Picking another domain only changes which controls are shown.
   state settingsDomain = "user"
+  // Set once POST /api/system/update accepts, until the new version answers or the wait gives up.
+  state updateTo = ""
+  state updateFrom = ""
+  state updatePolls = 0
+  state updateStuck = false
   state newPassword = ""
   state botQuery = ""
   state searching = false
@@ -949,6 +973,7 @@ component Bots
   resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
   resource providers = loadProviders() as shape Provider[] else empty()
   resource about = loadAbout() as shape About else empty()
+  resource system = loadSystem(systemGate) as shape SystemStatus else empty()
   resource prefs = loadPrefs() as shape Prefs else empty()
   resource notice = loadNotice() as shape NoticeState else empty()
   resource vault = loadVault() as shape Login[] else empty()
@@ -992,6 +1017,9 @@ component Bots
   mutation botRemoved as shape Reply refreshes bots then afterBotRemove
   mutation prefsSaved as shape Reply refreshes prefs
   mutation passwordSet as shape Reply refreshes session then afterPassword
+  mutation updateStarted as shape UpdateStart then afterUpdateStart
+  mutation healthRead as shape Health then afterHealth
+  mutation pageReloaded as shape Reply
   mutation loginSaved as shape Reply refreshes vault then afterLoginSave
   mutation loginRemoved as shape Reply refreshes vault then afterLoginRemove
   mutation revealed as shape Revealed
@@ -1075,6 +1103,10 @@ component Bots
   derive libraryGate = (onLibrary and slug != "") ? "1" : "0"
   derive computerGate = (onComputer and slug != "") ? "1" : "0"
   derive usageGate = top(nav).name == "settings" ? "1" : "0"
+  derive systemGate = (top(nav).name == "settings" and settingsDomain == "updates") ? "1" : "0"
+  derive updateError = match updateStarted { case some(r) => r.ok ? "" : r.error, case none => "" }
+  derive canUpdate = system.ok and system.installed and system.service and system.updateAvailable and system.error == "" and updateTo == "" and not updateStuck
+  derive updateNeedsService = system.ok and system.installed and not system.service and system.updateAvailable and system.error == "" and updateTo == "" and not updateStuck
   derive modelError = match modelSaved { case some(r) => r.error, case none => "" }
   derive controlError = match controlled { case some(r) => r.error, case none => "" }
   derive openError = match openedBrowser { case some(r) => r.error, case none => "" }
@@ -1093,6 +1125,10 @@ component Bots
 
   task fit mount
     every(200, fitView)
+
+  // Health while an update is replacing this process. About ten minutes, then stop.
+  task watchUpdate when updateTo != "" and not updateStuck
+    every(2000, askHealth)
 
   // The saved theme is applied once it has loaded; picking one applies it at once.
   task scheme when prefs.theme != ""
@@ -1173,6 +1209,8 @@ component Bots
     if top(nav).name == "settings"
       refresh usage
       refresh report
+      if settingsDomain == "updates"
+        refresh system
     if onLibrary
       refresh shelf
     if onComputer
@@ -1715,6 +1753,32 @@ component Bots
     nav = go(nav, "/settings")
   action pickSettingsDomain(domain: string)
     settingsDomain = domain
+  action doStartUpdate
+    if canUpdate and not pending(updateStarted)
+      send updateStarted = startUpdate()
+  action afterUpdateStart
+    match updateStarted {
+      case some(r)
+        if r.ok and r.version != ""
+          updateTo = r.version
+          updateFrom = system.version
+          updatePolls = 0
+          updateStuck = false
+      case none
+        updatePolls = updatePolls
+    }
+  action askHealth
+    if updateTo != "" and not updateStuck and not pending(healthRead)
+      updatePolls = updatePolls + 1
+      send healthRead = readHealth()
+  action afterHealth
+    let target = updateTo
+    let polls = updatePolls
+    let arrived = match healthRead { case some(h) => h.ok and h.version == target and target != "", case none => false }
+    if arrived and not pending(pageReloaded)
+      send pageReloaded = reloadPage()
+    else if target != "" and polls >= 300
+      updateStuck = true
   action doEditName(v: string)
     nameDraft = v
     nameEditing = true
@@ -2372,6 +2436,34 @@ component Bots
                         text passwordError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="password-error"
                   else if settingsDomain == "updates"
                     column gap="space.xl"
+                      column
+                        text t("settings.domainUpdates") class=SectionLabel
+                        column class=GroupCard padding="0"
+                          row align-items="center" min-height=44 padding="0 space.md" box-sizing="border-box"
+                            if updateTo != "" and not updateStuck
+                              text t("settings.updating", version=updateTo) font="-exact-subheadline" testId="update-status"
+                            else if updateStuck
+                              text t("settings.updateStuck", version=(updateFrom != "" ? updateFrom : system.version)) font="-exact-subheadline" color="-exact-system-red" testId="update-status"
+                            else if pending(system) and not system.ok
+                              text t("settings.updateChecking") font="-exact-subheadline" color="ink.muted" testId="update-status"
+                            else if system.error != ""
+                              text system.error font="-exact-subheadline" color="ink.muted" testId="update-status"
+                            else if not system.ok
+                              text t("settings.updateFailed") font="-exact-subheadline" color="ink.muted" testId="update-status"
+                            else if not system.installed
+                              text t("settings.updateSource") font="-exact-subheadline" testId="update-status"
+                            else if system.updateAvailable
+                              text t("settings.updateAvailable", version=system.latest) font="-exact-subheadline" testId="update-status"
+                            else
+                              text t("settings.updateCurrent", version=system.version) font="-exact-subheadline" testId="update-status"
+                          if canUpdate
+                            row align-items="center" min-height=44 padding="space.sm space.md" box-sizing="border-box" border-top="1px solid surface.line"
+                              button appearance="none" press=doStartUpdate disabled=pending(updateStarted) testId="start-update" min-height=36 padding="0 space.lg" border="none" border-radius="radius.full" background-color="brand.default" color="ink.dark" font="-exact-subheadline" font-weight=600
+                                text t("settings.updateRestart")
+                        if updateNeedsService
+                          text t("settings.updateNotService") class=SettingsFoot
+                        if updateError != "" and updateTo == ""
+                          text updateError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="update-error"
                       column
                         text t("settings.about") class=SectionLabel
                         column class=GroupCard padding="0"
