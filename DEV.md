@@ -48,13 +48,9 @@ The gateway still reads its normal settings, including `HOST` and `PORT`. The sc
 bun scripts/dev.mjs --lan
 ```
 
-This passes `--lan` to Exact and starts the debug gateway with `HOST=0.0.0.0`. Open the printed web URL on a device that can reach this machine. The frontend connects to port 3780 on the selected address, so both ports must be reachable through the host firewall. The script selects the first non-internal IPv4 address; if that is the wrong interface, choose one explicitly:
+This passes `--lan` to Exact and starts the debug gateway with `HOST=0.0.0.0`. Open `http://<any address of this machine>:8765` from a device that can reach it: the LAN address, the Tailscale address, `<hostname>.local`, or any other interface. One run answers on all of them.
 
-```sh
-HBOTS_DEV_HOST=192.168.1.42 bun scripts/dev.mjs --lan
-```
-
-`HBOTS_DEV_HOST` selects the address embedded in the client and printed at startup; it does not change the bind address. Use a reachable address, not `0.0.0.0`. Restart the script if that address changes. Devices normally need to be on the same network; VPNs, firewalls, and Wi-Fi client isolation can prevent access.
+In LAN mode a small proxy listens on 8765 and the Exact loop moves to 8766. The client is built with the gateway placeholder, as in a release, and the proxy replaces it with `http://<host the browser used>:3780`, so each device calls the gateway on the address it already reached. Exact is started with `--allow-host` for every IPv4 address of this machine plus `<hostname>` and `<hostname>.local`; a different name (for example a MagicDNS name) is refused by Exact's host check. Ports 8765, 8766 and 3780 must all be free and reachable through the host firewall. `HBOTS_DEV_HOST` only chooses the example address printed at startup. Devices normally need to be on the same network or tailnet; VPNs, firewalls, and Wi-Fi client isolation can prevent access.
 
 **Use LAN mode only on a trusted network.** Both development services are exposed to network peers. The debug gateway permits requests from any browser origin by reflecting the request origin for credentialed CORS and bypassing its origin check. This does not disable gateway authentication, but if no password is configured the gateway is open. Traffic here uses HTTP. The dev script enables this behavior with `HBOTS_DEV_ALLOW_ANY_ORIGIN=1`; release builds ignore that setting and retain their normal origin checks. The Exact dev server may also expose development output and errors to peers.
 

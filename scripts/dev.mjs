@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Local dev stack.
 //   bun scripts/dev.mjs
-//   bun scripts/dev.mjs --lan  (set HBOTS_DEV_HOST to choose a LAN address)
+//   bun scripts/dev.mjs --lan  (every address of this machine; HBOTS_DEV_HOST only picks the printed example)
 //
 // Gateway (debug, restarts after a Rust change): http://127.0.0.1:3780
 // Frontend (Exact dev loop, rebuilds and reloads the page): http://127.0.0.1:8765
@@ -14,7 +14,7 @@ import { spawn, execFileSync } from 'node:child_process';
 import { watch, existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { networkInterfaces } from 'node:os';
+import { networkInterfaces, hostname } from 'node:os';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const gatewayPort = 3780;
@@ -176,15 +176,55 @@ const webEnv = {
   ...process.env,
   EXACT_APP_DIR: resolve(root, 'app'),
   EXACT_WEB_DIST: resolve(root, 'app/target/web-dev'),
-  HBOTS_URL: gatewayUrl,
+  ...(lan ? {} : { HBOTS_URL: gatewayUrl }),
   PATH: `${process.env.HOME}/.t3/bin:${process.env.PATH ?? ''}`,
 };
-const taken = listeners(webPort);
-if (taken.length) {
-  console.error(`port ${webPort} is in use (${command(taken[0]) || taken[0]})`);
-  process.exit(1);
+// In LAN mode the Exact loop sits behind a small proxy on webPort. The page is built with the
+// gateway placeholder (as in a release), and the proxy swaps in the host the browser used, so one
+// run answers on every address of this machine (LAN, Tailscale, a MagicDNS name).
+const exactPort = lan ? webPort + 1 : webPort;
+for (const port of lan ? [webPort, exactPort] : [webPort]) {
+  const taken = listeners(port);
+  if (taken.length) {
+    console.error(`port ${port} is in use (${command(taken[0]) || taken[0]})`);
+    process.exit(1);
+  }
 }
-web = spawnGroup(process.execPath, [resolve(exact, 'host/web/dev.mjs'), '--app', resolve(root, 'app'), '--port', String(webPort), ...(lan ? ['--lan'] : [])], webEnv);
+const ORIGIN_PLACEHOLDER = 'http://hbots-origin.invalid';
+const hostNames = [...new Set([
+  ...Object.values(networkInterfaces()).flat().filter((a) => a?.family === 'IPv4').map((a) => a.address),
+  hostname(), `${hostname()}.local`,
+])].map((h) => h.toLowerCase()).filter((h) => /^[a-z0-9][a-z0-9.-]*$/.test(h));
+const rewritable = /^(text\/html|text\/javascript|application\/javascript|application\/json)\b/i;
+function startProxy() {
+  Bun.serve({
+    port: webPort,
+    hostname: '0.0.0.0',
+    idleTimeout: 0,
+    async fetch(req) {
+      const url = new URL(req.url);
+      const host = req.headers.get('host') ?? '';
+      const name = host.replace(/:\d+$/, '');
+      const origin = /^[A-Za-z0-9.\-\[\]:]+$/.test(name) ? `http://${name}:${gatewayPort}` : gatewayUrl;
+      const upstream = await fetch(`http://127.0.0.1:${exactPort}${url.pathname}${url.search}`, {
+        method: req.method,
+        headers: req.headers,
+        body: req.body,
+        redirect: 'manual',
+        decompress: true,
+      }).catch((err) => new Response(`proxy: ${err.message}`, { status: 502 }));
+      const type = upstream.headers.get('content-type') ?? '';
+      if (!rewritable.test(type)) return upstream;
+      const body = (await upstream.text()).replaceAll(ORIGIN_PLACEHOLDER, origin);
+      const headers = new Headers(upstream.headers);
+      headers.delete('content-length');
+      headers.delete('content-encoding');
+      return new Response(body, { status: upstream.status, headers });
+    },
+  });
+}
+if (lan) startProxy();
+web = spawnGroup(process.execPath, [resolve(exact, 'host/web/dev.mjs'), '--app', resolve(root, 'app'), '--port', String(exactPort), ...(lan ? ['--lan', ...hostNames.flatMap((h) => ['--allow-host', h])] : [])], webEnv);
 prefix(web, 'web');
 web.on('exit', (code, signal) => {
   if (stopping) return;
@@ -198,7 +238,7 @@ arm('gateway/Cargo.toml', false);
 arm('design/Cargo.toml', false);
 arm('Cargo.toml', false);
 
-console.log(`[web] http://${lan ? lanAddress : '127.0.0.1'}:${webPort}`);
+console.log(lan ? `[web] http://<any address of this machine>:${webPort} (e.g. http://${lanAddress}:${webPort})` : `[web] http://127.0.0.1:${webPort}`);
 if (lan) console.warn('[dev] LAN mode allows requests from any browser origin; use only on a trusted network.');
 cycle();
 

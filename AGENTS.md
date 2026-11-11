@@ -52,9 +52,9 @@ From the repo root, with T3 Code already running:
 bun scripts/dev.mjs
 ```
 
-For access from another device on the local network, run `bun scripts/dev.mjs --lan`.
-Set `HBOTS_DEV_HOST` to the machine's reachable address if the automatically selected IPv4
-address is wrong. LAN mode accepts browser requests from any origin in the debug gateway;
+For access from another device, run `bun scripts/dev.mjs --lan`. A proxy on 8765 points each
+browser at the gateway on the host it used, so LAN, Tailscale and `<hostname>.local` addresses all
+work from one run (Exact moves to 8766). LAN mode accepts browser requests from any origin in the debug gateway;
 use it only on a trusted network. Release builds do not enable this behavior.
 
 That starts both and rebuilds each when its own code changes.
