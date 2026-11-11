@@ -16,7 +16,7 @@ const STARTS: [(&str, &str, &str, &str, &str); 5] = [
      "Plan a trip with me. Ask for my dates and budget, then suggest a plan I can adjust."),
 ];
 
-pub fn all() -> Vec<Value> {
+pub(crate) fn all() -> Vec<Value> {
     STARTS
         .iter()
         .map(|(name, about, color, shape, first)| {

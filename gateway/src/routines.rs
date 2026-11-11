@@ -13,11 +13,11 @@ use crate::t3::T3;
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
-pub const LIST: &str = "scheduledTasks.subscribe";
-pub const UPSERT: &str = "scheduledTasks.upsert";
-pub const SET_ENABLED: &str = "scheduledTasks.setEnabled";
-pub const DELETE: &str = "scheduledTasks.delete";
-pub const RUN_NOW: &str = "scheduledTasks.runNow";
+pub(crate) const LIST: &str = "scheduledTasks.subscribe";
+pub(crate) const UPSERT: &str = "scheduledTasks.upsert";
+pub(crate) const SET_ENABLED: &str = "scheduledTasks.setEnabled";
+pub(crate) const DELETE: &str = "scheduledTasks.delete";
+pub(crate) const RUN_NOW: &str = "scheduledTasks.runNow";
 
 const HISTORY_LIMIT: usize = 50;
 
@@ -54,7 +54,7 @@ impl RoutineHistory {
 }
 
 /// Keep tasks bound to one Bot's main thread. Other tasks stay out of that Bot's sheet.
-pub fn tasks_for_thread(doc: &Value, thread_id: &str) -> Vec<Value> {
+pub(crate) fn tasks_for_thread(doc: &Value, thread_id: &str) -> Vec<Value> {
     doc["tasks"]
         .as_array()
         .or_else(|| doc.as_array())
@@ -103,7 +103,7 @@ fn days_label(days: &[u64]) -> Option<String> {
 
 /// What a routine's schedule says, as the panel shows it: "Every day at 8:00 AM", "Weekdays at
 /// 8:00 AM", "Every 2 hours", "Once, Nov 10 at 8:00 AM", "When a webhook arrives".
-pub fn schedule_label(task: &Value) -> String {
+pub(crate) fn schedule_label(task: &Value) -> String {
     let schedule = &task["schedule"];
     match schedule["type"].as_str() {
         Some("interval") => {
@@ -161,7 +161,12 @@ pub fn schedule_label(task: &Value) -> String {
 }
 
 /// A routine bound to this Bot. It starts off. Webhook schedules are not built here.
-pub fn new_routine(bot: &Value, title: &str, kind: &str, now: u64) -> Result<Value, &'static str> {
+pub(crate) fn new_routine(
+    bot: &Value,
+    title: &str,
+    kind: &str,
+    now: u64,
+) -> Result<Value, &'static str> {
     let title = title.trim();
     if title.is_empty() {
         return Err("Give the routine a name.");
@@ -209,7 +214,7 @@ pub fn new_routine(bot: &Value, title: &str, kind: &str, now: u64) -> Result<Val
     }))
 }
 
-pub fn task_row(task: &Value) -> Value {
+pub(crate) fn task_row(task: &Value) -> Value {
     json!({
         "id": task["id"].as_str().unwrap_or(""),
         "title": task["title"].as_str().unwrap_or("Routine"),
@@ -224,7 +229,7 @@ pub fn task_row(task: &Value) -> Value {
     })
 }
 
-pub async fn list(t3: &T3) -> ApiResult<Value> {
+pub(crate) async fn list(t3: &T3) -> ApiResult<Value> {
     let value = t3
         .rpc()
         .await?
@@ -233,7 +238,7 @@ pub async fn list(t3: &T3) -> ApiResult<Value> {
     Ok(value)
 }
 
-pub async fn change(
+pub(crate) async fn change(
     t3: &T3,
     history: &RoutineHistory,
     action: &str,

@@ -3,7 +3,7 @@
 use serde_json::{json, Value};
 
 /// T3 follows a real shell snapshot with a project-only one. That empty thread list is not the roster.
-pub fn is_project_enrichment(item: &Value) -> bool {
+pub(crate) fn is_project_enrichment(item: &Value) -> bool {
     item.get("resolvedRepositoryIdentityRoots").is_some()
         && item["snapshot"]["threads"]
             .as_array()
@@ -14,7 +14,7 @@ pub fn is_project_enrichment(item: &Value) -> bool {
             .unwrap_or(true)
 }
 
-pub fn status_label(raw: &str, pending_request: bool, settled: bool) -> &'static str {
+pub(crate) fn status_label(raw: &str, pending_request: bool, settled: bool) -> &'static str {
     if pending_request {
         return "Waiting";
     }
@@ -77,7 +77,7 @@ fn is_active(row: &Value) -> bool {
 /// Rows for the Bot details sheet. Remote delegates stay remote.
 /// Settled children (Done, Idle, …) stay out. With no active child, the latest
 /// live turn is one Working row and not an Open target.
-pub fn rows(projection: &Value) -> Vec<Value> {
+pub(crate) fn rows(projection: &Value) -> Vec<Value> {
     if is_project_enrichment(projection) {
         return Vec::new();
     }
@@ -193,7 +193,7 @@ fn one(agent: &Value) -> Option<Value> {
 }
 
 /// A local child opens as that thread. A remote child does not open, and never as the parent.
-pub fn open_child(row: &Value, parent: &str) -> Option<String> {
+pub(crate) fn open_child(row: &Value, parent: &str) -> Option<String> {
     if row["remote"] == true {
         return None;
     }
@@ -208,7 +208,7 @@ pub fn open_child(row: &Value, parent: &str) -> Option<String> {
 /// The thread a send, stop, voice clip, or request answer uses.
 /// No child means the parent. A local child is that thread. A remote child, or the parent id
 /// passed as the child, is refused. This writes nothing.
-pub fn thread_for(
+pub(crate) fn thread_for(
     rows: &[Value],
     parent: &str,
     asked: Option<&str>,

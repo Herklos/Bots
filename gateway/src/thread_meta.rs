@@ -46,10 +46,10 @@ static TOOL_SEPARATOR: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"__|\.").u
 
 const MAX_STAMPS: usize = 200;
 /// Pins stay a short list. One past this is refused.
-pub const PIN_CAP: usize = 20;
+pub(crate) const PIN_CAP: usize = 20;
 // Nothing in the gateway calls this yet.
 #[allow(dead_code)]
-pub const NOT_IN_VIEW: &str = "This message is not in view.";
+pub(crate) const NOT_IN_VIEW: &str = "This message is not in view.";
 
 fn bad(message: &str) -> ApiError {
     ApiError::bad_request(message)
@@ -79,7 +79,7 @@ fn text_of(value: &Value) -> String {
 }
 
 /// One line of Markdown as it reads, without its syntax or T3's hidden context.
-pub fn preview_text(value: &str) -> String {
+pub(crate) fn preview_text(value: &str) -> String {
     let s = ULTRATHINK.replace(value, "").into_owned();
     let s = REPLY_CONTEXT.replace(&s, "").into_owned();
     let s = IMAGE.replace_all(&s, "").into_owned();
@@ -110,7 +110,7 @@ fn parsed(value: &Value) -> Value {
 
 /// The newest thing a person would recognize in this conversation, or None when it has none.
 /// `names` maps a thread to its Bot's name, for "Messaged <Bot>: ..." lines.
-pub fn latest_preview(projection: &Value, names: &HashMap<String, String>) -> Option<Value> {
+pub(crate) fn latest_preview(projection: &Value, names: &HashMap<String, String>) -> Option<Value> {
     let rows = crate::chat::without_group_turns(
         projection["visibleTurnItems"]
             .as_array()
@@ -287,7 +287,7 @@ fn view(state: &Map<String, Value>, thread: &str) -> Value {
 
 /// Moves the mark to `latest` only while that chat is open.
 /// A hidden Bot that is not the open chat stays where it was.
-pub fn next_last_read(stored: &str, latest: &str, open: bool, hidden: bool) -> String {
+pub(crate) fn next_last_read(stored: &str, latest: &str, open: bool, hidden: bool) -> String {
     if hidden && !open {
         return stored.to_string();
     }
@@ -299,14 +299,19 @@ pub fn next_last_read(stored: &str, latest: &str, open: bool, hidden: bool) -> S
 
 /// A later message is unread until this chat is the open one.
 /// A hidden Bot keeps that mark until it is opened.
-pub fn is_unread(stored: &str, latest: &str, open: bool, hidden: bool) -> bool {
+pub(crate) fn is_unread(stored: &str, latest: &str, open: bool, hidden: bool) -> bool {
     !latest.is_empty() && next_last_read(stored, latest, open, hidden) != latest
 }
 
 /// The inbox mark. A hidden Bot follows the message id, so the roster's
 /// timestamp rule (a hidden Bot is never unread) does not apply. A visible
 /// Bot keeps the flag the roster already computed and is not notified from here.
-pub fn inbox_unread(hidden: bool, roster_unread: bool, last_read: &str, latest: &str) -> bool {
+pub(crate) fn inbox_unread(
+    hidden: bool,
+    roster_unread: bool,
+    last_read: &str,
+    latest: &str,
+) -> bool {
     if hidden {
         is_unread(last_read, latest, false, true)
     } else {
@@ -317,7 +322,7 @@ pub fn inbox_unread(hidden: bool, roster_unread: bool, last_read: &str, latest: 
 /// Pins in stored order. An id that is not in the loaded messages stays, and says so.
 // Nothing in the gateway calls this yet.
 #[allow(dead_code)]
-pub fn pin_lines(pins: &[Value], messages: &[Value]) -> Vec<Value> {
+pub(crate) fn pin_lines(pins: &[Value], messages: &[Value]) -> Vec<Value> {
     pins.iter()
         .filter_map(Value::as_str)
         .map(|id| {

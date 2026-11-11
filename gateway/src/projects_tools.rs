@@ -95,7 +95,7 @@ fn thread_prop() -> Value {
 }
 
 /// The Projects tools as tools/list shows them.
-pub fn tools() -> Vec<Value> {
+pub(crate) fn tools() -> Vec<Value> {
     vec![
         json!({
             "name": "projects_overview",
@@ -163,7 +163,11 @@ pub fn tools() -> Vec<Value> {
 }
 
 /// Runs a Projects tool. None when `name` isn't one of them, so the caller can answer "unknown tool".
-pub async fn call(state: &AppState, name: &str, args: &Value) -> Option<Result<Value, String>> {
+pub(crate) async fn call(
+    state: &AppState,
+    name: &str,
+    args: &Value,
+) -> Option<Result<Value, String>> {
     if !NAMES.contains(&name) {
         return None;
     }
@@ -235,7 +239,7 @@ async fn run(state: &AppState, name: &str, args: &Value) -> Result<Value, String
 /// Works behind a proxy that forwards `x-forwarded-host`.
 // Nothing in the gateway calls this yet.
 #[allow(dead_code)]
-pub fn same_origin(headers: &HeaderMap) -> bool {
+pub(crate) fn same_origin(headers: &HeaderMap) -> bool {
     let header = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
     let Some(origin) = header("origin") else {
         return header("sec-fetch-site").is_none_or(|s| s == "same-origin");

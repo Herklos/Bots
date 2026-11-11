@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Duration};
 
 /// The mode `orchestration.launchThread` already accepts. A missing or unknown field keeps
 /// today's launch: `autoReview == false` is full access, otherwise auto. A stored choice wins.
-pub fn launch_runtime_mode(bot: &Value, settings: &Value) -> &'static str {
+pub(crate) fn launch_runtime_mode(bot: &Value, settings: &Value) -> &'static str {
     match bot
         .get("runtimeMode")
         .and_then(Value::as_str)
@@ -26,12 +26,12 @@ pub fn launch_runtime_mode(bot: &Value, settings: &Value) -> &'static str {
     }
 }
 
-pub fn default_model() -> Value {
+pub(crate) fn default_model() -> Value {
     json!({ "instanceId": "claudeAgent", "model": "claude-haiku-5-5", "options": [{ "id": "effort", "value": "medium" }] })
 }
 
 /// The choice the picker writes. Effort stays medium unless the caller already set options.
-pub fn model_selection(instance_id: &str, model: &str) -> Result<Value, &'static str> {
+pub(crate) fn model_selection(instance_id: &str, model: &str) -> Result<Value, &'static str> {
     if instance_id.is_empty()
         || model.is_empty()
         || !model
@@ -47,7 +47,7 @@ pub fn model_selection(instance_id: &str, model: &str) -> Result<Value, &'static
     }))
 }
 
-pub fn model_label(model: &str) -> String {
+pub(crate) fn model_label(model: &str) -> String {
     match model {
         "claude-haiku-5-5" => "Haiku".into(),
         other => other.to_string(),
@@ -55,7 +55,7 @@ pub fn model_label(model: &str) -> String {
 }
 
 /// Haiku, plus whatever this Bot or the settings already use, so the current choice is always listed.
-pub fn model_choices(current: &Value, fallback: &Value) -> Vec<Value> {
+pub(crate) fn model_choices(current: &Value, fallback: &Value) -> Vec<Value> {
     let mut out = vec![choice_row(&default_model())];
     for extra in [current, fallback] {
         if extra.is_object() {
@@ -82,7 +82,7 @@ fn choice_row(selection: &Value) -> Value {
     })
 }
 
-pub fn project_model_update(project_id: &str, selection: &Value) -> Value {
+pub(crate) fn project_model_update(project_id: &str, selection: &Value) -> Value {
     json!({
         "type": "project.update",
         "commandId": uuid::Uuid::new_v4().to_string(),
@@ -92,7 +92,7 @@ pub fn project_model_update(project_id: &str, selection: &Value) -> Value {
 }
 
 /// The thread list already shows this Bot: same title, same favicon, and no project icon.
-pub fn face_in_sync(project: Option<&Value>, name: &str, favicon: &str) -> bool {
+pub(crate) fn face_in_sync(project: Option<&Value>, name: &str, favicon: &str) -> bool {
     let Some(project) = project else {
         return false;
     };
@@ -102,7 +102,7 @@ pub fn face_in_sync(project: Option<&Value>, name: &str, favicon: &str) -> bool 
 }
 
 /// `projects.mutate` payload that sets the project title and favicon to this Bot's face.
-pub fn project_face_update(project_id: &str, name: &str, favicon: &str) -> Value {
+pub(crate) fn project_face_update(project_id: &str, name: &str, favicon: &str) -> Value {
     json!({
         "type": "project.update",
         "commandId": uuid::Uuid::new_v4().to_string(),
@@ -113,7 +113,7 @@ pub fn project_face_update(project_id: &str, name: &str, favicon: &str) -> Value
     })
 }
 
-pub fn thread_model_command(thread_id: &str, selection: &Value) -> Value {
+pub(crate) fn thread_model_command(thread_id: &str, selection: &Value) -> Value {
     json!({
         "type": "thread.model-selection.set",
         "threadId": thread_id,
@@ -123,7 +123,7 @@ pub fn thread_model_command(thread_id: &str, selection: &Value) -> Value {
 
 /// A model change lands on this Bot's own project and main thread. A subagent is a Bot, so
 /// the ids are the child's, never its parent's.
-pub async fn push_model(
+pub(crate) async fn push_model(
     rpc: &crate::t3::T3Client,
     bot: &Value,
     selection: &Value,
@@ -139,7 +139,7 @@ pub async fn push_model(
     Ok(())
 }
 
-pub fn start(state: Arc<AppState>) {
+pub(crate) fn start(state: Arc<AppState>) {
     tokio::spawn(async move {
         loop {
             if let Err(e) = tick(&state).await {

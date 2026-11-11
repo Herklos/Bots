@@ -37,7 +37,7 @@ Data, settings and installed versions live in HBOTS_HOME (default ~/.hbots).
 ";
 
 /// Run a command. Returns the exit code, or None when the gateway should start (`serve`, or no command).
-pub async fn run(args: &[String]) -> Option<i32> {
+pub(crate) async fn run(args: &[String]) -> Option<i32> {
     if args.iter().any(|a| a == "--version" || a == "-V")
         || args.first().map(String::as_str) == Some("version")
     {
@@ -81,19 +81,19 @@ pub async fn run(args: &[String]) -> Option<i32> {
 
 /// Options as the Node gateway's parser reads them: `--name value`, `--name=value`, `--name`, and `--no-name`.
 #[derive(Debug, Default, PartialEq)]
-pub struct Flags(HashMap<String, String>);
+pub(crate) struct Flags(HashMap<String, String>);
 
 impl Flags {
     /// The flag is given and not turned off.
-    pub fn has(&self, name: &str) -> bool {
+    pub(crate) fn has(&self, name: &str) -> bool {
         self.0.get(name).is_some_and(|v| v != "false")
     }
     /// The flag was given as `--no-<name>`.
-    pub fn disabled(&self, name: &str) -> bool {
+    pub(crate) fn disabled(&self, name: &str) -> bool {
         self.0.get(name).is_some_and(|v| v == "false")
     }
     /// The value of a flag that takes one (`--port 3780`).
-    pub fn value(&self, name: &str) -> Option<&str> {
+    pub(crate) fn value(&self, name: &str) -> Option<&str> {
         self.0
             .get(name)
             .map(String::as_str)
@@ -102,7 +102,7 @@ impl Flags {
 }
 
 /// Split the arguments after the command into options and the rest.
-pub fn parse_args(argv: &[String]) -> (Flags, Vec<String>) {
+pub(crate) fn parse_args(argv: &[String]) -> (Flags, Vec<String>) {
     let mut flags = HashMap::new();
     let mut rest = Vec::new();
     let mut i = 0;
@@ -133,7 +133,7 @@ pub fn parse_args(argv: &[String]) -> (Flags, Vec<String>) {
 // ---------- settings ----------
 
 /// The `KEY=value` lines of a `.env` file. Quotes around a value are removed.
-pub fn parse_env(text: &str) -> Vec<(String, String)> {
+pub(crate) fn parse_env(text: &str) -> Vec<(String, String)> {
     text.lines()
         .filter_map(|line| {
             let (key, value) = line.trim_start().split_once('=')?;
@@ -166,7 +166,7 @@ fn is_key_line(line: &str, key: &str) -> bool {
 }
 
 /// `.env` text with `KEY=value` set: the first such line is replaced, or the line is added. Other lines stay.
-pub fn set_env_text(text: &str, key: &str, value: &str) -> String {
+pub(crate) fn set_env_text(text: &str, key: &str, value: &str) -> String {
     let line = format!("{key}={value}");
     let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
     match lines.iter().position(|l| is_key_line(l, key)) {

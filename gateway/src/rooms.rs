@@ -19,7 +19,7 @@ use tokio::sync::Mutex;
 
 /// Bot-to-Bot wake-ups one message from the person can set off. One handoff is enough: a Bot
 /// can ask another once, and that answer lands in the room without starting a ping-pong.
-pub const MAX_HOPS: u64 = 1;
+pub(crate) const MAX_HOPS: u64 = 1;
 
 #[derive(Clone, Debug)]
 pub struct Member {
@@ -368,7 +368,7 @@ impl Rooms {
 }
 
 /// The commands a room send dispatches. No quote field is added.
-pub fn dispatch_commands(dispatches: &[Dispatch]) -> Vec<Value> {
+pub(crate) fn dispatch_commands(dispatches: &[Dispatch]) -> Vec<Value> {
     dispatches
         .iter()
         .map(|item| {
@@ -413,7 +413,7 @@ fn last_responder(room: &Value) -> Option<String> {
 }
 
 /// Who a message from the person wakes, as indexes into `members`.
-pub fn plan_dispatches(members: &[Member], text: &str, last: Option<&str>) -> Vec<usize> {
+pub(crate) fn plan_dispatches(members: &[Member], text: &str, last: Option<&str>) -> Vec<usize> {
     if wants_everyone(text) {
         return (0..members.len()).collect();
     }
@@ -570,7 +570,7 @@ fn mention_words(text: &str) -> Vec<String> {
 }
 
 /// Members named with `@slug` or `@name` (the name without spaces), in room order.
-pub fn mentioned(members: &[Member], text: &str) -> Vec<usize> {
+pub(crate) fn mentioned(members: &[Member], text: &str) -> Vec<usize> {
     let words = mention_words(text);
     members
         .iter()
@@ -588,7 +588,7 @@ pub fn mentioned(members: &[Member], text: &str) -> Vec<usize> {
         .collect()
 }
 
-pub fn present(room: &Value, directory: &[Member]) -> Value {
+pub(crate) fn present(room: &Value, directory: &[Member]) -> Value {
     let members = resolve(member_slugs(room), directory);
     json!({
         "id": room["id"],
@@ -603,7 +603,7 @@ pub fn present(room: &Value, directory: &[Member]) -> Value {
 }
 
 /// One row of the list: no messages, the last one as a preview.
-pub fn summary(room: &Value) -> Value {
+pub(crate) fn summary(room: &Value) -> Value {
     let last = room["messages"]
         .as_array()
         .and_then(|l| l.last())
@@ -637,7 +637,7 @@ fn is_unread(room: &Value) -> bool {
     !from.is_empty() && from != "user" && !at.is_empty() && at > seen
 }
 
-pub fn member_row(member: &Member) -> Value {
+pub(crate) fn member_row(member: &Member) -> Value {
     json!({
         "slug": member.slug,
         "name": member.title,
@@ -648,7 +648,7 @@ pub fn member_row(member: &Member) -> Value {
     })
 }
 
-pub fn face_state(member: &Member) -> &'static str {
+pub(crate) fn face_state(member: &Member) -> &'static str {
     if !member.provisioned {
         "asleep"
     } else if member.working {
@@ -658,7 +658,7 @@ pub fn face_state(member: &Member) -> &'static str {
     }
 }
 
-pub fn status_line(member: &Member) -> &'static str {
+pub(crate) fn status_line(member: &Member) -> &'static str {
     if !member.provisioned {
         "Getting set up…"
     } else if member.working {
@@ -669,7 +669,7 @@ pub fn status_line(member: &Member) -> &'static str {
 }
 
 /// Directory rows for the slugs stored on the room, in that order.
-pub fn resolve(slugs: Vec<String>, directory: &[Member]) -> Vec<Member> {
+pub(crate) fn resolve(slugs: Vec<String>, directory: &[Member]) -> Vec<Member> {
     slugs
         .into_iter()
         .filter_map(|slug| directory.iter().find(|member| member.slug == slug).cloned())

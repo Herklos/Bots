@@ -22,7 +22,7 @@ use std::{path::PathBuf, sync::Arc};
 const MAX_BYTES: usize = 8 << 20;
 const MAX_FILES: usize = 8;
 
-pub async fn list(
+pub(crate) async fn list(
     State(s): State<Arc<AppState>>,
     Path(slug): Path<String>,
 ) -> ApiResult<Json<Value>> {
@@ -32,7 +32,7 @@ pub async fn list(
     ))
 }
 
-pub async fn create(
+pub(crate) async fn create(
     State(s): State<Arc<AppState>>,
     Path(slug): Path<String>,
     h: HeaderMap,
@@ -48,7 +48,7 @@ pub async fn create(
     Ok(Json(saved))
 }
 
-pub async fn download(
+pub(crate) async fn download(
     State(s): State<Arc<AppState>>,
     Path((slug, id)): Path<(String, String)>,
 ) -> ApiResult<Response> {
@@ -87,7 +87,7 @@ pub async fn download(
         .into_response())
 }
 
-pub async fn remove(
+pub(crate) async fn remove(
     State(s): State<Arc<AppState>>,
     Path((slug, id)): Path<(String, String)>,
 ) -> ApiResult<Json<Value>> {
@@ -104,7 +104,7 @@ async fn ensure_bot(s: &AppState, slug: &str) -> ApiResult<()> {
 }
 
 /// Name, media type and decoded bytes from a JSON body. Nothing is written.
-pub fn prepare(body: &Value) -> ApiResult<(String, String, Vec<u8>)> {
+pub(crate) fn prepare(body: &Value) -> ApiResult<(String, String, Vec<u8>)> {
     let name = clean_name(body["name"].as_str().unwrap_or(""))?;
     let media = clean_media(body["mediaType"].as_str().unwrap_or(""))?;
     let data = body["data"].as_str().unwrap_or("");
@@ -127,7 +127,7 @@ pub fn prepare(body: &Value) -> ApiResult<(String, String, Vec<u8>)> {
     Ok((name, media, bytes))
 }
 
-pub fn clean_name(name: &str) -> ApiResult<String> {
+pub(crate) fn clean_name(name: &str) -> ApiResult<String> {
     let name = name.trim();
     if name.is_empty() || name.len() > 120 {
         return Err(ApiError::bad_request("give the file a name"));
@@ -146,7 +146,7 @@ pub fn clean_name(name: &str) -> ApiResult<String> {
     Ok(name.to_string())
 }
 
-pub fn clean_media(media: &str) -> ApiResult<String> {
+pub(crate) fn clean_media(media: &str) -> ApiResult<String> {
     let media = media.trim().to_ascii_lowercase();
     let ok = matches!(
         media.as_str(),
@@ -172,7 +172,7 @@ pub fn clean_media(media: &str) -> ApiResult<String> {
     Ok(media)
 }
 
-pub fn command_part(meta: &Value) -> Value {
+pub(crate) fn command_part(meta: &Value) -> Value {
     let media = meta["mediaType"]
         .as_str()
         .unwrap_or("application/octet-stream");
@@ -191,7 +191,11 @@ pub fn command_part(meta: &Value) -> Value {
 }
 
 /// Ids from a send body, capped, each one a real stored file.
-pub async fn for_send(root: &std::path::Path, slug: &str, body: &Value) -> ApiResult<Vec<Value>> {
+pub(crate) async fn for_send(
+    root: &std::path::Path,
+    slug: &str,
+    body: &Value,
+) -> ApiResult<Vec<Value>> {
     let ids: Vec<&str> = body["attachmentIds"]
         .as_array()
         .map(|list| list.iter().filter_map(Value::as_str).collect())
@@ -209,7 +213,7 @@ pub async fn for_send(root: &std::path::Path, slug: &str, body: &Value) -> ApiRe
     Ok(out)
 }
 
-pub async fn write_file(
+pub(crate) async fn write_file(
     root: &std::path::Path,
     slug: &str,
     name: &str,
@@ -231,7 +235,7 @@ pub async fn write_file(
     Ok(meta)
 }
 
-pub async fn read_file(
+pub(crate) async fn read_file(
     root: &std::path::Path,
     slug: &str,
     id: &str,
@@ -250,7 +254,7 @@ pub async fn read_file(
     Ok((meta, bytes))
 }
 
-pub async fn read_dir(root: &std::path::Path, slug: &str) -> ApiResult<Vec<Value>> {
+pub(crate) async fn read_dir(root: &std::path::Path, slug: &str) -> ApiResult<Vec<Value>> {
     let dir = dir_for(root, slug)?;
     let mut entries = match tokio::fs::read_dir(&dir).await {
         Ok(e) => e,
@@ -271,7 +275,7 @@ pub async fn read_dir(root: &std::path::Path, slug: &str) -> ApiResult<Vec<Value
     Ok(out)
 }
 
-pub async fn delete_file(root: &std::path::Path, slug: &str, id: &str) -> ApiResult<()> {
+pub(crate) async fn delete_file(root: &std::path::Path, slug: &str, id: &str) -> ApiResult<()> {
     let dir = dir_for(root, slug)?;
     let json = json_path(&dir, id)?;
     if tokio::fs::metadata(&json).await.is_err() {

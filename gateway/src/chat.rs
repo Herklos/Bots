@@ -16,7 +16,7 @@ const LIVE: &[&str] = &[
 
 /// Bots by main thread: `{slug, name, color, shape}`. It turns a thread id in a tool call or a
 /// sender into the Bot the person knows.
-pub type Peers = HashMap<String, Value>;
+pub(crate) type Peers = HashMap<String, Value>;
 
 /// The last segment of a tool name: `mcp__t3-code__schedule_task` is `schedule_task`.
 fn tool_of(item: &Value) -> &str {
@@ -160,7 +160,7 @@ fn request_for(item: &Value) -> Value {
 /// Drops framed turns from a one-to-one chat: a group dispatch (`[Group "…`) or a Computer
 /// open nudge (`[Computer]`), plus everything the Bot did in answer, up to the next ordinary
 /// message from the person. Group rooms use [`group_transcript`] and keep their own frames.
-pub fn without_group_turns(items: Vec<Value>) -> Vec<Value> {
+pub(crate) fn without_group_turns(items: Vec<Value>) -> Vec<Value> {
     let mut hidden = false;
     items
         .into_iter()
@@ -201,13 +201,13 @@ fn turn_items(projection: &Value) -> Vec<Value> {
 }
 
 /// The bubbles and cards of a thread projection, oldest first.
-pub fn transcript(projection: &Value) -> Value {
+pub(crate) fn transcript(projection: &Value) -> Value {
     transcript_for(projection, &Peers::new())
 }
 
 /// Like [`transcript`], with the lines between messages (`events`) and each message's files.
 /// `ordinal` orders messages and events together.
-pub fn transcript_for(projection: &Value, peers: &Peers) -> Value {
+pub(crate) fn transcript_for(projection: &Value, peers: &Peers) -> Value {
     project_turns(
         &without_group_turns(turn_items(projection)),
         peers,
@@ -218,7 +218,7 @@ pub fn transcript_for(projection: &Value, peers: &Peers) -> Value {
 /// The same shape as [`transcript`], for a thread that is itself the group.
 /// A group thread has no one-to-one sender line, so this takes no peers.
 /// The one-to-one filter stays on [`transcript`]: it would drop the framed user message and the reply.
-pub fn group_transcript(projection: &Value) -> Value {
+pub(crate) fn group_transcript(projection: &Value) -> Value {
     project_turns(&turn_items(projection), &Peers::new(), projection)
 }
 
@@ -277,12 +277,12 @@ fn project_turns(items: &[Value], peers: &Peers, projection: &Value) -> Value {
 
 // Nothing in the gateway calls this yet.
 #[allow(dead_code)]
-pub const LOADED_SENTENCE: &str = "Search covers the loaded conversation.";
+pub(crate) const LOADED_SENTENCE: &str = "Search covers the loaded conversation.";
 
 /// Filters messages already loaded from a projection. Nothing else is searched.
 // Nothing in the gateway calls this yet.
 #[allow(dead_code)]
-pub fn search_messages(messages: &[Value], query: &str, partial: bool) -> Value {
+pub(crate) fn search_messages(messages: &[Value], query: &str, partial: bool) -> Value {
     let query = query.trim().to_lowercase();
     let hits: Vec<Value> = if query.is_empty() {
         Vec::new()
@@ -305,14 +305,14 @@ pub fn search_messages(messages: &[Value], query: &str, partial: bool) -> Value 
     })
 }
 
-pub fn projection_partial(projection: &Value) -> bool {
+pub(crate) fn projection_partial(projection: &Value) -> bool {
     projection["truncated"] == true
         || projection["hasMore"] == true
         || projection["partial"] == true
 }
 
 /// Adds a token line only where [`crate::usage::turn_token_line`] finds a shared id.
-pub fn with_tokens(mut transcript: Value, projection: &Value) -> Value {
+pub(crate) fn with_tokens(mut transcript: Value, projection: &Value) -> Value {
     if let Some(messages) = transcript.get_mut("messages").and_then(Value::as_array_mut) {
         for message in messages.iter_mut() {
             let id = message["id"].as_str().unwrap_or("");
@@ -326,7 +326,7 @@ pub fn with_tokens(mut transcript: Value, projection: &Value) -> Value {
 
 /// Writes the clip as an attachment, records the duration, and builds the dispatch.
 /// `voiceCalls` stays a time and a duration. The command gains no quote field.
-pub async fn store_voice_send(
+pub(crate) async fn store_voice_send(
     root: &std::path::Path,
     slug: &str,
     threads: &crate::thread_meta::ThreadMeta,
@@ -351,7 +351,7 @@ const VOICE_TYPES: &[&str] = &["audio/mp4", "audio/webm", "audio/mpeg", "audio/w
 
 /// Dispatches a clip that is already stored. It does not write a second file.
 /// A file that is not audio is refused. The command gains no quote field.
-pub async fn dispatch_stored_voice(
+pub(crate) async fn dispatch_stored_voice(
     root: &std::path::Path,
     slug: &str,
     threads: &crate::thread_meta::ThreadMeta,
@@ -383,7 +383,7 @@ pub async fn dispatch_stored_voice(
 
 /// The command a phone send dispatches.
 /// `attachments` is the gateway's file records (`attachments::command_part`).
-pub fn send_command(thread: &str, text: &str, attachments: &[Value]) -> Value {
+pub(crate) fn send_command(thread: &str, text: &str, attachments: &[Value]) -> Value {
     let id = uuid::Uuid::new_v4().to_string();
     json!({
         "commandId": id, "type": "message.dispatch", "threadId": thread, "messageId": id, "text": text,
@@ -394,7 +394,7 @@ pub fn send_command(thread: &str, text: &str, attachments: &[Value]) -> Value {
 
 /// A send aimed at a child. The command is built only after the child resolves, so a remote
 /// child or the parent id produces no command and does not write the parent. No quote field.
-pub fn child_send(
+pub(crate) fn child_send(
     rows: &[Value],
     parent: &str,
     asked: &str,

@@ -42,7 +42,7 @@ pub struct T3Client {
     closed: Arc<std::sync::atomic::AtomicBool>,
 }
 
-pub fn ws_base(http_base: &str) -> String {
+pub(crate) fn ws_base(http_base: &str) -> String {
     if let Some(rest) = http_base.strip_prefix("https") {
         format!("wss{rest}")
     } else if let Some(rest) = http_base.strip_prefix("http") {
@@ -345,7 +345,7 @@ impl T3 {
 }
 
 /// `/t3/api/...` → T3's `/api/...`, with the bearer added and the client's cookies dropped.
-pub async fn proxy_http(
+pub(crate) async fn proxy_http(
     t3: &T3,
     method: axum::http::Method,
     path_and_query: &str,
@@ -392,7 +392,7 @@ pub async fn proxy_http(
 }
 
 /// Pipes a client WebSocket to T3 (`/ws` for RPC, `/api/preview-stream/ws` for a Bot's screen).
-pub async fn proxy_ws(
+pub(crate) async fn proxy_ws(
     client: WebSocket,
     upstream_url: String,
     token: String,

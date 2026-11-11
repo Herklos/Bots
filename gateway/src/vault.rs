@@ -35,7 +35,7 @@ fn now() -> String {
     iso(i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
-pub fn iso(ms: i64) -> String {
+pub(crate) fn iso(ms: i64) -> String {
     let secs = ms.div_euclid(1000);
     let (days, rem) = (secs.div_euclid(86_400), secs.rem_euclid(86_400));
     // Civil-from-days (Howard Hinnant).
@@ -57,12 +57,12 @@ pub fn iso(ms: i64) -> String {
     )
 }
 
-pub fn now_iso() -> String {
+pub(crate) fn now_iso() -> String {
     now()
 }
 
 /// The domain a login fills on: the website's hostname without a leading `www.`.
-pub fn site_domain(website: &str) -> String {
+pub(crate) fn site_domain(website: &str) -> String {
     let s = website.trim();
     if s.is_empty() {
         return String::new();
@@ -84,7 +84,7 @@ pub fn site_domain(website: &str) -> String {
 
 /// Whether a page URL is the login's site or one of its subdomains; lookalikes don't match.
 /// Used by the `vault_fill_*` Bot tools (`vault_tools.rs`) before a password is typed.
-pub fn matches_site(page_url: &str, website: &str) -> bool {
+pub(crate) fn matches_site(page_url: &str, website: &str) -> bool {
     let domain = site_domain(website);
     let Ok(page) = url::Url::parse(page_url) else {
         return false;
@@ -250,7 +250,7 @@ fn normalize(input: &Value, existing: Option<&Value>) -> ApiResult<Value> {
 }
 
 /// What the app list and Bots may see: everything except the password.
-pub fn redact(item: &Value) -> Value {
+pub(crate) fn redact(item: &Value) -> Value {
     if item["type"] != "login" {
         return item.clone();
     }

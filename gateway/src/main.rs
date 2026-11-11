@@ -30,6 +30,12 @@ mod cli;
     clippy::map_err_ignore,
     reason = "the client sees a fixed browser-stream failure, never the socket error or the bearer token"
 )]
+// `computer.rs` is intentionally left unchanged. `pub` in that private module is
+// still meaningless to other crates; the allow stays until that file is edited.
+#[allow(
+    unreachable_pub,
+    reason = "computer.rs is left unchanged; its pub items are not part of another crate's API"
+)]
 mod computer; // The Bot's browser, watch first.
 mod config;
 mod error;

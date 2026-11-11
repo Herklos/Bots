@@ -8,11 +8,11 @@ use base64::Engine;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-pub const RECORD_KINDS: &[&str] = &[
+pub(crate) const RECORD_KINDS: &[&str] = &[
     "project", "note", "task", "plan", "link", "repo", "machine", "service",
 ];
 
-pub fn statuses(kind: &str) -> &'static [&'static str] {
+pub(crate) fn statuses(kind: &str) -> &'static [&'static str] {
     match kind {
         "project" => &["active", "paused", "idea", "done"],
         "task" => &["todo", "doing", "waiting", "done"],
@@ -35,7 +35,7 @@ fn default_status(kind: &str) -> &'static str {
 }
 
 /// Today / This week / Older, by UTC day. A missing or future day has no group.
-pub fn group_day(day: &str, today: &str, week_start: &str) -> &'static str {
+pub(crate) fn group_day(day: &str, today: &str, week_start: &str) -> &'static str {
     if day.len() != 10 || today.len() != 10 || day > today {
         return "";
     }
@@ -48,7 +48,7 @@ pub fn group_day(day: &str, today: &str, week_start: &str) -> &'static str {
     }
 }
 
-pub fn file_kind(name: &str) -> &'static str {
+pub(crate) fn file_kind(name: &str) -> &'static str {
     let lower = name.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
     match lower.as_str() {
         "html" | "htm" => "page",
@@ -57,7 +57,7 @@ pub fn file_kind(name: &str) -> &'static str {
     }
 }
 
-pub fn media_kind(mime: &str) -> &'static str {
+pub(crate) fn media_kind(mime: &str) -> &'static str {
     if mime.starts_with("image/") || mime.starts_with("video/") {
         "media"
     } else {
@@ -66,7 +66,7 @@ pub fn media_kind(mime: &str) -> &'static str {
 }
 
 /// http(s) links in message text. Trailing punctuation is not part of the link.
-pub fn web_links(text: &str) -> Vec<String> {
+pub(crate) fn web_links(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let bytes = text.as_bytes();
     let mut i = 0;
@@ -510,7 +510,7 @@ fn is_picture(title: &str, detail: &str) -> bool {
 /// A Bot's shelf for the panel: pictures, files and links, newest first, nothing else. Records
 /// kept by the person or the Bot (notes, tasks, plans and the rest) and connectors stay out.
 /// `url` is a gateway path the app prefixes with its address (or a link's own address).
-pub fn shelf_from(slug: &str, view: &Value) -> Value {
+pub(crate) fn shelf_from(slug: &str, view: &Value) -> Value {
     let (mut pictures, mut files, mut links) = (Vec::new(), Vec::new(), Vec::new());
     for e in view["entries"].as_array().into_iter().flatten() {
         let id = e["id"].as_str().unwrap_or("");
@@ -580,7 +580,7 @@ fn new_id() -> String {
         .collect()
 }
 
-pub fn validate_connector_name(name: &str) -> ApiResult<()> {
+pub(crate) fn validate_connector_name(name: &str) -> ApiResult<()> {
     let ok = !name.is_empty()
         && name.len() <= 32
         && name != "bot"
@@ -597,7 +597,7 @@ pub fn validate_connector_name(name: &str) -> ApiResult<()> {
     }
 }
 
-pub fn validate_connector_url(url: &str) -> ApiResult<()> {
+pub(crate) fn validate_connector_url(url: &str) -> ApiResult<()> {
     match url::Url::parse(url) {
         Ok(u)
             if matches!(u.scheme(), "http" | "https") && !u.host_str().unwrap_or("").is_empty() =>
@@ -612,7 +612,12 @@ pub fn validate_connector_url(url: &str) -> ApiResult<()> {
 
 /// `bot` stays. An enabled connector is written. A disabled one is removed.
 /// A secret never appears in a response; it is only placed in the file the harness reads.
-pub fn merge_mcp(existing: &Value, connectors: &[Value], bot_url: &str, bot_token: &str) -> Value {
+pub(crate) fn merge_mcp(
+    existing: &Value,
+    connectors: &[Value],
+    bot_url: &str,
+    bot_token: &str,
+) -> Value {
     let mut mcp = existing.clone();
     if !mcp.is_object() {
         mcp = json!({});
@@ -647,7 +652,7 @@ pub fn merge_mcp(existing: &Value, connectors: &[Value], bot_url: &str, bot_toke
     mcp
 }
 
-pub fn claude_settings(existing: &Value, connectors: &[Value]) -> Value {
+pub(crate) fn claude_settings(existing: &Value, connectors: &[Value]) -> Value {
     let mut cs = if existing.is_object() {
         existing.clone()
     } else {
@@ -664,7 +669,7 @@ pub fn claude_settings(existing: &Value, connectors: &[Value]) -> Value {
     cs
 }
 
-pub fn codex_toml(mcp: &Value) -> String {
+pub(crate) fn codex_toml(mcp: &Value) -> String {
     let mut out =
         String::from("# Written by the Bot gateway. bot = the Vault and other Bot tools.\n");
     if let Some(servers) = mcp["mcpServers"].as_object() {
@@ -687,7 +692,7 @@ pub fn codex_toml(mcp: &Value) -> String {
     out
 }
 
-pub fn encode_file(bytes: &[u8]) -> String {
+pub(crate) fn encode_file(bytes: &[u8]) -> String {
     base64::engine::general_purpose::STANDARD.encode(bytes)
 }
 

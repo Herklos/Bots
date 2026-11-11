@@ -176,7 +176,7 @@ fn sha256_scheme() -> Pkcs1v15Sign {
 }
 
 /// RSA public keys from a JWKS document, by key id. A key that doesn't parse is skipped.
-pub fn parse_jwks(body: &Value) -> HashMap<String, RsaPublicKey> {
+pub(crate) fn parse_jwks(body: &Value) -> HashMap<String, RsaPublicKey> {
     let mut out = HashMap::new();
     for jwk in body["keys"].as_array().into_iter().flatten() {
         let (Some(kid), Some(n), Some(e)) =
@@ -200,7 +200,7 @@ fn decode_json(part: &str) -> Option<Value> {
 }
 
 /// The Access token of a request: its `Cf-Access-Jwt-Assertion` header, else the `CF_Authorization` cookie.
-pub fn token_from(headers: &HeaderMap) -> Option<String> {
+pub(crate) fn token_from(headers: &HeaderMap) -> Option<String> {
     headers
         .get("cf-access-jwt-assertion")
         .and_then(|v| v.to_str().ok())

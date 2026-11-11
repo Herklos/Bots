@@ -14,18 +14,18 @@ use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
 
 /// Bytes kept from each file. Longer files return `truncated: true`.
-pub const FILE_CAP: usize = 16 * 1024;
+pub(crate) const FILE_CAP: usize = 16 * 1024;
 
 const PARENT_MISSING: &str = "This subagent's parent folder is missing.";
 const NAMES: [&str; 2] = ["memory_read", "skills_read"];
 
 /// What the tools need, passed in so tests can supply a temp directory.
-pub struct Deps<'a> {
+pub(crate) struct Deps<'a> {
     pub root: &'a Path,
     pub roster: &'a [Value],
 }
 
-pub fn tool_defs() -> Vec<Value> {
+pub(crate) fn tool_defs() -> Vec<Value> {
     let thread = json!({
         "type": "string",
         "description": "Your main conversation's T3 thread id (in AGENTS.md, or mainThreadId in .bot/bot.json)."
@@ -57,12 +57,12 @@ pub fn tool_defs() -> Vec<Value> {
     ]
 }
 
-pub fn is_memory_tool(name: &str) -> bool {
+pub(crate) fn is_memory_tool(name: &str) -> bool {
     NAMES.contains(&name)
 }
 
 /// Entry point from `mcp.rs`.
-pub async fn call(state: &AppState, name: &str, args: &Value) -> Result<Value, String> {
+pub(crate) async fn call(state: &AppState, name: &str, args: &Value) -> Result<Value, String> {
     let roster = state.bots.list().await.map_err(|e| e.message)?;
     dispatch(
         &Deps {
@@ -75,7 +75,7 @@ pub async fn call(state: &AppState, name: &str, args: &Value) -> Result<Value, S
     .await
 }
 
-pub async fn dispatch(d: &Deps<'_>, name: &str, args: &Value) -> Result<Value, String> {
+pub(crate) async fn dispatch(d: &Deps<'_>, name: &str, args: &Value) -> Result<Value, String> {
     match name {
         "memory_read" => read_memory(d, args).await,
         "skills_read" => read_skills(d, args).await,
