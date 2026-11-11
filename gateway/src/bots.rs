@@ -525,6 +525,43 @@ impl Bots {
             Some(Value::String(text)) => text.clone(),
             Some(_) => return Err(ApiError::bad_request("prompt must be a string")),
         };
+        let runtime_mode = match input.get("runtimeMode") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(mode))
+                if matches!(mode.as_str(), "approval-required" | "auto" | "full-access") =>
+            {
+                Some(mode.clone())
+            }
+            Some(_) => {
+                return Err(ApiError::bad_request(
+                    "runtimeMode must be approval-required, auto, or full-access",
+                ))
+            }
+        };
+        let goal = match input.get("goal") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(text)) => {
+                let text: String = text.trim().chars().take(2000).collect();
+                if text.is_empty() {
+                    None
+                } else {
+                    Some(text)
+                }
+            }
+            Some(_) => return Err(ApiError::bad_request("goal must be a string")),
+        };
+        let pending_routines = match input.get("pendingRoutines") {
+            None | Some(Value::Null) => None,
+            Some(Value::Array(items)) if items.is_empty() => None,
+            Some(Value::Array(items)) => {
+                for item in items {
+                    crate::routines::validate_pending_routine(item)
+                        .map_err(ApiError::bad_request)?;
+                }
+                Some(Value::Array(items.clone()))
+            }
+            Some(_) => return Err(ApiError::bad_request("pendingRoutines must be a list")),
+        };
         let base = slugify(&name);
         let (mut slug, mut n) = (base.clone(), 2);
         while tokio::fs::try_exists(self.root.join(&slug))
@@ -609,6 +646,15 @@ impl Bots {
             .filter(|c| !c.is_empty())
         {
             bot["createdBy"] = json!(created_by);
+        }
+        if let Some(mode) = runtime_mode {
+            bot["runtimeMode"] = json!(mode);
+        }
+        if let Some(goal) = goal {
+            bot["goal"] = json!(goal);
+        }
+        if let Some(pending) = pending_routines {
+            bot["pendingRoutines"] = pending;
         }
         self.save(&slug, &bot, true).await
     }
@@ -784,6 +830,12 @@ pub(crate) fn render_agents_md(
         .map(str::to_string)
         .or_else(|| parent_slug_of(bot))
         .unwrap_or_else(|| "its parent".into());
+    let goal = bot["goal"]
+        .as_str()
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .map(|text| format!("\n## Goal\n\n{}\n", plain_prompt(text)))
+        .unwrap_or_default();
     let intro = if child {
         format!("You are {name}, a subagent of {parent_name}. {parent_name} assigns your work.")
     } else {
@@ -838,7 +890,7 @@ pub(crate) fn render_agents_md(
     };
     format!(
         "{MANAGED_START}\n# {name}{label}\n\n\
-{intro}\n\n\
+{intro}\n{goal}\n\
 ## Memory\n\n- Your notes: `memory/MEMORY.md`. Keep durable facts there, short and current.\n- Your work log: `memory/log.md`.\n{own_folders}- Facts shared by every Bot: {}.\n- Files you keep for the person: `library/`.\n{own_prompt}{inherited}\n\
 ## Tools\n\nThe `bot` MCP server gives you the Vault (`vault_list`) and the Projects board (`projects_*`). Never read the vault files on disk.\n\n\
 ## Routines\n\nTo run something on a schedule, use your `schedule_task` tool. Weekdays count from 0 for Sunday to 6 for Saturday, and times are local. The person sees your routines in the app but can't change them there, so say what you set up.\n\n## Computer\n\nThe person can open or close your browser from the Computer panel. A message framed `[Computer]` means open a page (resume where you left off, or https://www.google.com) or close your browser tabs with your browser tools, without asking, and stay quiet in chat.\n\n## Other Bots\n\nTo message another Bot, use `t3_thread_send`. Say who you are and what you need.\n{subagents}\n## Asking first\n\nAsk before anything that leaves this machine or can't be undone.\n{MANAGED_END}\n",
@@ -1003,6 +1055,80 @@ mod tests {
             .unwrap();
         assert!(ada["lastSeenAt"].as_str().is_some_and(|t| !t.is_empty()));
         assert_eq!(ada["firstMessage"], "Plan my day.");
+    }
+
+    #[tokio::test]
+    async fn create_accepts_a_runtime_mode_and_rejects_an_unknown_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        let ada = bots
+            .create(&json!({ "name": "Ada", "runtimeMode": "auto" }))
+            .await
+            .unwrap();
+        assert_eq!(ada["runtimeMode"], "auto");
+        let err = bots
+            .create(&json!({ "name": "Cy", "runtimeMode": "ask" }))
+            .await
+            .unwrap_err();
+        assert_eq!(status_of(err), 400);
+        assert!(bots.get("cy").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn skipping_the_new_fields_matches_todays_bot_record() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        let ada = bots.create(&json!({ "name": "Ada" })).await.unwrap();
+        assert!(ada.get("runtimeMode").is_none());
+        assert!(ada.get("goal").is_none());
+        assert!(ada.get("pendingRoutines").is_none());
+        assert_eq!(ada["prompt"], "");
+        assert!(ada["mainThreadId"].is_null());
+        assert_eq!(ada["shape"], "ball");
+        assert_eq!(ada["role"], "bot");
+        assert_eq!(ada["pinned"], false);
+        assert_eq!(ada["hidden"], false);
+        assert_eq!(ada["primary"], true);
+        assert_eq!(ada["notifications"], true);
+        assert_eq!(ada["hideFromSidebar"], false);
+    }
+
+    #[tokio::test]
+    async fn a_goal_is_stored_on_its_own_and_routines_wait_for_the_thread() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        let ada = bots
+            .create(&json!({
+                "name": "Ada",
+                "goal": "  Ship the weekly note.  ",
+                "prompt": "Be brief.",
+                "pendingRoutines": [
+                    { "preset": "weekdays", "prompt": "Send the note." },
+                    { "time": "08:30", "weekday": 1, "prompt": "Plan Monday." }
+                ]
+            }))
+            .await
+            .unwrap();
+        assert_eq!(ada["goal"], "Ship the weekly note.");
+        assert_eq!(ada["prompt"], "Be brief.");
+        assert_eq!(ada["pendingRoutines"].as_array().unwrap().len(), 2);
+        assert!(ada["mainThreadId"].is_null());
+        let agents = std::fs::read_to_string(dir.path().join("ada/AGENTS.md")).unwrap();
+        assert!(agents.contains("## Goal"));
+        assert!(agents.contains("Ship the weekly note."));
+        assert_eq!(
+            agents.matches("Ship the weekly note.").count(),
+            1,
+            "the goal stays in the managed block"
+        );
+        let err = bots
+            .create(&json!({
+                "name": "Cy",
+                "pendingRoutines": [{ "preset": "hourly", "prompt": "Go." }]
+            }))
+            .await
+            .unwrap_err();
+        assert_eq!(status_of(err), 400);
     }
 
     #[test]

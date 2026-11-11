@@ -5,6 +5,7 @@
 ### Improvements
 
 - Poll the open screen on its own: the inbox refreshes its conversation list, a chat refreshes that chat, and a hidden window waits about ten seconds. Sending, answering, or stopping a run pauses the poll.
+- A new Bot can keep a goal, an approval mode, and routines that are created once its thread exists. A routine that fails to save leaves the Bot in place. A new group can start with one kickoff message.
 - Record a terminal provider failure on the thread transcript as a rate limit, a transport failure, or another provider error. A retry that is still in progress stays off the transcript.
 - Show a terminal provider rate limit or provider error in the chat, and when the limit resets.
 

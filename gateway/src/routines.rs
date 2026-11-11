@@ -215,6 +215,94 @@ pub(crate) fn new_routine(
     }))
 }
 
+/// A wizard entry is either a preset or a local time, one weekday, and a prompt.
+/// `/api/routines` forwards that same pair of shapes once the thread exists.
+pub(crate) fn validate_pending_routine(entry: &Value) -> Result<(), &'static str> {
+    let _ = pending_schedule(entry)?;
+    Ok(())
+}
+
+fn pending_schedule(entry: &Value) -> Result<Value, &'static str> {
+    let prompt = entry["prompt"]
+        .as_str()
+        .map(str::trim)
+        .filter(|text| !text.is_empty())
+        .ok_or("A routine needs a prompt.")?;
+    if prompt.chars().count() > 2000 {
+        return Err("A routine prompt is too long.");
+    }
+    if let Some(preset) = entry.get("preset") {
+        if entry.get("time").is_some() || entry.get("weekday").is_some() {
+            return Err("A routine is a preset or a time and weekday.");
+        }
+        let schedule = match preset.as_str() {
+            Some("hour") => json!({ "type": "interval", "everyMs": 3_600_000u64 }),
+            Some("day") => json!({ "type": "fixed_time", "timeOfDay": "09:00" }),
+            Some("weekdays") => {
+                json!({ "type": "fixed_time", "timeOfDay": "09:00", "weekdays": [1, 2, 3, 4, 5] })
+            }
+            _ => return Err("Pick a routine preset."),
+        };
+        return Ok(schedule);
+    }
+    let time = entry["time"]
+        .as_str()
+        .map(str::trim)
+        .filter(|time| clock_24(time))
+        .ok_or("A routine needs a time.")?;
+    let weekday = entry["weekday"]
+        .as_u64()
+        .filter(|day| *day <= 6)
+        .ok_or("A routine needs a weekday.")?;
+    Ok(json!({ "type": "fixed_time", "timeOfDay": time, "weekdays": [weekday] }))
+}
+
+fn clock_24(time: &str) -> bool {
+    let Some((hour, minute)) = time.split_once(':') else {
+        return false;
+    };
+    hour.len() == 2
+        && minute.len() == 2
+        && hour.parse::<u32>().is_ok_and(|hour| hour <= 23)
+        && minute.parse::<u32>().is_ok_and(|minute| minute <= 59)
+        && hour.chars().all(|c| c.is_ascii_digit())
+        && minute.chars().all(|c| c.is_ascii_digit())
+}
+
+/// The `scheduledTasks.upsert` body for one stored entry, bound to this thread.
+pub(crate) fn pending_routine_task(
+    project_id: &str,
+    thread_id: &str,
+    model: &Value,
+    entry: &Value,
+) -> Result<Value, &'static str> {
+    if project_id.is_empty() || thread_id.is_empty() {
+        return Err("This Bot is still getting set up.");
+    }
+    let prompt = entry["prompt"].as_str().unwrap_or("").trim();
+    let schedule = pending_schedule(entry)?;
+    let model = if model.is_object() {
+        model.clone()
+    } else {
+        crate::provisioner::default_model()
+    };
+    Ok(json!({
+        "title": prompt,
+        "prompt": prompt,
+        "enabled": true,
+        "schedule": schedule,
+        "projectId": project_id,
+        "threadId": thread_id,
+        "threadMode": "continue",
+        "workspaceStrategy": { "type": "root" },
+        "modelSelection": model,
+        "runtimeMode": "approval-required",
+        "interactionMode": "default",
+        "createdBy": "user",
+        "creationSource": "web",
+    }))
+}
+
 pub(crate) fn task_row(task: &Value) -> Value {
     json!({
         "id": task["id"].as_str().unwrap_or(""),
@@ -381,6 +469,41 @@ mod tests {
             (Some(false), Some("failed"), Some("No model"))
         );
         assert_eq!(failed["nextRunAt"], "2026-11-11T08:00:00Z");
+    }
+
+    #[test]
+    fn a_pending_routine_is_a_preset_or_a_time_and_weekday() {
+        assert!(
+            validate_pending_routine(&json!({ "preset": "hour", "prompt": "Check mail." })).is_ok()
+        );
+        assert!(
+            validate_pending_routine(&json!({ "preset": "hourly", "prompt": "Check mail." }))
+                .is_err()
+        );
+        assert!(validate_pending_routine(
+            &json!({ "time": "08:30", "weekday": 1, "prompt": "Plan." })
+        )
+        .is_ok());
+        assert!(validate_pending_routine(
+            &json!({ "time": "8:30", "weekday": 1, "prompt": "Plan." })
+        )
+        .is_err());
+        assert!(validate_pending_routine(
+            &json!({ "time": "08:30", "weekday": 7, "prompt": "Plan." })
+        )
+        .is_err());
+        let task = pending_routine_task(
+            "p1",
+            "t1",
+            &Value::Null,
+            &json!({ "preset": "weekdays", "prompt": "Send the note." }),
+        )
+        .unwrap();
+        assert_eq!(task["threadId"], "t1");
+        assert_eq!(task["projectId"], "p1");
+        assert_eq!(task["schedule"]["weekdays"], json!([1, 2, 3, 4, 5]));
+        assert_eq!(task["enabled"], true);
+        assert_eq!(task["runtimeMode"], "approval-required");
     }
 
     #[test]
