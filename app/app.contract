@@ -1691,13 +1691,23 @@ component Bots
     groupPage = "edit"
   action groupBack
     groupPage = "root"
+  action openGroupAdd
+    groupPage = "add"
+  action closeGroupAdd
+    groupPage = "edit"
   action patchGroup(field: string, value: string)
     if roomId != ""
       send groupSaved = updateGroup(roomId, field, value)
-  action toggleGroupMemberOf(m: string)
-    let current = room.members.map(x => x.slug)
-    let next = current.includes(m) ? current.filter(x => x != m) : current.concat([m])
-    send groupSaved = updateGroup(roomId, "members", next.join("\n"))
+  action removeGroupMember(m: string)
+    if roomId != "" and room.members.length > 2
+      let next = room.members.map(x => x.slug).filter(x => x != m)
+      send groupSaved = updateGroup(roomId, "members", next.join("\n"))
+  action addGroupMember(m: string)
+    if roomId != ""
+      let current = room.members.map(x => x.slug)
+      if not current.includes(m)
+        send groupSaved = updateGroup(roomId, "members", current.concat([m]).join("\n"))
+        groupPage = "edit"
   action dropGroup
     if roomId != ""
       send groupGone = deleteGroup(roomId)
@@ -2656,7 +2666,7 @@ component Bots
                     button class=SendControl appearance="none" press=postRoom disabled=(roomText.trim() == "" or pending(roomSent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="room-send"
                       Glyph(name="send", size=18)
                   text (roomText.includes("@") ? t("group.hintMention") : t("group.hintNone")) color="ink.muted" font="-exact-footnote" testId="room-hint"
-              GroupPanel(shown=groupPanel, wide=wide, page=groupPage, room=room, bots=bots, closePanel=toggleGroupPanel, openEdit=openGroupEdit, goRoot=groupBack, patch=patchGroup, toggleMember=toggleGroupMemberOf, drop=dropGroup, error=groupSaveError)
+              GroupPanel(shown=groupPanel, wide=wide, page=groupPage, room=room, bots=bots, closePanel=toggleGroupPanel, openEdit=openGroupEdit, goRoot=groupBack, openAdd=openGroupAdd, closeAdd=closeGroupAdd, patch=patchGroup, removeMember=removeGroupMember, addMember=addGroupMember, drop=dropGroup, error=groupSaveError)
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader
@@ -3560,22 +3570,38 @@ component GroupPanel
     closePanel: action
     openEdit: action
     goRoot: action
+    openAdd: action
+    closeAdd: action
     patch: action
-    toggleMember: action
+    removeMember: action
+    addMember: action
     drop: action
     error: string
   state title = room.title
   state about = room.description
-  derive picked = room.members.map(m => m.slug)
-  derive pickable = bots.filter(b => not b.hideFromSidebar)
+  state memberQuery = ""
+  derive memberSlugs = room.members.map(m => m.slug)
+  derive candidates = bots.filter(b => not b.hideFromSidebar and not memberSlugs.includes(b.slug))
+  derive memberQ = memberQuery.trim().toLowerCase()
+  derive shownCandidates = (candidates.length > 6 and memberQ != "") ? candidates.filter(b => b.name.toLowerCase().includes(memberQ) or b.slug.toLowerCase().includes(memberQ)) : candidates
   action editTitle(v: string)
     title = v
   action editAbout(v: string)
     about = v
+  action editMemberQuery(v: string)
+    memberQuery = v
+  action beginAdd
+    memberQuery = ""
+    openAdd()
   view
     column id="group-panel" display=(shown ? "flex" : "none") position="absolute" top=(wide ? 0 : 72) right=0 bottom=0 width=(wide ? "20rem" : "100%") box-sizing="border-box" background-color="surface.canvas" border-left="1px solid surface.line" testId="group-panel"
       row align-items="center" gap="space.xs" padding="space.sm space.sm space.sm space.md" min-height=52 box-sizing="border-box"
-        if page == "edit"
+        if page == "add"
+          button class=IconControl appearance="none" press=closeAdd aria-label=t("common.back") title=t("common.back") testId="group-add-back"
+            column rotate="180deg"
+              Glyph(name="chevron", size=20)
+          text t("group.addBot") role="heading" aria-level=2 class=PageTitle flex=1 testId="group-panel-title"
+        else if page == "edit"
           button class=IconControl appearance="none" press=goRoot aria-label=t("common.back") title=t("common.back") testId="group-panel-back"
             column rotate="180deg"
               Glyph(name="chevron", size=20)
@@ -3586,7 +3612,20 @@ component GroupPanel
             Glyph(name="settings", size=20)
           button class=IconControl appearance="none" press=closePanel aria-label=t("panel.close") title=t("panel.close") testId="group-panel-close"
             Glyph(name="close", size=20)
-      if page == "edit"
+      if page == "add"
+        scroll flex=1 min-height=0
+          column gap="space.lg" padding="space.sm space.lg space.xl" testId="group-add-page"
+            if candidates.length > 6
+              input type="search" appearance="none" class=Field value=memberQuery input=editMemberQuery placeholder=t("group.searchBots") aria-label=t("group.searchBots") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-add-search"
+            if shownCandidates.length == 0
+              text (candidates.length == 0 ? t("group.everyoneIn") : t("group.noMatch")) color="ink.muted" testId="group-add-empty"
+            column gap="space.xs"
+              for b in shownCandidates key=b.slug
+                button appearance="none" press=addMember(b.slug) aria-label=b.name testId=`group-add-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" color="-exact-label"
+                  row gap="space.md" align-items="center" width="100%"
+                    Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=32, still=true, presence="")
+                    text b.name font-weight=500 flex=1 min-width=0 text-align="left"
+      else if page == "edit"
         scroll flex=1 min-height=0
           column gap="space.lg" padding="space.sm space.lg space.xl" testId="group-edit-page"
             column gap="space.sm"
@@ -3596,15 +3635,16 @@ component GroupPanel
               text t("common.description") class=SectionLabel
               input appearance="none" class=Field value=about input=editAbout change=patch("description") placeholder=t("group.aboutPlaceholderShort") aria-label=t("common.description") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-edit-about"
             column gap="space.sm"
-              text t("common.bots") class=SectionLabel
-              for b in pickable key=b.slug
-                button appearance="none" press=toggleMember(b.slug) role="checkbox" aria-checked=picked.includes(b.slug) aria-label=b.name testId=`group-edit-member-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border=(picked.includes(b.slug) ? "2px solid AccentColor" : "2px solid surface.line") border-radius="radius.md" background-color="surface.card" color="-exact-label"
-                  row gap="space.md" align-items="center" width="100%"
-                    Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=32, still=true, presence="")
-                    text b.name font-weight=500 flex=1 min-width=0 text-align="left"
-                    if picked.includes(b.slug)
-                      column color="AccentColor"
-                        Glyph(name="check", size=18)
+              row align-items="center" gap="space.sm"
+                text t("common.bots") class=SectionLabel flex=1
+                button class=TextControl appearance="none" press=beginAdd testId="group-add-open"
+                  text t("group.add")
+              for m in room.members key=m.slug
+                row gap="space.md" align-items="center" width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId=`group-roster-${m.slug}`
+                  Avatar(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state=m.state, size=32, still=(m.state != "working"), presence="")
+                  text m.name font-weight=500 flex=1 min-width=0 text-align="left"
+                  button appearance="none" press=removeMember(m.slug) disabled=(room.members.length < 3) aria-label=t("group.removeNamed", name=m.name) testId=`group-remove-${m.slug}` color=(room.members.length < 3 ? "ink.muted" : "-exact-system-red")
+                    text t("group.remove")
             if error != ""
               text error color="-exact-system-red" testId="group-error-panel"
             row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
