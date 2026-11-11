@@ -26,6 +26,10 @@ This release gives you more control over network access, notifications and group
 - Keep authentication, Vault and T3 secrets out of debug output.
 - Correct Contract syntax and preserve navigation state through the Exact router.
 
+### Improvements
+
+- Group chat uses the same jump-to-end control and follow behavior as a Bot chat, including replies that arrive while you are already at the end.
+
 ## 0.1.6
 
 This release makes conversations easier to navigate on small screens and adds faster ways to mention Bots.
