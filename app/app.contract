@@ -2269,6 +2269,8 @@ component Bots
                         text (prefs.userName != "" ? prefs.userName : t("settings.you")) font-weight=500 overflow-wrap="break-word" testId="you-name"
           else if e.name == "chat"
             column class=Screen navigationKey=`${e.id}` navigationScroll="transcript" drop=filesDropped position="absolute" inset=0 padding-right=((wide and panelOpen) ? "20rem" : "0px")
+              if messageMenu != ""
+                button appearance="none" position="absolute" inset=0 z-index=20 background-color="transparent" border="none" press=closeMessageMenu aria-label=t("common.cancel") testId="message-menu-scrim"
               header appearance="none" class=PageHeader position="relative" testId="chat-header"
                 button id="back" class=IconControl appearance="none" press=back aria-label=t("common.back") title=t("common.back") display=(wide ? "none" : "flex")
                   column rotate="180deg"
@@ -2309,7 +2311,7 @@ component Bots
                     button press=edit(t("chat.starter.helpSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-help"
                       text t("chat.starter.help")
               else
-                column flex=1 min-height=0 justify-content="flex-end" position="relative"
+                column flex=1 min-height=0 justify-content="flex-end" position="relative" z-index=(messageMenu != "" ? 21 : 0) pointer-events=(messageMenu != "" ? "none" : "auto")
                   if chatSearching
                     input type="search" class=SearchField value=messageQuery input=editChatQuery placeholder=t("chat.search") aria-label=t("chat.search") testId="chat-search" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="0 space.lg space.xs"
                   if chatSearching and searchNote != ""
@@ -2441,6 +2443,8 @@ component Bots
                 BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, mute=doMute, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), showComputerLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, openBrowser=doOpenBrowser, opening=openingBrowser, openError=openError, closeBrowser=doCloseBrowser, closing=closingBrowser, closeError=closeError, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
           else if e.name == "group"
             column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
+              if messageMenu != ""
+                button appearance="none" position="absolute" inset=0 z-index=20 background-color="transparent" border="none" press=closeMessageMenu aria-label=t("common.cancel") testId="message-menu-scrim"
               header appearance="none" class=PageHeader position="relative" testId="room-header"
                 button id="back" class=IconControl appearance="none" press=back aria-label=t("common.back") title=t("common.back") display=(wide ? "none" : "flex")
                   column rotate="180deg"
@@ -2468,7 +2472,7 @@ component Bots
                     text t("group.emptyTitle") class=HeroTitle text-align="center"
                     text t("group.emptyBody") color="ink.muted" text-align="center" max-width="24rem"
                 else
-                  column flex=1 min-height=0 justify-content="flex-end" position="relative"
+                  column flex=1 min-height=0 justify-content="flex-end" position="relative" z-index=(messageMenu != "" ? 21 : 0) pointer-events=(messageMenu != "" ? "none" : "auto")
                     if away
                       button class=IconControl appearance="none" press=toEnd aria-label=t("chat.jump") title=t("chat.jumpShort") testId="to-end" position="absolute" left="50%" translate="-50% 0" bottom=8 z-index=1 width=32 height=32 border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line"
                         Glyph(name="arrow-down", size=16)
@@ -3136,8 +3140,7 @@ component ChatMessage
               else if row.text != ""
                 MessageParts(id=row.id, parts=row.parts, tail=row.tail, textTestId=textTestId, ring=ring)
               if menuOpen
-                button appearance="none" position="fixed" inset=0 z-index=30 background-color="transparent" border="none" press=closeMenu aria-label=t("common.cancel") testId="message-menu-scrim"
-                column role="menu" aria-label=t("chat.messageActions") key=menuKey pointerdown=holdMenu position="absolute" z-index=31 top=(nearEnd ? "auto" : "calc(100% + 4px)") bottom=(nearEnd ? "calc(100% + 4px)" : "auto") left=(row.mine ? "auto" : "0") right=(row.mine ? "0" : "auto") width=216 box-sizing="border-box" padding="space.xs" gap="2px" border-radius="radius.md" background-color="surface.card" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" transform-origin=(row.mine ? (nearEnd ? "bottom right" : "top right") : (nearEnd ? "bottom left" : "top left")) animation="trayIn 120ms ease-out both" testId="message-menu"
+                column role="menu" aria-label=t("chat.messageActions") key=menuKey pointerdown=holdMenu pointer-events="auto" position="absolute" z-index=2 top=(nearEnd ? "auto" : "calc(100% + 4px)") bottom=(nearEnd ? "calc(100% + 4px)" : "auto") left=(row.mine ? "auto" : "0") right=(row.mine ? "0" : "auto") width=216 box-sizing="border-box" padding="space.xs" gap="2px" border-radius="radius.md" background-color="surface.card" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" transform-origin=(row.mine ? (nearEnd ? "bottom right" : "top right") : (nearEnd ? "bottom left" : "top left")) animation="trayIn 120ms ease-out both" testId="message-menu"
                   row gap="2px" testId=`menu-react-${row.id}`
                     for em, n in reactStrip(row.react) key=em
                       button class=TextControl appearance="none" key=menuKey pointerdown=holdMenu press=pickEmoji(em) aria-label=t("chat.reactWith", emoji=em) aria-pressed=(row.react == em) width=hit height=hit min-height=hit padding=0 border-radius="radius.sm" font="-exact-title3" box-shadow=(row.react == em ? "0 0 0 2px brand.default" : "none") animation=`emojiIn 120ms ease-out ${n * 20}ms both` testId=`pick-${em}`
