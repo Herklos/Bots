@@ -726,3 +726,22 @@ test "the model page shows five effort levels and keeps the current one"
   clock data
   expect checked "model-sonnet"
   expect checked "effort-high"
+
+test "Access shows where Bots are stored"
+  tap "Settings"
+  clock data
+  tap "settings-domain-access"
+  clock data
+  expect tree has "storage-filesystem"
+  expect text "storage-filesystem" == "File system"
+  expect enabled "storage-filesystem"
+  expect tree has "storage-anytype"
+  expect disabled "storage-anytype"
+  expect text "storage-anytype-note" == "Not available yet"
+  expect tree has "storage-folder"
+  expect tree has "storage-save"
+  expect tree has "storage-test"
+  expect tree has "storage-copy"
+  expect text "storage-copy" == "Copy Bots here"
+  expect tree missing "storage-key"
+  expect tree missing "storage-restart"

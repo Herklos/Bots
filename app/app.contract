@@ -441,6 +441,17 @@ shape Network
   error: string
   http: bool
 
+// Where Bots are stored. `backendLock` and `rootLock` are the environment
+// variable that locks that control, or empty. The screen does not read a key.
+shape Storage
+  backend: string
+  root: string
+  backendLock: string
+  rootLock: string
+  restartRequired: bool
+  canRestart: bool
+  error: string
+
 shape Bot
   slug: string
   name: string
@@ -975,6 +986,9 @@ component Bots
   state updatePolls = 0
   state updateStuck = false
   state newPassword = ""
+  state folderDraft = ""
+  state folderEditing = false
+  state storageHint = ""
   state botQuery = ""
   state searching = false
   state away = false
@@ -1047,6 +1061,7 @@ component Bots
   resource prefs = loadPrefs() as shape Prefs else empty()
   resource notice = loadNotice() as shape NoticeState else empty()
   resource network = loadNetwork(networkGate) as shape Network else empty()
+  resource storage = loadStorage(networkGate) as shape Storage else empty()
   resource vault = loadVault() as shape Login[] else empty()
   resource usage = loadUsage(usageGate, hostTime.locale) as shape Usage else empty()
   resource report = loadUsageReport(slug, usagePeriod, reportGate, hostTime.locale) as shape UsageReport else empty()
@@ -1093,6 +1108,10 @@ component Bots
   mutation healthRead as shape Health then afterHealth
   mutation networkSet as shape Reply refreshes network
   mutation networkRestarted as shape Reply
+  mutation storageSaved as shape Reply refreshes storage
+  mutation storageTested as shape Reply then afterStorageTest
+  mutation storageCopied as shape Reply then afterStorageCopy
+  mutation storageRestarted as shape Reply
   mutation loginSaved as shape Reply refreshes vault then afterLoginSave
   mutation loginRemoved as shape Reply refreshes vault then afterLoginRemove
   mutation revealed as shape Revealed
@@ -1155,6 +1174,11 @@ component Bots
   derive passwordError = match passwordSet { case some(r) => r.error, case none => "" }
   derive networkError = match networkSet { case some(r) => r.error, case none => "" }
   derive networkRestartError = match networkRestarted { case some(r) => r.error, case none => "" }
+  derive storagePath = folderEditing ? folderDraft : (storage.root != "" ? storage.root : "~/.hbots/bots")
+  derive storageSaveError = match storageSaved { case some(r) => r.error, case none => "" }
+  derive storageTestError = match storageTested { case some(r) => r.error, case none => "" }
+  derive storageCopyError = match storageCopied { case some(r) => r.error, case none => "" }
+  derive storageRestartError = match storageRestarted { case some(r) => r.error, case none => "" }
   derive networkGate = (top(nav).name == "settings" and settingsDomain == "access") ? "1" : "0"
   derive loginError = match loginSaved { case some(r) => r.error, case none => "" }
   derive loginRemoveError = match loginRemoved { case some(r) => r.error, case none => "" }
@@ -1938,7 +1962,7 @@ component Bots
       panelPage = "root"
       subSlug = ""
 
-  // Settings: name, theme, usage, the default model, Vault, the remote password, and about.
+  // Settings: name, theme, usage, the default model, Vault, the remote password, storage, and about.
   action openSettings
     settingsDomain = "user"
     computerEnlarged = false
@@ -2000,6 +2024,42 @@ component Bots
   action doRestartNetwork
     if network.canRestart and network.restartRequired and not pending(networkRestarted)
       send networkRestarted = restartGateway()
+  action doEditFolder(v: string)
+    folderDraft = v
+    folderEditing = true
+  action doSaveStorage
+    let path = storagePath
+    if (storage.rootLock == "" or storage.backendLock == "") and path != "" and not pending(storageSaved)
+      storageHint = ""
+      folderEditing = false
+      send storageSaved = saveStorage(path, storage.backendLock == "" ? "1" : "0", storage.rootLock == "" ? "1" : "0")
+  action doTestStorage
+    let path = storagePath
+    if path != "" and not pending(storageTested)
+      storageHint = ""
+      send storageTested = testStorage(path)
+  action afterStorageTest
+    match storageTested
+      case some(r)
+        if r.ok
+          storageHint = "test"
+      case none
+        storageHint = storageHint
+  action doCopyStorage
+    let path = storagePath
+    if path != "" and not pending(storageCopied)
+      storageHint = ""
+      send storageCopied = copyStorage(path)
+  action afterStorageCopy
+    match storageCopied
+      case some(r)
+        if r.ok
+          storageHint = "copy"
+      case none
+        storageHint = storageHint
+  action doRestartStorage
+    if storage.canRestart and storage.restartRequired and not pending(storageRestarted)
+      send storageRestarted = restartStorage()
 
   // Vault: a login is edited in a sheet. The password is kept unless a new one is typed.
   action doCommitLogin(id: string, title: string, website: string, username: string, password: string, hints: string)
@@ -2672,6 +2732,55 @@ component Bots
                               text t("settings.networkRestartButton")
                       if networkRestartError != "" and not pending(networkRestarted)
                         text networkRestartError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0"
+                    column
+                      text t("settings.storage") class=SectionLabel
+                      column class=GroupCard padding="space.sm" gap="space.sm"
+                        text t("settings.storage.where") font="-exact-subheadline"
+                        row class=SettingsTrack role="radiogroup" aria-label=t("settings.storage.where")
+                          button class=SettingsTab appearance="none" role="radio" aria-checked=(storage.backend != "anytype") press=doSaveStorage disabled=(storage.backendLock != "") testId="storage-filesystem" background-color=(storage.backend != "anytype" ? "surface.card" : "transparent") color=(storage.backend != "anytype" ? "-exact-label" : "ink.muted")
+                            text t("settings.storage.filesystem")
+                          button class=SettingsTab appearance="none" role="radio" aria-checked=false disabled=true testId="storage-anytype" background-color="transparent" color="ink.muted"
+                            text t("settings.storage.anytype")
+                        text t("settings.storage.anytypeSoon") class=SettingsFoot testId="storage-anytype-note"
+                        if storage.backendLock != ""
+                          text t("settings.storage.locked", variable=storage.backendLock) class=SettingsFoot testId="storage-locked-backend"
+                      text t("settings.storage.folder") class=SectionLabel
+                      column class=GroupCard padding="0"
+                        row class=SettingsRow min-height=44
+                          input appearance="none" class=Field value=storagePath placeholder=t("settings.storage.defaultFolder") input=doEditFolder aria-label=t("settings.storage.folder") flex=1 min-width=0 disabled=(storage.rootLock != "") testId="storage-folder"
+                          button appearance="none" press=doSaveStorage disabled=(storagePath == "" or (storage.rootLock != "" and storage.backendLock != "") or pending(storageSaved)) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="storage-save"
+                            text t("settings.storage.save")
+                      text t("settings.storage.folderNote") class=SettingsFoot
+                      if storage.rootLock != ""
+                        text t("settings.storage.locked", variable=storage.rootLock) class=SettingsFoot testId="storage-locked-folder"
+                      row class=SettingsRow padding="space.xs space.md 0" min-height=44 gap="space.sm"
+                        button appearance="none" press=doTestStorage disabled=(storagePath == "" or pending(storageTested)) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="storage-test"
+                          text t("settings.storage.test")
+                        button appearance="none" press=doCopyStorage disabled=(storagePath == "" or pending(storageCopied)) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="storage-copy"
+                          text t("settings.storage.copy")
+                      text t("settings.storage.copyNote") class=SettingsFoot
+                      if storageHint == "test" and storageTestError == "" and not pending(storageTested)
+                        text t("settings.storage.testOk") class=SettingsFoot testId="storage-test-ok"
+                      if storageHint == "copy" and storageCopyError == "" and not pending(storageCopied)
+                        text t("settings.storage.copyOk") class=SettingsFoot testId="storage-copy-ok"
+                      if storage.error != ""
+                        text storage.error color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-error"
+                      if storageSaveError != "" and not pending(storageSaved)
+                        text storageSaveError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-save-error"
+                      if storageTestError != "" and not pending(storageTested)
+                        text storageTestError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-test-error"
+                      if storageCopyError != "" and not pending(storageCopied)
+                        text storageCopyError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-copy-error"
+                      if pending(storageRestarted)
+                        text t("settings.storage.restarting") class=SettingsFoot
+                      else if storage.restartRequired
+                        row class=SettingsRow padding="space.xs space.md 0" min-height=44
+                          text t("settings.storage.restart") color="ink.muted" font="-exact-footnote" flex=1 testId="storage-restart-note"
+                          if storage.canRestart
+                            button appearance="none" press=doRestartStorage min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="storage-restart"
+                              text t("settings.storage.restartNow")
+                      if storageRestartError != "" and not pending(storageRestarted)
+                        text storageRestartError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-restart-error"
                   else if settingsDomain == "updates"
                     column gap="space.xl"
                       column
