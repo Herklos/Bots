@@ -1,15 +1,24 @@
 # Changelog
 
-## Unreleased
+## 0.2.2
+
+This release keeps Bot instructions and memory available across threads, improves message controls, and adds groundwork for configurable Bot storage.
+
+### New features
+
+- Include a bounded snapshot of Bot memory, logs, shared notes and inherited parent notes in managed instructions; refresh it when those files change. Ephemeral threads are excluded.
+- Record Bot storage preferences, including a folder under the hbots home. The running gateway continues to use the file system; Anytype can be saved as a choice but is currently unavailable.
 
 ### Improvements
 
-- Settings can record where Bots are stored. The file system stays the default.
-- Run the contract check again on a clean checkout.
-- Bots receive their prompt in every thread.
-- The message menu floats on the bubble in a Bot chat and a group, with a reaction strip, reply, pin or unpin, and copy.
-- Bots receive a snapshot of their memory in every thread.
-- Post unread notices when the roster changes, using the notification settings and permission already on screen. A chat reuses thread reactions and pins for about ten seconds, until a new last message, a reaction, or a pin.
+- Include each Bot's prompt in its managed instructions, including updates to durable children when the parent changes.
+- Show a floating message menu in Bot and group chats with reactions, reply, pin and copy controls.
+- Reduce refresh work by sharing room reads and caching chat metadata while keeping unread notifications current.
+
+### Bug fixes
+
+- Keep the message menu overlay within the chat screen.
+- Restore Contract validation on a clean CI checkout.
 
 ## 0.2.1
 
