@@ -1,12 +1,30 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
+
+This release gives you more control over network access, notifications and group conversations, and makes browser interaction and updates easier.
 
 ### New features
 
-- Choose where hbots listens in Settings → Access → Network: this device, the local network, or Tailscale Serve. A password is required beyond this device, and a listener change applies on the next start. `HBOTS_NETWORK_ACCESS` overrides the setting and locks it.
-- `@everyone` and `@all` in a group ask every member to answer for themselves. A member whose name is `everyone` or `all` is that member, and a Bot's own `@everyone` does not wake the group.
-- Choose who answers in a group when nobody is named: the last speaker (`last`, the default), every member (`everyone`), or a chief (`chief`). Settings stores the default as `groupAnswerPolicy`. A group can override it with `answerPolicy`, and can name its `chief`. `@mention`, `@all`, and a single plain name still choose the recipients. Chief mode allows one fewer Bot-to-Bot handoff than there are members. Rooms saved before these fields keep today's last-speaker behavior.
+- Choose whether hbots listens on this device, the local network or Tailscale Serve in Settings → Access → Network. Access beyond this device requires a password; changes take effect on the next start. `HBOTS_NETWORK_ACCESS` overrides the setting.
+- Receive notifications for unread Bot and group messages, manage notification settings and mute individual conversations without clearing their unread indicators.
+- Check for an available release and update and restart a background service from Settings → About.
+- Use `@everyone` or `@all` in groups to ask every member to answer. A Bot's own broadcast mention does not wake the whole group, and an individual Bot named `everyone` or `all` takes precedence.
+- Configure the gateway's default group answer policy and per-group overrides: last speaker, everyone, or a designated chief. Explicit mentions continue to select recipients; existing groups retain last-speaker behavior by default.
+
+### Improvements
+
+- Control the Bot browser with keyboard codes and Shift, Alt and Ctrl, and request sharper frames in the enlarged view.
+- Open a new Bot's chat after creation and show the creation form when the inbox is empty. Chat scrolls to a pending message after sending, and working indicators animate.
+- Access the development watch stack through local, LAN, Tailscale and hostname addresses using its LAN proxy. Port conflicts now include a command to stop the listener.
+- Add Contract validation to the development workflow, commit hook and CI, and document project-specific development and release workflows.
+
+### Bug fixes
+
+- Mark groups unread when a Bot replies after the group has been opened, and close a chat's notification when it is opened.
+- Report browser-control authorization failures and allow the T3 token to be reissued when it cannot operate the browser.
+- Keep authentication, Vault and T3 secrets out of debug output.
+- Correct Contract syntax and preserve navigation state through the Exact router.
 
 ## 0.1.6
 
