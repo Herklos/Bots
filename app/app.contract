@@ -883,7 +883,7 @@ component Bots
   resource clipType = isTypeSupported(type="audio/mp4") as shape TypeSupport else empty()
   mutation signedIn as shape Reply refreshes session, bots
   mutation signedOut as shape Reply refreshes session, bots
-  mutation created as shape Reply refreshes bots then afterCreate
+  mutation created as shape Made refreshes bots then afterCreate
   mutation groupMade as shape Made refreshes convos then afterGroupMade
   mutation roomSent as shape Reply refreshes room, convos then afterRoomSend
   mutation groupGone as shape Reply refreshes convos
@@ -1265,8 +1265,13 @@ component Bots
     if newName.trim() != "" and not pending(created)
       send created = createBot(newName.trim(), newColor, newShape, newFirst)
   action afterCreate
-    if createError == "" and top(nav).name == "create"
-      nav = back(nav)
+    match created
+      case some(r)
+        if r.ok and r.id != ""
+          nav = push(top(nav).name == "create" ? back(nav) : nav, path("chat", r.id))
+        else if r.ok and top(nav).name == "create"
+          nav = back(nav)
+      case none
   action openNewGroup
     plusOpen = false
     groupName = ""
