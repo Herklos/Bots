@@ -34,7 +34,7 @@ Inbox ──┬── Bot chat ──┬── Library
 
 1. The person opens the web app or the installed app. If a password is set, the sign-in screen appears first: the Face, the wordmark, "Your own Bots, in one place.", then the password.
 2. Sign in with the password from Settings → Remote access. Five wrong tries lock sign-in for 15 minutes.
-3. The inbox shows **No Bots Yet** with "A Bot is a long-lived T3 Code thread with a face and a memory." and **Create Your First Bot**.
+3. When the roster has loaded and it is empty, the inbox is one form: a 96-point Face, **Meet your first Bot**, "Give them a name. The look can change later.", the name, ten colours and eight shapes, **Create Bot**, then "Or pick a starting point." and the suggestion rows. Search and the plus menu are hidden. Settings stays. On a wide window that form is the detail column; the rail shows the wordmark and the person chip. A suggestion fills the name, colour, and shape, and the person can still edit the name. **Create Bot** opens that chat. If the gateway is down, the screen stays **Can’t Reach the Gateway** and **Try again**, with no name field.
 
 ### 2. Create a Bot
 
@@ -101,7 +101,7 @@ Each has a title, a message that says what to do, and a symbol.
 
 | Screen | Title | Message |
 |---|---|---|
-| Inbox, no Bots | No Bots Yet | A Bot is a long-lived T3 Code thread with a face and a memory. |
+| Inbox, no Bots | Meet your first Bot | Give them a name. The look can change later. |
 | Vault, no logins | No Logins Yet | Save a login here. Its password stays in the Vault and shows only when you press Reveal. |
 | Vault, gateway down | Can’t Open the Vault | Check that `hbots` is running, then try again. |
 | Any screen, gateway down | Can’t Reach the Gateway | Start the `hbots` gateway on this machine or on your server, then try again. |
