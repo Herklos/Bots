@@ -403,6 +403,25 @@ type ChatRow = any;
 // Pins are mutable so a Pin tap can toggle a row without a live gateway.
 // A room the contract runner just created. Null keeps the built-in Design room.
 let fixtureMade: { title: string; description: string; color: string; shape: string; slugs: string[] } | null = null;
+// Membership edits the contract runner saves without a gateway. Absent means the room's built-in roster.
+const fixtureMemberEdits = new Map<string, string[]>();
+const FIXTURE_CROWD: [string, string][] = [
+  ['one', 'One'], ['two', 'Two'], ['three', 'Three'], ['four', 'Four'],
+  ['five', 'Five'], ['six', 'Six'], ['seven', 'Seven'],
+];
+
+function fixtureMemberRow(slug: string) {
+  if (slug === 'bea') return { slug, name: 'Bea', line: 'Getting set up…', state: 'asleep', ready: false, working: false };
+  if (slug === 'ada') return { slug, name: 'Ada', line: 'Working', state: 'working', ready: true, working: true };
+  const named = FIXTURE_CROWD.find((pair) => pair[0] === slug);
+  return { slug, name: slug === 'fixture' ? 'Ada' : (named?.[1] ?? slug), line: 'Ready to chat', state: 'idle', ready: true, working: false };
+}
+
+function fixtureCrowdBots() {
+  return FIXTURE_CROWD.map(([slug, name]) => ({
+    slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get(slug)),
+  }));
+}
 // Lines the contract runner has sent. The transcript uses the same id the send returned.
 const fixtureSent: { id: string; text: string }[] = [];
 const fixtureRoomSent: { id: string; text: string }[] = [];
@@ -950,11 +969,12 @@ const sources: Sources = {
         { slug: 'quiet', name: 'Quiet', label: '', initials: 'Q', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get('quiet')) },
       ];
     }
-    if (focus === 'fixture' || focus === 'bea') {
+    if (focus === 'fixture' || focus === 'bea' || focus === 'fixture-crowd') {
       return [
         { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get('fixture')) },
         { slug: 'ada-junior-1', name: 'Ada junior 1', label: '', initials: 'AJ', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: 'fixture', hideFromSidebar: true, subagent: true, prompt: 'Look things up.', inheritParentPrompt: true, notifications: wantsNotice(fixtureBotNotify.get('ada-junior-1')) },
         { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true, shape: 'ball', pinned: false, working: false, line: 'Getting set up…', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get('bea')) },
+        ...(focus === 'fixture-crowd' ? fixtureCrowdBots() : []),
       ];
     }
     const body = await botsBody(store);
@@ -1139,6 +1159,11 @@ const sources: Sources = {
         { kind: 'group', key: 'group-fixture-busy', id: 'fixture-busy', name: 'Design', color: 'brand.blue', shape: 'hex', faces: [{ shape: 'ball', color: fill('brand.default'), state: 'working' }, { shape: 'ball', color: fill('brand.blue'), state: 'working' }], line: 'Ada: On it', time: '', at: '', unread: false, working: true, ready: true, notifications: wantsNotice(fixtureRoomNotify.get('fixture-busy')) },
       ];
     }
+    if (focus === 'fixture-crowd' || room === 'fixture-crowd') {
+      return [
+        { kind: 'group', key: 'group-fixture-crowd', id: 'fixture-crowd', name: 'Design', color: 'brand.blue', shape: 'hex', faces: [], line: 'Ada: On it', time: '', at: '', unread: false, working: false, ready: true, notifications: wantsNotice(fixtureRoomNotify.get('fixture-crowd')) },
+      ];
+    }
     const body = await botsBody(store);
     const now = Number(body.now);
     const directory = body.bots as any[];
@@ -1171,12 +1196,17 @@ const sources: Sources = {
     return [...bots, ...groups].sort((x, y) => y.at.localeCompare(x.at));
   },
   markRoomSeen: async ([id], store) => {
-    if (id === 'fixture' || id === 'fixture-busy') return { ok: true, error: '' };
+    if (id === 'fixture' || id === 'fixture-busy' || id === 'fixture-crowd') return { ok: true, error: '' };
     return reply(await call(store, `/api/rooms/${encodeURIComponent(id)}/seen`, { method: 'POST', body: '{}' }));
   },
   updateGroup: async ([id, field, value], store) => {
-    if ((id === 'fixture' || id === 'fixture-busy') && field === 'notifications') {
+    const fixtureRoom = id === 'fixture' || id === 'fixture-busy' || id === 'fixture-crowd';
+    if (fixtureRoom && field === 'notifications') {
       fixtureRoomNotify.set(id, value === 'true');
+      return { ok: true, error: '' };
+    }
+    if (fixtureRoom && field === 'members') {
+      fixtureMemberEdits.set(id, value === '' ? [] : value.split('\n').filter((slug) => slug !== ''));
       return { ok: true, error: '' };
     }
     const body = field === 'members'
@@ -1281,7 +1311,7 @@ const sources: Sources = {
   },
   markSeen: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/seen`, { method: 'POST', body: '{}' })),
   noteUnread: async ([visibility, focused, available, state, enabled, enabledMissing, sound, preview, when, openSlug, openRoom], store): Promise<Result<'noteUnread'>> => {
-    if (FIXTURE_SLUG(openSlug) || FIXTURE_SLUG(openRoom) || openSlug === 'fixture-busy' || openRoom === 'fixture-busy') return { ok: true, error: '' };
+    if (FIXTURE_SLUG(openSlug) || FIXTURE_SLUG(openRoom) || openSlug === 'fixture-busy' || openRoom === 'fixture-busy' || openSlug === 'fixture-crowd' || openRoom === 'fixture-crowd') return { ok: true, error: '' };
     const prefs: NoticePrefs = {
       enabled: enabledMissing ? null : enabled,
       sound,
@@ -1610,7 +1640,8 @@ const sources: Sources = {
   loadRoom: async ([id], store): Promise<Result<'loadRoom'>> => {
     if (id === '') return { id: '', title: '', description: '', color: 'brand.default', shape: 'ball', members: [], messages: [], notifications: true };
     if (id === 'fixture') {
-      if (fixtureMade) {
+      const edited = fixtureMemberEdits.get('fixture');
+      if (fixtureMade && !edited) {
         const nameOf = (slug: string) => (slug === 'bea' ? 'Bea' : 'Ada');
         return {
           id: 'fixture', title: fixtureMade.title, description: fixtureMade.description, color: fixtureMade.color, shape: fixtureMade.shape,
@@ -1621,7 +1652,7 @@ const sources: Sources = {
       }
       return {
         id: 'fixture', title: 'Design', description: 'Where Ada and Bea trade drafts', color: 'brand.blue', shape: 'hex',
-        members: [
+        members: edited ? edited.map(fixtureMemberRow) : [
           { slug: 'ada', name: 'Ada', line: 'Working', state: 'working', ready: true, working: true },
           { slug: 'bea', name: 'Bea', line: 'Getting set up…', state: 'asleep', ready: false, working: false },
         ],
@@ -1633,10 +1664,20 @@ const sources: Sources = {
         notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
       };
     }
+    if (id === 'fixture-crowd') {
+      const edited = fixtureMemberEdits.get('fixture-crowd');
+      return {
+        id: 'fixture-crowd', title: 'Design', description: 'Where Ada and Bea trade drafts', color: 'brand.blue', shape: 'hex',
+        members: (edited ?? ['ada', 'bea']).map(fixtureMemberRow),
+        messages: [],
+        notifications: wantsNotice(fixtureRoomNotify.get('fixture-crowd')),
+      };
+    }
     if (id === 'fixture-busy') {
+      const edited = fixtureMemberEdits.get('fixture-busy');
       return {
         id: 'fixture-busy', title: 'Design', description: 'Where Ada and Bea trade drafts', color: 'brand.blue', shape: 'hex',
-        members: [
+        members: edited ? edited.map(fixtureMemberRow) : [
           { slug: 'ada', name: 'Ada', line: 'Working', state: 'working', ready: true, working: true },
           { slug: 'bea', name: 'Bea', line: 'Working', state: 'working', ready: true, working: true },
         ],

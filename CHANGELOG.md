@@ -4,6 +4,7 @@
 
 ### Improvements
 
+- Add or remove one Bot at a time on an existing group. A group keeps at least two Bots.
 - An open chat stays as it is when the transcript has not changed. The read carries a tag and waits on that request until a message arrives or about 25 seconds pass.
 - Typing in the composer writes the draft once after a short pause, and before send, a conversation change, closing the panel, or leaving the screen.
 - Settings shows Storage with Access: the file system, the Bots folder, and a restart when that folder changes.
