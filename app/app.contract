@@ -888,6 +888,10 @@ fn bitState(faces: FaceBit[], n: number): string = match faces.at(n) { case some
 fn memberFaces(bots: Bot[], members: RoomMember[]): FaceBit[] = members.slice(0, 3).map(m => FaceBit(shape=shapeOf(bots, m.slug), color=colorOf(bots, m.slug), state=m.state))
 fn pickedFaces(bots: Bot[], slugs: string[]): FaceBit[] = slugs.slice(0, 3).map(slug => FaceBit(shape=shapeOf(bots, slug), color=colorOf(bots, slug), state="idle"))
 fn withWorking(messages: RoomMessage[], working: bool): RoomMessage[] = working ? messages.concat([RoomMessage(id="working", name="", text="", from="")]) : messages
+// The person's text, shown at the end of the room log until the sent row arrives.
+fn withRoomPending(messages: RoomMessage[], text: string): RoomMessage[] = text == "" ? messages : messages.concat([RoomMessage(id="room-pending", name="", text=text, from="user")])
+// A local transcript row for text that is still sending or failed. It is not a gateway row.
+fn pendingRow(text: string, failed: bool): Row = Row(id="pending", kind="pending", mine=true, text=text, title="", time="", head=true, tail=true, variant=(failed ? "failed" : ""), files=[], botSlug="", botName="", botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="")
 // True when the last character can continue a word, so `joe@mail` is not a mention.
 fn wordChar(c: string): bool = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".includes(c)
 fn mentionReplace(text: string, q: string, slug: string): string = `${text.slice(0, text.length - q.length)}${slug} `
@@ -947,6 +951,10 @@ component Bots
   state botQuery = ""
   state searching = false
   state away = false
+  // Set before a send. A task scrolls once the new row exists, then clears it.
+  state stickToEnd = false
+  // Group chat has no server row until room_send returns. This is that text, faded, in the log.
+  state roomPending = ""
   state chatSearching = false
   state hiddenOpen = false
   state vaultQuery = ""
@@ -1082,11 +1090,14 @@ component Bots
   derive roomError = match roomSent { case some(r) => r.error, case none => "" }
   derive roomId = match stack(nav).filter(e => e.name == "group").at(-1) { case some(e) => e.params.id, case none => "" }
   derive workingMembers = room.members.filter(m => m.working)
-  derive roomRows = withWorking(room.messages, workingMembers.length > 0)
+  derive roomRows = withRoomPending(withWorking(room.messages, workingMembers.length > 0), roomPending)
   derive mentionPool = roomId != "" ? roomMentions(bots, room.members, t("group.everyone")) : botMentions(bots)
   derive mentionHits = mentionOn ? filterMentions(mentionPool, mentionQ) : []
   derive qtext = messageQuery.trim().toLowerCase()
-  derive shownRows = chat.rows.filter(m => m.kind != "message" or qtext == "" or m.text.toLowerCase().includes(qtext))
+  derive filteredRows = chat.rows.filter(m => m.kind != "message" or qtext == "" or m.text.toLowerCase().includes(qtext))
+  derive pendingText = pending(sent) and lastText != "" ? lastText : (failedText != "" and not pending(sent) ? failedText : "")
+  derive pendingFailed = failedText != "" and not pending(sent)
+  derive shownRows = pendingText == "" ? filteredRows : filteredRows.concat([pendingRow(pendingText, pendingFailed)])
   derive searchNote = qtext != "" and chat.partial ? t("chat.searchPartial") : ""
   derive visibleBots = bots.filter(b => not b.hidden and not b.hideFromSidebar and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
   derive tiles = visibleBots.filter(b => query == "" and (b.main or b.pinned))
@@ -1124,6 +1135,14 @@ component Bots
   derive answerError = match answered { case some(r) => r.error, case none => "" }
   derive canSend = draft.trim() != "" or pendingAttaches.length > 0
   derive onBot = top(nav).name == "chat"
+  derive onGroup = top(nav).name == "group"
+  // Bot chat keys on the pending row once it is in the list, otherwise the latest server row.
+  // Group chat keys on the previous last row until the optimistic row exists, then on that row.
+  derive sendJump = onGroup ? (roomPending != "" ? "room-pending" : lastRoomId) : (pendingText != "" ? "pending" : lastId)
+  derive jumpList = onGroup ? "room-log" : "transcript"
+  // Skip a stale last id while the send is still in flight and the new row is not in the list yet.
+  derive sendReady = sendJump == "pending" or sendJump == "room-pending" or (not onGroup and pendingText == "" and not pending(sent) and lastId != "") or (onGroup and roomPending == "" and not pending(roomSent) and lastRoomId != "")
+  derive workingHere = onGroup ? (workingMembers.length > 0 ? "working" : "") : (onBot and chat.working ? "working" : "")
   derive onLibrary = top(nav).name == "chat" and panelOpen and panelTab == "library"
   derive onComputer = top(nav).name == "chat" and panelOpen and panelTab == "computer"
   derive detailGate = (onBot and slug != "") ? "1" : "0"
@@ -1187,6 +1206,16 @@ component Bots
 
   task endWelcome when welcomed and bots.length > 0
     after(1, forgetWelcome)
+
+  // Scroll once the row this send is waiting on exists. The key changes from the old last id
+  // to that row, so the jump is not the stale target post used to scroll before the send.
+  task followSend key=sendJump when stickToEnd and messageQuery == "" and sendReady and (onBot or onGroup)
+    scrollIntoView(jumpList, sendJump, block="end")
+    stickToEnd = false
+
+  // A working row grows the list. Follow it only when the person is already at the end.
+  task followWorking key=workingHere when workingHere != "" and not away and not stickToEnd and pendingText == "" and roomPending == "" and (onBot or onGroup)
+    scrollIntoView(jumpList, workingHere, block="end")
 
   action fitView
     let box = frame("app-shell")
@@ -1531,15 +1560,16 @@ component Bots
         focus("composer")
   action postRoom
     if roomText.trim() != "" and not pending(roomSent) and roomId != ""
-      if lastRoomId != ""
-        scrollIntoView("room-log", lastRoomId, block="end")
-      send roomSent = sendRoom(roomId, roomText.trim())
+      let text = roomText.trim()
+      away = false
+      stickToEnd = true
+      roomPending = text
+      send roomSent = sendRoom(roomId, text)
       roomText = ""
       clearMention()
     focus("room-composer")
   action afterRoomSend
-    if roomError == "" and lastRoomId != ""
-      scrollIntoView("room-log", lastRoomId, block="end")
+    roomPending = ""
   action roomKey(k: string, event: KeyboardEvent)
     if mentionOn and mentionHits.length > 0 and (k == "ArrowDown" or k == "ArrowUp" or k == "Enter" or k == "Tab" or k == "Escape")
       preventDefault()
@@ -1588,7 +1618,8 @@ component Bots
   action post
     if canSend and not pending(sent)
       messageQuery = ""
-      toEnd()
+      away = false
+      stickToEnd = true
       // pendingAttaches entries are `id\\tname`; the data module keeps the ids.
       lastText = draft.trim()
       failedText = ""
@@ -1621,14 +1652,15 @@ component Bots
       lastText = ""
       replyTo = ""
       replyQuote = ""
-      // A search filter hides the new row, so scrollIntoView would stop on the previous match.
+      // A search filter hides the new row, so the jump waits until this is empty.
       messageQuery = ""
     else
       failedText = lastText
-    toEnd()
   action retry
     if failedText != "" and not pending(sent)
-      toEnd()
+      messageQuery = ""
+      away = false
+      stickToEnd = true
       let again = failedText
       lastText = again
       failedText = ""
@@ -2136,7 +2168,7 @@ component Bots
                 column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" aria-busy=true
                   Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="working", size=44, still=false)
                   text t("chat.loading") color="ink.muted"
-              else if chat.rows.length == 0 and not chat.working
+              else if chat.rows.length == 0 and not chat.working and pendingText == ""
                 column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="empty-chat"
                   Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="idle", size=72, still=false)
                   text nameOf(bots, e.params.slug) class=HeroTitle
@@ -2175,6 +2207,17 @@ component Bots
                                 text m.title font="-exact-footnote" color="-exact-label" testId=`event-title-${m.id}`
                         else if m.kind == "message"
                           ChatMessage(row=m, canHover=(pointerFacts.hover == "hover"), picking=(reactFor == m.id), menuOpen=(messageMenu == m.id), react=doReact, openPicker=openReact, reply=startReply, pin=doPinMessage, openMenu=openMessageMenu, closeMenu=closeMessageMenu)
+                        else if m.kind == "pending"
+                          row justify-content="flex-end" padding="2px space.lg" testId=(m.variant == "failed" ? "not-sent" : "sending")
+                            if m.variant == "failed"
+                              column align-items="flex-end" gap="space.xs" max-width="82%"
+                                text m.text class=Bubble background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" opacity=0.7
+                                row gap="space.sm" align-items="center"
+                                  text t("chat.notSent") font="-exact-footnote" color="-exact-system-red"
+                                  button class=TextControl appearance="none" press=retry testId="retry-send"
+                                    text t("common.retry")
+                            else
+                              text m.text class=Bubble opacity=0.6 background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" max-width="82%"
                         else if m.kind == "request"
                           row padding="space.sm space.lg"
                             column gap="space.sm" padding="space.md space.lg" border-radius="radius.lg" background-color="surface.bubble" flex=1 max-width="32rem" testId=`request-${m.id}`
@@ -2214,17 +2257,6 @@ component Bots
                             Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="working", size=24, still=false)
                             row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working")
                               WorkingDots()
-                  if pending(sent) and lastText != ""
-                    row justify-content="flex-end" padding="2px space.lg" testId="sending"
-                      text lastText class=Bubble opacity=0.6 background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" max-width="82%"
-                  if failedText != "" and not pending(sent)
-                    row justify-content="flex-end" padding="2px space.lg" testId="not-sent"
-                      column align-items="flex-end" gap="space.xs" max-width="82%"
-                        text failedText class=Bubble background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" opacity=0.7
-                        row gap="space.sm" align-items="center"
-                          text t("chat.notSent") font="-exact-footnote" color="-exact-system-red"
-                          button class=TextControl appearance="none" press=retry testId="retry-send"
-                            text t("common.retry")
               if attachError != "" and not pending(attached)
                 text attachError color="-exact-system-red" padding="0 space.lg" testId="attach-error"
               if pendingAttaches.length > 0
@@ -2300,7 +2332,7 @@ component Bots
                       column
                         text m.name font="-exact-footnote" font-weight=600 testId=`member-${m.slug}-name`
                         text m.line color="ink.muted" font="-exact-caption2" testId=`member-${m.slug}-state`
-                if room.messages.length == 0 and workingMembers.length == 0
+                if room.messages.length == 0 and workingMembers.length == 0 and roomPending == ""
                   column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="room-empty"
                     Faces(faces=memberFaces(bots, room.members), size=72, tuck=-28)
                     text t("group.emptyTitle") class=HeroTitle text-align="center"
@@ -2324,7 +2356,7 @@ component Bots
                                 if msg.from != "user"
                                   text msg.name font="-exact-footnote" font-weight=600 color="ink.muted" testId=`room-from-${msg.id}`
                                 if msg.from == "user"
-                                  text msg.text class=Bubble testId=`room-text-${msg.id}`
+                                  text msg.text class=Bubble opacity=(msg.id == "room-pending" ? 0.6 : 1) testId=`room-text-${msg.id}`
                                     background-color="brand.default"
                                     color="ink.dark"
                                     border-radius="radius.lg"
