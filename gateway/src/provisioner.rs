@@ -548,6 +548,7 @@ mod tests {
             access_team: String::new(),
             access_aud: String::new(),
             access_emails: vec![],
+            storage: crate::storage_settings::ProcessEnv::default(),
         };
         let tailnet = Arc::new(Tailnet::new());
         Arc::new(AppState {
