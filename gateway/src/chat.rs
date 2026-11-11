@@ -62,8 +62,39 @@ fn peer(peers: &Peers, thread: &Value) -> Value {
         .unwrap_or(Value::Null)
 }
 
+/// A provider `type=error` item, reduced to the fields a transcript event can carry.
+/// `None` when this is not an error item or `failure` is missing. A missing or unknown
+/// `failure.class` is `other`. A completed retry is not terminal.
+pub(crate) fn provider_failure(item: &Value) -> Option<Value> {
+    if item["type"].as_str() != Some("error") {
+        return None;
+    }
+    let failure = item.get("failure").filter(|value| value.is_object())?;
+    let kind = match failure["class"].as_str() {
+        Some("usage_limit") => "rate_limit",
+        Some("transport_error") => "transport",
+        _ => "other",
+    };
+    let retry = item.get("retry").filter(|value| value.is_object());
+    let number = |key: &str| {
+        retry
+            .and_then(|retry| retry.get(key))
+            .and_then(Value::as_u64)
+    };
+    Some(json!({
+        "kind": kind,
+        "terminal": item["status"].as_str() == Some("failed"),
+        "attempt": number("attempt"),
+        "maxAttempts": number("maxAttempts"),
+        "retryDelayMs": number("retryDelayMs"),
+        "resetAt": failure["resetAt"].as_str(),
+        "message": failure["message"].as_str().unwrap_or(""),
+    }))
+}
+
 /// A line the transcript shows between messages: who the Bot messaged, who messaged it, a
-/// routine made or run, a one-off child thread started. Anything else in a turn is not for the person.
+/// routine made or run, a one-off child thread started, or a provider failure that stopped.
+/// A retry that finished (`status` completed) stays quiet. Anything else in a turn is not for the person.
 fn event_for(item: &Value, peers: &Peers, ordinal: i64) -> Option<Value> {
     let id = format!("event-{}", item["id"].as_str().unwrap_or(""));
     let at = item["startedAt"]
@@ -114,6 +145,29 @@ fn event_for(item: &Value, peers: &Peers, ordinal: i64) -> Option<Value> {
             item["title"].as_str().unwrap_or("one-off work"),
             Value::Null,
         ),
+        // Only a terminal failure is a line. The same short verbs as the other events; the
+        // provider's own message is the title.
+        "error" => {
+            let classified = provider_failure(item)?;
+            if classified["terminal"] != true {
+                return None;
+            }
+            let (kind, text) = if classified["kind"] == "rate_limit" {
+                ("provider-limit", "Limited")
+            } else {
+                ("provider-error", "Failed")
+            };
+            line(
+                kind,
+                text,
+                classified["message"].as_str().unwrap_or(""),
+                Value::Null,
+            )
+            .map(|mut event| {
+                event["failure"] = classified;
+                event
+            })
+        }
         _ => None,
     }
 }
@@ -562,6 +616,89 @@ mod tests {
             &json!({ "turnItems": [{ "id": "c", "type": "user_message", "status": "completed", "text": "hi" }] }),
         );
         assert_eq!(mine["messages"][0]["from"], Value::Null);
+    }
+
+    fn provider_error_fixture(id: &str) -> Value {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/provider-errors.json");
+        let fixture: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        fixture["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["id"].as_str() == Some(id))
+            .cloned()
+            .unwrap_or_else(|| panic!("missing provider error fixture {id}"))
+    }
+
+    #[test]
+    fn a_terminal_usage_limit_is_a_provider_limit_event() {
+        let item = provider_error_fixture("usage-limit-terminal");
+        let event = &transcript(&json!({ "turnItems": [item.clone()] }))["events"][0];
+        assert_eq!(event["kind"], "provider-limit");
+        assert_eq!(event["text"], "Limited");
+        assert_eq!(event["title"], item["failure"]["message"]);
+        assert_eq!(event["failure"]["kind"], "rate_limit");
+        assert_eq!(event["failure"]["terminal"], true);
+        assert_eq!(event["failure"]["resetAt"], item["failure"]["resetAt"]);
+        assert!(event["failure"]["attempt"].is_null());
+        assert_eq!(event["bot"], Value::Null);
+        let wrapped = transcript(&json!({ "turnItems": [{ "item": item }] }));
+        assert_eq!(wrapped["events"][0]["kind"], "provider-limit");
+    }
+
+    #[test]
+    fn a_terminal_transport_error_is_a_provider_error() {
+        let item = provider_error_fixture("transport-gave-up");
+        let event = &transcript(&json!({ "turnItems": [item] }))["events"][0];
+        assert_eq!(event["kind"], "provider-error");
+        assert_eq!(event["text"], "Failed");
+        assert_eq!(event["failure"]["kind"], "transport");
+        assert_eq!(event["failure"]["terminal"], true);
+        assert_eq!(event["failure"]["attempt"], 5);
+        assert_eq!(event["failure"]["maxAttempts"], 5);
+    }
+
+    #[test]
+    fn a_completed_transport_retry_emits_no_event() {
+        let item = provider_error_fixture("transport-retrying");
+        let classified = provider_failure(&item).unwrap();
+        assert_eq!(classified["kind"], "transport");
+        assert_eq!(classified["terminal"], false);
+        assert!(transcript(&json!({ "turnItems": [item] }))["events"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        let recovered = provider_error_fixture("usage-limit-retrying");
+        assert_eq!(provider_failure(&recovered).unwrap()["kind"], "rate_limit");
+        assert!(transcript(&json!({ "turnItems": [recovered] }))["events"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn an_error_with_only_retry_emits_no_event() {
+        let retry =
+            json!({ "id": "e", "type": "error", "status": "completed", "retry": { "attempt": 4 } });
+        assert!(provider_failure(&retry).is_none());
+        assert!(transcript(&json!({ "turnItems": [retry] }))["events"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+    }
+
+    #[test]
+    fn an_unknown_failure_class_is_other() {
+        let mut item = provider_error_fixture("transport-gave-up");
+        item["failure"]["class"] = json!("not_a_known_class");
+        let classified = provider_failure(&item).unwrap();
+        assert_eq!(classified["kind"], "other");
+        assert_eq!(classified["terminal"], true);
+        let event = &transcript(&json!({ "turnItems": [item] }))["events"][0];
+        assert_eq!(event["kind"], "provider-error");
+        assert_eq!(event["failure"]["kind"], "other");
+        assert!(provider_failure(&json!({ "type": "user_message" })).is_none());
     }
 
     #[test]

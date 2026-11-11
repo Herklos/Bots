@@ -1,0 +1,88 @@
+{
+  "_note": "Reconstructed type=error items. ~/.t3/userdata/statev2.sqlite was not on the machine that added this file, so these payloads follow the observed field shapes rather than a live read. threadId, runId and providerThreadId are neutral. There is no user text. resetAt and timestamps are placeholders: the observation recorded that resetAt was set, not its value. The give-up message repeats the observed title \"Provider retry stopped\" because the failure text itself was not recorded. The in-progress transport retry's attempt count was not recorded, so attempt is 1 and its message is empty. No pure ETIMEDOUT item was observed. Transport retries were also seen with code \"unknown\" and with code null; this file keeps one representative, responseStreamDisconnected.",
+  "items": [
+    {
+      "id": "usage-limit-terminal",
+      "type": "error",
+      "title": "Usage limit reached",
+      "status": "failed",
+      "threadId": "thread-1",
+      "runId": "run-1",
+      "providerThreadId": "provider-thread-1",
+      "startedAt": "2026-11-11T12:00:00.000Z",
+      "failure": {
+        "class": "usage_limit",
+        "code": "api_error_429",
+        "message": "Claude API rate limit reached. Try again later.",
+        "retryable": false,
+        "resetAt": "2026-11-11T13:00:00.000Z"
+      }
+    },
+    {
+      "id": "usage-limit-retrying",
+      "type": "error",
+      "title": "Provider recovered",
+      "status": "completed",
+      "threadId": "thread-1",
+      "runId": "run-1",
+      "providerThreadId": "provider-thread-1",
+      "startedAt": "2026-11-11T12:01:00.000Z",
+      "failure": {
+        "class": "usage_limit",
+        "code": null,
+        "message": "HTTP 429",
+        "retryable": true,
+        "resetAt": null
+      },
+      "retry": {
+        "attempt": 1,
+        "maxAttempts": null,
+        "retryDelayMs": null
+      }
+    },
+    {
+      "id": "transport-retrying",
+      "type": "error",
+      "title": "Provider recovered",
+      "status": "completed",
+      "threadId": "thread-1",
+      "runId": "run-1",
+      "providerThreadId": "provider-thread-1",
+      "startedAt": "2026-11-11T12:02:00.000Z",
+      "failure": {
+        "class": "transport_error",
+        "code": "responseStreamDisconnected",
+        "message": "",
+        "retryable": true,
+        "resetAt": null
+      },
+      "retry": {
+        "attempt": 1,
+        "maxAttempts": null,
+        "retryDelayMs": null
+      }
+    },
+    {
+      "id": "transport-gave-up",
+      "type": "error",
+      "title": "Provider retry stopped",
+      "status": "failed",
+      "threadId": "thread-1",
+      "runId": "run-1",
+      "providerThreadId": "provider-thread-1",
+      "startedAt": "2026-11-11T12:03:00.000Z",
+      "failure": {
+        "class": "transport_error",
+        "code": null,
+        "message": "Provider retry stopped",
+        "retryable": false,
+        "resetAt": null
+      },
+      "retry": {
+        "attempt": 5,
+        "maxAttempts": 5,
+        "retryDelayMs": null
+      }
+    }
+  ]
+}

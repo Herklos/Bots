@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Improvements
+
+- Record a terminal provider failure on the thread transcript as a rate limit, a transport failure, or another provider error. A retry that is still in progress stays off the transcript.
+
 ## 0.2.0
 
 This release gives you more control over network access, notifications and group conversations, and makes browser interaction and updates easier.
