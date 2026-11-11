@@ -21,11 +21,20 @@ const CONTACT_FIELDS: &[&str] = &[
     "title", "label", "name", "street", "apt", "city", "state", "zip", "country", "kind", "hints",
 ];
 
-#[derive(Debug)]
 pub struct Vault {
     file: PathBuf,
     key_file: PathBuf,
     items: Mutex<Option<Vec<Value>>>,
+}
+
+impl std::fmt::Debug for Vault {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Vault")
+            .field("file", &self.file)
+            .field("key_file", &self.key_file)
+            .field("items", &"…")
+            .finish()
+    }
 }
 
 fn now() -> String {

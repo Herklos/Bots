@@ -15,7 +15,6 @@ pub(crate) const COOKIE: &str = "bot_session";
 const SESSION_MS: u128 = 30 * 24 * 3600 * 1000;
 const LOCKOUT: Duration = Duration::from_secs(15 * 60);
 
-#[derive(Debug)]
 pub struct Auth {
     secret: Mutex<String>,
     secret_path: PathBuf,
@@ -24,6 +23,19 @@ pub struct Auth {
     allowed_origins: Vec<String>,
     /// Fired by [`Auth::rotate`] so open sockets can close.
     pub close_sockets: Arc<tokio::sync::Notify>,
+}
+
+impl std::fmt::Debug for Auth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Auth")
+            .field("secret", &"…")
+            .field("secret_path", &self.secret_path)
+            .field("password", &"…")
+            .field("attempts", &self.attempts)
+            .field("allowed_origins", &self.allowed_origins)
+            .field("close_sockets", &self.close_sockets)
+            .finish()
+    }
 }
 
 pub(crate) fn safe_equal(a: &str, b: &str) -> bool {

@@ -304,12 +304,22 @@ impl T3Client {
 }
 
 /// One shared connection, reopened after T3 restarts.
-#[derive(Debug)]
 pub struct T3 {
     pub base_url: String,
     pub token: String,
     pub http: reqwest::Client,
     client: Mutex<Option<Arc<T3Client>>>,
+}
+
+impl std::fmt::Debug for T3 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("T3")
+            .field("base_url", &self.base_url)
+            .field("token", &"…")
+            .field("http", &self.http)
+            .field("client", &self.client)
+            .finish()
+    }
 }
 
 impl T3 {
