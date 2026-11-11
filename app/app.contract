@@ -2213,7 +2213,7 @@ component Bots
                           row padding="space.sm space.lg" gap="space.sm" align-items="center" testId="working"
                             Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="working", size=24, still=false)
                             row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working")
-                              WorkingDots
+                              WorkingDots()
                   if pending(sent) and lastText != ""
                     row justify-content="flex-end" padding="2px space.lg" testId="sending"
                       text lastText class=Bubble opacity=0.6 background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" max-width="82%"
@@ -2315,7 +2315,7 @@ component Bots
                               for m in workingMembers key=m.slug
                                 Face(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state="working", size=24, still=false)
                               row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working") testId="room-working-dots"
-                                WorkingDots
+                                WorkingDots()
                           else
                             row justify-content=(msg.from == "user" ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="1px 0" testId=`room-msg-${msg.id}`
                               if msg.from != "user"
