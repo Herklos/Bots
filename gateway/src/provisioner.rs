@@ -515,6 +515,7 @@ mod tests {
             roster: crate::roster::Roster::default(),
             providers: crate::providers::Providers::default(),
             rooms: crate::rooms::Rooms::new(app_dir.join("groups.json")),
+            room_working: std::sync::Mutex::new(crate::rooms::WorkingBook::default()),
             routine_history: crate::routines::RoutineHistory::new(
                 app_dir.join("routine-history.json"),
             ),

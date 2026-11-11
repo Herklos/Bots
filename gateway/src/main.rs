@@ -79,7 +79,12 @@ use axum::{
 };
 use error::{ApiError, ApiResult};
 use serde_json::{json, Value};
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
 #[derive(Debug)]
 pub struct AppState {
@@ -98,6 +103,9 @@ pub struct AppState {
     pub roster: roster::Roster,
     pub providers: providers::Providers,
     pub rooms: rooms::Rooms,
+    /// Last known working flag per group thread, and the short grace after a dispatch.
+    /// Not written to `groups.json`.
+    pub(crate) room_working: Mutex<rooms::WorkingBook>,
     pub routine_history: routines::RoutineHistory,
     pub system: release::System,
     pub icons: icons::Icons,
@@ -258,6 +266,7 @@ async fn main() -> anyhow::Result<()> {
         roster: roster::Roster::default(),
         providers: providers::Providers::default(),
         rooms: rooms::Rooms::new(app_dir.join("groups.json")),
+        room_working: Mutex::new(rooms::WorkingBook::default()),
         routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
         system: release::System::new(cfg.data_root.clone(), app_dir.clone()),
         icons: icons::Icons::new(cfg.data_root.join("icons")),
@@ -834,7 +843,27 @@ async fn access_tunnel(
 }
 
 async fn rooms_list(State(s): S) -> ApiResult<Json<Value>> {
-    let rooms: Vec<Value> = s.rooms.list().await?.iter().map(rooms::summary).collect();
+    let listed = s.rooms.list().await?;
+    let bots = s.bots.list().await?;
+    let mut prepared = Vec::with_capacity(listed.len());
+    for room in &listed {
+        prepared.push(room_members(&s, room, &bots, false).await?);
+    }
+    let threads = room_thread_ids(prepared.iter().flatten());
+    let reads = read_room_threads(&s, threads).await;
+    let now = Instant::now();
+    let mut book = s
+        .room_working
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let rooms: Vec<Value> = listed
+        .iter()
+        .zip(&prepared)
+        .map(|(room, members)| {
+            let working = working_slugs(members, &reads, &mut book, now);
+            rooms::summary(room, &working)
+        })
+        .collect();
     Ok(Json(json!({ "rooms": rooms })))
 }
 
@@ -974,9 +1003,61 @@ async fn dispatch_room(s: &AppState, dispatches: &[rooms::Dispatch]) -> ApiResul
             .await
             .map_err(|err| ApiError::new(502, err.to_string()))?;
         s.usage.note_for(&item.slug, usage::Event::Message).await;
+        {
+            let mut book = s
+                .room_working
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            book.note(&item.thread_id, Instant::now());
+        }
         sent.push(item.slug.clone());
     }
     Ok(sent)
+}
+
+fn room_thread_ids<'a>(members: impl Iterator<Item = &'a rooms::Member>) -> Vec<String> {
+    members
+        .filter(|member| !member.thread_id.is_empty())
+        .map(|member| member.thread_id.clone())
+        .collect()
+}
+
+fn working_slugs(
+    members: &[rooms::Member],
+    reads: &HashMap<String, (rooms::MemberProbe, Vec<Value>)>,
+    book: &mut rooms::WorkingBook,
+    now: Instant,
+) -> Vec<String> {
+    members
+        .iter()
+        .filter(|member| {
+            let probe = reads
+                .get(&member.thread_id)
+                .map(|(probe, _)| *probe)
+                .unwrap_or(rooms::MemberProbe::Failed);
+            !member.thread_id.is_empty() && book.decide(&member.thread_id, probe, now)
+        })
+        .map(|member| member.slug.clone())
+        .collect()
+}
+
+async fn read_room_threads(
+    s: &AppState,
+    thread_ids: Vec<String>,
+) -> HashMap<String, (rooms::MemberProbe, Vec<Value>)> {
+    let rpc = s.t3.rpc().await.ok();
+    rooms::read_group_threads(thread_ids, |thread| {
+        let rpc = rpc.clone();
+        async move {
+            let rpc = rpc.ok_or_else(|| anyhow::anyhow!("T3 unavailable"))?;
+            rpc.call(
+                "orchestration.getThreadProjection",
+                json!({ "threadId": thread }),
+            )
+            .await
+        }
+    })
+    .await
 }
 
 /// Member rows for a room, with each member's working flag, and each member's group thread messages.
@@ -993,11 +1074,49 @@ async fn room_snapshot(
     std::collections::HashMap<String, Vec<Value>>,
 )> {
     let bots = s.bots.list().await?;
+    let mut members = room_members(s, room, &bots, ensure).await?;
+    let reads = read_room_threads(s, room_thread_ids(members.iter())).await;
+    let now = Instant::now();
+    let mut book = s
+        .room_working
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut threads = std::collections::HashMap::new();
+    for member in &mut members {
+        if member.thread_id.is_empty() {
+            member.working = false;
+            continue;
+        }
+        if let Some((rooms::MemberProbe::Read { .. }, messages)) = reads.get(&member.thread_id) {
+            // This thread is the group, so the one-to-one filter would drop the anchor and the reply.
+            threads.insert(member.slug.clone(), messages.clone());
+        }
+        let probe = reads
+            .get(&member.thread_id)
+            .map(|(probe, _)| *probe)
+            .unwrap_or(rooms::MemberProbe::Failed);
+        member.working = book.decide(&member.thread_id, probe, now);
+    }
+    Ok((members, threads))
+}
+
+/// Seats for a room, before their projections are read. With `ensure`, a member who is set up
+/// but has no thread for this group gets one now. An empty id or the Bot's one-to-one thread
+/// counts as none. A failed launch stays empty.
+async fn room_members(
+    s: &AppState,
+    room: &Value,
+    bots: &[Value],
+    ensure: bool,
+) -> ApiResult<Vec<rooms::Member>> {
     let rpc = s.t3.rpc().await.ok();
     let room_id = room["id"].as_str().unwrap_or("").to_string();
-    let settings = s.settings().await;
+    let settings = if ensure {
+        s.settings().await
+    } else {
+        Value::Null
+    };
     let mut members = Vec::new();
-    let mut threads = std::collections::HashMap::new();
     for slug in string_list(&room["members"]) {
         let Some(bot) = bots
             .iter()
@@ -1039,38 +1158,15 @@ async fn room_snapshot(
                 }
             }
         }
-        let mut working = false;
-        if !thread.is_empty() {
-            if let Some(rpc) = &rpc {
-                if let Ok(projection) = rpc
-                    .call(
-                        "orchestration.getThreadProjection",
-                        json!({ "threadId": thread }),
-                    )
-                    .await
-                {
-                    // This thread is the group, so the one-to-one filter would drop the anchor and the reply.
-                    let transcript = chat::group_transcript(&projection);
-                    working = transcript["working"] == true;
-                    threads.insert(
-                        slug.clone(),
-                        transcript["messages"]
-                            .as_array()
-                            .cloned()
-                            .unwrap_or_default(),
-                    );
-                }
-            }
-        }
         members.push(rooms::Member {
             slug,
             title: bot["name"].as_str().unwrap_or("Bot").to_string(),
             thread_id: thread,
-            working,
+            working: false,
             provisioned,
         });
     }
-    Ok((members, threads))
+    Ok(members)
 }
 
 async fn thread_meta_get(State(s): S, Path(thread): Path<String>) -> ApiResult<Json<Value>> {
@@ -2717,6 +2813,7 @@ mod tests {
             roster: roster::Roster::default(),
             providers: providers::Providers::default(),
             rooms: rooms::Rooms::new(app_dir.join("groups.json")),
+            room_working: Mutex::new(rooms::WorkingBook::default()),
             routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
             icons: icons::Icons::new(dir.join("icons")),
             usage: usage::Usage::new(app_dir.join("usage.json")),

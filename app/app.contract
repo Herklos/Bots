@@ -954,6 +954,8 @@ component Bots
   state scrollRoute = ""
   // Group chat has no server row until room_send returns. This is that text, faded, in the log.
   state roomPending = ""
+  // Slugs kept for a moment after they stop, so the working row does not unmount between turns.
+  state heldSlugs: string[] = []
   state chatSearching = false
   state hiddenOpen = false
   state vaultQuery = ""
@@ -1089,7 +1091,9 @@ component Bots
   derive roomError = match roomSent { case some(r) => r.error, case none => "" }
   derive roomId = match stack(nav).filter(e => e.name == "group").at(-1) { case some(e) => e.params.id, case none => "" }
   derive workingMembers = room.members.filter(m => m.working)
-  derive roomRows = withRoomPending(withWorking(room.messages, workingMembers.length > 0), roomPending).map(m => roomLine(m))
+  derive workerKey = workingMembers.map(m => m.slug).join(",")
+  derive paintedWorkers = workingMembers.length > 0 ? workingMembers : room.members.filter(m => heldSlugs.filter(s => s == m.slug).length > 0)
+  derive roomRows = withRoomPending(withWorking(room.messages, paintedWorkers.length > 0), roomPending).map(m => roomLine(m))
   derive mentionPool = roomId != "" ? roomMentions(bots, room.members, t("group.everyone")) : botMentions(bots)
   derive mentionHits = mentionOn ? filterMentions(mentionPool, mentionQ) : []
   derive qtext = messageQuery.trim().toLowerCase()
@@ -1144,7 +1148,7 @@ component Bots
   derive activeReady = activePending != "" or ((onGroup ? not pending(roomSent) : not pending(sent)) and lastRowId != "")
   derive followKey = `${activeLastId}:${sendTick}`
   derive routeId = `${top(nav).name}:${slug}:${roomId}`
-  derive workingHere = onGroup ? (workingMembers.length > 0 ? "working" : "") : (onBot and chat.working ? "working" : "")
+  derive workingHere = onGroup ? (paintedWorkers.length > 0 ? "working" : "") : (onBot and chat.working ? "working" : "")
   derive onLibrary = top(nav).name == "chat" and panelOpen and panelTab == "library"
   derive onComputer = top(nav).name == "chat" and panelOpen and panelTab == "computer"
   derive detailGate = (onBot and slug != "") ? "1" : "0"
@@ -1247,6 +1251,23 @@ component Bots
       scrollIntoView("room-log", workingHere, block="end")
     else
       scrollIntoView("transcript", workingHere, block="end")
+
+  // Remember who is working, then drop that row shortly after the last one stops.
+  task catchWorkers when workerKey != "" key=workerKey
+    after(1, keepWorkers)
+
+  task releaseWorkers when roomId != "" and workerKey == "" and heldSlugs.length > 0
+    after(800, dropWorkers)
+
+  task leaveWorkers when roomId == "" and heldSlugs.length > 0
+    after(1, dropWorkers)
+
+  action keepWorkers()
+    heldSlugs = workingMembers.map(m => m.slug)
+
+  action dropWorkers()
+    if workingMembers.length == 0
+      heldSlugs = []
 
   action fitView
     let box = frame("app-shell")
@@ -2369,7 +2390,7 @@ component Bots
                       column
                         text m.name font="-exact-footnote" font-weight=600 testId=`member-${m.slug}-name`
                         text m.line color="ink.muted" font="-exact-caption2" testId=`member-${m.slug}-state`
-                if room.messages.length == 0 and workingMembers.length == 0 and roomPending == ""
+                if room.messages.length == 0 and paintedWorkers.length == 0 and roomPending == ""
                   column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="room-empty"
                     Faces(faces=memberFaces(bots, room.members), size=72, tuck=-28)
                     text t("group.emptyTitle") class=HeroTitle text-align="center"
@@ -2383,11 +2404,12 @@ component Bots
                       for msg in roomRows key=msg.id
                         column
                           if msg.kind == "working"
-                            row gap="space.sm" align-items="center" padding="1px 0" testId="room-working"
-                              for m in workingMembers key=m.slug
-                                Face(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state="working", size=24, still=false)
-                              row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working") testId="room-working-dots"
-                                WorkingDots()
+                            column gap="space.sm" padding="1px 0" testId="room-working"
+                              for m in paintedWorkers key=m.slug
+                                row gap="space.sm" align-items="center" testId=`room-working-${m.slug}`
+                                  Face(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state="working", size=24, still=false)
+                                  row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working") testId=`room-working-dots-${m.slug}`
+                                    WorkingDots()
                           else
                             row justify-content=(msg.mine ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="1px 0" testId=`room-msg-${msg.id}`
                               if not msg.mine
@@ -3058,13 +3080,13 @@ component Faces
         column width=size height=size border-radius="radius.full" border="2px dashed surface.line" background-color="surface.raised"
       if faces.length >= 1
         column z-index=1 flex-shrink=0 border="2px solid surface.canvas" border-radius="radius.full" background-color="surface.canvas"
-          Avatar(shape=bitShape(faces, 0), color=faceColor(bitColor(faces, 0)), state=bitState(faces, 0), size=size, still=true, presence="")
+          Avatar(shape=bitShape(faces, 0), color=faceColor(bitColor(faces, 0)), state=bitState(faces, 0), size=size, still=(bitState(faces, 0) != "working"), presence=(bitState(faces, 0) == "working" ? "online" : ""))
       if faces.length >= 2
         column z-index=2 flex-shrink=0 margin-left=tuck border="2px solid surface.canvas" border-radius="radius.full" background-color="surface.canvas"
-          Avatar(shape=bitShape(faces, 1), color=faceColor(bitColor(faces, 1)), state=bitState(faces, 1), size=size, still=true, presence="")
+          Avatar(shape=bitShape(faces, 1), color=faceColor(bitColor(faces, 1)), state=bitState(faces, 1), size=size, still=(bitState(faces, 1) != "working"), presence=(bitState(faces, 1) == "working" ? "online" : ""))
       if faces.length >= 3
         column z-index=3 flex-shrink=0 margin-left=tuck border="2px solid surface.canvas" border-radius="radius.full" background-color="surface.canvas"
-          Avatar(shape=bitShape(faces, 2), color=faceColor(bitColor(faces, 2)), state=bitState(faces, 2), size=size, still=true, presence="")
+          Avatar(shape=bitShape(faces, 2), color=faceColor(bitColor(faces, 2)), state=bitState(faces, 2), size=size, still=(bitState(faces, 2) != "working"), presence=(bitState(faces, 2) == "working" ? "online" : ""))
 
 // A Vault login's sheet. The password field starts empty: a saved password is shown only after Reveal.
 component LoginSheet
