@@ -5,11 +5,15 @@
 //! room. `notifications` is the mute switch: missing means on. Mute does not clear unread.
 //!
 //! A send is stored here, then dispatched to the members it wakes: everyone named with `@`,
-//! `@all` for everyone, a single plain name, otherwise whoever spoke last (everyone while no
-//! Bot has spoken). Each dispatch remembers the message id it created, its anchor. A sync reads
-//! each member's group thread and copies the replies after that anchor into the room. A reply
-//! that @-mentions another member can wake that member once ([`MAX_HOPS`]); a courtesy reply
-//! never wakes anyone.
+//! `@all` for everyone, a single plain name, otherwise the room's answer policy. `last` (the
+//! default, and what a room without the field does) wakes whoever spoke last, or everyone while
+//! no Bot has spoken. `everyone` wakes every member. `chief` wakes only the chief, and that
+//! dispatch carries the chief line. Each dispatch remembers the message id it created, its
+//! anchor. A sync reads each member's group thread and copies the replies after that anchor into
+//! the room. A reply that @-mentions another member can wake that member within the hop budget
+//! ([`max_hops`]: one for `last` and `everyone`, one less than the member count for `chief`). A
+//! courtesy reply never wakes anyone. `answerPolicy` and `chief` are optional. Missing fields are
+//! not filled in on disk.
 
 use crate::error::{ApiError, ApiResult};
 use serde_json::{json, Value};
@@ -20,6 +24,59 @@ use tokio::sync::Mutex;
 /// Bot-to-Bot wake-ups one message from the person can set off. One handoff is enough: a Bot
 /// can ask another once, and that answer lands in the room without starting a ping-pong.
 pub(crate) const MAX_HOPS: u64 = 1;
+
+/// Who answers a group message that does not name anyone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnswerPolicy {
+    Last,
+    Everyone,
+    Chief,
+}
+
+impl AnswerPolicy {
+    pub(crate) fn parse(raw: Option<&str>) -> Option<Self> {
+        match raw {
+            Some("last") => Some(Self::Last),
+            Some("everyone") => Some(Self::Everyone),
+            Some("chief") => Some(Self::Chief),
+            Some(_) | None => None,
+        }
+    }
+
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Last => "last",
+            Self::Everyone => "everyone",
+            Self::Chief => "chief",
+        }
+    }
+}
+
+/// Stored room policy, or the settings default when the field is missing or `"default"`.
+/// An unrecognised stored value behaves as `last`.
+pub(crate) fn resolve_policy(room: &Value, default: AnswerPolicy) -> AnswerPolicy {
+    match room["answerPolicy"].as_str() {
+        None | Some("default") => default,
+        Some(stored) => AnswerPolicy::parse(Some(stored)).unwrap_or(AnswerPolicy::Last),
+    }
+}
+
+/// The chief slug when it is still a member, otherwise the first member.
+pub(crate) fn effective_chief(room: &Value, members: &[Member]) -> Option<String> {
+    let stored = room["chief"].as_str().unwrap_or("");
+    if !stored.is_empty() && members.iter().any(|member| member.slug == stored) {
+        return Some(stored.to_string());
+    }
+    members.first().map(|member| member.slug.clone())
+}
+
+/// Bot-to-Bot wake-ups one message from the person can still set off.
+pub(crate) fn max_hops(policy: AnswerPolicy, members_len: usize) -> u64 {
+    match policy {
+        AnswerPolicy::Last | AnswerPolicy::Everyone => MAX_HOPS,
+        AnswerPolicy::Chief => u64::try_from(members_len.saturating_sub(1)).unwrap_or(0),
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct Member {
@@ -77,6 +134,10 @@ impl Rooms {
         Ok(rooms_of(&doc))
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "answerPolicy and chief are optional fields on the same create call"
+    )]
     pub async fn create(
         &self,
         title: &str,
@@ -85,6 +146,8 @@ impl Rooms {
         shape: &str,
         slugs: &[String],
         bots: &[Value],
+        answer_policy: Option<&str>,
+        chief: Option<&str>,
     ) -> ApiResult<Value> {
         let title = title.trim();
         if title.is_empty() {
@@ -101,9 +164,25 @@ impl Rooms {
         }
         // `bots` is the list `Bots::list` already loaded. A subagent is not a second store.
         refuse_subagent(&slugs, bots)?;
+        let answer_policy = answer_policy
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        if let Some(policy) = answer_policy {
+            if !matches!(policy, "default" | "last" | "everyone" | "chief") {
+                return Err(ApiError::bad_request(
+                    "answerPolicy must be default, last, everyone, or chief",
+                ));
+            }
+        }
+        let chief = chief.map(str::trim).filter(|value| !value.is_empty());
+        if let Some(slug) = chief {
+            if !slugs.iter().any(|member| member == slug) {
+                return Err(ApiError::bad_request("chief must be a member"));
+            }
+        }
         let _g = self.lock.lock().await;
         let mut doc = read_doc(&self.path).await?;
-        let room = json!({
+        let mut room = json!({
             "id": uuid::Uuid::new_v4().to_string(),
             "title": title,
             "description": description.trim(),
@@ -116,6 +195,12 @@ impl Rooms {
             "hops": 0,
             "notifications": true,
         });
+        if let Some(policy) = answer_policy {
+            room["answerPolicy"] = json!(policy);
+        }
+        if let Some(slug) = chief {
+            room["chief"] = json!(slug);
+        }
         push_room(&mut doc, room.clone())?;
         write_doc(&self.path, &doc).await?;
         Ok(room)
@@ -168,6 +253,29 @@ impl Rooms {
         }
         if let Some(list) = replacement {
             room["members"] = json!(list);
+            let chief = room["chief"].as_str().unwrap_or("");
+            if !chief.is_empty() && !list.iter().any(|slug| slug == chief) {
+                room.as_object_mut().map(|object| object.remove("chief"));
+            }
+        }
+        if let Some(value) = patch.get("answerPolicy") {
+            let policy = value.as_str().unwrap_or("");
+            if !matches!(policy, "default" | "last" | "everyone" | "chief") {
+                return Err(ApiError::bad_request(
+                    "answerPolicy must be default, last, everyone, or chief",
+                ));
+            }
+            room["answerPolicy"] = json!(policy);
+        }
+        if let Some(value) = patch.get("chief") {
+            let chief = value.as_str().unwrap_or("").trim();
+            if chief.is_empty() {
+                room.as_object_mut().map(|object| object.remove("chief"));
+            } else if member_slugs(room).iter().any(|slug| slug == chief) {
+                room["chief"] = json!(chief);
+            } else {
+                return Err(ApiError::bad_request("chief must be a member"));
+            }
         }
         if let Some(value) = patch.get("notifications") {
             let on = value
@@ -232,6 +340,7 @@ impl Rooms {
         text: &str,
         id: &str,
         at: &str,
+        effective_default: AnswerPolicy,
     ) -> ApiResult<(Value, Vec<Dispatch>)> {
         let text = text.trim();
         if text.is_empty() {
@@ -242,9 +351,21 @@ impl Rooms {
         let room = room_mut(&mut doc, room_id)?;
         let members = resolve(member_slugs(room), directory);
         let last = last_responder(room);
-        let chosen = plan_dispatches(&members, text, last.as_deref());
+        let policy = resolve_policy(room, effective_default);
+        let chief = effective_chief(room, &members);
+        let chosen = plan_dispatches(&members, text, last.as_deref(), policy, chief.as_deref());
         let title = room["title"].as_str().unwrap_or("").to_string();
-        let dispatches = frame(&title, &members, "You", text, targets(&members, &chosen));
+        let chief_line = (policy == AnswerPolicy::Chief)
+            .then_some(chief.as_deref())
+            .flatten();
+        let dispatches = frame(
+            &title,
+            &members,
+            "You",
+            text,
+            targets(&members, &chosen),
+            chief_line,
+        );
         push_message(room, &message(id, at, "user", "You", text))?;
         room["hops"] = json!(0);
         anchor_all(room, &dispatches);
@@ -286,11 +407,18 @@ impl Rooms {
         room_id: &str,
         directory: &[Member],
         threads: &HashMap<String, Vec<Value>>,
+        effective_default: AnswerPolicy,
     ) -> ApiResult<(Value, Vec<Dispatch>)> {
         let _g = self.lock.lock().await;
         let mut doc = read_doc(&self.path).await?;
         let room = room_mut(&mut doc, room_id)?;
         let members = resolve(member_slugs(room), directory);
+        let policy = resolve_policy(room, effective_default);
+        let budget = max_hops(policy, members.len());
+        let chief = effective_chief(room, &members);
+        let chief_line = (policy == AnswerPolicy::Chief)
+            .then_some(chief.as_deref())
+            .flatten();
         let title = room["title"].as_str().unwrap_or("").to_string();
         let mut wake: Vec<Dispatch> = Vec::new();
         let mut changed = false;
@@ -330,7 +458,7 @@ impl Rooms {
                     continue;
                 }
                 let hops = room["hops"].as_u64().unwrap_or(0);
-                if hops >= MAX_HOPS {
+                if hops >= budget {
                     continue;
                 }
                 let others: Vec<Member> = members
@@ -340,12 +468,12 @@ impl Rooms {
                     .collect();
                 let named = mentioned(&others, text);
                 let mut chosen = targets(&others, &named);
-                chosen.truncate(usize::try_from(MAX_HOPS - hops).unwrap_or(0));
+                chosen.truncate(usize::try_from(budget - hops).unwrap_or(0));
                 if chosen.is_empty() {
                     continue;
                 }
                 room["hops"] = json!(hops + u64::try_from(chosen.len()).unwrap_or(0));
-                let framed = frame(&title, &members, &member.title, text, chosen);
+                let framed = frame(&title, &members, &member.title, text, chosen, chief_line);
                 anchor_all(room, &framed);
                 wake.extend(framed);
                 changed = true;
@@ -414,7 +542,13 @@ fn last_responder(room: &Value) -> Option<String> {
 }
 
 /// Who a message from the person wakes, as indexes into `members`.
-pub(crate) fn plan_dispatches(members: &[Member], text: &str, last: Option<&str>) -> Vec<usize> {
+pub(crate) fn plan_dispatches(
+    members: &[Member],
+    text: &str,
+    last: Option<&str>,
+    policy: AnswerPolicy,
+    chief: Option<&str>,
+) -> Vec<usize> {
     if wants_everyone(text) {
         return (0..members.len()).collect();
     }
@@ -425,6 +559,23 @@ pub(crate) fn plan_dispatches(members: &[Member], text: &str, last: Option<&str>
     if let Some(index) = named_one(members, text) {
         return vec![index];
     }
+    match policy {
+        AnswerPolicy::Last => last_or_everyone(members, last),
+        AnswerPolicy::Everyone => (0..members.len()).collect(),
+        AnswerPolicy::Chief => {
+            if let Some(index) = chief.and_then(|slug| members.iter().position(|m| m.slug == slug))
+            {
+                let member = &members[index];
+                if member.provisioned && !member.thread_id.is_empty() {
+                    return vec![index];
+                }
+            }
+            last_or_everyone(members, last)
+        }
+    }
+}
+
+fn last_or_everyone(members: &[Member], last: Option<&str>) -> Vec<usize> {
     if let Some(index) = last.and_then(|slug| members.iter().position(|m| m.slug == slug)) {
         return vec![index];
     }
@@ -449,6 +600,7 @@ fn frame(
     from: &str,
     text: &str,
     targets: Vec<(String, String)>,
+    chief: Option<&str>,
 ) -> Vec<Dispatch> {
     let names = members
         .iter()
@@ -462,13 +614,20 @@ fn frame(
         .join(", ");
     targets
         .into_iter()
-        .map(|(slug, thread_id)| Dispatch {
-            slug,
-            thread_id,
-            message_id: uuid::Uuid::new_v4().to_string(),
-            text: format!(
-                "[Group \"{title}\": {names}. {from} wrote:]\n{text}\n\n[Your reply is shared with the group. To ask one member for something, write @ and their slug ({slugs}). Do not mention anyone to agree, thank, or acknowledge.]"
-            ),
+        .map(|(slug, thread_id)| {
+            let chief_line = if chief == Some(slug.as_str()) {
+                " You are the group chief. Answer first, and bring in members with @slug only when you need them."
+            } else {
+                ""
+            };
+            Dispatch {
+                slug,
+                thread_id,
+                message_id: uuid::Uuid::new_v4().to_string(),
+                text: format!(
+                    "[Group \"{title}\": {names}. {from} wrote:]{chief_line}\n{text}\n\n[Your reply is shared with the group. To ask one member for something, write @ and their slug ({slugs}). Do not mention anyone to agree, thank, or acknowledge.]"
+                ),
+            }
         })
         .collect()
 }
@@ -589,8 +748,14 @@ pub(crate) fn mentioned(members: &[Member], text: &str) -> Vec<usize> {
         .collect()
 }
 
-pub(crate) fn present(room: &Value, directory: &[Member]) -> Value {
+pub(crate) fn present(room: &Value, directory: &[Member], default: AnswerPolicy) -> Value {
     let members = resolve(member_slugs(room), directory);
+    let stored = room["answerPolicy"].as_str().unwrap_or("default");
+    let stored = if matches!(stored, "default" | "last" | "everyone" | "chief") {
+        stored
+    } else {
+        "default"
+    };
     json!({
         "id": room["id"],
         "title": room["title"],
@@ -600,6 +765,9 @@ pub(crate) fn present(room: &Value, directory: &[Member]) -> Value {
         "members": members.iter().map(member_row).collect::<Vec<_>>(),
         "messages": room["messages"].as_array().cloned().unwrap_or_default(),
         "notifications": notifications_on(room),
+        "answerPolicy": stored,
+        "answerPolicyEffective": resolve_policy(room, default).as_str(),
+        "chief": room["chief"].as_str().filter(|slug| !slug.is_empty()),
     })
 }
 
@@ -834,14 +1002,30 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let created = rooms
-            .create("Design", "", "", "", &["ada".into(), "bea".into()], &[])
+            .create(
+                "Design",
+                "",
+                "",
+                "",
+                &["ada".into(), "bea".into()],
+                &[],
+                None,
+                None,
+            )
             .await
             .unwrap();
         let id = created["id"].as_str().unwrap().to_string();
         assert!(!rooms.list().await.unwrap().is_empty());
 
         let (stored, dispatches) = rooms
-            .send(&id, &directory(), "hello both", "m1", "t1")
+            .send(
+                &id,
+                &directory(),
+                "hello both",
+                "m1",
+                "t1",
+                AnswerPolicy::Last,
+            )
             .await
             .unwrap();
         assert_eq!(stored["messages"].as_array().unwrap().len(), 1);
@@ -870,7 +1054,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = rooms
-            .create("Design", "", "", "", &["ada".into(), "bea".into()], &[])
+            .create(
+                "Design",
+                "",
+                "",
+                "",
+                &["ada".into(), "bea".into()],
+                &[],
+                None,
+                None,
+            )
             .await
             .unwrap()["id"]
             .as_str()
@@ -878,7 +1071,14 @@ mod tests {
             .to_string();
 
         let (_, by_slug) = rooms
-            .send(&id, &directory(), "ada please look", "m2", "t2")
+            .send(
+                &id,
+                &directory(),
+                "ada please look",
+                "m2",
+                "t2",
+                AnswerPolicy::Last,
+            )
             .await
             .unwrap();
         assert_eq!(by_slug.len(), 1);
@@ -886,7 +1086,14 @@ mod tests {
         assert_eq!(by_slug[0].thread_id, "thread-ada");
 
         let (stored, by_title) = rooms
-            .send(&id, &directory(), "ask Bea about it", "m3", "t3")
+            .send(
+                &id,
+                &directory(),
+                "ask Bea about it",
+                "m3",
+                "t3",
+                AnswerPolicy::Last,
+            )
             .await
             .unwrap();
         assert_eq!(by_title.len(), 1);
@@ -894,7 +1101,14 @@ mod tests {
         assert_eq!(stored["messages"].as_array().unwrap().len(), 2);
 
         let (_, both_named) = rooms
-            .send(&id, &directory(), "Ada and Bea", "m4", "t4")
+            .send(
+                &id,
+                &directory(),
+                "Ada and Bea",
+                "m4",
+                "t4",
+                AnswerPolicy::Last,
+            )
             .await
             .unwrap();
         assert_eq!(both_named.len(), 2);
@@ -905,7 +1119,16 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = rooms
-            .create("Design", "", "", "", &["ada".into(), "bea".into()], &[])
+            .create(
+                "Design",
+                "",
+                "",
+                "",
+                &["ada".into(), "bea".into()],
+                &[],
+                None,
+                None,
+            )
             .await
             .unwrap()["id"]
             .as_str()
@@ -928,7 +1151,7 @@ mod tests {
             },
         ];
         let (_, dispatches) = rooms
-            .send(&id, &members, "hello", "m1", "t1")
+            .send(&id, &members, "hello", "m1", "t1", AnswerPolicy::Last)
             .await
             .unwrap();
         assert_eq!(dispatches.len(), 1);
@@ -953,7 +1176,7 @@ mod tests {
         assert_eq!(messages[2]["name"], "Bea");
         assert_eq!(messages[2]["text"], "I am still starting");
 
-        let view = present(&stored, &members);
+        let view = present(&stored, &members, AnswerPolicy::Last);
         assert_eq!(view["members"][0]["name"], "Ada");
         assert_eq!(view["members"][0]["line"], "Working");
         assert_eq!(view["members"][0]["state"], "working");
@@ -984,6 +1207,8 @@ mod tests {
                 "hex",
                 &["ada".into(), "bea".into(), "cy".into()],
                 &[],
+                None,
+                None,
             )
             .await
             .unwrap()["id"]
@@ -1014,6 +1239,8 @@ mod tests {
                 "not-a-shape",
                 &["ada".into(), "bea".into()],
                 &[],
+                None,
+                None,
             )
             .await
             .unwrap();
@@ -1030,6 +1257,8 @@ mod tests {
                 "egg",
                 &["ada".into(), "bea".into()],
                 &[],
+                None,
+                None,
             )
             .await
             .unwrap();
@@ -1038,7 +1267,7 @@ mod tests {
             "the app's own colour names are kept"
         );
 
-        let view = present(&room, &trio());
+        let view = present(&room, &trio(), AnswerPolicy::Last);
         assert_eq!(view["description"], "Plans the week");
         assert_eq!(view["shape"], "hex");
         let row = summary(&room);
@@ -1055,13 +1284,25 @@ mod tests {
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let ada = vec!["ada".to_string()];
         assert!(rooms
-            .create(" ", "", "", "", &["ada".into(), "bea".into()], &[])
+            .create(
+                " ",
+                "",
+                "",
+                "",
+                &["ada".into(), "bea".into()],
+                &[],
+                None,
+                None
+            )
             .await
             .is_err());
-        assert!(rooms.create("Solo", "", "", "", &ada, &[]).await.is_err());
+        assert!(rooms
+            .create("Solo", "", "", "", &ada, &[], None, None)
+            .await
+            .is_err());
         let twice = vec!["ada".to_string(), "ada".to_string()];
         let err = rooms
-            .create("Twin", "", "", "", &twice, &[])
+            .create("Twin", "", "", "", &twice, &[], None, None)
             .await
             .unwrap_err();
         assert_eq!(
@@ -1075,7 +1316,10 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
-        rooms.send(&id, &trio(), "hello", "m1", "t1").await.unwrap();
+        rooms
+            .send(&id, &trio(), "hello", "m1", "t1", AnswerPolicy::Last)
+            .await
+            .unwrap();
         let updated = rooms
             .update(&id, &json!({ "title": "Crew", "description": "", "color": "red", "members": ["ada", "cy"] }), &[])
             .await
@@ -1133,7 +1377,10 @@ mod tests {
         assert_eq!(row["unread"], false, "an old room is not unread");
         assert_eq!(row["notifications"], true, "a missing key stays on");
         assert_eq!(row["last"]["from"], "ada");
-        assert_eq!(present(&listed[0], &[])["notifications"], true);
+        assert_eq!(
+            present(&listed[0], &[], AnswerPolicy::Last)["notifications"],
+            true
+        );
         let again = rooms.list().await.unwrap();
         assert_eq!(
             again[0]["lastSeenAt"],
@@ -1142,7 +1389,16 @@ mod tests {
         );
 
         let created = rooms
-            .create("Design", "", "", "", &["ada".into(), "bea".into()], &[])
+            .create(
+                "Design",
+                "",
+                "",
+                "",
+                &["ada".into(), "bea".into()],
+                &[],
+                None,
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(created["notifications"], true);
@@ -1161,7 +1417,14 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         let user_at = crate::vault::now_iso();
         rooms
-            .send("room-1", &directory(), "mine", "m2", &user_at)
+            .send(
+                "room-1",
+                &directory(),
+                "mine",
+                "m2",
+                &user_at,
+                AnswerPolicy::Last,
+            )
             .await
             .unwrap();
         let after_user = rooms.get("room-1").await.unwrap();
@@ -1182,7 +1445,10 @@ mod tests {
         let muted_row = summary(&muted);
         assert_eq!(muted_row["unread"], true, "mute does not clear the dot");
         assert_eq!(muted_row["notifications"], false);
-        assert_eq!(present(&muted, &[])["notifications"], false);
+        assert_eq!(
+            present(&muted, &[], AnswerPolicy::Last)["notifications"],
+            false
+        );
         let err = rooms
             .update("room-1", &json!({ "notifications": "no" }), &[])
             .await
@@ -1237,6 +1503,8 @@ mod tests {
                 "",
                 &[ada_slug.clone(), kid_slug.clone()],
                 &loaded,
+                None,
+                None,
             )
             .await
             .unwrap_err();
@@ -1253,6 +1521,8 @@ mod tests {
                 "",
                 &[ada_slug.clone(), bea_slug.clone()],
                 &loaded,
+                None,
+                None,
             )
             .await
             .unwrap_err();
@@ -1273,6 +1543,8 @@ mod tests {
                 "",
                 &[ada_slug.clone(), bea_slug.clone()],
                 &loaded,
+                None,
+                None,
             )
             .await
             .unwrap();
@@ -1325,28 +1597,46 @@ mod tests {
     fn mentions_pick_members_by_slug_or_name_and_all_wakes_everyone() {
         let m = trio();
         assert_eq!(
-            plan_dispatches(&m, "@ada and @bea please look", None),
+            plan_dispatches(
+                &m,
+                "@ada and @bea please look",
+                None,
+                AnswerPolicy::Last,
+                None
+            ),
             vec![0, 1]
         );
         assert_eq!(
-            plan_dispatches(&m, "@cypark can you check", None),
+            plan_dispatches(&m, "@cypark can you check", None, AnswerPolicy::Last, None),
             vec![2],
             "a name without spaces"
         );
         assert_eq!(
-            plan_dispatches(&m, "@Cy hi", None),
+            plan_dispatches(&m, "@Cy hi", None, AnswerPolicy::Last, None),
             vec![2],
             "case does not matter"
         );
-        assert_eq!(plan_dispatches(&m, "@all stand up", None), vec![0, 1, 2]);
-        assert_eq!(plan_dispatches(&m, "@everyone", None), vec![0, 1, 2]);
         assert_eq!(
-            plan_dispatches(&m, "mail me at joe@example.com", None),
+            plan_dispatches(&m, "@all stand up", None, AnswerPolicy::Last, None),
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            plan_dispatches(&m, "@everyone", None, AnswerPolicy::Last, None),
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            plan_dispatches(
+                &m,
+                "mail me at joe@example.com",
+                None,
+                AnswerPolicy::Last,
+                None
+            ),
             vec![0, 1, 2],
             "an address is not a mention"
         );
         assert_eq!(
-            plan_dispatches(&m, "hello", None),
+            plan_dispatches(&m, "hello", None, AnswerPolicy::Last, None),
             vec![0, 1, 2],
             "nobody has spoken yet"
         );
@@ -1355,14 +1645,17 @@ mod tests {
     #[test]
     fn without_a_mention_the_last_speaker_answers() {
         let m = trio();
-        assert_eq!(plan_dispatches(&m, "and then?", Some("bea")), vec![1]);
         assert_eq!(
-            plan_dispatches(&m, "@ada and then?", Some("bea")),
+            plan_dispatches(&m, "and then?", Some("bea"), AnswerPolicy::Last, None),
+            vec![1]
+        );
+        assert_eq!(
+            plan_dispatches(&m, "@ada and then?", Some("bea"), AnswerPolicy::Last, None),
             vec![0],
             "a mention beats the last speaker"
         );
         assert_eq!(
-            plan_dispatches(&m, "and then?", Some("gone")),
+            plan_dispatches(&m, "and then?", Some("gone"), AnswerPolicy::Last, None),
             vec![0, 1, 2]
         );
     }
@@ -1373,7 +1666,14 @@ mod tests {
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
         let (_, woken) = rooms
-            .send(&id, &trio(), "@bea draft the plan", "m1", "t1")
+            .send(
+                &id,
+                &trio(),
+                "@bea draft the plan",
+                "m1",
+                "t1",
+                AnswerPolicy::Last,
+            )
             .await
             .unwrap();
         assert_eq!(slugs(&woken), vec!["bea"]);
@@ -1409,7 +1709,7 @@ mod tests {
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
         let (_, woken) = rooms
-            .send(&id, &trio(), "@ada hello", "m1", "t1")
+            .send(&id, &trio(), "@ada hello", "m1", "t1", AnswerPolicy::Last)
             .await
             .unwrap();
         let anchor = woken[0].message_id.clone();
@@ -1422,14 +1722,20 @@ mod tests {
             ),
         );
 
-        let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        let (room, wake) = rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
         assert!(wake.is_empty());
         let messages = room["messages"].as_array().unwrap();
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[1]["from"], "ada");
         assert_eq!(messages[1]["text"], "Hi there");
 
-        let (again, _) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        let (again, _) = rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
         assert_eq!(
             again["messages"].as_array().unwrap().len(),
             2,
@@ -1443,7 +1749,10 @@ mod tests {
                 &[("a1", "Hi there", false), ("a2", "Done typing", false)],
             ),
         );
-        let (done, _) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        let (done, _) = rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
         assert_eq!(done["messages"].as_array().unwrap().len(), 3);
     }
 
@@ -1453,7 +1762,7 @@ mod tests {
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
         rooms
-            .send(&id, &trio(), "@ada hello", "m1", "t1")
+            .send(&id, &trio(), "@ada hello", "m1", "t1", AnswerPolicy::Last)
             .await
             .unwrap();
         let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
@@ -1464,7 +1773,10 @@ mod tests {
                 json!({ "id": "other", "role": "user", "text": "Not our message", "streaming": false }),
             ],
         );
-        let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        let (room, wake) = rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
         assert_eq!(
             room["messages"].as_array().unwrap().len(),
             1,
@@ -1479,7 +1791,7 @@ mod tests {
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
         let (_, woken) = rooms
-            .send(&id, &trio(), "@ada hello", "m1", "t1")
+            .send(&id, &trio(), "@ada hello", "m1", "t1", AnswerPolicy::Last)
             .await
             .unwrap();
         let anchor = format!("turn-item:message:{}", woken[0].message_id);
@@ -1493,7 +1805,10 @@ mod tests {
                 json!({ "id": "turn-item:provider:x:new", "role": "bot", "text": "fresh reply", "streaming": false, "at": "a2" }),
             ],
         );
-        let (room, _) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        let (room, _) = rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
         let texts: Vec<&str> = room["messages"]
             .as_array()
             .unwrap()
@@ -1513,7 +1828,14 @@ mod tests {
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
         let (_, woken) = rooms
-            .send(&id, &trio(), "@ada ask Cy for numbers", "m1", "t1")
+            .send(
+                &id,
+                &trio(),
+                "@ada ask Cy for numbers",
+                "m1",
+                "t1",
+                AnswerPolicy::Last,
+            )
             .await
             .unwrap();
         let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
@@ -1524,7 +1846,10 @@ mod tests {
                 &[("a1", "@cy what are this week's numbers?", false)],
             ),
         );
-        let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        let (room, wake) = rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
         assert_eq!(slugs(&wake), vec!["cy"], "Bea stays asleep");
         assert!(wake[0].text.contains("Ada wrote:"));
         assert_eq!(room["hops"], 1);
@@ -1534,7 +1859,10 @@ mod tests {
             "cy".into(),
             thread(&wake[0].message_id, &[("c1", "@ada 42 units", false)]),
         );
-        let (room, back) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        let (room, back) = rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
         assert!(back.is_empty(), "an answer does not start another turn");
         assert!(
             room["messages"]
@@ -1552,7 +1880,7 @@ mod tests {
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = trio_room(&rooms).await;
         let (_, woken) = rooms
-            .send(&id, &trio(), "@ada start", "m1", "t1")
+            .send(&id, &trio(), "@ada start", "m1", "t1", AnswerPolicy::Last)
             .await
             .unwrap();
         let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
@@ -1560,7 +1888,10 @@ mod tests {
             "ada".into(),
             thread(&woken[0].message_id, &[("a1", "thanks @bea, on it", false)]),
         );
-        let (room, wake) = rooms.sync(&id, &trio(), &threads).await.unwrap();
+        let (room, wake) = rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
         assert!(wake.is_empty(), "a thank-you must not start another turn");
         assert_eq!(room["hops"], 0, "courtesy does not spend the hop budget");
         assert!(room["messages"]
@@ -1575,14 +1906,30 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let rooms = Rooms::new(dir.path().join("groups.json"));
         let id = rooms
-            .create("Pair", "", "", "", &["ada".into(), "bea".into()], &[])
+            .create(
+                "Pair",
+                "",
+                "",
+                "",
+                &["ada".into(), "bea".into()],
+                &[],
+                None,
+                None,
+            )
             .await
             .unwrap()["id"]
             .as_str()
             .unwrap()
             .to_string();
         let (_, mut woken) = rooms
-            .send(&id, &directory(), "@ada start", "m1", "t1")
+            .send(
+                &id,
+                &directory(),
+                "@ada start",
+                "m1",
+                "t1",
+                AnswerPolicy::Last,
+            )
             .await
             .unwrap();
         let mut turns = 0;
@@ -1601,7 +1948,10 @@ mod tests {
                 next.slug.clone(),
                 thread(&next.message_id, &[(&format!("r{counter}"), other, false)]),
             );
-            let (_, wake) = rooms.sync(&id, &directory(), &threads).await.unwrap();
+            let (_, wake) = rooms
+                .sync(&id, &directory(), &threads, AnswerPolicy::Last)
+                .await
+                .unwrap();
             woken.extend(wake);
         }
         assert_eq!(
@@ -1612,10 +1962,293 @@ mod tests {
         let room = rooms.get(&id).await.unwrap();
         // A new message from the person resets the budget.
         rooms
-            .send(&id, &directory(), "@bea again", "m2", "t9")
+            .send(
+                &id,
+                &directory(),
+                "@bea again",
+                "m2",
+                "t9",
+                AnswerPolicy::Last,
+            )
             .await
             .unwrap();
         assert_eq!(rooms.get(&id).await.unwrap()["hops"], 0);
         assert!(room["messages"].as_array().unwrap().len() > 1);
+    }
+
+    #[test]
+    fn each_policy_picks_who_answers_and_an_explicit_name_still_wins() {
+        let m = trio();
+        assert_eq!(
+            plan_dispatches(&m, "hello", None, AnswerPolicy::Everyone, Some("bea")),
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            plan_dispatches(&m, "hello", Some("cy"), AnswerPolicy::Last, Some("bea")),
+            vec![2]
+        );
+        assert_eq!(
+            plan_dispatches(&m, "hello", Some("cy"), AnswerPolicy::Chief, Some("bea")),
+            vec![1],
+            "the chief answers when nobody is named"
+        );
+        assert_eq!(
+            plan_dispatches(
+                &m,
+                "@ada hello",
+                Some("cy"),
+                AnswerPolicy::Chief,
+                Some("bea")
+            ),
+            vec![0],
+            "an @mention beats the policy"
+        );
+        assert_eq!(
+            plan_dispatches(&m, "@all hello", None, AnswerPolicy::Chief, Some("bea")),
+            vec![0, 1, 2]
+        );
+        assert_eq!(
+            plan_dispatches(&m, "ask Ada", None, AnswerPolicy::Everyone, Some("bea")),
+            vec![0],
+            "a single plain name beats the policy"
+        );
+    }
+
+    #[test]
+    fn a_chief_who_cannot_answer_falls_back_to_the_last_speaker_then_everyone() {
+        let mut quiet = trio();
+        quiet[1].thread_id.clear();
+        quiet[1].provisioned = false;
+        assert_eq!(
+            plan_dispatches(
+                &quiet,
+                "hello",
+                Some("cy"),
+                AnswerPolicy::Chief,
+                Some("bea")
+            ),
+            vec![2],
+            "the last speaker answers when the chief has no thread"
+        );
+        assert_eq!(
+            plan_dispatches(&quiet, "hello", None, AnswerPolicy::Chief, Some("bea")),
+            vec![0, 1, 2],
+            "everyone answers when the chief cannot and nobody has spoken"
+        );
+        assert_eq!(max_hops(AnswerPolicy::Last, 3), MAX_HOPS);
+        assert_eq!(max_hops(AnswerPolicy::Everyone, 3), MAX_HOPS);
+        assert_eq!(max_hops(AnswerPolicy::Chief, 3), 2);
+    }
+
+    #[test]
+    fn the_effective_chief_is_the_stored_member_or_the_first() {
+        let room = json!({ "members": ["ada", "bea", "cy"], "chief": "cy" });
+        assert_eq!(effective_chief(&room, &trio()).as_deref(), Some("cy"));
+        let dropped = json!({ "members": ["ada", "bea"], "chief": "gone" });
+        assert_eq!(
+            effective_chief(&dropped, &directory()).as_deref(),
+            Some("ada")
+        );
+        let missing = json!({ "members": ["ada", "bea"] });
+        assert_eq!(
+            effective_chief(&missing, &directory()).as_deref(),
+            Some("ada")
+        );
+    }
+
+    #[tokio::test]
+    async fn chief_mode_frames_only_the_chief_and_allows_a_longer_handoff() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = rooms
+            .create(
+                "Team",
+                "",
+                "",
+                "",
+                &["ada".into(), "bea".into(), "cy".into()],
+                &[],
+                Some("chief"),
+                Some("bea"),
+            )
+            .await
+            .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        let (_, woken) = rooms
+            .send(&id, &trio(), "hello", "m1", "t1", AnswerPolicy::Last)
+            .await
+            .unwrap();
+        assert_eq!(slugs(&woken), vec!["bea"]);
+        assert!(
+            woken[0].text.contains(
+                "You are the group chief. Answer first, and bring in members with @slug only when you need them."
+            )
+        );
+
+        let mut threads: HashMap<String, Vec<Value>> = HashMap::new();
+        threads.insert(
+            "bea".into(),
+            thread(&woken[0].message_id, &[("b1", "@ada take this", false)]),
+        );
+        let (_, to_ada) = rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
+        assert_eq!(slugs(&to_ada), vec!["ada"]);
+        assert!(
+            !to_ada[0].text.contains("You are the group chief"),
+            "a member the chief brings in is not the chief"
+        );
+        threads.insert(
+            "ada".into(),
+            thread(&to_ada[0].message_id, &[("a1", "@cy and this", false)]),
+        );
+        let (_, to_cy) = rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
+        assert_eq!(
+            slugs(&to_cy),
+            vec!["cy"],
+            "the second handoff is still inside the budget"
+        );
+        threads.insert(
+            "cy".into(),
+            thread(&to_cy[0].message_id, &[("c1", "@bea done", false)]),
+        );
+        let (room, back) = rooms
+            .sync(&id, &trio(), &threads, AnswerPolicy::Last)
+            .await
+            .unwrap();
+        assert!(back.is_empty(), "the budget is members_len - 1");
+        assert_eq!(room["hops"], 2);
+    }
+
+    #[tokio::test]
+    async fn a_room_without_the_new_fields_stays_on_last_and_a_group_override_beats_the_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("groups.json");
+        let rooms = Rooms::new(path);
+        let id = trio_room(&rooms).await;
+        let stored = rooms.get(&id).await.unwrap();
+        assert!(stored.get("answerPolicy").is_none());
+        assert!(stored.get("chief").is_none());
+        let view = present(&stored, &trio(), AnswerPolicy::Everyone);
+        assert_eq!(view["answerPolicy"], "default");
+        assert_eq!(view["answerPolicyEffective"], "everyone");
+        assert_eq!(view["chief"], Value::Null);
+
+        let (_, woken) = rooms
+            .send(&id, &trio(), "hello", "m1", "t1", AnswerPolicy::Last)
+            .await
+            .unwrap();
+        assert_eq!(slugs(&woken), vec!["ada", "bea", "cy"]);
+        rooms
+            .reply(&id, "ada", "Ada", "noted", "r1", "t1b")
+            .await
+            .unwrap();
+
+        let updated = rooms
+            .update(
+                &id,
+                &json!({ "answerPolicy": "everyone", "chief": "cy" }),
+                &[],
+            )
+            .await
+            .unwrap();
+        let view = present(&updated, &trio(), AnswerPolicy::Last);
+        assert_eq!(view["answerPolicy"], "everyone");
+        assert_eq!(view["answerPolicyEffective"], "everyone");
+        assert_eq!(view["chief"], "cy");
+        let (_, all) = rooms
+            .send(&id, &trio(), "again", "m2", "t2", AnswerPolicy::Last)
+            .await
+            .unwrap();
+        assert_eq!(
+            slugs(&all),
+            vec!["ada", "bea", "cy"],
+            "everyone overrides a settings default of last, even after Ada spoke"
+        );
+
+        rooms
+            .update(&id, &json!({ "answerPolicy": "last" }), &[])
+            .await
+            .unwrap();
+        rooms
+            .reply(&id, "cy", "Cy", "on it", "r2", "t2b")
+            .await
+            .unwrap();
+        let (_, only_last) = rooms
+            .send(
+                &id,
+                &trio(),
+                "and then?",
+                "m3",
+                "t3",
+                AnswerPolicy::Everyone,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            slugs(&only_last),
+            vec!["cy"],
+            "the room's last policy beats a settings default of everyone"
+        );
+    }
+
+    #[tokio::test]
+    async fn answer_policy_and_chief_are_checked_and_a_dropped_member_clears_the_chief() {
+        let dir = tempfile::tempdir().unwrap();
+        let rooms = Rooms::new(dir.path().join("groups.json"));
+        let id = trio_room(&rooms).await;
+        let err = rooms
+            .update(&id, &json!({ "answerPolicy": "round" }), &[])
+            .await
+            .unwrap_err();
+        assert_eq!(err.status, 400);
+        let err = rooms
+            .update(&id, &json!({ "chief": "nope" }), &[])
+            .await
+            .unwrap_err();
+        assert_eq!(err.status, 400);
+        let err = rooms
+            .create(
+                "Bad",
+                "",
+                "",
+                "",
+                &["ada".into(), "bea".into()],
+                &[],
+                Some("sideways"),
+                None,
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(err.status, 400);
+
+        let set = rooms
+            .update(&id, &json!({ "chief": "bea" }), &[])
+            .await
+            .unwrap();
+        assert_eq!(set["chief"], "bea");
+        let cleared = rooms
+            .update(&id, &json!({ "chief": "" }), &[])
+            .await
+            .unwrap();
+        assert!(cleared.get("chief").is_none());
+        rooms
+            .update(&id, &json!({ "chief": "cy" }), &[])
+            .await
+            .unwrap();
+        let dropped = rooms
+            .update(&id, &json!({ "members": ["ada", "bea"] }), &[])
+            .await
+            .unwrap();
+        assert!(dropped.get("chief").is_none());
+        let view = present(&dropped, &directory(), AnswerPolicy::Chief);
+        assert_eq!(view["answerPolicy"], "default");
+        assert_eq!(view["answerPolicyEffective"], "chief");
     }
 }

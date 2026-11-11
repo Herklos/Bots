@@ -7,7 +7,7 @@ This plan records what is implemented and what remains. “Built” means the co
 ### Bots and conversations
 
 - Create and manage Bots with their own instructions, workspace, model and approval mode. Claude Haiku is the default model. Bot details include routines, usage, library, connectors and child threads.
-- Chat with Bots and groups. Groups keep their own messages and dispatch to the members' existing threads; mentions select recipients. The composer offers mention completion.
+- Chat with Bots and groups. Groups keep their own messages and dispatch to the members' existing threads. An `@mention`, `@all`, or a single plain name selects recipients. Otherwise the answer policy does: last speaker (the default, including rooms saved without the field), every member, or the group's chief. Settings holds the default (`groupAnswerPolicy`); a group can override it. The composer offers mention completion.
 - Send attachments and voice clips, preview recorded audio, stop runs and answer requests. Chat supports reactions, replies, pins, unread indicators and search over loaded messages.
 - Show activity and routine events as localized chips. Display per-turn token usage when a message and provider turn share an ID; otherwise leave it out.
 - Show member activity in groups and open local child threads from Working on. Remote children stay associated with their remote environment instead of opening as the parent. The gateway also supports sending to eligible local child threads; availability depends on the child's state.

@@ -118,6 +118,7 @@ impl AppState {
             "rules": { "alwaysAsk": [], "allowWithoutAsking": [] }, "sections": [], "defaultModel": null, "avatarDrawingModel": null,
             "beta": { "projects": false },
             "notifications": { "enabled": false, "sound": true, "preview": "full", "when": "any" },
+            "groupAnswerPolicy": "last",
         })
     }
 
@@ -159,8 +160,14 @@ impl AppState {
         let mut out = store::merge(&Self::settings_defaults(), &saved);
         out["beta"] = json!({ "projects": saved["beta"]["projects"] == true });
         out["notifications"] = Self::notifications_view(&saved);
+        out["groupAnswerPolicy"] = json!(group_answer_policy(&out).as_str());
         out
     }
+}
+
+fn group_answer_policy(settings: &Value) -> rooms::AnswerPolicy {
+    rooms::AnswerPolicy::parse(settings["groupAnswerPolicy"].as_str())
+        .unwrap_or(rooms::AnswerPolicy::Last)
 }
 
 type S = State<Arc<AppState>>;
@@ -869,10 +876,13 @@ async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
             body["shape"].as_str().unwrap_or(""),
             &slugs,
             &known,
+            body["answerPolicy"].as_str(),
+            body["chief"].as_str(),
         )
         .await?;
+    let policy = group_answer_policy(&s.settings().await);
     let (members, _) = room_snapshot(&s, &room, true).await?;
-    Ok(Json(rooms::present(&room, &members)))
+    Ok(Json(rooms::present(&room, &members, policy)))
 }
 
 async fn room_get(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>> {
@@ -880,11 +890,12 @@ async fn room_get(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>>
     let (members, threads) = room_snapshot(&s, &room, false).await?;
     // Replies the members have finished since the last read join the room here, and a reply that
     // mentions another member wakes that member.
-    let (room, wake) = s.rooms.sync(&id, &members, &threads).await?;
+    let policy = group_answer_policy(&s.settings().await);
+    let (room, wake) = s.rooms.sync(&id, &members, &threads, policy).await?;
     if let Err(err) = dispatch_room(&s, &wake).await {
         tracing::warn!("group wake-up failed: {}", err.message);
     }
-    Ok(Json(rooms::present(&room, &members)))
+    Ok(Json(rooms::present(&room, &members, policy)))
 }
 
 async fn room_update(
@@ -901,14 +912,16 @@ async fn room_update(
         Vec::new()
     };
     let room = s.rooms.update(&id, &body, &known).await?;
+    let policy = group_answer_policy(&s.settings().await);
     let (members, _) = room_snapshot(&s, &room, false).await?;
-    Ok(Json(rooms::present(&room, &members)))
+    Ok(Json(rooms::present(&room, &members, policy)))
 }
 
 async fn room_seen(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>> {
     let room = s.rooms.seen(&id).await?;
+    let policy = group_answer_policy(&s.settings().await);
     let (members, _) = room_snapshot(&s, &room, false).await?;
-    Ok(Json(rooms::present(&room, &members)))
+    Ok(Json(rooms::present(&room, &members, policy)))
 }
 
 async fn room_delete(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>> {
@@ -935,12 +948,14 @@ async fn room_send(
             &text,
             &uuid::Uuid::new_v4().to_string(),
             &routines::stamped(),
+            group_answer_policy(&s.settings().await),
         )
         .await?;
     let dispatched = dispatch_room(&s, &dispatches).await?;
+    let policy = group_answer_policy(&s.settings().await);
     Ok(Json(json!({
         "ok": true,
-        "room": rooms::present(&stored, &members),
+        "room": rooms::present(&stored, &members, policy),
         "dispatched": dispatched,
     })))
 }
@@ -1271,6 +1286,13 @@ async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
         let chosen =
             checked_selection(&s, &patch["defaultModel"], &current["defaultModel"]).await?;
         patch["defaultModel"] = chosen;
+    }
+    if let Some(policy) = patch.get("groupAnswerPolicy") {
+        if rooms::AnswerPolicy::parse(policy.as_str()).is_none() {
+            return Err(ApiError::bad_request(
+                "groupAnswerPolicy must be last, everyone, or chief",
+            ));
+        }
     }
     if let Some(mode) = patch.get("defaultRuntimeMode") {
         if !matches!(
@@ -2797,5 +2819,37 @@ mod tests {
             next["notifications"],
             json!({ "enabled": true, "sound": false, "preview": "hidden", "when": "background" })
         );
+    }
+
+    #[tokio::test]
+    async fn group_answer_policy_defaults_to_last_and_put_rejects_anything_else() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = settings_state(dir.path());
+        assert_eq!(
+            AppState::settings_defaults()["groupAnswerPolicy"],
+            json!("last")
+        );
+        store::write_json(
+            &state.settings_path(),
+            &json!({ "groupAnswerPolicy": "nope", "userName": "Ada" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(state.settings().await["groupAnswerPolicy"], "last");
+        let err = put(&state, json!({ "groupAnswerPolicy": "default" }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            err.message,
+            "groupAnswerPolicy must be last, everyone, or chief"
+        );
+        let next = put(&state, json!({ "groupAnswerPolicy": "chief" }))
+            .await
+            .unwrap();
+        assert_eq!(next["groupAnswerPolicy"], "chief");
+        assert_eq!(next["userName"], "Ada");
+        let again = state.settings().await;
+        assert_eq!(again["groupAnswerPolicy"], "chief");
     }
 }

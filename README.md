@@ -34,7 +34,7 @@ For a terminal-only setup, run `hbots up --no-service`, then `hbots serve` using
 ## Features
 
 - **Personal Bots:** create and customize Bots, choose models and approval modes, and give each Bot its own instructions and workspace. Claude Haiku is the default model.
-- **Conversations:** chat with individual Bots or groups, mention Bots, attach files and voice clips, reply, react, and pin messages. Stop a run or answer an approval request from the app.
+- **Conversations:** chat with individual Bots or groups, mention Bots, attach files and voice clips, reply, react, and pin messages. In a group, an `@mention`, `@all`, or a single name chooses who answers; otherwise the last speaker does, unless the group or Settings says everyone or a chief should. Stop a run or answer an approval request from the app.
 - **Bot details:** see routines, usage, child threads, and a library of files, pages and links. Manage per-Bot MCP connectors and watch or interact with a Bot's browser through T3 Code.
 - **Routines:** schedule work through the harness and review or run a Bot's routines.
 - **Vault:** keep logins encrypted, import or export CSV, and let Bot tools use saved credentials without exposing the password to the Bot.
