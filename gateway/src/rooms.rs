@@ -16,16 +16,122 @@
 //! ([`max_hops`]: one for `last` and `everyone`, one less than the member count for `chief`). A
 //! courtesy reply never wakes anyone. `answerPolicy` and `chief` are optional. Missing fields are
 //! not filled in on disk.
+//!
+//! `working` and `workingSlugs` on a list row are computed from each member's group thread.
+//! They are not written to `groups.json`.
 
 use crate::error::{ApiError, ApiResult};
+use futures_util::future::join_all;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
 /// Bot-to-Bot wake-ups one message from the person can set off. One handoff is enough: a Bot
 /// can ask another once, and that answer lands in the room without starting a ping-pong.
 pub(crate) const MAX_HOPS: u64 = 1;
+
+/// How many group-thread projections are in flight at once.
+pub(crate) const READ_LIMIT: usize = 4;
+
+/// After a dispatch, show the member working until a live item arrives, or this long.
+pub(crate) const WORKING_GRACE: Duration = Duration::from_secs(2);
+
+/// How long a failed projection keeps the last successful answer.
+pub(crate) const WORKING_TTL: Duration = Duration::from_secs(5);
+
+/// What one `orchestration.getThreadProjection` told us. A failure is not "idle".
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum MemberProbe {
+    Read { working: bool },
+    Failed,
+}
+
+/// Last successful read, and the dispatch that has not shown a live item yet.
+#[derive(Debug, Default)]
+pub(crate) struct WorkingBook {
+    known: HashMap<String, (bool, Instant)>,
+    sent: HashMap<String, Instant>,
+}
+
+impl WorkingBook {
+    /// The member was just dispatched. The projection may not show a run yet.
+    pub(crate) fn note(&mut self, thread: &str, now: Instant) {
+        if !thread.is_empty() {
+            self.sent.insert(thread.to_string(), now);
+        }
+    }
+
+    /// `true` when the inbox should show this thread working.
+    /// A [`MemberProbe::Failed`] read keeps the last value for [`WORKING_TTL`] and does not
+    /// store `false`. A dispatch stays working until the first live item or [`WORKING_GRACE`].
+    pub(crate) fn decide(&mut self, thread: &str, probe: MemberProbe, now: Instant) -> bool {
+        let grace = self
+            .sent
+            .get(thread)
+            .is_some_and(|at| now.saturating_duration_since(*at) < WORKING_GRACE);
+        match probe {
+            MemberProbe::Read { working } => {
+                if working {
+                    self.sent.remove(thread);
+                }
+                self.known.insert(thread.to_string(), (working, now));
+                working || grace
+            }
+            MemberProbe::Failed => {
+                if grace {
+                    return true;
+                }
+                match self.known.get(thread) {
+                    Some((value, at)) if now.saturating_duration_since(*at) < WORKING_TTL => *value,
+                    _ => false,
+                }
+            }
+        }
+    }
+}
+
+/// Loads group threads a few at a time. The key is the thread id.
+/// A failed call is [`MemberProbe::Failed`] and carries no messages.
+pub(crate) async fn read_group_threads<F, Fut>(
+    thread_ids: Vec<String>,
+    fetch: F,
+) -> HashMap<String, (MemberProbe, Vec<Value>)>
+where
+    F: Fn(String) -> Fut,
+    Fut: Future<Output = anyhow::Result<Value>>,
+{
+    let mut out = HashMap::new();
+    let mut ids = thread_ids;
+    ids.sort();
+    ids.dedup();
+    for chunk in ids.chunks(READ_LIMIT) {
+        let loads = chunk.iter().map(|id| {
+            let load = fetch(id.clone());
+            let id = id.clone();
+            async move { (id, load.await) }
+        });
+        for (id, result) in join_all(loads).await {
+            match result {
+                Ok(projection) => {
+                    let transcript = crate::chat::group_transcript(&projection);
+                    let working = transcript["working"] == true;
+                    let messages = transcript["messages"]
+                        .as_array()
+                        .cloned()
+                        .unwrap_or_default();
+                    out.insert(id, (MemberProbe::Read { working }, messages));
+                }
+                Err(_) => {
+                    out.insert(id, (MemberProbe::Failed, Vec::new()));
+                }
+            }
+        }
+    }
+    out
+}
 
 /// Who answers a group message that does not name anyone.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -797,11 +903,18 @@ pub(crate) fn present(room: &Value, directory: &[Member], default: AnswerPolicy)
 }
 
 /// One row of the list: no messages, the last one as a preview.
-pub(crate) fn summary(room: &Value) -> Value {
+/// `working_slugs` is the members whose group thread is working, in member order.
+/// Both fields are for the response. Nothing here is stored.
+pub(crate) fn summary(room: &Value, working_slugs: &[String]) -> Value {
     let last = room["messages"]
         .as_array()
         .and_then(|l| l.last())
         .map(|m| json!({ "name": m["name"], "text": m["text"], "at": m["at"], "from": m["from"] }));
+    let members = member_slugs(room);
+    let working_slugs: Vec<&String> = members
+        .iter()
+        .filter(|slug| working_slugs.iter().any(|working| working == *slug))
+        .collect();
     json!({
         "id": room["id"],
         "title": room["title"],
@@ -812,6 +925,8 @@ pub(crate) fn summary(room: &Value) -> Value {
         "last": last,
         "unread": is_unread(room),
         "notifications": notifications_on(room),
+        "working": !working_slugs.is_empty(),
+        "workingSlugs": working_slugs,
     })
 }
 
@@ -1295,7 +1410,7 @@ mod tests {
         let view = present(&room, &trio(), AnswerPolicy::Last);
         assert_eq!(view["description"], "Plans the week");
         assert_eq!(view["shape"], "hex");
-        let row = summary(&room);
+        let row = summary(&room, &[]);
         assert!(
             row.get("messages").is_none(),
             "the list carries no transcript"
@@ -1398,7 +1513,7 @@ mod tests {
         let listed = rooms.list().await.unwrap();
         let stamp = listed[0]["lastSeenAt"].as_str().unwrap().to_string();
         assert!(!stamp.is_empty());
-        let row = summary(&listed[0]);
+        let row = summary(&listed[0], &[]);
         assert_eq!(row["unread"], false, "an old room is not unread");
         assert_eq!(row["notifications"], true, "a missing key stays on");
         assert_eq!(row["last"]["from"], "ada");
@@ -1436,8 +1551,8 @@ mod tests {
             .await
             .unwrap();
         let after_bot = rooms.get("room-1").await.unwrap();
-        assert_eq!(summary(&after_bot)["unread"], true);
-        assert_eq!(summary(&after_bot)["last"]["from"], "ada");
+        assert_eq!(summary(&after_bot, &[])["unread"], true);
+        assert_eq!(summary(&after_bot, &[])["last"]["from"], "ada");
 
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         let user_at = crate::vault::now_iso();
@@ -1453,8 +1568,8 @@ mod tests {
             .await
             .unwrap();
         let after_user = rooms.get("room-1").await.unwrap();
-        assert_eq!(summary(&after_user)["unread"], false);
-        assert_eq!(summary(&after_user)["last"]["from"], "user");
+        assert_eq!(summary(&after_user, &[])["unread"], false);
+        assert_eq!(summary(&after_user, &[])["last"]["from"], "user");
 
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         let later = crate::vault::now_iso();
@@ -1467,7 +1582,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(muted["notifications"], false);
-        let muted_row = summary(&muted);
+        let muted_row = summary(&muted, &[]);
         assert_eq!(muted_row["unread"], true, "mute does not clear the dot");
         assert_eq!(muted_row["notifications"], false);
         assert_eq!(
@@ -1488,7 +1603,7 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         let seen = rooms.seen("room-1").await.unwrap();
         assert!(seen["lastSeenAt"].as_str().unwrap() > later.as_str());
-        assert_eq!(summary(&seen)["unread"], false);
+        assert_eq!(summary(&seen, &[])["unread"], false);
     }
 
     async fn patch_bot(root: &std::path::Path, slug: &str, patch: Value) {
@@ -2398,5 +2513,148 @@ mod tests {
         let view = present(&dropped, &directory(), AnswerPolicy::Chief);
         assert_eq!(view["answerPolicy"], "default");
         assert_eq!(view["answerPolicyEffective"], "chief");
+    }
+
+    fn listed_room() -> Value {
+        json!({
+            "id": "room-1",
+            "title": "Team",
+            "description": "",
+            "color": "blue",
+            "shape": "ball",
+            "members": ["ada", "bea", "cy"],
+            "messages": [],
+            "anchors": {},
+            "threads": {},
+            "hops": 0
+        })
+    }
+
+    #[test]
+    fn a_list_row_names_zero_one_or_many_working_members() {
+        let room = listed_room();
+        let none = summary(&room, &[]);
+        assert_eq!(none["working"], false);
+        assert_eq!(none["workingSlugs"], json!([]));
+        assert!(none.get("messages").is_none());
+
+        let one = summary(&room, &["bea".into()]);
+        assert_eq!(one["working"], true);
+        assert_eq!(one["workingSlugs"], json!(["bea"]));
+
+        let many = summary(&room, &["cy".into(), "ada".into(), "bea".into()]);
+        assert_eq!(many["working"], true);
+        assert_eq!(
+            many["workingSlugs"],
+            json!(["ada", "bea", "cy"]),
+            "working slugs stay in member order"
+        );
+
+        let outsider = summary(&room, &["nope".into()]);
+        assert_eq!(outsider["working"], false);
+        assert_eq!(outsider["workingSlugs"], json!([]));
+    }
+
+    #[test]
+    fn an_rpc_error_keeps_the_last_known_working_value_for_a_short_time() {
+        let mut book = WorkingBook::default();
+        let now = Instant::now();
+        assert!(
+            !book.decide("thread-ada", MemberProbe::Failed, now),
+            "an error with nothing remembered is not working"
+        );
+        assert!(book.decide("thread-ada", MemberProbe::Read { working: true }, now));
+        assert!(
+            book.decide(
+                "thread-ada",
+                MemberProbe::Failed,
+                now + Duration::from_secs(1)
+            ),
+            "a failed read does not force false"
+        );
+        assert!(
+            !book.decide(
+                "thread-ada",
+                MemberProbe::Failed,
+                now + WORKING_TTL + Duration::from_secs(1)
+            ),
+            "the remembered value expires"
+        );
+        assert!(!book.decide("thread-bea", MemberProbe::Read { working: false }, now));
+        assert!(
+            !book.decide(
+                "thread-bea",
+                MemberProbe::Failed,
+                now + Duration::from_millis(200)
+            ),
+            "a remembered idle stays idle"
+        );
+    }
+
+    #[test]
+    fn a_dispatch_shows_working_until_a_live_item_or_about_two_seconds() {
+        let mut book = WorkingBook::default();
+        let now = Instant::now();
+        book.note("thread-ada", now);
+        assert!(book.decide(
+            "thread-ada",
+            MemberProbe::Read { working: false },
+            now + Duration::from_millis(500)
+        ));
+        assert!(!book.decide(
+            "thread-ada",
+            MemberProbe::Read { working: false },
+            now + WORKING_GRACE + Duration::from_millis(50)
+        ));
+
+        book.note("thread-ada", now);
+        assert!(book.decide(
+            "thread-ada",
+            MemberProbe::Read { working: true },
+            now + Duration::from_millis(100)
+        ));
+        assert!(
+            !book.decide(
+                "thread-ada",
+                MemberProbe::Read { working: false },
+                now + Duration::from_millis(200)
+            ),
+            "the first live item ends the grace period"
+        );
+
+        book.note("thread-bea", now);
+        assert!(book.decide(
+            "thread-bea",
+            MemberProbe::Failed,
+            now + Duration::from_millis(400)
+        ));
+    }
+
+    #[tokio::test]
+    async fn group_thread_reads_stay_within_the_fan_out_limit() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let current = std::sync::Arc::new(AtomicUsize::new(0));
+        let peak = std::sync::Arc::new(AtomicUsize::new(0));
+        let ids: Vec<String> = (0..6).map(|i| format!("thread-{i}")).collect();
+        let current_load = current.clone();
+        let peak_load = peak.clone();
+        let reads = read_group_threads(ids, move |_thread| {
+            let current_load = current_load.clone();
+            let peak_load = peak_load.clone();
+            async move {
+                let now = current_load.fetch_add(1, Ordering::SeqCst) + 1;
+                peak_load.fetch_max(now, Ordering::SeqCst);
+                tokio::time::sleep(Duration::from_millis(40)).await;
+                current_load.fetch_sub(1, Ordering::SeqCst);
+                Ok(json!({ "items": [], "runs": [] }))
+            }
+        })
+        .await;
+        assert_eq!(reads.len(), 6);
+        assert!(peak.load(Ordering::SeqCst) > 1);
+        assert!(peak.load(Ordering::SeqCst) <= READ_LIMIT);
+        assert!(reads
+            .values()
+            .all(|(probe, _)| *probe == MemberProbe::Read { working: false }));
     }
 }

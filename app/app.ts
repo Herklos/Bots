@@ -71,14 +71,15 @@ function lineOf(b: any): string {
   return typeof b.mainThreadId === 'string' ? 'Ready to chat' : 'Getting set up…';
 }
 // A group's face is its members, at most three. The list stores slugs or member objects.
-function stackFaces(members: unknown, directory: any[]): { shape: string; color: string; state: string }[] {
+function stackFaces(members: unknown, directory: any[], workingSlugs: string[]): { shape: string; color: string; state: string }[] {
+  const working = new Set(workingSlugs);
   const slugs = (Array.isArray(members) ? members : [])
     .map((m) => (typeof m === 'string' ? m : String((m as { slug?: unknown })?.slug ?? '')))
     .filter((slug) => slug !== '')
     .slice(0, 3);
   return slugs.map((slug) => {
     const bot = directory.find((b) => String(b.slug) === slug);
-    return { shape: String(bot?.shape ?? 'ball'), color: fill(bot?.color), state: 'idle' };
+    return { shape: String(bot?.shape ?? 'ball'), color: fill(bot?.color), state: working.has(slug) ? 'working' : 'idle' };
   });
 }
 const initials = (name: string): string => name.trim().split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('') || '?';
@@ -829,6 +830,11 @@ const sources: Sources = {
         { kind: 'group', key: 'group-fixture', id: 'fixture', name: 'Design', color: 'brand.blue', shape: 'hex', faces: [{ shape: 'ball', color: fill('brand.default'), state: 'idle' }, { shape: 'ball', color: fill('brand.blue'), state: 'idle' }], line: 'Ada: On it', time: '', at: '', unread: false, working: false, ready: true, notifications: wantsNotice(fixtureRoomNotify.get('fixture')) },
       ];
     }
+    if (focus === 'fixture-busy' || room === 'fixture-busy') {
+      return [
+        { kind: 'group', key: 'group-fixture-busy', id: 'fixture-busy', name: 'Design', color: 'brand.blue', shape: 'hex', faces: [{ shape: 'ball', color: fill('brand.default'), state: 'working' }, { shape: 'ball', color: fill('brand.blue'), state: 'working' }], line: 'Ada: On it', time: '', at: '', unread: false, working: true, ready: true, notifications: wantsNotice(fixtureRoomNotify.get('fixture-busy')) },
+      ];
+    }
     const body = await botsBody(store);
     const now = Number(body.now);
     const directory = body.bots as any[];
@@ -853,8 +859,8 @@ const sources: Sources = {
         const said = typeof g.last?.at === 'string' ? g.last.at : '';
         return {
           kind: 'group', key: `group-${String(g.id)}`, id: String(g.id), name: String(g.title ?? ''), color: String(g.color ?? 'brand.default'), shape: String(g.shape ?? 'ball'),
-          faces: stackFaces(g.members, directory),
-          line: last !== '' ? last : String(g.description ?? ''), time: when(said, now), at: said, unread: g.unread === true, working: false, ready: true, notifications: wantsNotice(g.notifications),
+          faces: stackFaces(g.members, directory, Array.isArray(g.workingSlugs) ? g.workingSlugs.map((slug: unknown) => String(slug)) : []),
+          line: last !== '' ? last : String(g.description ?? ''), time: when(said, now), at: said, unread: g.unread === true, working: g.working === true, ready: true, notifications: wantsNotice(g.notifications),
         };
       });
     try {
