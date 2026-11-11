@@ -1468,7 +1468,7 @@ async fn usage_report(
         .unwrap_or(0)
         .clamp(-840, 840);
     let which = q.get("bot").map(String::as_str).unwrap_or("all");
-    let now_ms = unix_now() as i64 * 1000;
+    let now_ms = i64::try_from(unix_now()).unwrap_or(i64::MAX) * 1000;
     let range = usage::period_days(period, now_ms, offset)
         .ok_or_else(|| ApiError::bad_request("Pick today, 7d, 30d or all."))?;
     let bots: Vec<Value> = s
@@ -1805,8 +1805,8 @@ async fn computer_control(
         .unwrap_or_else(|poison| poison.into_inner());
     match action {
         "take" => {
-            let width = body["width"].as_u64().unwrap_or(0) as u32;
-            let height = body["height"].as_u64().unwrap_or(0) as u32;
+            let width = u32::try_from(body["width"].as_u64().unwrap_or(0)).unwrap_or(0);
+            let height = u32::try_from(body["height"].as_u64().unwrap_or(0)).unwrap_or(0);
             sessions.take(&slug, tab, width, height);
             if !frame.is_empty() {
                 sessions.note_image(&slug, &library::encode_file(&frame));
@@ -1841,12 +1841,12 @@ async fn computer_input(
     };
     let width = body["width"]
         .as_u64()
-        .map(|n| n as u32)
+        .and_then(|n| u32::try_from(n).ok())
         .filter(|n| *n > 0)
         .unwrap_or(hold.width);
     let height = body["height"]
         .as_u64()
-        .map(|n| n as u32)
+        .and_then(|n| u32::try_from(n).ok())
         .filter(|n| *n > 0)
         .unwrap_or(hold.height);
     let box_w = num(&body, "boxW");

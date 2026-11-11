@@ -78,7 +78,13 @@ fn frame_px(fraction: f64, span: u32) -> Result<i64, &'static str> {
     if !fraction.is_finite() || !(0.0..=1.0).contains(&fraction) || span == 0 {
         return Err("That point is off the page.");
     }
-    Ok((fraction * f64::from(span)).round() as i64)
+    let px = (fraction * f64::from(span)).round();
+    // `fraction` is in 0..=1 and `span` fits in `i64`, so the rounded pixel does too.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "rounded pixel is finite and at most the frame span, which fits in i64"
+    )]
+    Ok(px as i64)
 }
 
 /// A click in the streamed frame. Fractions are of that JPEG, and the click does not take control.
@@ -155,10 +161,10 @@ pub fn jpeg_size(bytes: &[u8]) -> Option<(u32, u32)> {
         if i + 4 >= bytes.len() {
             return None;
         }
-        let len = u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]) as usize;
+        let len = usize::from(u16::from_be_bytes([bytes[i + 2], bytes[i + 3]]));
         if marker == 0xc0 || marker == 0xc1 || marker == 0xc2 {
-            let height = u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]) as u32;
-            let width = u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]) as u32;
+            let height = u32::from(u16::from_be_bytes([bytes[i + 5], bytes[i + 6]]));
+            let width = u32::from(u16::from_be_bytes([bytes[i + 7], bytes[i + 8]]));
             if width == 0 || height == 0 {
                 return None;
             }

@@ -560,7 +560,7 @@ pub fn unix_now() -> u64 {
 
 /// `YYYY-MM-DDTHH:MM:SSZ` for a Unix time (UTC).
 pub fn iso8601(unix_secs: u64) -> String {
-    let days = (unix_secs / 86_400) as i64;
+    let days = i64::try_from(unix_secs / 86_400).unwrap_or(i64::MAX);
     let rem = unix_secs % 86_400;
     let (h, mi, s) = (rem / 3600, rem % 3600 / 60, rem % 60);
     // Days since 1970-01-01 to a civil date (H. Hinnant's algorithm).

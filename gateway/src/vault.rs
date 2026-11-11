@@ -32,7 +32,7 @@ fn now() -> String {
     let d = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default();
-    iso(d.as_millis() as i64)
+    iso(i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
 pub fn iso(ms: i64) -> String {

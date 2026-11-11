@@ -210,7 +210,8 @@ fn iso_now() -> String {
         .map(|d| d.as_secs())
         .unwrap_or(0);
     let (days, rem) = (secs / 86_400, secs % 86_400);
-    let (y, m, d) = civil_from_days(days as i64);
+    let days = i64::try_from(days).unwrap_or(i64::MAX);
+    let (y, m, d) = civil_from_days(days);
     format!(
         "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}.000Z",
         rem / 3600,
@@ -227,8 +228,8 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
     let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
     let mp = (5 * doy + 2) / 153;
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    let d = u32::try_from(doy - (153 * mp + 2) / 5 + 1).unwrap_or(0);
+    let m = u32::try_from(if mp < 10 { mp + 3 } else { mp - 9 }).unwrap_or(0);
     let y = yoe + era * 400 + i64::from(m <= 2);
     (y, m, d)
 }
