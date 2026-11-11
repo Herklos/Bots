@@ -40,6 +40,8 @@ Built: a dev script, `scripts/run-macos.sh`. Not built: the in-app shell.
 
 **Not built (the in-app shell).** The choice of owner is made. The shell itself is not built.
 
+`host.macos.window.keepRunning` is true, so closing the window leaves the Mac app running. A new Bot or group message can still post its notice and set the Dock badge while the window is closed. Quitting from the Dock exits.
+
 - The Exact host, in the `.app`, does not start or stop the gateway yet. The script is the only starter.
 - `HBOTS_URL` stays inlined at build (`app/app.ts`, `env` in `app/app.json`). This shell uses that one gateway. A per-launch URL is a later mechanism.
 - The host owns the gateway child. It starts `hbots serve` when the app launches, waits for `/api/health`, then shows the window. A native module stops that child in `willQuit(done:)` (SIGTERM, then `done`) and force-ends it in `destroy()` if the five-second quit deadline expires (`docs/reference.md`, around line 336). iOS never calls `willQuit`. The phone is a client of the baked `HBOTS_URL`, not an owner of the gateway.

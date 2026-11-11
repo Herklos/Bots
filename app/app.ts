@@ -1,5 +1,5 @@
 import type { Answer, Result, Sources, Storage } from './app.contract.d.ts';
-import { closeNotification, notificationStatus, showNotification } from '@exact/notifications';
+import { closeNotification, notificationStatus, setBadge, showNotification } from '@exact/notifications';
 import en from './strings/en.json' with { type: 'json' };
 import fr from './strings/fr.json' with { type: 'json' };
 
@@ -545,43 +545,118 @@ function draftRows(raw: string | null): { stamp: string; texts: string[]; files:
 // The contract runner's slugs. A real Bot still notifies.
 const FIXTURE_SLUG = (slug: string): boolean => slug === 'fixture' || slug === 'bea' || slug === 'tabs' || slug === 'frame';
 
-async function noticeGranted(): Promise<boolean> {
+const STATUS_LINE = (line: string): boolean => line === '' || line === 'Ready to chat' || line === 'Getting set up…' || line === 'Working…';
+
+// The last message id posted for a tag. The same id does not post again.
+const noticeIds = new Map<string, string>();
+
+type NoticePrefs = { enabled: boolean | null; sound: boolean; preview: 'full' | 'hidden'; when: 'any' | 'background' };
+
+// A missing `enabled` is null. The poster treats that as on only when permission is already granted.
+function noticePrefs(body: any): NoticePrefs {
+  const note = body?.notifications;
+  return {
+    enabled: typeof note?.enabled === 'boolean' ? note.enabled : null,
+    sound: note?.sound !== false,
+    preview: note?.preview === 'hidden' ? 'hidden' : 'full',
+    when: note?.when === 'background' ? 'background' : 'any',
+  };
+}
+
+function unsupported(error: unknown): boolean {
+  const code = (error as { code?: string; name?: string }).code ?? (error as { name?: string }).name;
+  return code === 'NotSupportedError';
+}
+
+async function shutNotice(tag: string): Promise<void> {
+  noticeIds.delete(tag);
   try {
-    const status = await notificationStatus({});
-    return status?.state === 'granted';
+    await closeNotification({ tag });
+    if (tag.startsWith('unread-bot-')) await closeNotification({ tag: `unread-${tag.slice('unread-bot-'.length)}` });
   } catch {
-    return false;
+    // The list still loads when the host cannot close a notice.
   }
 }
 
-// Closes the one notice for this Bot. A host with no notification centre still opens the chat.
-async function closeNotice(slug: string): Promise<void> {
-  if (slug === '' || FIXTURE_SLUG(slug)) return;
+// One notice per unread chat, from the inbox poll. A subagent, a fixture, a muted
+// chat, the open route, a status line and the person's own message stay quiet.
+async function postUnread(store: { get(name: string): string | null }, directory: any[], rooms: any[], openSlug: string, openRoom: string, visibility: string, focused: boolean): Promise<void> {
+  let host: { available?: boolean; state?: string };
   try {
-    await closeNotification({ tag: `unread-${slug}` });
-  } catch {
-    // The page keeps working when the host cannot close a notice.
+    host = await notificationStatus({});
+  } catch (error) {
+    if (unsupported(error)) return;
+    throw error;
   }
-}
-
-// One local notice per hidden unread Bot. The open chat is closed instead.
-// A subagent (hideFromSidebar) is not in Hidden, so it never gets this notice.
-// Nothing is posted until the person has allowed notifications, so a poll never asks.
-async function noteHidden(bots: any[], openSlug: string): Promise<void> {
-  if (FIXTURE_SLUG(openSlug)) return;
-  const hidden = bots.filter((b) => b && b.hidden === true && b.hideFromSidebar !== true && b.notifications !== false && !FIXTURE_SLUG(String(b.slug ?? '')));
-  if (hidden.length === 0) return;
-  if (!(await noticeGranted())) return;
-  for (const bot of hidden) {
-    const slug = String(bot.slug);
-    const tag = `unread-${slug}`;
-    if (slug === openSlug || bot.unread !== true) {
-      await closeNotification({ tag });
+  if (host?.available !== true) return;
+  const granted = host.state === 'granted';
+  const settings = await call(store, '/api/settings');
+  const prefs = settings.ok ? noticePrefs(settings.body) : noticePrefs({});
+  const master = prefs.enabled === null ? granted : prefs.enabled;
+  const away = visibility === 'hidden' || focused === false;
+  const mayPost = granted && master && (prefs.when !== 'background' || away);
+  type Chat = { tag: string; title: string; line: string; navigate: string; id: string; close: boolean; post: boolean };
+  const chats: Chat[] = [];
+  let badge = 0;
+  for (const bot of directory) {
+    if (!bot || bot.hideFromSidebar === true || bot.role === 'subagent') continue;
+    const slug = String(bot.slug ?? '');
+    if (slug === '' || FIXTURE_SLUG(slug)) continue;
+    const tag = `unread-bot-${slug}`;
+    const line = lineOf(bot);
+    const own = bot.preview?.role === 'user' || line.startsWith('You: ');
+    const unread = bot.unread === true;
+    const muted = !wantsNotice(bot.notifications);
+    if (unread && !muted) badge += 1;
+    const messageId = String(bot.preview?.id ?? bot.preview?.at ?? '');
+    const close = muted || !unread || slug === openSlug;
+    const quiet = own || STATUS_LINE(line) || messageId === '';
+    chats.push({
+      tag, title: String(bot.name || slug), line, navigate: `/bot/${slug}`, id: messageId, close,
+      post: mayPost && !close && !quiet,
+    });
+  }
+  for (const room of rooms) {
+    const id = String(room?.id ?? '');
+    if (id === '' || FIXTURE_SLUG(id)) continue;
+    const tag = `unread-group-${id}`;
+    const raw = String(room.last?.text ?? '');
+    const show = Boolean(room.last) && !isGroupLeak(raw);
+    const line = show ? `${String(room.last?.name ?? '')}: ${raw}`.slice(0, 120) : '';
+    const own = room.last?.from === 'user';
+    const unread = room.unread === true;
+    const muted = !wantsNotice(room.notifications);
+    if (unread && !muted) badge += 1;
+    const messageId = show ? String(room.last?.id ?? `${room.last?.from ?? ''}:${room.last?.at ?? ''}`) : '';
+    const close = muted || !unread || id === openRoom;
+    const quiet = own || STATUS_LINE(line) || messageId === '';
+    chats.push({
+      tag, title: String(room.title ?? id), line, navigate: `/group/${id}`, id: messageId, close,
+      post: mayPost && !close && !quiet,
+    });
+  }
+  const live = new Set(chats.map((chat) => chat.tag));
+  for (const tag of noticeIds.keys()) {
+    if (!live.has(tag)) await shutNotice(tag);
+  }
+  for (const chat of chats) {
+    if (chat.close) {
+      await shutNotice(chat.tag);
       continue;
     }
-    const line = lineOf(bot);
-    const body = line === 'Ready to chat' || line === 'Getting set up…' || line === 'Working…' ? say('notice.hidden') : line;
-    await showNotification({ title: String(bot.name || slug), body, tag, navigate: `/bot/${slug}` });
+    if (!chat.post || noticeIds.get(chat.tag) === chat.id) continue;
+    const body = prefs.preview === 'hidden' ? say('notice.hidden') : chat.line;
+    try {
+      await showNotification({ title: chat.title, body, tag: chat.tag, navigate: chat.navigate, silent: !prefs.sound });
+      noticeIds.set(chat.tag, chat.id);
+    } catch (error) {
+      if (!unsupported(error)) throw error;
+    }
+  }
+  try {
+    await setBadge({ contents: granted && master ? badge : 0 });
+  } catch (error) {
+    if (!unsupported(error)) throw error;
   }
 }
 
@@ -620,11 +695,6 @@ const sources: Sources = {
     const at = (b: any): string => (typeof b.preview?.at === 'string' ? b.preview.at : '');
     // The main Bot first, then the most recent conversation; a Bot with none goes last.
     const sorted = [...(body.bots as any[])].sort((a, b) => (b.primary === true ? 1 : 0) - (a.primary === true ? 1 : 0) || at(b).localeCompare(at(a)));
-    try {
-      await noteHidden(sorted, focus);
-    } catch {
-      // A missing notification host still lists the Bots.
-    }
     return sorted.map((b) => ({
       slug: String(b.slug), name: String(b.name), label: String(b.label ?? ''), initials: initials(String(b.name)),
       color: fill(b.color), shape: String(b.shape ?? 'ball'), main: b.primary === true, pinned: b.pinned === true, hidden: b.hidden === true,
@@ -670,6 +740,7 @@ const sources: Sources = {
   deleteBot: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'DELETE' })),
   loadPrefs: async (_args, store): Promise<Result<'loadPrefs'>> => {
     const body = await read(store, '/api/settings');
+    const note = noticePrefs(body);
     return {
       userName: String(body.userName ?? ''),
       theme: String(body.theme ?? 'system'),
@@ -677,8 +748,26 @@ const sources: Sources = {
       defaultModel: String(body.defaultModel?.model ?? ''),
       defaultEffort: savedEffort(body),
       defaultRuntimeMode: String(body.defaultRuntimeMode ?? (body.autoReview === false ? "full-access" : "auto")),
+      noticeEnabled: note.enabled === true,
+      noticeSound: note.sound,
+      noticePreview: note.preview,
+      noticeWhen: note.when,
+      noticeEnabledMissing: note.enabled === null,
     };
   },
+  loadNotice: async (): Promise<Result<'loadNotice'>> => {
+    try {
+      const status = await notificationStatus({});
+      return { available: status?.available === true, state: String(status?.state ?? 'unknown') };
+    } catch (error) {
+      if (!unsupported(error)) console.log(`notification status failed: ${String(error)}`);
+      return { available: false, state: 'unknown' };
+    }
+  },
+  setNotifications: async ([enabled, sound, preview, when], store) => reply(await call(store, '/api/settings', {
+    method: 'PUT',
+    body: JSON.stringify({ notifications: { enabled, sound, preview, when } }),
+  })),
   setUserName: async ([userName], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ userName }) })),
   setDefaultMode: async ([defaultRuntimeMode], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ defaultRuntimeMode }) })),
   setTheme: async ([theme], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ theme }) })),
@@ -705,7 +794,7 @@ const sources: Sources = {
     return reply(r);
   },
   deleteLogin: async ([id], store) => reply(await call(store, `/api/vault/${encodeURIComponent(id)}`, { method: 'DELETE' })),
-  loadConvos: async ([query, focus, room], store): Promise<Result<'loadConvos'>> => {
+  loadConvos: async ([query, focus, room, visibility, focused], store): Promise<Result<'loadConvos'>> => {
     if (focus === 'tabs') {
       return [
         { kind: 'bot', key: 'bot-tabs', id: 'tabs', name: 'Tabs', color: fill('brand.default'), shape: 'ball', faces: [], line: 'Ready to chat', time: '', at: '', unread: false, working: false, ready: true, notifications: wantsNotice(fixtureBotNotify.get('tabs')) },
@@ -745,8 +834,17 @@ const sources: Sources = {
           line: last !== '' ? last : String(g.description ?? ''), time: when(said, now), at: said, unread: g.unread === true, working: false, ready: true, notifications: wantsNotice(g.notifications),
         };
       });
+    try {
+      await postUnread(store, directory, listed, focus, room, visibility, focused);
+    } catch {
+      // A missing notification host still lists the chats.
+    }
     // The most recent conversation first, a Bot or a group alike; one with nothing said goes last.
     return [...bots, ...groups].sort((x, y) => y.at.localeCompare(x.at));
+  },
+  markRoomSeen: async ([id], store) => {
+    if (id === 'fixture' || id === 'fixture-busy') return { ok: true, error: '' };
+    return reply(await call(store, `/api/rooms/${encodeURIComponent(id)}/seen`, { method: 'POST', body: '{}' }));
   },
   updateGroup: async ([id, field, value], store) => {
     if ((id === 'fixture' || id === 'fixture-busy') && field === 'notifications') {
