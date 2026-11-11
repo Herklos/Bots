@@ -421,9 +421,10 @@ async fn deliver(
         .map_err(|_| "The browser closed the connection.".to_string())?;
     }
     // A take is held only after the stream says this token can operate.
-    if messages.iter().any(|message| {
-        message.get("type").and_then(Value::as_str) == Some("takeControl")
-    }) {
+    if messages
+        .iter()
+        .any(|message| message.get("type").and_then(Value::as_str) == Some("takeControl"))
+    {
         wait_for_control(&mut ws).await?;
     }
     match tokio::time::timeout(Duration::from_millis(800), read_one_jpeg(&mut ws)).await {
@@ -557,10 +558,7 @@ fn control_frame(msg: &Value) -> ControlFrame {
     if msg["canOperate"] == false {
         return ControlFrame::Denied(CANNOT_OPERATE);
     }
-    let controller = msg
-        .get("controller")
-        .and_then(Value::as_str)
-        .unwrap_or("");
+    let controller = msg.get("controller").and_then(Value::as_str).unwrap_or("");
     if controller == "another-viewer" {
         return ControlFrame::Denied("Someone else has this page.");
     }
@@ -669,7 +667,10 @@ mod tests {
 
         let allowed = json!({ "type": "control", "controller": "you", "canOperate": true });
         hold_if_ready(&mut sessions, "ada", "tab-1", &allowed).unwrap();
-        assert_eq!(sessions.get("ada").map(|hold| hold.tab.as_str()), Some("tab-1"));
+        assert_eq!(
+            sessions.get("ada").map(|hold| hold.tab.as_str()),
+            Some("tab-1")
+        );
     }
 
     #[test]
