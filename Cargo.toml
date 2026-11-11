@@ -28,3 +28,5 @@ cast_lossless = "warn"
 # macOS volumes are case-insensitive, so ".JSON" is the same file as ".json".
 case_sensitive_file_extension_comparisons = "warn"
 unused_async = "warn"
+map_err_ignore = "warn"
+multiple_crate_versions = "warn"

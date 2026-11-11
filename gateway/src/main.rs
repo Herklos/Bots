@@ -4,6 +4,19 @@
 //! wired today (`mod t3`); other backends may be added. The gateway keeps Bot folders,
 //! settings, the Vault, the Projects board and the Bots' own MCP tool server. Home is
 //! `~/.hbots`.
+// These copies are pinned by crates this binary does not publish.
+// base64 0.22 (this crate, axum, reqwest) and 0.23 (hyper-util).
+// cpufeatures 0.2 (aes, sha1, sha2, polyval) and 0.3 (chacha20).
+// getrandom 0.2 (ring, and rand 0.8 through this crate and rsa), 0.3 (tungstenite's
+// rand 0.9), and 0.4 (quinn, uuid, tempfile). Dropping the direct rand 0.8 still
+// leaves 0.2 via ring and rsa, and nothing here can retarget tungstenite or quinn.
+// The same upstream split also keeps rand, rand_core, rand_chacha, r-efi,
+// tokio-tungstenite 0.26 next to axum's 0.29, tungstenite, webpki-roots,
+// windows-sys 0.52 (ring) next to 0.61, and syn.
+#![allow(
+    clippy::multiple_crate_versions,
+    reason = "base64 0.22/0.23, cpufeatures 0.2/0.3, and getrandom 0.2/0.3/0.4 are upstream pins this repo cannot collapse, and the same graph keeps the other duplicate crates"
+)]
 mod access; // T4: Cloudflare Access JWTs.
 mod approvals; // T5: answering a pending request.
 mod attachments; // Chat files stored on the Bot.
@@ -11,6 +24,12 @@ mod auth;
 mod bots;
 mod chat;
 mod cli;
+// Fixed strings for the browser stream. The socket error can name the T3 address,
+// and the bearer-header error can echo the token.
+#[allow(
+    clippy::map_err_ignore,
+    reason = "the client sees a fixed browser-stream failure, never the socket error or the bearer token"
+)]
 mod computer; // The Bot's browser, watch first.
 mod config;
 mod error;
@@ -552,6 +571,10 @@ fn parse(body: &Bytes) -> ApiResult<Value> {
         return Ok(json!({}));
     }
     // serde's message can quote the input, which may hold a password.
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "serde quotes the body, which may hold a password"
+    )]
     serde_json::from_slice(body).map_err(|_| ApiError::bad_request("invalid JSON body"))
 }
 
@@ -2141,6 +2164,10 @@ async fn send_voice(
             false,
         )
     } else {
+        #[allow(
+            clippy::map_err_ignore,
+            reason = "a base64 error can quote the clip, which is the user's audio"
+        )]
         let bytes = body["data"]
             .as_str()
             .map(|data| {

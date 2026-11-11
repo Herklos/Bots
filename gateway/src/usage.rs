@@ -225,6 +225,10 @@ pub async fn get_usage(State(s): State<Arc<AppState>>) -> ApiResult<Json<Value>>
 async fn read_doc(path: &std::path::Path) -> ApiResult<Value> {
     match tokio::fs::read_to_string(path).await {
         Ok(text) => {
+            #[allow(
+                clippy::map_err_ignore,
+                reason = "serde quotes usage.json; the client only hears that the file is not JSON"
+            )]
             let doc: Value = serde_json::from_str(&text)
                 .map_err(|_| ApiError::new(500, "usage.json is not valid JSON"))?;
             if !doc.is_object() {

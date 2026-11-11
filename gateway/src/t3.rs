@@ -221,13 +221,23 @@ impl T3Client {
             .lock()
             .await
             .insert(id.clone(), Waiter::Once(tx));
-        self.out
+        #[allow(
+            clippy::map_err_ignore,
+            reason = "a socket error can include the T3 address; callers only need that the connection closed"
+        )]
+        let sent = self.out
             .send(WsMsg::text(json!({ "_tag": "Request", "id": id, "tag": tag, "payload": payload, "headers": [] }).to_string()))
-            .map_err(|_| anyhow!("T3 closed the connection"))?;
-        tokio::time::timeout(Duration::from_secs(30), rx)
+            .map_err(|_| anyhow!("T3 closed the connection"));
+        sent?;
+        #[allow(
+            clippy::map_err_ignore,
+            reason = "the dropped reply is an empty oneshot error; callers only need that T3 closed"
+        )]
+        let reply = tokio::time::timeout(Duration::from_secs(30), rx)
             .await
             .context("T3 timed out")?
-            .map_err(|_| anyhow!("T3 closed the connection"))?
+            .map_err(|_| anyhow!("T3 closed the connection"));
+        reply?
     }
 
     /// Read a stream until `keep` accepts one item, then interrupt it.
@@ -249,11 +259,16 @@ impl T3Client {
             .lock()
             .await
             .insert(id.clone(), Waiter::Many(tx));
-        self.out
+        #[allow(
+            clippy::map_err_ignore,
+            reason = "a socket error can include the T3 address; callers only need that the connection closed"
+        )]
+        let sent = self.out
             .send(WsMsg::text(
                 json!({ "_tag": "Request", "id": id, "tag": tag, "payload": payload, "headers": [] }).to_string(),
             ))
-            .map_err(|_| anyhow!("T3 closed the connection"))?;
+            .map_err(|_| anyhow!("T3 closed the connection"));
+        sent?;
         let result = tokio::time::timeout(Duration::from_secs(30), async {
             while let Some(note) = rx.recv().await {
                 match note {

@@ -775,6 +775,10 @@ fn room_mut<'a>(doc: &'a mut Value, room_id: &str) -> ApiResult<&'a mut Value> {
 async fn read_doc(path: &std::path::Path) -> ApiResult<Value> {
     match tokio::fs::read_to_string(path).await {
         Ok(text) => {
+            #[allow(
+                clippy::map_err_ignore,
+                reason = "serde quotes groups.json, which holds room messages"
+            )]
             let doc: Value = serde_json::from_str(&text)
                 .map_err(|_| ApiError::new(500, "groups.json is not valid"))?;
             if !doc["rooms"].is_array() {
