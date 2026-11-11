@@ -346,6 +346,24 @@ test "the composer holds a voice clip and the sent clip is that attachment"
   clock settle
   expect text "voice-hold" == "voice.m4a"
 
+test "rapid composer edits save once, and a pause saves the latest text"
+  size 1440x900
+  at "/bot/fixture"
+  clock +600
+  clock data
+  type "composer" "a"
+  clock +300
+  type "composer" "ab"
+  clock +300
+  type "composer" "abc"
+  clock +300
+  expect state savedRev == 0
+  expect text "composer" == "abc"
+  clock +100
+  clock data
+  expect state savedRev == 3
+  expect text "composer" == "abc"
+
 test "a draft stays with its Bot and a child keeps its own"
   size 1440x900
   at "/bot/fixture"

@@ -4,6 +4,7 @@
 
 ### Improvements
 
+- Typing in the composer writes the draft once after a short pause, and before send, a conversation change, closing the panel, or leaving the screen.
 - Settings shows Storage with Access: the file system, the Bots folder, and a restart when that folder changes.
 
 ## 0.2.2

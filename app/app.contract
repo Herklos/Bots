@@ -1277,7 +1277,13 @@ component Bots
   task restoreDrafts when keptDrafts.stamp != appliedStamp
     after(1, applyDrafts)
 
-  task keepDrafts when draftRev != savedRev
+  // One save for a burst of edits. The key is draftRev: while the gate stays true the
+  // wait does not restart, and each edit has to re-arm it. About 400ms after the last one.
+  task keepDrafts when draftRev != savedRev key=draftRev
+    after(400, writeDrafts)
+
+  // Leaving the page writes a draft the wait has not saved. Typing does not change this gate.
+  task flushDraftOnHide when page.visibilityState != "visible"
     after(1, writeDrafts)
 
   // Once per empty roster, not once per poll. A Bot coming back clears the flag.
@@ -1355,6 +1361,8 @@ component Bots
     computerEnlarged = false
     let next = not panelOpen
     panelOpen = next
+    if not next
+      writeDrafts()
     if next and panelTab == "details"
       refresh models
       refresh routines
@@ -1379,6 +1387,7 @@ component Bots
   action clearToast
     toast = ""
   action openHidden(bslug: string)
+    writeDrafts()
     panelTab = "details"
     panelPage = "root"
     panelOpen = true
@@ -1424,6 +1433,7 @@ component Bots
   // A wide window shows the list beside the open chat. Opening another Bot
   // replaces that chat, so the conversation swaps instead of stacking.
   action open(url: string)
+    writeDrafts()
     computerEnlarged = false
     wantOpen = false
     wantClose = false
@@ -1433,12 +1443,14 @@ component Bots
     rowMenu = ""
     nav = top(nav).name == "chat" and url.startsWith("/bot/") ? replace(nav, url) : go(nav, url)
   action back
+    writeDrafts()
     computerEnlarged = false
     if childThread != ""
       childThread = ""
     else
       nav = back(nav)
   action closeChild
+    writeDrafts()
     childThread = ""
   action noteDraft
     draftRev = draftRev + 1
@@ -1451,9 +1463,10 @@ component Bots
         draftFiles = keptDrafts.files
         draftVoices = keptDrafts.voices
   action writeDrafts
-    let rev = draftRev
-    savedRev = rev
-    send draftSaved = saveDrafts(draftTexts, draftFiles, draftVoices)
+    if draftRev != savedRev
+      let rev = draftRev
+      savedRev = rev
+      send draftSaved = saveDrafts(draftTexts, draftFiles, draftVoices)
   action editChatQuery(v: string)
     messageQuery = v
   action toggleShownMark
@@ -1555,8 +1568,10 @@ component Bots
       if not hasFileId(draftFiles, id) and not hasVoiceId(nextVoices, id) and slug != "fixture" and slug != ""
         send voiceDropped = dropVoice(slug, id)
   action openChild(threadId: string)
+    writeDrafts()
     childThread = threadId
   action openNew
+    writeDrafts()
     plusOpen = false
     newName = ""
     newColor = "brand.default"
@@ -1608,6 +1623,7 @@ component Bots
           nav = back(nav)
       case none
   action openNewGroup
+    writeDrafts()
     plusOpen = false
     groupName = ""
     groupAbout = ""
@@ -1759,6 +1775,7 @@ component Bots
       send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"), childThread, replyTo, replyQuote)
       clearMention()
       edit("")
+      writeDrafts()
     focus("composer")
   action composerKey(k: string, event: KeyboardEvent)
     if mentionOn and mentionHits.length > 0 and (k == "ArrowDown" or k == "ArrowUp" or k == "Enter" or k == "Tab" or k == "Escape")
@@ -1782,6 +1799,7 @@ component Bots
     if sendError == ""
       draftFiles = dropKey(draftFiles, dkey)
       noteDraft()
+      writeDrafts()
       lastText = ""
       replyTo = ""
       replyQuote = ""
@@ -1964,6 +1982,7 @@ component Bots
 
   // Settings: name, theme, usage, the default model, Vault, the remote password, storage, and about.
   action openSettings
+    writeDrafts()
     settingsDomain = "user"
     computerEnlarged = false
     childThread = ""
@@ -2216,7 +2235,7 @@ component Bots
     computerEnlarged = false
 
   view
-    main id="app-shell" class=Screen navigationKey=`${top(nav).id}` navigationBack="back" navigate=open interactive-widget="resizes-content" position="relative" width="100%" height="100%" testId="app"
+    main id="app-shell" class=Screen navigationKey=`${top(nav).id}` navigationBack="back" navigate=open beforeunload=writeDrafts interactive-widget="resizes-content" position="relative" width="100%" height="100%" testId="app"
       if locked
         column flex=1 justify-content="center" align-items="center" padding="space.xl" testId="sign-in"
           column width="100%" max-width="22rem" gap="space.lg" box-sizing="border-box" padding="space.xl" border="1px solid surface.line" border-radius="radius.lg" background-color="surface.card"
