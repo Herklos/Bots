@@ -894,6 +894,18 @@ async fn known_bots(s: &AppState, slugs: &[String]) -> ApiResult<Vec<Value>> {
 async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
     require_json(&h)?;
     let body = parse(&body)?;
+    let kickoff = match body.get("kickoff") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(text)) => {
+            let text = text.trim();
+            if text.is_empty() {
+                None
+            } else {
+                Some(text.to_string())
+            }
+        }
+        Some(_) => return Err(ApiError::bad_request("kickoff must be a string")),
+    };
     let slugs = string_list(&body["members"]);
     let known = known_bots(&s, &slugs).await?;
     let room = s
@@ -911,6 +923,24 @@ async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
         .await?;
     let policy = group_answer_policy(&s.settings().await);
     let (members, _) = room_snapshot(&s, &room, true).await?;
+    let room = if let Some(text) = kickoff {
+        let id = room["id"].as_str().unwrap_or("");
+        let (stored, dispatches) = s
+            .rooms
+            .send(
+                id,
+                &members,
+                &text,
+                &uuid::Uuid::new_v4().to_string(),
+                &routines::stamped(),
+                policy,
+            )
+            .await?;
+        dispatch_room(&s, &dispatches).await?;
+        stored
+    } else {
+        room
+    };
     Ok(Json(rooms::present(&room, &members, policy)))
 }
 

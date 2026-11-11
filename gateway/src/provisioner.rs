@@ -284,6 +284,55 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
                 .await
                 .map_err(|e| anyhow::anyhow!(e.message))?;
         }
+        // The launch above already set this thread's runtime mode. There is no later RPC for it.
+        // Routines wait until that thread exists, then run once. A failed upsert leaves the Bot
+        // and the entries that did not land, so the next pass can retry them.
+        if let Some(entries) = bot["pendingRoutines"]
+            .as_array()
+            .filter(|list| !list.is_empty())
+        {
+            let mut left = Vec::new();
+            for entry in entries {
+                let task = match crate::routines::pending_routine_task(
+                    &project_id,
+                    &thread,
+                    &model,
+                    entry,
+                ) {
+                    Ok(task) => task,
+                    Err(_) => {
+                        tracing::warn!("[provisioner] routine for {slug} was not saved");
+                        left.push(entry.clone());
+                        continue;
+                    }
+                };
+                match crate::routines::change(
+                    &state.t3,
+                    &state.routine_history,
+                    "upsert",
+                    crate::routines::UPSERT,
+                    task,
+                )
+                .await
+                {
+                    Ok(_) => {}
+                    Err(_) => {
+                        tracing::warn!("[provisioner] routine for {slug} was not saved");
+                        left.push(entry.clone());
+                    }
+                }
+            }
+            let patch = if left.is_empty() {
+                json!({ "pendingRoutines": null })
+            } else {
+                json!({ "pendingRoutines": left })
+            };
+            state
+                .bots
+                .save(&slug, &patch, false)
+                .await
+                .map_err(|e| anyhow::anyhow!(e.message))?;
+        }
     }
     Ok(())
 }
@@ -620,5 +669,53 @@ mod tests {
         assert_eq!(threads[0]["threadId"], child_thread);
         assert!(calls.iter().all(|p| p["projectId"] != parent_project));
         assert!(calls.iter().all(|p| p["threadId"] != parent_thread));
+    }
+
+    #[tokio::test]
+    async fn pending_routines_are_applied_once_and_then_cleared() {
+        let (url, log) = fake_harness().await;
+        let dir = tempfile::tempdir().unwrap();
+        let state = fixture_state(dir.path(), url);
+        state
+            .bots
+            .create(&json!({
+                "name": "Ada",
+                "runtimeMode": "full-access",
+                "pendingRoutines": [
+                    { "preset": "day", "prompt": "Send the note." },
+                    { "time": "08:30", "weekday": 1, "prompt": "Plan Monday." }
+                ]
+            }))
+            .await
+            .unwrap();
+
+        tick(&state).await.unwrap();
+
+        let ada = state.bots.get("ada").await.unwrap().unwrap();
+        assert!(ada["pendingRoutines"].is_null());
+        assert_eq!(ada["runtimeMode"], "full-access");
+        assert!(ada["mainThreadId"]
+            .as_str()
+            .is_some_and(|id| !id.is_empty()));
+        let calls = log.lock().expect("log").clone();
+        assert!(calls.iter().any(|payload| {
+            payload["runtimeMode"] == "full-access" && payload["interactionMode"] == "default"
+        }));
+        let upserts: Vec<_> = calls
+            .iter()
+            .filter(|payload| payload.get("schedule").is_some())
+            .collect();
+        assert_eq!(upserts.len(), 2);
+        assert_eq!(upserts[0]["prompt"], "Send the note.");
+        assert_eq!(upserts[0]["threadId"], ada["mainThreadId"]);
+        assert_eq!(upserts[1]["schedule"]["timeOfDay"], "08:30");
+        assert_eq!(upserts[1]["schedule"]["weekdays"], json!([1]));
+
+        log.lock().expect("log").clear();
+        tick(&state).await.unwrap();
+        let again = log.lock().expect("log").clone();
+        assert!(again
+            .iter()
+            .all(|payload| payload.get("schedule").is_none()));
     }
 }

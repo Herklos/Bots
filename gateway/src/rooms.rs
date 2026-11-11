@@ -2398,6 +2398,21 @@ mod tests {
         let stored = rooms.get(&id).await.unwrap();
         assert!(stored.get("answerPolicy").is_none());
         assert!(stored.get("chief").is_none());
+        let outsider = rooms
+            .create(
+                "Chiefs",
+                "",
+                "",
+                "",
+                &["ada".into(), "bea".into(), "cy".into()],
+                &[],
+                Some("chief"),
+                Some("nope"),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(outsider.status.as_u16(), 400);
+        assert_eq!(rooms.list().await.unwrap().len(), 1);
         let view = present(&stored, &trio(), AnswerPolicy::Everyone);
         assert_eq!(view["answerPolicy"], "default");
         assert_eq!(view["answerPolicyEffective"], "everyone");
