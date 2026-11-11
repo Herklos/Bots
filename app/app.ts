@@ -183,6 +183,13 @@ async function hostNotice(): Promise<{ available: boolean; state: string } | nul
   return noticeHostInflight;
 }
 const reply = (r: Answered) => (r.ok ? { ok: true, error: '' } : { ok: false, error: localize(r.error) });
+// The transcript row for a command id is `turn-item:message:` plus that id.
+const transcriptRowId = (id: string): string => (id === '' || id.startsWith('turn-item:') ? id : `turn-item:message:${id}`);
+function sentFrom(r: Answered, fallback: string): { ok: boolean; error: string; messageId: string } {
+  if (!r.ok) return { ok: false, error: localize(r.error), messageId: '' };
+  const id = typeof r.body?.messageId === 'string' ? r.body.messageId : '';
+  return { ok: true, error: '', messageId: id !== '' ? id : fallback };
+}
 // The first read on the About tab asks GitHub. Later refreshes use the stored answer.
 let systemChecked = false;
 
@@ -372,6 +379,9 @@ type ChatRow = any;
 // Pins are mutable so a Pin tap can toggle a row without a live gateway.
 // A room the contract runner just created. Null keeps the built-in Design room.
 let fixtureMade: { title: string; description: string; color: string; shape: string; slugs: string[] } | null = null;
+// Lines the contract runner has sent. The transcript uses the same id the send returned.
+const fixtureSent: { id: string; text: string }[] = [];
+const fixtureRoomSent: { id: string; text: string }[] = [];
 // Mute choices the contract runner makes. Missing means the chat still notifies.
 const fixtureBotNotify = new Map<string, boolean>();
 const fixtureRoomNotify = new Map<string, boolean>();
@@ -461,6 +471,7 @@ function fixtureChat(child: string) {
       row({ id: 'm3', time: '9:01 AM', text: 'No tokens here', head: false }),
       row({ id: 'm4', time: '9:02 AM', text: '| Item | Count |\n| :--- | ---: |\n| apple | 2 |', head: true }),
       row({ id: 'voice1', mine: true, files: [{ id: 'voice', name: 'voice.m4a', kind: 'audio', size: '1 KB', url: '/api/bots/fixture/attachments/voice' }] }),
+      ...fixtureSent.map((m) => row({ id: transcriptRowId(m.id), mine: true, text: m.text })),
       { ...blank, id: 'e1', kind: 'event', mine: false, text: 'Created routine', title: 'Morning', head: true, tail: true, variant: 'routine-created' },
       { ...blank, id: 'e2', kind: 'event', mine: false, text: 'Messaged', botName: 'Inbox', botSlug: 'inbox', botShape: 'hex', botColor: 'brand.pink', head: true, tail: true, variant: 'sent' },
     ],
@@ -1135,7 +1146,16 @@ const sources: Sources = {
     const r = await call(store, '/api/rooms', { method: 'POST', body: JSON.stringify({ title, description, color, shape, members: slugs }) });
     return r.ok ? { ok: true, id: String(r.body.id ?? ''), error: '' } : { ok: false, id: '', error: r.error };
   },
-  sendRoom: async ([id, text], store) => reply(await call(store, `/api/rooms/${encodeURIComponent(id)}/messages`, { method: 'POST', body: JSON.stringify({ text }) })),
+  sendRoom: async ([id, text, messageId], store) => {
+    if (id === 'fixture' || id === 'fixture-busy') {
+      fixtureRoomSent.push({ id: messageId, text });
+      return { ok: true, error: '', messageId };
+    }
+    return sentFrom(await call(store, `/api/rooms/${encodeURIComponent(id)}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ text, ...(messageId !== '' ? { messageId } : {}) }),
+    }), messageId);
+  },
   deleteGroup: async ([id], store) => reply(await call(store, `/api/rooms/${encodeURIComponent(id)}`, { method: 'DELETE' })),
   createBot: async ([name, color, shape, firstMessage], store) => {
     // The contract runner has no gateway. A real Bot still posts.
@@ -1258,21 +1278,26 @@ const sources: Sources = {
     if (child !== '') body.child = child;
     return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/requests/${encodeURIComponent(id)}/respond`, { method: 'POST', body: JSON.stringify(body) }));
   },
-  sendMessage: async ([slug, text, pending, child, replyTo, quote], store) => {
+  sendMessage: async ([slug, text, pending, child, replyTo, quote, messageId], store) => {
     const attachmentIds = String(pending ?? '')
       .split('\n')
       .map((line) => line.split('\t')[0]?.trim())
       .filter((id) => !!id);
+    if (FIXTURE_SLUG(slug)) {
+      if (text !== '') fixtureSent.push({ id: messageId, text });
+      return { ok: true, error: '', messageId };
+    }
     const body: Record<string, unknown> = { text, attachmentIds };
     if (child !== '') body.child = child;
     if (replyTo !== '') {
       body.replyTo = replyTo;
       body.quote = String(quote ?? '').slice(0, 500);
     }
-    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/chat`, {
+    if (messageId !== '') body.messageId = messageId;
+    return sentFrom(await call(store, `/api/bots/${encodeURIComponent(slug)}/chat`, {
       method: 'POST',
       body: JSON.stringify(body),
-    }));
+    }), messageId);
   },
   uploadAttachment: async ([slug, path, rawName, rawType, locale], store, storage): Promise<Result<'uploadAttachment'>> => {
     noteLocale(locale);
@@ -1529,7 +1554,7 @@ const sources: Sources = {
         return {
           id: 'fixture', title: fixtureMade.title, description: fixtureMade.description, color: fixtureMade.color, shape: fixtureMade.shape,
           members: fixtureMade.slugs.map((slug) => ({ slug, name: nameOf(slug), line: 'Ready to chat', state: 'idle', ready: true, working: false })),
-          messages: [],
+          messages: fixtureRoomSent.map((m) => roomMessage({ id: m.id, name: 'You', text: m.text, from: 'user' })),
           notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
         };
       }
@@ -1542,6 +1567,7 @@ const sources: Sources = {
         messages: [
           roomMessage({ id: 'r1', name: 'You', text: 'Hello', from: 'user' }),
           roomMessage({ id: 'r2', name: 'Ada', text: 'On it', from: 'ada' }),
+          ...fixtureRoomSent.map((m) => roomMessage({ id: m.id, name: 'You', text: m.text, from: 'user' })),
         ],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
       };
@@ -1555,6 +1581,7 @@ const sources: Sources = {
         ],
         messages: [
           roomMessage({ id: 'r1', name: 'Ada', text: 'On it', from: 'ada' }),
+          ...fixtureRoomSent.map((m) => roomMessage({ id: m.id, name: 'You', text: m.text, from: 'user' })),
         ],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture-busy')),
       };

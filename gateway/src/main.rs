@@ -1014,6 +1014,7 @@ async fn room_send(
     require_json(&h)?;
     let body = parse(&body)?;
     let text = body["text"].as_str().unwrap_or("").trim().to_string();
+    let message_id = chat::message_id(body["messageId"].as_str());
     let room = s.rooms.get(&id).await?;
     let (members, _) = room_snapshot(&s, &room, true).await?;
     let (stored, dispatches) = s
@@ -1022,7 +1023,7 @@ async fn room_send(
             &id,
             &members,
             &text,
-            &uuid::Uuid::new_v4().to_string(),
+            &message_id,
             &routines::stamped(),
             group_answer_policy(&s.settings().await),
         )
@@ -1031,6 +1032,7 @@ async fn room_send(
     let policy = group_answer_policy(&s.settings().await);
     Ok(Json(json!({
         "ok": true,
+        "messageId": message_id,
         "room": rooms::present(&stored, &members, policy),
         "dispatched": dispatched,
     })))
@@ -2394,11 +2396,13 @@ async fn send_chat(
         .filter(|id| !id.is_empty());
     // Resolve before any reply is stored or any command is dispatched. A refused child
     // builds no command, so the parent thread is not written.
+    let message_id = chat::message_id(body["messageId"].as_str());
     let command = if let Some(child) = asked {
         let rows = parent_rows(&s, &parent).await?;
-        chat::child_send(&rows, &parent, child, &text, &files).map_err(ApiError::bad_request)?
+        chat::child_send_with(&rows, &parent, child, &text, &files, &message_id)
+            .map_err(ApiError::bad_request)?
     } else {
-        chat::send_command(&parent, &text, &files)
+        chat::command_with(&parent, &text, &files, &message_id)
     };
     let thread = command["threadId"].as_str().unwrap_or(&parent).to_string();
     let rpc =

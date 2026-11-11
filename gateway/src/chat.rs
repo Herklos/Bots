@@ -444,7 +444,10 @@ pub(crate) async fn dispatch_stored_voice(
 /// The command a phone send dispatches.
 /// `attachments` is the gateway's file records (`attachments::command_part`).
 pub(crate) fn send_command(thread: &str, text: &str, attachments: &[Value]) -> Value {
-    let id = uuid::Uuid::new_v4().to_string();
+    command_with(thread, text, attachments, &uuid::Uuid::new_v4().to_string())
+}
+
+pub(crate) fn command_with(thread: &str, text: &str, attachments: &[Value], id: &str) -> Value {
     json!({
         "commandId": id, "type": "message.dispatch", "threadId": thread, "messageId": id, "text": text,
         "attachments": attachments, "createdBy": "user", "creationSource": "web",
@@ -452,8 +455,23 @@ pub(crate) fn send_command(thread: &str, text: &str, attachments: &[Value]) -> V
     })
 }
 
+/// A short token the client chose, or a new id. The transcript row is `turn-item:message:` plus this.
+pub(crate) fn message_id(supplied: Option<&str>) -> String {
+    let id = supplied.unwrap_or("").trim();
+    if (1..=80).contains(&id.len())
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    {
+        id.to_string()
+    } else {
+        uuid::Uuid::new_v4().to_string()
+    }
+}
+
 /// A send aimed at a child. The command is built only after the child resolves, so a remote
 /// child or the parent id produces no command and does not write the parent. No quote field.
+#[cfg(test)]
 pub(crate) fn child_send(
     rows: &[Value],
     parent: &str,
@@ -461,8 +479,26 @@ pub(crate) fn child_send(
     text: &str,
     attachments: &[Value],
 ) -> Result<Value, &'static str> {
+    child_send_with(
+        rows,
+        parent,
+        asked,
+        text,
+        attachments,
+        &uuid::Uuid::new_v4().to_string(),
+    )
+}
+
+pub(crate) fn child_send_with(
+    rows: &[Value],
+    parent: &str,
+    asked: &str,
+    text: &str,
+    attachments: &[Value],
+    id: &str,
+) -> Result<Value, &'static str> {
     let thread = crate::lineage::thread_for(rows, parent, Some(asked))?;
-    Ok(send_command(&thread, text, attachments))
+    Ok(command_with(&thread, text, attachments, id))
 }
 
 #[cfg(test)]
@@ -1178,5 +1214,20 @@ mod tests {
         assert!(written
             .iter()
             .all(|command| command["threadId"] != "parent-thread"));
+    }
+
+    #[test]
+    fn a_client_message_id_is_kept_when_it_is_a_short_token() {
+        assert_eq!(message_id(Some("m-1")), "m-1");
+        assert_eq!(message_id(Some("  m-1  ")), "m-1");
+        assert_ne!(
+            message_id(Some("turn-item:message:m-1")),
+            "turn-item:message:m-1"
+        );
+        assert_eq!(message_id(Some("")).len(), 36);
+        assert_eq!(message_id(None).len(), 36);
+        let command = command_with("thread", "hi", &[], "m-1");
+        assert_eq!(command["messageId"], "m-1");
+        assert_eq!(command["commandId"], "m-1");
     }
 }
