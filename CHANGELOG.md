@@ -4,6 +4,7 @@
 
 ### Improvements
 
+- Bots avoid Markdown tables and prefer bullet lists.
 - Poll the open screen on its own: the inbox refreshes its conversation list, a chat refreshes that chat, and a hidden window waits about ten seconds. Sending, answering, or stopping a run pauses the poll.
 - Record a terminal provider failure on the thread transcript as a rate limit, a transport failure, or another provider error. A retry that is still in progress stays off the transcript.
 - Show a terminal provider rate limit or provider error in the chat, and when the limit resets.
