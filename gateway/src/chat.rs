@@ -3,7 +3,17 @@
 //! an approval. T3 Code is the harness wired today; other backends may be added. The `/t3/*`
 //! passthrough is that backend's door.
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use sha2::Digest;
+use std::{
+    collections::HashMap,
+    future::Future,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    time::Duration,
+};
+use tokio::sync::Notify;
 
 const LIVE: &[&str] = &[
     "running",
@@ -501,6 +511,188 @@ pub(crate) fn child_send_with(
     Ok(command_with(&thread, text, attachments, id))
 }
 
+/// How long a matching chat read waits for the transcript to change.
+pub(crate) const HOLD_FOR: Duration = Duration::from_secs(25);
+/// How often a held read asks the existing chat read whether the transcript moved.
+pub(crate) const LOOK_EVERY: Duration = Duration::from_millis(500);
+
+/// Fields that should repaint an open chat. `now` is left out: it changes on every read
+/// and is only there so the client can label days.
+fn paint_slice(view: &Value) -> Value {
+    json!({
+        "messages": view.get("messages").cloned().unwrap_or(json!([])),
+        "events": view.get("events").cloned().unwrap_or(json!([])),
+        "requests": view.get("requests").cloned().unwrap_or(json!([])),
+        "working": view.get("working").and_then(Value::as_bool).unwrap_or(false),
+        "pins": view.get("pins").cloned().unwrap_or(json!([])),
+        "readOnly": view.get("readOnly").and_then(Value::as_bool).unwrap_or(false),
+        "threadId": view.get("threadId").and_then(Value::as_str).unwrap_or(""),
+    })
+}
+
+/// A stable tag for one transcript. A child thread, when the body carries one, uses the same fields.
+pub(crate) fn transcript_tag(view: &Value) -> String {
+    let mut slice = paint_slice(view);
+    if let Some(child) = view.get("child").filter(|child| child.is_object()) {
+        slice["child"] = paint_slice(child);
+    }
+    let bytes = serde_json::to_vec(&slice).unwrap_or_default();
+    let digest = sha2::Sha256::digest(&bytes);
+    format!("\"{}\"", hex::encode(digest))
+}
+
+/// `If-None-Match` lists tags. A match includes a weak tag and a bare or quoted form.
+pub(crate) fn none_match(header: Option<&str>, tag: &str) -> bool {
+    let Some(header) = header else {
+        return false;
+    };
+    let tag = tag.trim().trim_matches('"');
+    header.split(',').any(|part| {
+        let part = part.trim();
+        if part == "*" {
+            return true;
+        }
+        let part = part
+            .strip_prefix("W/")
+            .unwrap_or(part)
+            .trim()
+            .trim_matches('"');
+        part == tag
+    })
+}
+
+/// The group list repaints from these fields. There is no clock in the body.
+pub(crate) fn room_tag(view: &Value) -> String {
+    let slice = json!({
+        "id": view.get("id").and_then(Value::as_str).unwrap_or(""),
+        "title": view.get("title").and_then(Value::as_str).unwrap_or(""),
+        "description": view.get("description").and_then(Value::as_str).unwrap_or(""),
+        "messages": view.get("messages").cloned().unwrap_or(json!([])),
+        "members": view.get("members").cloned().unwrap_or(json!([])),
+        "notifications": view.get("notifications").and_then(Value::as_bool).unwrap_or(true),
+    });
+    let bytes = serde_json::to_vec(&slice).unwrap_or_default();
+    let digest = sha2::Sha256::digest(&bytes);
+    format!("\"{}\"", hex::encode(digest))
+}
+
+#[derive(Debug)]
+struct Lane {
+    gen: u64,
+    wake: Arc<Notify>,
+}
+
+#[derive(Debug)]
+struct HoldInner {
+    lanes: Mutex<HashMap<String, Lane>>,
+    stop: Notify,
+    closed: AtomicBool,
+}
+
+/// One held read per chat or group. A retry replaces the previous wait. Shutdown ends it.
+#[derive(Clone, Debug)]
+pub(crate) struct HeldReads {
+    inner: Arc<HoldInner>,
+}
+
+#[derive(Debug)]
+pub(crate) enum Hold<T> {
+    Changed(T),
+    Same,
+    Superseded,
+    Stopped,
+}
+
+impl HeldReads {
+    pub(crate) fn new() -> Self {
+        Self {
+            inner: Arc::new(HoldInner {
+                lanes: Mutex::new(HashMap::new()),
+                stop: Notify::new(),
+                closed: AtomicBool::new(false),
+            }),
+        }
+    }
+
+    pub(crate) fn stop(&self) {
+        self.inner.closed.store(true, Ordering::SeqCst);
+        self.inner.stop.notify_waiters();
+    }
+
+    fn lanes(&self) -> std::sync::MutexGuard<'_, HashMap<String, Lane>> {
+        self.inner
+            .lanes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    fn begin(&self, key: &str) -> (u64, Arc<Notify>) {
+        let mut lanes = self.lanes();
+        let lane = lanes.entry(key.to_string()).or_insert_with(|| Lane {
+            gen: 0,
+            wake: Arc::new(Notify::new()),
+        });
+        lane.gen = lane.gen.wrapping_add(1);
+        let gen = lane.gen;
+        let wake = lane.wake.clone();
+        wake.notify_waiters();
+        (gen, wake)
+    }
+
+    fn generation(&self, key: &str) -> u64 {
+        self.lanes().get(key).map(|lane| lane.gen).unwrap_or(0)
+    }
+
+    /// Waits until `load` reports a tag other than `seen`, the wait is replaced, time runs out, or shutdown.
+    pub(crate) async fn hold_until_change<T, F, Fut>(
+        &self,
+        key: &str,
+        seen: &str,
+        look: Duration,
+        timeout: Duration,
+        mut load: F,
+    ) -> Hold<T>
+    where
+        F: FnMut() -> Fut,
+        Fut: Future<Output = Option<(T, String)>>,
+    {
+        let (gen, wake) = self.begin(key);
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            if self.inner.closed.load(Ordering::SeqCst) {
+                return Hold::Stopped;
+            }
+            if self.generation(key) != gen {
+                return Hold::Superseded;
+            }
+            let now = tokio::time::Instant::now();
+            if now >= deadline {
+                return Hold::Same;
+            }
+            let slice = look.min(deadline - now);
+            tokio::select! {
+                _ = self.inner.stop.notified() => return Hold::Stopped,
+                _ = wake.notified() => continue,
+                _ = tokio::time::sleep(slice) => {}
+            }
+            if self.inner.closed.load(Ordering::SeqCst) {
+                return Hold::Stopped;
+            }
+            if self.generation(key) != gen {
+                return Hold::Superseded;
+            }
+            if let Some((value, tag)) = load().await {
+                if tag != seen {
+                    return Hold::Changed(value);
+                }
+            }
+            if tokio::time::Instant::now() >= deadline {
+                return Hold::Same;
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -531,6 +723,124 @@ mod tests {
             .join("../tests/fixtures/t3")
             .join(name);
         serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap()
+    }
+
+    fn sample_view(text: &str, now: u64) -> Value {
+        json!({
+            "messages": [{ "id": "m1", "text": text }],
+            "events": [],
+            "requests": [],
+            "working": false,
+            "pins": ["m1"],
+            "readOnly": false,
+            "threadId": "thread-1",
+            "now": now,
+            "child": {
+                "messages": [{ "id": "c1", "text": "Notes" }],
+                "events": [],
+                "requests": [],
+                "working": false,
+                "pins": [],
+                "readOnly": true,
+                "threadId": "child-1",
+                "now": now,
+            }
+        })
+    }
+
+    #[test]
+    fn the_same_transcript_keeps_its_tag_and_a_new_message_changes_it() {
+        let first = sample_view("Hello", 1);
+        let later = sample_view("Hello", 2);
+        assert_eq!(transcript_tag(&first), transcript_tag(&later));
+        assert!(none_match(
+            Some(&transcript_tag(&first)),
+            &transcript_tag(&later)
+        ));
+        let mut changed = later;
+        changed["messages"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({ "id": "m2", "text": "Again" }));
+        assert_ne!(transcript_tag(&first), transcript_tag(&changed));
+        let mut child_changed = sample_view("Hello", 1);
+        child_changed["child"]["messages"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({ "id": "c2", "text": "More" }));
+        assert_ne!(transcript_tag(&first), transcript_tag(&child_changed));
+    }
+
+    #[tokio::test]
+    async fn a_held_read_returns_when_the_transcript_changes() {
+        let holds = HeldReads::new();
+        let text = Arc::new(Mutex::new("Hello".to_string()));
+        let seen = text.clone();
+        let waiting = tokio::spawn(async move {
+            holds
+                .hold_until_change(
+                    "ada",
+                    "Hello",
+                    Duration::from_millis(20),
+                    Duration::from_secs(25),
+                    move || {
+                        let seen = seen.clone();
+                        async move {
+                            let tag = seen.lock().unwrap_or_else(|p| p.into_inner()).clone();
+                            Some(((), tag))
+                        }
+                    },
+                )
+                .await
+        });
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        *text.lock().unwrap_or_else(|p| p.into_inner()) = "Again".to_string();
+        let outcome = tokio::time::timeout(Duration::from_secs(2), waiting)
+            .await
+            .expect("the held read waited out the full hold")
+            .unwrap();
+        assert!(matches!(outcome, Hold::Changed(())));
+    }
+
+    #[tokio::test]
+    async fn a_second_hold_replaces_the_first_and_shutdown_ends_it() {
+        let holds = HeldReads::new();
+        let first_holds = holds.clone();
+        let first = tokio::spawn(async move {
+            first_holds
+                .hold_until_change(
+                    "ada",
+                    "a",
+                    Duration::from_secs(25),
+                    Duration::from_secs(25),
+                    || async { Some(((), "a".to_string())) },
+                )
+                .await
+        });
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        let second_holds = holds.clone();
+        let second = tokio::spawn(async move {
+            second_holds
+                .hold_until_change(
+                    "ada",
+                    "a",
+                    Duration::from_secs(25),
+                    Duration::from_secs(25),
+                    || async { Some(((), "a".to_string())) },
+                )
+                .await
+        });
+        let first = tokio::time::timeout(Duration::from_secs(2), first)
+            .await
+            .expect("the replaced hold stayed up")
+            .unwrap();
+        assert!(matches!(first, Hold::Superseded));
+        holds.stop();
+        let second = tokio::time::timeout(Duration::from_secs(2), second)
+            .await
+            .expect("shutdown left the hold waiting")
+            .unwrap();
+        assert!(matches!(second, Hold::Stopped));
     }
 
     #[test]

@@ -390,6 +390,7 @@ mod tests {
             system: crate::release::System::new(cfg.data_root.clone(), cfg.app_dir()),
             mcp_token: "fixture-only".into(),
             provision_now: tokio::sync::Notify::new(),
+            holds: crate::chat::HeldReads::new(),
             access: None,
             exposure,
             remote: Arc::new(RemoteAccess::new(
