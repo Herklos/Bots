@@ -196,7 +196,7 @@ impl Library {
         let listed = self.ws.list(&format!("{slug}/.bot/attachments")).await?;
         let mut out = Vec::new();
         for entry in listed {
-            if !entry.is_file || !entry.name.ends_with(".json") {
+            if !entry.is_file || !ascii_ext(&entry.name, "json") {
                 continue;
             }
             let rel = format!("{slug}/.bot/attachments/{}", entry.name);
@@ -479,6 +479,13 @@ impl Library {
 
 const SHELF_CAP: usize = 60;
 
+/// File-name extension, compared without case. The default macOS volume treats `.JSON` and `.json` as one file.
+fn ascii_ext(name: &str, ext: &str) -> bool {
+    std::path::Path::new(name)
+        .extension()
+        .is_some_and(|found| found.eq_ignore_ascii_case(ext))
+}
+
 fn is_picture(title: &str, detail: &str) -> bool {
     detail.starts_with("image/")
         || matches!(
@@ -702,6 +709,8 @@ mod tests {
         assert_eq!(file_kind("Report.html"), "page");
         assert_eq!(file_kind("shot.PNG"), "media");
         assert_eq!(file_kind("notes.txt"), "file");
+        assert!(ascii_ext("meta.JSON", "json"));
+        assert!(!ascii_ext("meta.json.bak", "json"));
         assert_eq!(media_kind("image/png"), "media");
         assert_eq!(media_kind("application/pdf"), "file");
     }

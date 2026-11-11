@@ -191,7 +191,11 @@ mod tests {
         let first = write_face(dir.path(), "hex", "orange").unwrap();
         let second = write_face(dir.path(), "hex", "orange").unwrap();
         assert_eq!(first, second);
-        assert!(first.starts_with(".bot/avatar-") && first.ends_with(".svg"));
+        assert!(first.starts_with(".bot/avatar-"));
+        assert_eq!(
+            std::path::Path::new(&first).extension(),
+            Some(std::ffi::OsStr::new("svg"))
+        );
         assert_eq!(first.len(), ".bot/avatar-".len() + 12 + ".svg".len());
         let bytes = std::fs::read(dir.path().join(".bot").join(&first[".bot/".len()..])).unwrap();
         assert_eq!(bytes, face_svg("hex", "orange").into_bytes());

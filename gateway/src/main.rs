@@ -1335,6 +1335,21 @@ async fn library_delete(
     Ok(Json(s.library.delete_item(&slug, &id).await?))
 }
 
+/// Content type for a library file. The extension match ignores case: the default macOS volume does too.
+fn library_mime(path: &str) -> &'static str {
+    let ext = std::path::Path::new(path).extension();
+    let is = |want: &str| ext.is_some_and(|found| found.eq_ignore_ascii_case(want));
+    if is("html") || is("htm") {
+        "text/html; charset=utf-8"
+    } else if is("png") {
+        "image/png"
+    } else if is("jpg") || is("jpeg") {
+        "image/jpeg"
+    } else {
+        "application/octet-stream"
+    }
+}
+
 async fn library_file(
     State(s): S,
     Path(slug): Path<String>,
@@ -1343,15 +1358,7 @@ async fn library_file(
     require_bot(&s, &slug).await?;
     let path = q.get("path").map(String::as_str).unwrap_or("");
     let bytes = s.library.file_bytes(&slug, path).await?;
-    let mime = if path.ends_with(".html") || path.ends_with(".htm") {
-        "text/html; charset=utf-8"
-    } else if path.ends_with(".png") {
-        "image/png"
-    } else if path.ends_with(".jpg") || path.ends_with(".jpeg") {
-        "image/jpeg"
-    } else {
-        "application/octet-stream"
-    };
+    let mime = library_mime(path);
     Ok(([(header::CONTENT_TYPE, mime)], bytes).into_response())
 }
 
@@ -2414,7 +2421,10 @@ async fn static_files(State(s): S, uri: Uri, req: Request) -> Response {
     }
     // The web build is made with a placeholder gateway address (see app/app.ts); serve it with the
     // address this request came in on, so one build works wherever the gateway is reached.
-    if target.extension().is_some_and(|e| e == "js") {
+    if target
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("js"))
+    {
         if let Ok(js) = tokio::fs::read_to_string(&target).await {
             if js.contains(ORIGIN_PLACEHOLDER) {
                 let body = js.replace(ORIGIN_PLACEHOLDER, &request_origin(req.headers()));
@@ -2482,6 +2492,16 @@ mod tests {
             "https://127.0.0.1",
             "a host that could break out of a string is replaced"
         );
+    }
+
+    #[test]
+    fn library_mime_ignores_extension_case() {
+        assert_eq!(library_mime("page.HTML"), "text/html; charset=utf-8");
+        assert_eq!(library_mime("page.HTM"), "text/html; charset=utf-8");
+        assert_eq!(library_mime("shot.PNG"), "image/png");
+        assert_eq!(library_mime("shot.JPEG"), "image/jpeg");
+        assert_eq!(library_mime("shot.JPG"), "image/jpeg");
+        assert_eq!(library_mime("notes.TXT"), "application/octet-stream");
     }
 
     fn settings_state(dir: &std::path::Path) -> Arc<AppState> {

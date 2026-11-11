@@ -975,13 +975,13 @@ impl System {
         checker.status.clone()
     }
 
-    async fn persist(&self, state: &AutoState) {
+    fn persist(&self, state: &AutoState) {
         if let Err(error) = write_auto_state(&self.auto_file, state) {
             tracing::error!("auto-update: couldn't save its state: {error}");
         }
     }
 
-    async fn log(&self, line: &str) {
+    fn log(&self, line: &str) {
         tracing::info!("{line}");
         log_update(&self.home, line);
     }
@@ -998,8 +998,8 @@ impl System {
                 .exists()
         };
         if let Some(line) = settle(&mut state, VERSION, &installed, &iso8601(unix_now())) {
-            self.log(&line).await;
-            self.persist(&state).await;
+            self.log(&line);
+            self.persist(&state);
         }
     }
 
@@ -1014,8 +1014,7 @@ impl System {
             Err(error) => {
                 self.log(&format!(
                     "auto-update: couldn't read the busy Bot threads: {error}"
-                ))
-                .await;
+                ));
                 return;
             }
         };
@@ -1026,18 +1025,18 @@ impl System {
         let at = iso8601(now_ms / 1000);
         let (step, lines) = consider(&mut state, check, VERSION, busy, now_ms, &at);
         for line in &lines {
-            self.log(line).await;
+            self.log(line);
         }
-        self.persist(&state).await;
+        self.persist(&state);
         if let Step::Install { version } = step {
             let preview = is_preview(VERSION);
             if let Err(error) = start_updater(&version, preview, &self.home) {
                 if let Some(line) =
                     mark_failed(&mut state, VERSION, &version, &error.to_string(), &at)
                 {
-                    self.log(&line).await;
+                    self.log(&line);
                 }
-                self.persist(&state).await;
+                self.persist(&state);
             }
         }
     }
@@ -1187,7 +1186,7 @@ async fn set_auto_update(State(s): State<Arc<AppState>>, body: Bytes) -> Respons
     state.auto = auto;
     state.waiting = None;
     state.gave_up = None;
-    s.system.persist(&state).await;
+    s.system.persist(&state);
     drop(state);
     Json(s.system.auto_status().await).into_response()
 }
@@ -1205,7 +1204,7 @@ async fn dismiss_notice(State(s): State<Arc<AppState>>, Query(q): Query<NoticeAt
         .is_some_and(|n| q.at.as_ref().is_none_or(|at| *at == n.at))
     {
         state.notice = None;
-        s.system.persist(&state).await;
+        s.system.persist(&state);
     }
     drop(state);
     Json(s.system.auto_status().await)

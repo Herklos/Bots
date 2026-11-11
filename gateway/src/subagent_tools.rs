@@ -71,7 +71,7 @@ pub async fn call(state: &AppState, name: &str, args: &Value) -> Result<Value, S
 
 pub async fn dispatch(d: &Deps<'_>, name: &str, args: &Value) -> Result<Value, String> {
     match name {
-        "subagent_list" => list(d, args).await,
+        "subagent_list" => list(d, args),
         "subagent_create" => create(d, args).await,
         _ => Err(format!("Unknown tool {name}")),
     }
@@ -104,7 +104,7 @@ fn child_view(bot: &Value) -> Value {
     })
 }
 
-async fn list(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
+fn list(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
     let parent = caller(d.roster, args)?;
     let slug = parent["slug"].as_str().unwrap_or_default();
     let subagents: Vec<Value> = d
