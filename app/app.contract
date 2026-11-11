@@ -2647,7 +2647,7 @@ component Bots
                       column class=GroupCard padding="space.sm"
                         row class=SettingsTrack role="radiogroup" aria-label=t("settings.network")
                           for mode in ["local", "lan", "tailscale"] key=mode
-                            button class=SettingsTab appearance="none" role="radio" aria-checked=(network.mode == mode) press=doSetNetwork(mode) disabled=network.locked testId=`network-${mode}` background-color=(network.mode == mode ? "surface.card" : "transparent") color=(network.mode == mode ? "-exact-label" : "ink.muted")
+                            button class=SettingsTab appearance="none" role="radio" aria-checked=(network.mode == mode) press=doSetNetwork(mode) disabled=network.locked opacity=(network.locked and network.mode != mode ? 0.4 : 1) testId=`network-${mode}` background-color=(network.mode == mode ? "surface.card" : "transparent") color=(network.mode == mode ? "-exact-label" : "ink.muted")
                               text networkModeLabel(mode, t("settings.networkLocal"), t("settings.networkLan"), t("settings.networkTailscale"))
                       text (network.mode == "lan" ? t("settings.networkLanNote") : network.mode == "tailscale" ? t("settings.networkTailscaleNote") : t("settings.networkLocalNote")) class=SettingsFoot
                       if network.locked
