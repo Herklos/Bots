@@ -267,6 +267,58 @@ style GroupCard
   padding="space.xs space.md"
   box-sizing="border-box"
 
+// Settings uses one track for domain tabs and for exclusive choices.
+style SettingsTrack
+  display="flex"
+  align-items="stretch"
+  width="100%"
+  box-sizing="border-box"
+  padding="2px"
+  border-radius="radius.full"
+  background-color="surface.soft"
+
+style SettingsTab
+  flex=1
+  min-width=0
+  min-height=36
+  padding="space.xs space.sm"
+  border="none"
+  border-radius="radius.full"
+  background-color="transparent"
+  color="ink.muted"
+  font="-exact-subheadline"
+  font-weight=500
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+// A row inside a Settings card. The card draws the outer edge; a hairline is a node attribute.
+style SettingsRow
+  display="flex"
+  align-items="center"
+  gap="space.md"
+  width="100%"
+  box-sizing="border-box"
+  min-height=44
+  padding="0 space.md"
+  border="none"
+  background-color="transparent"
+  color="-exact-label"
+  text-align="left"
+  text-decoration="none"
+  :hover
+    background-color="surface.soft"
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+style SettingsFoot
+  color="ink.muted"
+  font="-exact-footnote"
+  padding="space.xs space.md 0"
+
 // A small status chip: a dot and a word.
 style Chip
   display="flex"
@@ -2145,91 +2197,100 @@ component Bots
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader
                 text t("settings.title") role="heading" aria-level=1 class=PageTitle flex=1
-              row role="tablist" aria-label=t("settings.domains") justify-content="center" flex-wrap="wrap" gap="space.xs" padding="space.md space.lg space.sm"
-                for d in ["user", "models", "access", "updates"] key=d
-                  button class=Segment appearance="none" role="tab" aria-selected=(settingsDomain == d) press=pickSettingsDomain(d) min-height=36 padding="space.xs space.md" testId=`settings-domain-${d}` background-color=(settingsDomain == d ? "surface.raised" : "transparent") color=(settingsDomain == d ? "-exact-label" : "ink.muted")
-                    text settingsDomainLabel(d, t("settings.domainUser"), t("settings.domainModels"), t("settings.domainAccess"), t("settings.about")) font="-exact-subheadline"
+              column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" padding="space.md space.lg space.sm"
+                row class=SettingsTrack role="tablist" aria-label=t("settings.domains")
+                  for d in ["user", "models", "access", "updates"] key=d
+                    button class=SettingsTab appearance="none" role="tab" aria-selected=(settingsDomain == d) press=pickSettingsDomain(d) testId=`settings-domain-${d}` background-color=(settingsDomain == d ? "surface.card" : "transparent") color=(settingsDomain == d ? "-exact-label" : "ink.muted")
+                      text settingsDomainLabel(d, t("settings.domainUser"), t("settings.domainModels"), t("settings.domainAccess"), t("settings.about"))
               scroll id="settings-form" flex=1 min-height=0
                 column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" margin="0 auto" padding="space.lg space.lg space.xl" gap="space.xl"
                   if settingsDomain == "user"
-                    row class=GroupCard gap="space.lg" align-items="center" padding="space.lg"
-                      column width=56 height=56 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
-                        if initialsOf(prefs.userName) != ""
-                          text initialsOf(prefs.userName) font="-exact-title3" font-weight=600
-                        else
-                          Glyph(name="person", size=24)
-                      column flex=1 gap="2px" min-width=0
-                        input appearance="none" class=Field value=(nameEditing ? nameDraft : prefs.userName) input=doEditName change=doSaveName placeholder=t("settings.yourName") aria-label=t("settings.yourName") font="-exact-headline" testId="user-name"
-                        text botCountLabel(bots.length, t("bots.one"), t("bots.many", n=bots.length)) color="ink.muted" font="-exact-footnote"
-                    column gap="space.sm"
+                    column
+                      text t("settings.you") class=SectionLabel
+                      row class=GroupCard gap="space.lg" align-items="center" padding="space.lg" min-height=44
+                        column width=56 height=56 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
+                          if initialsOf(prefs.userName) != ""
+                            text initialsOf(prefs.userName) font="-exact-title3" font-weight=600
+                          else
+                            Glyph(name="person", size=24)
+                        column flex=1 gap="2px" min-width=0
+                          input appearance="none" class=Field value=(nameEditing ? nameDraft : prefs.userName) input=doEditName change=doSaveName placeholder=t("settings.yourName") aria-label=t("settings.yourName") font="-exact-headline" testId="user-name"
+                          text botCountLabel(bots.length, t("bots.one"), t("bots.many", n=bots.length)) color="ink.muted" font="-exact-footnote"
+                    column
                       text t("settings.appearance") class=SectionLabel
-                      row gap="space.sm" role="radiogroup" aria-label=t("settings.theme")
-                        for t in ["system", "light", "dark"] key=t
-                          button press=doPickTheme(t) role="radio" aria-checked=(prefs.theme == t) appearance="none" flex=1 padding="space.sm" border-radius="radius.md" testId=`theme-${t}` border=(prefs.theme == t ? "2px solid AccentColor" : "2px solid transparent") background-color="surface.card"
-                            column gap="space.xs" align-items="center"
-                              row width="100%" height=44 border-radius="radius.sm" overflow="hidden" border="1px solid surface.line"
-                                column flex=1 background-color=(t == "dark" ? "#17171b" : "#fcfcfd")
-                                column flex=1 background-color=(t == "light" ? "#fcfcfd" : t == "dark" ? "#17171b" : "#17171b")
-                              text themeLabel(t, t("theme.system"), t("theme.dark"), t("theme.light")) font="-exact-footnote" font-weight=500
-                    column gap="space.sm"
+                      column class=GroupCard padding="space.md"
+                        row gap="space.sm" role="radiogroup" aria-label=t("settings.theme")
+                          for t in ["system", "light", "dark"] key=t
+                            button press=doPickTheme(t) role="radio" aria-checked=(prefs.theme == t) appearance="none" flex=1 padding="space.sm" border-radius="radius.md" testId=`theme-${t}` border=(prefs.theme == t ? "2px solid AccentColor" : "2px solid transparent") background-color="surface.canvas"
+                              column gap="space.xs" align-items="center"
+                                row width="100%" height=44 border-radius="radius.sm" overflow="hidden" border="1px solid surface.line"
+                                  column flex=1 background-color=(t == "dark" ? "#17171b" : "#fcfcfd")
+                                  column flex=1 background-color=(t == "light" ? "#fcfcfd" : t == "dark" ? "#17171b" : "#17171b")
+                                text themeLabel(t, t("theme.system"), t("theme.dark"), t("theme.light")) font="-exact-footnote" font-weight=500
+                    column
                       text t("panel.usage") class=SectionLabel
                       column class=GroupCard padding="0"
                         UsageView(report=report, down=failed(report), period=usagePeriod, view=usageView, pickPeriod=pickPeriod, pickView=pickView, showBots=true)
-                      text t("settings.usageNote") color="ink.muted" font="-exact-footnote" padding="0 space.md"
+                      text t("settings.usageNote") class=SettingsFoot
                   else if settingsDomain == "models"
-                    column gap="space.sm"
+                    column
                       text t("settings.defaultModel") class=SectionLabel
                       column class=GroupCard padding="space.sm"
                         if providers.length == 0
-                          text t("settings.noProvider") color="ink.muted" font="-exact-subheadline" padding="space.sm"
+                          text t("settings.noProvider") color="ink.muted" font="-exact-subheadline" padding="space.sm" min-height=44
                         else
                           ModelPicker(providers=providers, instanceId=prefs.defaultInstance, model=prefs.defaultModel, effort=prefs.defaultEffort, prefix="default", pick=doMakeDefault)
-                    column gap="space.sm"
+                    column
                       text t("settings.defaultAccess") class=SectionLabel
-                      column class=GroupCard padding="space.md" gap="space.sm"
-                        row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("settings.defaultAccess")
+                      column class=GroupCard padding="space.sm"
+                        row class=SettingsTrack role="radiogroup" aria-label=t("settings.defaultAccess")
                           for mode in ["approval-required", "auto", "full-access"] key=mode
-                            button class=Segment appearance="none" role="radio" aria-checked=(prefs.defaultRuntimeMode == mode) press=doDefaultMode(mode) testId=`default-access-${mode}` border="1px solid surface.line" background-color=(prefs.defaultRuntimeMode == mode ? "surface.raised" : "transparent")
+                            button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.defaultRuntimeMode == mode) press=doDefaultMode(mode) testId=`default-access-${mode}` background-color=(prefs.defaultRuntimeMode == mode ? "surface.card" : "transparent") color=(prefs.defaultRuntimeMode == mode ? "-exact-label" : "ink.muted")
                               text (mode == "approval-required" ? t("model.ask") : mode == "auto" ? t("model.auto") : t("model.fullAccess"))
-                        text t("settings.defaultAccessNote") color="ink.muted" font="-exact-footnote"
-                        if prefsError != ""
-                          text prefsError color="-exact-system-red" font="-exact-footnote"
+                      text t("settings.defaultAccessNote") class=SettingsFoot
+                      if prefsError != ""
+                        text prefsError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0"
                   else if settingsDomain == "access"
-                    column gap="space.sm"
+                    column
                       text t("settings.private") class=SectionLabel
-                      button class=PanelRow appearance="none" press=open("/vault") testId="open-vault"
-                        column class=IconTile color="AccentColor"
-                          Glyph(name="lock", size=18)
-                        column flex=1 gap="2px" min-width=0
-                          text t("vault.title") font-weight=600
-                          text t("settings.vaultNote") color="ink.muted" font="-exact-footnote"
-                        column color="ink.muted"
-                          Glyph(name="chevron", size=18)
-                    column gap="space.sm"
+                      column class=GroupCard padding="0"
+                        button class=SettingsRow appearance="none" press=open("/vault") testId="open-vault"
+                          column class=IconTile color="AccentColor"
+                            Glyph(name="lock", size=18)
+                          column flex=1 gap="2px" min-width=0
+                            text t("vault.title") font-weight=600
+                            text t("settings.vaultNote") color="ink.muted" font="-exact-footnote"
+                          column color="ink.muted"
+                            Glyph(name="chevron", size=18)
+                    column
                       text t("settings.remote") class=SectionLabel
-                      column class=GroupCard gap="space.md" padding="space.md"
-                        text (session.passwordRequired ? t("settings.passwordOn") : t("settings.passwordOff")) color="ink.muted" font="-exact-footnote"
-                        row gap="space.sm" align-items="center"
-                          input appearance="none" class=Field type="password" value=newPassword input=editNewPassword submit=doSavePassword placeholder=(session.passwordRequired ? t("settings.newPassword") : t("settings.setPassword")) aria-label=t("common.password") autocomplete="new-password" flex=1 min-width=0 min-height=36 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" font="-exact-subheadline" testId="new-password"
-                          button class=ChoiceButton appearance="none" press=doSavePassword disabled=(newPassword == "" or pending(passwordSet)) background-color=(newPassword == "" ? "surface.raised" : "brand.default") color=(newPassword == "" ? "ink.muted" : "ink.dark") testId="save-password"
+                      column class=GroupCard padding="0"
+                        row class=SettingsRow min-height=44
+                          input appearance="none" class=Field type="password" value=newPassword input=editNewPassword submit=doSavePassword placeholder=(session.passwordRequired ? t("settings.newPassword") : t("settings.setPassword")) aria-label=t("common.password") autocomplete="new-password" flex=1 min-width=0 testId="new-password"
+                          button appearance="none" press=doSavePassword disabled=(newPassword == "" or pending(passwordSet)) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color=(newPassword == "" ? "ink.muted" : "AccentColor") font="-exact-subheadline" font-weight=500 testId="save-password"
                             text (session.passwordRequired ? t("settings.change") : t("settings.set"))
-                        if passwordError != "" and not pending(passwordSet)
-                          text passwordError color="-exact-system-red" font="-exact-footnote" testId="password-error"
+                      text (session.passwordRequired ? t("settings.passwordOn") : t("settings.passwordOff")) class=SettingsFoot
+                      if passwordError != "" and not pending(passwordSet)
+                        text passwordError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="password-error"
                   else if settingsDomain == "updates"
-                    column gap="space.sm"
-                      text t("settings.about") class=SectionLabel
-                      column class=GroupCard padding="space.xs space.md"
-                        row justify-content="space-between" align-items="center" min-height=40 font="-exact-subheadline"
-                          text "hbots" color="ink.muted"
-                          text (about.ok ? about.version : t("settings.unknown")) testId="about-version"
-                        row justify-content="space-between" align-items="center" min-height=40 border-top="1px solid surface.line" font="-exact-subheadline"
-                          text about.harness color="ink.muted"
-                          text (about.connected ? t("settings.connected") : t("settings.disconnected")) color=(about.connected ? "-exact-label" : "-exact-system-red") testId="about-harness"
-                      link class=ChoiceRow href="https://github.com/Herklos/HBots/blob/main/CHANGELOG.md" target="_blank" testId="about-changelog"
-                        text t("settings.changelog") font-weight=500
+                    column gap="space.xl"
+                      column
+                        text t("settings.about") class=SectionLabel
+                        column class=GroupCard padding="0"
+                          row justify-content="space-between" align-items="center" min-height=44 padding="0 space.md" box-sizing="border-box" font="-exact-subheadline"
+                            text "hbots" color="ink.muted"
+                            text (about.ok ? about.version : t("settings.unknown")) testId="about-version"
+                          row justify-content="space-between" align-items="center" min-height=44 padding="0 space.md" box-sizing="border-box" border-top="1px solid surface.line" font="-exact-subheadline"
+                            text about.harness color="ink.muted"
+                            text (about.connected ? t("settings.connected") : t("settings.disconnected")) color=(about.connected ? "-exact-label" : "-exact-system-red") testId="about-harness"
+                          link class=SettingsRow href="https://github.com/Herklos/HBots/blob/main/CHANGELOG.md" target="_blank" border-top="1px solid surface.line" testId="about-changelog"
+                            text t("settings.changelog") font-weight=500 flex=1
+                            column color="ink.muted"
+                              Glyph(name="chevron", size=18)
                       if session.passwordRequired
-                        button class=ChoiceRow appearance="none" press=logout justify-content="center" color="-exact-system-red" testId="sign-out"
-                          text t("settings.signOut") font-weight=500
+                        column class=GroupCard padding="0"
+                          button class=SettingsRow appearance="none" press=logout justify-content="flex-start" color="-exact-system-red" testId="sign-out"
+                            text t("settings.signOut") font-weight=500
           else if e.name == "vault"
             column class=Screen navigationKey=`${e.id}` navigationScroll="vault-list" position="absolute" inset=0
               header class=PageHeader flex-wrap="wrap"
