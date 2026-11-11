@@ -23,3 +23,21 @@ jobs:
         run: cargo clippy --all-targets --locked -- -D warnings
       - name: cargo test
         run: cargo test --locked
+
+  contract:
+    name: contract check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: expo/exact
+          # Same pin as the release workflow.
+          ref: ${{ vars.EXACT_REF || 'main' }}
+          path: exact
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Check the contract
+        run: EXACT_DIR="$PWD/exact" bun scripts/check-contract.mjs

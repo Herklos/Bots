@@ -1,0 +1,4 @@
+#!/bin/sh
+# Reject a commit that breaks the Exact contract. Enable with: git config core.hooksPath .githooks
+git diff --cached --name-only | grep -q '^app/.*\.contract$' || exit 0
+exec bun scripts/check-contract.mjs

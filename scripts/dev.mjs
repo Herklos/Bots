@@ -161,6 +161,16 @@ async function cycle() {
   }
 }
 
+// Parse and type check the contract on each save, so an error shows here before the browser overlay.
+let checkTimer = null;
+function checkContract() {
+  clearTimeout(checkTimer);
+  checkTimer = setTimeout(() => {
+    const child = spawnGroup(process.execPath, [resolve(root, 'scripts/check-contract.mjs')], process.env);
+    prefix(child, 'contract');
+  }, 400);
+}
+
 function schedule() {
   clearTimeout(timer);
   timer = setTimeout(cycle, 400);
@@ -233,6 +243,7 @@ web.on('exit', (code, signal) => {
   shutdown();
 });
 
+if (existsSync(resolve(root, 'app'))) watch(resolve(root, 'app'), (_, name) => { if (name?.endsWith('.contract')) checkContract(); });
 arm('gateway/src', true);
 arm('design/src', true);
 arm('gateway/Cargo.toml', false);

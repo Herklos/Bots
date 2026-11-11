@@ -73,8 +73,11 @@ Rebuild the web app after client or Contract changes. Release archives bundle th
 ```sh
 cargo test
 cargo fmt --all -- --check
+bun scripts/check-contract.mjs
 tests/e2e.sh
 ```
+
+`scripts/check-contract.mjs` parses and type checks `app/app.contract` with Exact's `contract build --errors-only`. It runs in CI, in the watch loop on every `.contract` save, and in the pre-commit hook. Enable the hook once per clone with `git config core.hooksPath .githooks`.
 
 The end-to-end script needs Bun, Cargo, Playwright and an existing `app/target/web-dist` build. It runs a mock T3 and a gateway on separate ports; its output directory contains logs and screenshots.
 

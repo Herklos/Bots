@@ -900,9 +900,9 @@ fn roomMentions(bots: Bot[], members: RoomMember[], allName: string): MentionHit
 fn filterMentions(hits: MentionHit[], q: string): MentionHit[] = hits.filter(h => q == "" or h.slug.toLowerCase().startsWith(q) or h.name.toLowerCase().startsWith(q) or h.name.toLowerCase().replaceAll(" ", "").startsWith(q)).slice(0, 8)
 
 keyframes dot
-  from opacity=0.3, translate="0 0"
-  40% opacity=1, translate="0 -3px"
-  to opacity=0.3, translate="0 0"
+  from opacity=0.3 translate="0 0"
+  40% opacity=1 translate="0 -3px"
+  to opacity=0.3 translate="0 0"
 
 component Bots
   state password = ""
@@ -1132,7 +1132,6 @@ component Bots
   // Bot chat keys on the pending row once it is in the list, otherwise the latest server row.
   // Group chat keys on the previous last row until the optimistic row exists, then on that row.
   derive sendJump = onGroup ? (roomPending != "" ? "room-pending" : lastRoomId) : (pendingText != "" ? "pending" : lastId)
-  derive jumpList = onGroup ? "room-log" : "transcript"
   // Skip a stale last id while the send is still in flight and the new row is not in the list yet.
   derive sendReady = sendJump == "pending" or sendJump == "room-pending" or (not onGroup and pendingText == "" and not pending(sent) and lastId != "") or (onGroup and roomPending == "" and not pending(roomSent) and lastRoomId != "")
   derive workingHere = onGroup ? (workingMembers.length > 0 ? "working" : "") : (onBot and chat.working ? "working" : "")
@@ -1202,13 +1201,25 @@ component Bots
 
   // Scroll once the row this send is waiting on exists. The key changes from the old last id
   // to that row, so the jump is not the stale target post used to scroll before the send.
-  task followSend key=sendJump when stickToEnd and messageQuery == "" and sendReady and (onBot or onGroup)
-    scrollIntoView(jumpList, sendJump, block="end")
+  task followSend when stickToEnd and messageQuery == "" and sendReady and (onBot or onGroup) key=sendJump
+    after(1, jumpToSend)
+
+  action jumpToSend
+    if onGroup
+      scrollIntoView("room-log", sendJump, block="end")
+    else
+      scrollIntoView("transcript", sendJump, block="end")
     stickToEnd = false
 
   // A working row grows the list. Follow it only when the person is already at the end.
-  task followWorking key=workingHere when workingHere != "" and not away and not stickToEnd and pendingText == "" and roomPending == "" and (onBot or onGroup)
-    scrollIntoView(jumpList, workingHere, block="end")
+  task followWorking when workingHere != "" and not away and not stickToEnd and pendingText == "" and roomPending == "" and (onBot or onGroup) key=workingHere
+    after(1, jumpToWorking)
+
+  action jumpToWorking
+    if onGroup
+      scrollIntoView("room-log", workingHere, block="end")
+    else
+      scrollIntoView("transcript", workingHere, block="end")
 
   action fitView
     let box = frame("app-shell")
