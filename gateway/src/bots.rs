@@ -317,7 +317,13 @@ impl Bots {
             if current.is_none() && !create {
                 return Err(ApiError::not_found("Bot not found"));
             }
-            for key in ["primary", "hidden", "pinned", "hideFromSidebar"] {
+            for key in [
+                "primary",
+                "hidden",
+                "pinned",
+                "hideFromSidebar",
+                "notifications",
+            ] {
                 if patch.get(key).is_some_and(|v| !v.is_boolean()) {
                     return Err(ApiError::bad_request(format!("{key} must be a boolean")));
                 }
@@ -940,6 +946,42 @@ mod tests {
             .save(&slugs[0], &json!({ "pinned": "yes" }), false)
             .await
             .is_err());
+    }
+
+    #[tokio::test]
+    async fn notifications_must_be_a_boolean_and_a_subagent_can_store_false() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        let ada = bots.create(&json!({ "name": "Ada" })).await.unwrap();
+        let slug = ada["slug"].as_str().unwrap();
+        let bad = bots
+            .save(slug, &json!({ "notifications": "no" }), false)
+            .await
+            .unwrap_err();
+        assert_eq!(status_of(bad), 400);
+        assert_eq!(
+            bots.get(slug).await.unwrap().unwrap()["notifications"],
+            true
+        );
+        let saved = bots
+            .save(slug, &json!({ "notifications": false }), false)
+            .await
+            .unwrap();
+        assert_eq!(saved["notifications"], false);
+
+        let junior = bots.create(&json!({ "parentSlug": slug })).await.unwrap();
+        let child = junior["slug"].as_str().unwrap();
+        let muted = bots
+            .save(child, &json!({ "notifications": false }), false)
+            .await
+            .unwrap();
+        assert_eq!(muted["role"], "subagent");
+        assert_eq!(muted["notifications"], false);
+        let child_bad = bots
+            .save(child, &json!({ "notifications": "off" }), false)
+            .await
+            .unwrap_err();
+        assert_eq!(status_of(child_bad), 400);
     }
 
     #[tokio::test]
