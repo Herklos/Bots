@@ -98,6 +98,7 @@
   "edit.makeMain": "Make main Bot",
   "edit.mute": "Mute",
   "edit.muteNote": "A muted chat still shows an unread dot.",
+  "edit.notify": "Notify",
   "edit.pin": "Pin to the top",
   "edit.pinNote": "Shows as a tile above the list.",
   "edit.unmute": "Unmute",

@@ -2866,13 +2866,13 @@ component GroupPanel
             if error != ""
               text error color="-exact-system-red" testId="group-error-panel"
             row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
-              column class=IconTile color="ink.muted"
-                Glyph(name="pause", size=18)
+              column class=IconTile color="AccentColor"
+                Glyph(name="bell", size=18)
               column flex=1 gap="2px"
-                text (room.notifications ? t("edit.mute") : t("edit.unmute")) font-weight=600 testId="mute-group-label"
+                text t("edit.notify") font-weight=600 testId="mute-group-label"
                 text t("edit.muteNote") color="ink.muted" font="-exact-footnote"
-              button class=ToggleControl appearance="none" role="switch" aria-checked=(not room.notifications) press=patch("notifications", room.notifications ? "false" : "true") aria-label=(room.notifications ? t("edit.mute") : t("edit.unmute")) testId="mute-group"
-                row width=44 height=26 border-radius="radius.full" background-color=(room.notifications ? "surface.line" : "AccentColor") align-items="center" justify-content=(room.notifications ? "flex-start" : "flex-end")
+              button class=ToggleControl appearance="none" role="switch" aria-checked=room.notifications press=patch("notifications", room.notifications ? "false" : "true") aria-label=t("edit.notify") testId="mute-group"
+                row width=44 height=26 border-radius="radius.full" background-color=(room.notifications ? "AccentColor" : "surface.line") align-items="center" justify-content=(room.notifications ? "flex-end" : "flex-start")
                   column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
             row align-items="center" gap="space.md" min-height=56 padding="0 space.md" border-top="1px solid surface.line"
               column class=IconTile color="-exact-system-red"
@@ -3535,13 +3535,13 @@ component EditBotPage
             row width=44 height=26 border-radius="radius.full" background-color=(bot.hidden ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.hidden ? "flex-end" : "flex-start")
               column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
         row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
-          column class=IconTile color="ink.muted"
-            Glyph(name="pause", size=18)
+          column class=IconTile color="AccentColor"
+            Glyph(name="bell", size=18)
           column flex=1 gap="2px"
-            text (bot.notifications ? t("edit.mute") : t("edit.unmute")) font-weight=600 testId="mute-label"
+            text t("edit.notify") font-weight=600 testId="mute-label"
             text t("edit.muteNote") color="ink.muted" font="-exact-footnote"
-          button class=ToggleControl appearance="none" role="switch" aria-checked=(not bot.notifications) press=mute(bot.slug, not bot.notifications) aria-label=(bot.notifications ? t("edit.mute") : t("edit.unmute")) testId="mute-bot"
-            row width=44 height=26 border-radius="radius.full" background-color=(bot.notifications ? "surface.line" : "AccentColor") align-items="center" justify-content=(bot.notifications ? "flex-start" : "flex-end")
+          button class=ToggleControl appearance="none" role="switch" aria-checked=bot.notifications press=mute(bot.slug, not bot.notifications) aria-label=t("edit.notify") testId="mute-bot"
+            row width=44 height=26 border-radius="radius.full" background-color=(bot.notifications ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.notifications ? "flex-end" : "flex-start")
               column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
       if bot.main
         text t("edit.mainStays") color="ink.muted" font="-exact-footnote" padding="0 space.md"

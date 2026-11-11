@@ -617,11 +617,11 @@ test "mute flips on a Bot edit page and a group menu"
   clock data
   tap "panel-toggle"
   tap "panel-edit"
-  expect text "mute-label" == "Mute"
+  expect text "mute-label" == "Notify"
   expect tree has "mute-bot"
   tap "mute-bot"
   clock data
-  expect text "mute-label" == "Unmute"
+  expect text "mute-label" == "Notify"
   at "/group/fixture"
   clock data
   tap "group-fixture" contextmenu

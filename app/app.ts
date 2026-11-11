@@ -742,7 +742,7 @@ const sources: Sources = {
         return {
           kind: 'group', key: `group-${String(g.id)}`, id: String(g.id), name: String(g.title ?? ''), color: String(g.color ?? 'brand.default'), shape: String(g.shape ?? 'ball'),
           faces: stackFaces(g.members, directory),
-          line: last !== '' ? last : String(g.description ?? ''), time: when(said, now), at: said, unread: false, working: false, ready: true, notifications: wantsNotice(g.notifications),
+          line: last !== '' ? last : String(g.description ?? ''), time: when(said, now), at: said, unread: g.unread === true, working: false, ready: true, notifications: wantsNotice(g.notifications),
         };
       });
     // The most recent conversation first, a Bot or a group alike; one with nothing said goes last.
