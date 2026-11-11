@@ -1172,9 +1172,12 @@ async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
                     })?);
                 }
                 "preview" => {
-                    let preview = v.as_str().filter(|p| matches!(*p, "full" | "hidden")).ok_or_else(
-                        || ApiError::bad_request("notifications.preview must be full or hidden"),
-                    )?;
+                    let preview = v
+                        .as_str()
+                        .filter(|p| matches!(*p, "full" | "hidden"))
+                        .ok_or_else(|| {
+                            ApiError::bad_request("notifications.preview must be full or hidden")
+                        })?;
                     merged[k] = json!(preview);
                 }
                 "when" => {
@@ -2564,7 +2567,9 @@ mod tests {
             "userName": "Ada",
             "notifications": { "enabled": true, "sound": false, "preview": "hidden", "when": "background" }
         });
-        store::write_json(&state.settings_path(), &saved).await.unwrap();
+        store::write_json(&state.settings_path(), &saved)
+            .await
+            .unwrap();
         let next = put(&state, json!({ "userName": "Bea" })).await.unwrap();
         assert_eq!(next["userName"], "Bea");
         assert_eq!(next["notifications"], saved["notifications"]);
