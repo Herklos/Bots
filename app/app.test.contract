@@ -323,6 +323,18 @@ test "a draft stays with its Bot and a child keeps its own"
   clock data
   expect text "composer" == "Child draft"
 
+test "creating a Bot opens that chat"
+  size 340x740
+  tap "new-bot"
+  tap "new-bot-option"
+  clock settle
+  type "new-name" "fixture"
+  tap "create"
+  clock data
+  clock settle
+  expect tree missing "new-name"
+  expect text "chat-title" == "Bea"
+
 test "creating a Bot works on a narrow screen"
   size 340x740
   tap "new-bot"

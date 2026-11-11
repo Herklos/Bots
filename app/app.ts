@@ -154,6 +154,13 @@ function botsBody(store: any): Promise<any> {
 }
 const reply = (r: Answered) => (r.ok ? { ok: true, error: '' } : { ok: false, error: localize(r.error) });
 
+// POST /api/bots returns the saved Bot. `reply` keeps only ok and error, which drops slug.
+function madeFromBot(r: Answered): { ok: boolean; id: string; error: string } {
+  if (!r.ok) return { ok: false, id: '', error: localize(r.error) };
+  const slug = typeof r.body?.slug === 'string' ? r.body.slug : '';
+  return { ok: true, id: slug, error: '' };
+}
+
 // The screen says what failed. A stopped gateway, an old hbots, a signed-out
 // session, and a quiet T3 are not the same problem.
 const NOT_IN_VIEW = 'This message is not in view.';
@@ -744,7 +751,13 @@ const sources: Sources = {
   },
   sendRoom: async ([id, text], store) => reply(await call(store, `/api/rooms/${encodeURIComponent(id)}/messages`, { method: 'POST', body: JSON.stringify({ text }) })),
   deleteGroup: async ([id], store) => reply(await call(store, `/api/rooms/${encodeURIComponent(id)}`, { method: 'DELETE' })),
-  createBot: async ([name, color, shape, firstMessage], store) => reply(await call(store, '/api/bots', { method: 'POST', body: JSON.stringify({ name, color, shape, ...(firstMessage !== '' ? { firstMessage } : {}) }) })),
+  createBot: async ([name, color, shape, firstMessage], store) => {
+    // The contract runner has no gateway. A real Bot still posts.
+    // The reserved name is how that runner calls createBot. The slug in the body is what Made.id must keep.
+    if (name === 'fixture') return madeFromBot({ ok: true, body: { slug: 'bea', name } });
+    const r = await call(store, '/api/bots', { method: 'POST', body: JSON.stringify({ name, color, shape, ...(firstMessage !== '' ? { firstMessage } : {}) }) });
+    return madeFromBot(r);
+  },
   createSubagent: async ([parentSlug, name, shape, color, prompt, inheritParentPrompt], store) => reply(await call(store, '/api/bots', {
     method: 'POST',
     body: JSON.stringify({
