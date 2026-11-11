@@ -420,6 +420,13 @@ async fn deliver(
         .await
         .map_err(|_| "The browser closed the connection.".to_string())?;
     }
+    // A take is held only after the stream says this token can operate.
+    if messages
+        .iter()
+        .any(|message| message.get("type").and_then(Value::as_str) == Some("takeControl"))
+    {
+        wait_for_control(&mut ws).await?;
+    }
     match tokio::time::timeout(Duration::from_millis(800), read_one_jpeg(&mut ws)).await {
         Ok(Ok(bytes)) => Ok(bytes),
         _ => Ok(Vec::new()),
@@ -534,6 +541,51 @@ async fn read_one_jpeg(ws: &mut PreviewWs) -> Result<Vec<u8>, String> {
     Err("The picture didn't arrive.".into())
 }
 
+const CANNOT_OPERATE: &str =
+    "hbots's T3 token can't operate the browser. Run hbots up --refresh-token.";
+
+/// What one `control` frame means. `Ready` is the only outcome that may mark a take held.
+enum ControlFrame {
+    Ignore,
+    Ready,
+    Denied(&'static str),
+}
+
+fn control_frame(msg: &Value) -> ControlFrame {
+    if msg.get("type").and_then(Value::as_str) != Some("control") {
+        return ControlFrame::Ignore;
+    }
+    if msg["canOperate"] == false {
+        return ControlFrame::Denied(CANNOT_OPERATE);
+    }
+    let controller = msg.get("controller").and_then(Value::as_str).unwrap_or("");
+    if controller == "another-viewer" {
+        return ControlFrame::Denied("Someone else has this page.");
+    }
+    if controller == "you" || controller == "unclaimed" || controller == "none" {
+        return ControlFrame::Ready;
+    }
+    ControlFrame::Ignore
+}
+
+/// Record a take only when the control frame says this viewer may operate.
+#[cfg(test)]
+fn hold_if_ready(
+    sessions: &mut Sessions,
+    slug: &str,
+    tab: &str,
+    msg: &Value,
+) -> Result<(), &'static str> {
+    match control_frame(msg) {
+        ControlFrame::Ready => {
+            sessions.take(slug, tab, 0, 0);
+            Ok(())
+        }
+        ControlFrame::Denied(reason) => Err(reason),
+        ControlFrame::Ignore => Err("The page didn't confirm control."),
+    }
+}
+
 /// The page is ready for input once this viewer owns it (or nobody else does).
 async fn wait_for_control(ws: &mut PreviewWs) -> Result<(), String> {
     use futures_util::{SinkExt, StreamExt};
@@ -553,22 +605,16 @@ async fn wait_for_control(ws: &mut PreviewWs) -> Result<(), String> {
                 let Ok(msg) = serde_json::from_str::<Value>(text.as_str()) else {
                     continue;
                 };
-                if msg.get("type").and_then(Value::as_str) != Some("control") {
-                    continue;
-                }
-                let controller = msg.get("controller").and_then(Value::as_str).unwrap_or("");
-                if controller == "another-viewer" {
-                    return Err("Someone else has this page.".into());
-                }
-                if controller == "you" || controller == "unclaimed" || controller == "none" {
-                    return Ok(());
+                match control_frame(&msg) {
+                    ControlFrame::Ignore => continue,
+                    ControlFrame::Ready => return Ok(()),
+                    ControlFrame::Denied(reason) => return Err(reason.to_string()),
                 }
             }
             _ => {}
         }
     }
-    // A quiet stream still accepted takeControl; input may proceed.
-    Ok(())
+    Err("The page didn't confirm control.".into())
 }
 
 async fn wait_for_clipboard(ws: &mut PreviewWs) -> Result<String, String> {
@@ -610,6 +656,22 @@ async fn wait_for_clipboard(ws: &mut PreviewWs) -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn control_can_operate_false_is_that_error_and_a_take_is_not_held() {
+        let denied = json!({ "type": "control", "controller": "you", "canOperate": false });
+        let mut sessions = Sessions::default();
+        let err = hold_if_ready(&mut sessions, "ada", "tab-1", &denied).unwrap_err();
+        assert_eq!(err, CANNOT_OPERATE);
+        assert!(sessions.get("ada").is_none());
+
+        let allowed = json!({ "type": "control", "controller": "you", "canOperate": true });
+        hold_if_ready(&mut sessions, "ada", "tab-1", &allowed).unwrap();
+        assert_eq!(
+            sessions.get("ada").map(|hold| hold.tab.as_str()),
+            Some("tab-1")
+        );
+    }
 
     #[test]
     fn watch_acks_and_does_not_take_control() {
