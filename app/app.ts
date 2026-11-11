@@ -199,6 +199,10 @@ type ChatRow = any;
 // Pins are mutable so a Pin tap can toggle a row without a live gateway.
 // A room the contract runner just created. Null keeps the built-in Design room.
 let fixtureMade: { title: string; description: string; color: string; shape: string; slugs: string[] } | null = null;
+// Mute choices the contract runner makes. Missing means the chat still notifies.
+const fixtureBotNotify = new Map<string, boolean>();
+const fixtureRoomNotify = new Map<string, boolean>();
+const wantsNotice = (value: unknown): boolean => value !== false;
 
 // The model page's fixture: five levels in the order a provider would send them.
 const FIXTURE_EFFORTS = [
@@ -601,14 +605,14 @@ const sources: Sources = {
       const slug = focus === 'frame' ? 'frame' : 'tabs';
       const name = focus === 'frame' ? 'Frame' : 'Tabs';
       return [
-        { slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false },
+        { slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get(slug)) },
       ];
     }
     if (focus === 'fixture' || focus === 'bea') {
       return [
-        { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false },
-        { slug: 'ada-junior-1', name: 'Ada junior 1', label: '', initials: 'AJ', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: 'fixture', hideFromSidebar: true, subagent: true, prompt: 'Look things up.', inheritParentPrompt: true },
-        { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true, shape: 'ball', pinned: false, working: false, line: 'Getting set up…', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false },
+        { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get('fixture')) },
+        { slug: 'ada-junior-1', name: 'Ada junior 1', label: '', initials: 'AJ', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: 'fixture', hideFromSidebar: true, subagent: true, prompt: 'Look things up.', inheritParentPrompt: true, notifications: wantsNotice(fixtureBotNotify.get('ada-junior-1')) },
+        { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true, shape: 'ball', pinned: false, working: false, line: 'Getting set up…', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get('bea')) },
       ];
     }
     const body = await botsBody(store);
@@ -631,8 +635,17 @@ const sources: Sources = {
       subagent: b.role === 'subagent' || b.hideFromSidebar === true,
       prompt: typeof b.subagent?.prompt === 'string' ? b.subagent.prompt : '',
       inheritParentPrompt: b.subagent?.inheritParentPrompt === true,
+      notifications: wantsNotice(b.notifications),
     }));
   },
+  setBotNotifications: async ([slug, notifications], store) => {
+    if (FIXTURE_SLUG(slug) || slug === 'ada-junior-1') {
+      fixtureBotNotify.set(slug, notifications);
+      return { ok: true, error: '' };
+    }
+    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ notifications }) }));
+  },
+  enableNotifications: async (_args, store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ notifications: { enabled: true } }) })),
   renameBot: async ([slug, name], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ name }) })),
   recolourBot: async ([slug, color], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ color }) })),
   hideBot: async ([slug, hidden], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ hidden }) })),
@@ -695,13 +708,13 @@ const sources: Sources = {
   loadConvos: async ([query, focus, room], store): Promise<Result<'loadConvos'>> => {
     if (focus === 'tabs') {
       return [
-        { kind: 'bot', key: 'bot-tabs', id: 'tabs', name: 'Tabs', color: fill('brand.default'), shape: 'ball', faces: [], line: 'Ready to chat', time: '', at: '', unread: false, working: false, ready: true },
+        { kind: 'bot', key: 'bot-tabs', id: 'tabs', name: 'Tabs', color: fill('brand.default'), shape: 'ball', faces: [], line: 'Ready to chat', time: '', at: '', unread: false, working: false, ready: true, notifications: wantsNotice(fixtureBotNotify.get('tabs')) },
       ];
     }
     if (focus === 'fixture' || focus === 'bea' || room === 'fixture') {
       return [
-        { kind: 'bot', key: 'bot-fixture', id: 'fixture', name: 'Ada', color: fill('brand.default'), shape: 'ball', faces: [], line: 'Ready to chat', time: '', at: '', unread: true, working: false, ready: true },
-        { kind: 'group', key: 'group-fixture', id: 'fixture', name: 'Design', color: 'brand.blue', shape: 'hex', faces: [{ shape: 'ball', color: fill('brand.default'), state: 'idle' }, { shape: 'ball', color: fill('brand.blue'), state: 'idle' }], line: 'Ada: On it', time: '', at: '', unread: false, working: false, ready: true },
+        { kind: 'bot', key: 'bot-fixture', id: 'fixture', name: 'Ada', color: fill('brand.default'), shape: 'ball', faces: [], line: 'Ready to chat', time: '', at: '', unread: true, working: false, ready: true, notifications: wantsNotice(fixtureBotNotify.get('fixture')) },
+        { kind: 'group', key: 'group-fixture', id: 'fixture', name: 'Design', color: 'brand.blue', shape: 'hex', faces: [{ shape: 'ball', color: fill('brand.default'), state: 'idle' }, { shape: 'ball', color: fill('brand.blue'), state: 'idle' }], line: 'Ada: On it', time: '', at: '', unread: false, working: false, ready: true, notifications: wantsNotice(fixtureRoomNotify.get('fixture')) },
       ];
     }
     const body = await botsBody(store);
@@ -714,7 +727,7 @@ const sources: Sources = {
       .map((b) => ({
         kind: 'bot', key: `bot-${String(b.slug)}`, id: String(b.slug), name: String(b.name), color: fill(b.color), shape: String(b.shape ?? 'ball'), faces: [] as { shape: string; color: string; state: string }[],
         line: lineOf(b), time: when(b.preview?.at, now), at: at(b), unread: b.unread === true, working: b.working === true,
-        ready: typeof b.mainThreadId === 'string',
+        ready: typeof b.mainThreadId === 'string', notifications: wantsNotice(b.notifications),
       }));
     // A rooms failure must not hide the Bots. An empty list is the honest fallback.
     const roomsReply = await call(store, '/api/rooms');
@@ -729,14 +742,22 @@ const sources: Sources = {
         return {
           kind: 'group', key: `group-${String(g.id)}`, id: String(g.id), name: String(g.title ?? ''), color: String(g.color ?? 'brand.default'), shape: String(g.shape ?? 'ball'),
           faces: stackFaces(g.members, directory),
-          line: last !== '' ? last : String(g.description ?? ''), time: when(said, now), at: said, unread: false, working: false, ready: true,
+          line: last !== '' ? last : String(g.description ?? ''), time: when(said, now), at: said, unread: g.unread === true, working: false, ready: true, notifications: wantsNotice(g.notifications),
         };
       });
     // The most recent conversation first, a Bot or a group alike; one with nothing said goes last.
     return [...bots, ...groups].sort((x, y) => y.at.localeCompare(x.at));
   },
   updateGroup: async ([id, field, value], store) => {
-    const body = field === 'members' ? { members: value === '' ? [] : value.split('\n') } : { [field]: value };
+    if ((id === 'fixture' || id === 'fixture-busy') && field === 'notifications') {
+      fixtureRoomNotify.set(id, value === 'true');
+      return { ok: true, error: '' };
+    }
+    const body = field === 'members'
+      ? { members: value === '' ? [] : value.split('\n') }
+      : field === 'notifications'
+        ? { notifications: value === 'true' }
+        : { [field]: value };
     return reply(await call(store, `/api/rooms/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }));
   },
   createGroup: async ([title, description, color, shape, members], store): Promise<Result<'createGroup'>> => {
@@ -1093,7 +1114,7 @@ const sources: Sources = {
     return { ok: true, error: '', text: typeof r.body.text === 'string' ? r.body.text : '' };
   },
   loadRoom: async ([id], store): Promise<Result<'loadRoom'>> => {
-    if (id === '') return { id: '', title: '', description: '', color: 'brand.default', shape: 'ball', members: [], messages: [] };
+    if (id === '') return { id: '', title: '', description: '', color: 'brand.default', shape: 'ball', members: [], messages: [], notifications: true };
     if (id === 'fixture') {
       if (fixtureMade) {
         const nameOf = (slug: string) => (slug === 'bea' ? 'Bea' : 'Ada');
@@ -1101,6 +1122,7 @@ const sources: Sources = {
           id: 'fixture', title: fixtureMade.title, description: fixtureMade.description, color: fixtureMade.color, shape: fixtureMade.shape,
           members: fixtureMade.slugs.map((slug) => ({ slug, name: nameOf(slug), line: 'Ready to chat', state: 'idle', ready: true, working: false })),
           messages: [],
+          notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
         };
       }
       return {
@@ -1113,6 +1135,7 @@ const sources: Sources = {
           { id: 'r1', name: 'You', text: 'Hello', from: 'user' },
           { id: 'r2', name: 'Ada', text: 'On it', from: 'ada' },
         ],
+        notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
       };
     }
     if (id === 'fixture-busy') {
@@ -1125,6 +1148,7 @@ const sources: Sources = {
         messages: [
           { id: 'r1', name: 'Ada', text: 'On it', from: 'ada' },
         ],
+        notifications: wantsNotice(fixtureRoomNotify.get('fixture-busy')),
       };
     }
     const body = await read(store, `/api/rooms/${encodeURIComponent(id)}`);
@@ -1139,6 +1163,7 @@ const sources: Sources = {
         state: String(m.state ?? 'idle'), ready: m.ready === true, working: m.working === true,
       })),
       messages: messages.map((m: any) => ({ id: String(m.id ?? ''), name: String(m.name ?? ''), text: String(m.text ?? ''), from: String(m.from ?? '') })),
+      notifications: wantsNotice(body.notifications),
     };
   },
   loadDrafts: async (_args, store) => {

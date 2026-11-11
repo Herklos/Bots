@@ -4,7 +4,7 @@
 component GlyphGallery
   view
     row gap=16
-      for name in ["add", "attach", "send", "stop", "lock", "chevron", "chevron-down", "trash", "close", "check", "settings", "info", "star", "eye-off", "search", "person", "globe", "file", "download", "clock", "arrow-down", "monitor", "pause", "image", "more", "pin", "copy", "smile", "reply", "mic"] key=name
+      for name in ["add", "attach", "send", "stop", "lock", "chevron", "chevron-down", "trash", "close", "check", "settings", "info", "star", "eye-off", "search", "person", "globe", "file", "download", "clock", "arrow-down", "monitor", "pause", "image", "more", "pin", "bell", "copy", "smile", "reply", "mic"] key=name
         Glyph(name=name, size=20)
 
 component Glyph
@@ -76,6 +76,9 @@ component Glyph
       else if name == "pin"
         path d="M12 17v5"
         path d="M9 10.8a2 2 0 0 1-1.1 1.8l-1.8.9A2 2 0 0 0 5 15.2V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.8a2 2 0 0 0-1.1-1.8l-1.8-.9A2 2 0 0 1 15 10.8V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+      else if name == "bell"
+        path d="M10.268 21a2 2 0 0 0 3.464 0"
+        path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
       else if name == "copy"
         rect x=9 y=9 width=13 height=13 rx=2
         path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"

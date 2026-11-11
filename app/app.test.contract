@@ -611,6 +611,26 @@ test "a subagent stays out of the inbox, Hidden, search, and group pickers"
   expect tree has "group-edit-member-fixture"
   expect tree has "group-edit-member-bea"
 
+test "mute flips on a Bot edit page and a group menu"
+  size 1200x800
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  tap "panel-edit"
+  expect text "mute-label" == "Notify"
+  expect tree has "mute-bot"
+  tap "mute-bot"
+  clock data
+  expect text "mute-label" == "Notify"
+  at "/group/fixture"
+  clock data
+  tap "group-fixture" contextmenu
+  expect text "menu-mute-fixture" == "Mute"
+  tap "menu-mute-fixture"
+  clock data
+  tap "group-fixture" contextmenu
+  expect text "menu-mute-fixture" == "Unmute"
+
 test "the model page shows five effort levels and keeps the current one"
   size 340x740
   at "/bot/fixture"
