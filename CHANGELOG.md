@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### New features
+
+- Choose where hbots listens in Settings → Access → Network: this device, the local network, or Tailscale Serve. A password is required beyond this device, and a listener change applies on the next start. `HBOTS_NETWORK_ACCESS` overrides the setting and locks it.
+
 ## 0.1.6
 
 This release makes conversations easier to navigate on small screens and adds faster ways to mention Bots.

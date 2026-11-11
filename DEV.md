@@ -58,6 +58,8 @@ HBOTS_DEV_HOST=192.168.1.42 bun scripts/dev.mjs --lan
 
 **Use LAN mode only on a trusted network.** Both development services are exposed to network peers. The debug gateway permits requests from any browser origin by reflecting the request origin for credentialed CORS and bypassing its origin check. This does not disable gateway authentication, but if no password is configured the gateway is open. Traffic here uses HTTP. The dev script enables this behavior with `HBOTS_DEV_ALLOW_ANY_ORIGIN=1`; release builds ignore that setting and retain their normal origin checks. The Exact dev server may also expose development output and errors to peers.
 
+That development switch is separate from Settings → Access → Network. The setting offers this device, the local network, and Tailscale Serve. Local network and Tailscale require a password, keep the normal origin checks, and apply when the gateway restarts. `HBOTS_NETWORK_ACCESS=local`, `lan`, or `tailscale` overrides the setting and locks it. `bun scripts/dev.mjs --lan` sets `HOST=0.0.0.0` for that process, which locks the control the same way a legacy `HOST` does, and the debug origin switch still allows it without a password. A release build does not.
+
 ## One-shot build and native client
 
 To build the web assets served by the gateway outside the watch loop:

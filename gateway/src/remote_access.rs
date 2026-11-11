@@ -144,6 +144,9 @@ pub(crate) struct AccessState {
     pub tailscale: Option<TailscaleSaved>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tunnel: Option<TunnelSaved>,
+    /// `local`, `lan`, or `tailscale`. Absent on a file written before this choice existed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub network: Option<String>,
 }
 
 /// A missing or unreadable file reads as nothing saved.
@@ -710,6 +713,19 @@ pub struct RemoteConfig {
     pub env_tailnet_users: Vec<String>,
     /// The `tailscale` binary, or `None` when it isn't installed.
     pub tailscale_bin: Option<String>,
+    /// `HBOTS_NETWORK_ACCESS`, from the process environment or `~/.hbots/.env`.
+    pub network_env: Option<String>,
+    /// `HOST` from the process environment, before dotenv reads the settings file.
+    pub process_host: Option<String>,
+    /// `HOST` after dotenv. `127.0.0.1` is the value `hbots up` writes and is not an override.
+    pub merged_host: Option<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct ListenerNote {
+    bound: String,
+    error: Option<String>,
+    withheld: bool,
 }
 
 #[derive(Debug)]
@@ -720,6 +736,7 @@ pub struct RemoteAccess {
     queue: AsyncMutex<()>,
     tunnel: Mutex<Option<Running>>,
     tunnel_error: Mutex<Option<String>>,
+    listener: Mutex<ListenerNote>,
     next_id: AtomicU64,
 }
 
@@ -731,6 +748,7 @@ impl RemoteAccess {
             queue: AsyncMutex::new(()),
             tunnel: Mutex::new(None),
             tunnel_error: Mutex::new(None),
+            listener: Mutex::new(ListenerNote::default()),
             next_id: AtomicU64::new(1),
         }
     }
@@ -769,6 +787,34 @@ impl RemoteAccess {
     /// Whether the app asks for a password: BOT_PASSWORD, or one set in Settings.
     pub fn password_required(&self) -> bool {
         self.password_from_env() || self.saved().password.is_some()
+    }
+
+    pub fn network_choice(&self) -> crate::network::Choice {
+        let saved = self.saved();
+        crate::network::resolve(&crate::network::Input {
+            network_env: self.cfg.network_env.clone(),
+            process_host: self.cfg.process_host.clone(),
+            merged_host: self.cfg.merged_host.clone(),
+            saved: saved.network,
+            tailscale_enabled: saved.tailscale.as_ref().is_some_and(|t| t.enabled),
+            env_tailnet: self.cfg.env_tailnet,
+        })
+    }
+
+    /// Remember the listener this process actually bound, and why a wider one was refused.
+    pub fn note_listener(&self, bound: &str, error: Option<String>, withheld: bool) {
+        *self.listener.lock().unwrap() = ListenerNote {
+            bound: bound.to_string(),
+            error,
+            withheld,
+        };
+    }
+
+    fn network_requires_password(&self) -> bool {
+        let choice = self.network_choice();
+        choice.mode != crate::network::Mode::Local
+            && !(crate::config::dev_allow_any_origin()
+                && choice.source == crate::network::Source::Host)
     }
 
     /// The password check for sign-in: BOT_PASSWORD if it is set, else the saved hash.
@@ -828,6 +874,38 @@ impl RemoteAccess {
                 json!(owner.as_deref() == Some(self.tailnet_listener_url().as_str())),
             );
         }
+        let choice = self.network_choice();
+        let note = self.listener.lock().unwrap().clone();
+        let applied = crate::network::apply(
+            &choice,
+            self.password_required(),
+            crate::config::dev_allow_any_origin(),
+        );
+        let restart_required =
+            !note.bound.is_empty() && !applied.withheld && applied.bind != note.bound;
+        let listening = if note.bound.is_empty() {
+            String::new()
+        } else {
+            format!("{}:{}", note.bound, self.cfg.local_port)
+        };
+        let urls = if choice.mode == crate::network::Mode::Tailscale {
+            tailscale
+                .get("url")
+                .and_then(|url| url.as_str())
+                .map(|url| vec![url.to_string()])
+                .unwrap_or_default()
+        } else if note.bound.is_empty() {
+            Vec::new()
+        } else {
+            crate::network::reachable_urls(&note.bound, self.cfg.local_port)
+        };
+        let error = if applied.withheld {
+            applied.error.clone()
+        } else {
+            note.error
+                .clone()
+                .filter(|err| err != crate::network::PASSWORD_REQUIRED)
+        };
         json!({
             "password": { "set": self.password_required(), "fromEnv": self.password_from_env() },
             "tailscale": Value::Object(tailscale),
@@ -837,7 +915,50 @@ impl RemoteAccess {
                 "error": self.tunnel_error.lock().unwrap().clone(),
                 "available": find_cloudflared(&self.cfg.home).is_some(),
             },
+            "network": {
+                "mode": crate::network::mode_name(choice.mode),
+                "locked": choice.locked,
+                "restartRequired": restart_required,
+                "listening": listening,
+                "urls": urls.join("\n"),
+                "error": error,
+                "http": choice.mode == crate::network::Mode::Lan,
+            },
         })
+    }
+
+    /// Save `local`, `lan`, or `tailscale`. The listener changes on the next start. Tailscale Serve
+    /// is turned on or off now, because that route is not the public socket.
+    pub async fn set_network(&self, mode: &str, router: Router) -> Result<(), AccessError> {
+        let _turn = self.queue.lock().await;
+        if self.network_choice().locked {
+            return Err(AccessError::conflict(
+                "Network access is set by the environment.",
+            ));
+        }
+        let mode = crate::network::parse_mode(mode).ok_or_else(|| {
+            AccessError::bad_request("Network access must be local, lan, or tailscale.")
+        })?;
+        if mode != crate::network::Mode::Local && !self.password_required() {
+            return Err(AccessError::coded(
+                "needs-password",
+                crate::network::PASSWORD_REQUIRED,
+            ));
+        }
+        match mode {
+            crate::network::Mode::Tailscale => {
+                self.tailscale_on_locked(router).await?;
+            }
+            crate::network::Mode::Local | crate::network::Mode::Lan => {
+                if !self.cfg.env_tailnet
+                    && self.saved().tailscale.as_ref().is_some_and(|t| t.enabled)
+                {
+                    self.tailscale_off_locked().await?;
+                }
+            }
+        }
+        let name = crate::network::mode_name(mode);
+        self.update(|state| state.network = Some(name.to_string()))
     }
 
     /// Set the password (`Some`) or remove it (`None`). The caller rotates the session secret.
@@ -852,6 +973,11 @@ impl RemoteAccess {
             if self.saved().tunnel.is_some_and(|t| t.enabled) {
                 return Err(AccessError::conflict(
                     "Turn off the Cloudflare link before removing the password.",
+                ));
+            }
+            if self.network_requires_password() {
+                return Err(AccessError::conflict(
+                    "Turn off access beyond this device before removing the password.",
                 ));
             }
             return self.update(|s| s.password = None);
@@ -947,6 +1073,10 @@ impl RemoteAccess {
 
     pub async fn tailscale_off(&self) -> Result<(), AccessError> {
         let _turn = self.queue.lock().await;
+        self.tailscale_off_locked().await
+    }
+
+    async fn tailscale_off_locked(&self) -> Result<(), AccessError> {
         let saved = self.saved().tailscale.unwrap_or_default();
         if let (Some(bin), Some(https_port), Some(port)) = (
             self.cfg.tailscale_bin.as_deref(),
@@ -1072,15 +1202,20 @@ impl RemoteAccess {
     pub async fn boot(self: &Arc<Self>, router: Router) {
         let _turn = self.queue.lock().await;
         let saved = self.saved();
-        if let Some(ts) = saved.tailscale.as_ref().filter(|t| t.enabled) {
-            if !self.cfg.env_tailnet {
-                let users = ts.users.clone().unwrap_or_default();
-                if let Err(e) = self
-                    .tailnet
-                    .open(ts.port.unwrap_or(0), &users, router)
-                    .await
-                {
-                    tracing::error!("tailnet listener failed: {e:#}");
+        let withheld = self.listener.lock().unwrap().withheld;
+        let skip_tailscale =
+            withheld && self.network_choice().mode == crate::network::Mode::Tailscale;
+        if !skip_tailscale {
+            if let Some(ts) = saved.tailscale.as_ref().filter(|t| t.enabled) {
+                if !self.cfg.env_tailnet {
+                    let users = ts.users.clone().unwrap_or_default();
+                    if let Err(e) = self
+                        .tailnet
+                        .open(ts.port.unwrap_or(0), &users, router)
+                        .await
+                    {
+                        tracing::error!("tailnet listener failed: {e:#}");
+                    }
                 }
             }
         }
@@ -1252,6 +1387,9 @@ mod tests {
                 env_tailnet: false,
                 env_tailnet_users: vec![],
                 tailscale_bin: None,
+                network_env: None,
+                process_host: None,
+                merged_host: None,
             },
             Arc::new(Tailnet::new()),
         );
@@ -1279,6 +1417,7 @@ mod tests {
                 users: Some(vec!["me@example.com".into()]),
             }),
             tunnel: Some(TunnelSaved { enabled: false }),
+            network: None,
         };
         let text = serde_json::to_value(&state).unwrap();
         assert_eq!(text["password"]["setAt"], "t");
@@ -1292,5 +1431,54 @@ mod tests {
             read.tailscale.unwrap().users.unwrap(),
             vec!["me@example.com"]
         );
+    }
+
+    fn remote_at(dir: &Path, network_env: Option<String>) -> RemoteAccess {
+        RemoteAccess::new(
+            RemoteConfig {
+                home: dir.to_path_buf(),
+                store_file: dir.join("access.json"),
+                url_file: dir.join("tunnel-url"),
+                local_port: 3780,
+                env_password: String::new(),
+                env_tailnet: false,
+                env_tailnet_users: vec![],
+                tailscale_bin: None,
+                network_env,
+                process_host: None,
+                merged_host: Some("127.0.0.1".into()),
+            },
+            Arc::new(Tailnet::new()),
+        )
+    }
+
+    #[tokio::test]
+    async fn lan_is_saved_only_with_a_password_and_waits_for_a_restart() {
+        let dir = tempfile::tempdir().unwrap();
+        let remote = remote_at(dir.path(), None);
+        remote.note_listener("127.0.0.1", None, false);
+        let refused = remote.set_network("lan", Router::new()).await.unwrap_err();
+        assert_eq!(refused.code, Some("needs-password"));
+        assert!(remote.saved().network.is_none());
+
+        remote
+            .set_password(Some("correct horse".into()))
+            .await
+            .unwrap();
+        remote.set_network("lan", Router::new()).await.unwrap();
+        let status = remote.status().await;
+        assert_eq!(status["network"]["mode"], "lan");
+        assert_eq!(status["network"]["locked"], false);
+        assert_eq!(status["network"]["restartRequired"], true);
+        assert_eq!(status["network"]["http"], true);
+        assert!(remote.set_password(None).await.is_err());
+
+        remote.set_network("local", Router::new()).await.unwrap();
+        remote.set_password(None).await.unwrap();
+        assert_eq!(remote.saved().network.as_deref(), Some("local"));
+
+        let locked = remote_at(dir.path(), Some("local".into()));
+        let err = locked.set_network("lan", Router::new()).await.unwrap_err();
+        assert!(err.message.contains("environment"), "{}", err.message);
     }
 }

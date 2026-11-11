@@ -62,7 +62,7 @@ That starts both and rebuilds each when its own code changes.
 
 Ctrl-C stops both. T3 Code on 3773 is left running. The script reads `EXACT_DIR` from the environment or from `.exact-path`. The one-shot release start above is still the path for a packed binary. While this watch is running, open http://127.0.0.1:8765.
 
-Env prefix is `HBOTS_*` (`HBOTS_HOME`, `HBOTS_PASSWORD`, `HBOTS_TAILSCALE_PATH`, `HBOTS_CLOUDFLARED_PATH`, `HBOTS_TAILNET_PORT`, `HBOTS_TAILNET_USERS`, `HBOTS_PUBLIC_LANDING_ONLY`, …). Legacy unprefixed Tailscale/tunnel names still work.
+Env prefix is `HBOTS_*` (`HBOTS_HOME`, `HBOTS_PASSWORD`, `HBOTS_NETWORK_ACCESS`, `HBOTS_TAILSCALE_PATH`, `HBOTS_CLOUDFLARED_PATH`, `HBOTS_TAILNET_PORT`, `HBOTS_TAILNET_USERS`, `HBOTS_PUBLIC_LANDING_ONLY`, …). Legacy unprefixed Tailscale/tunnel names still work. `HBOTS_NETWORK_ACCESS` is `local`, `lan`, or `tailscale`. When it is set, it overrides Settings → Access → Network and locks that control. See [DEV.md](DEV.md).
 
 **A6:** `busy_threads` reads one `orchestration.subscribeShell` snapshot, counts threads a restart would interrupt, and interrupts the subscription (`gateway/src/release.rs`, `gateway/src/t3.rs`). Routine list does the same for `scheduledTasks.subscribe`. Auto-update still waits when that read fails, including a `snapshot-required` reply.
 

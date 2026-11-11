@@ -46,6 +46,7 @@ mod library; // Files and records through the workspace adapter.
 mod lineage; // Subagents and delegated threads of one Bot.
 mod mcp;
 mod memory_tools;
+mod network; // Where the gateway listens: this device, the local network, or Tailscale.
 mod projects;
 mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-origin check.
 mod providers; // The providers and models T3 Code offers.
@@ -175,7 +176,19 @@ async fn main() -> anyhow::Result<()> {
     if let Some(code) = cli::run(&args).await {
         std::process::exit(code);
     }
+    // Snapshot HOST before dotenv. `hbots up` writes HOST=127.0.0.1 into ~/.hbots/.env, and that
+    // default must not lock Settings. A HOST already in the process environment is intentional.
+    let process_host = std::env::var("HOST").ok().filter(|v| !v.is_empty());
+    let process_network = std::env::var("HBOTS_NETWORK_ACCESS")
+        .ok()
+        .filter(|v| !v.is_empty());
     let cfg = config::Config::from_env()?;
+    let network_env = process_network.or_else(|| {
+        std::env::var("HBOTS_NETWORK_ACCESS")
+            .ok()
+            .filter(|v| !v.is_empty())
+    });
+    let merged_host = std::env::var("HOST").ok().filter(|v| !v.is_empty());
     let app_dir = cfg.app_dir();
     std::fs::create_dir_all(&app_dir)?;
     // The Bots' tool-server bearer: HBOTS_MCP_TOKEN, or a random one next to the vault key.
@@ -209,6 +222,9 @@ async fn main() -> anyhow::Result<()> {
             env_tailnet: exposure_cfg.tailnet_port > 0,
             env_tailnet_users: exposure_cfg.tailnet_users.clone(),
             tailscale_bin: remote_access::find_tailscale(),
+            network_env,
+            process_host,
+            merged_host,
         },
         tailnet.clone(),
     ));
@@ -270,6 +286,33 @@ async fn main() -> anyhow::Result<()> {
     provisioner::start(state.clone());
     release::start(state.clone()).await;
 
+    let applied = network::apply(
+        &state.remote.network_choice(),
+        state.remote.password_required(),
+        config::dev_allow_any_origin(),
+    );
+    let (bound, bind_error, listener) = match bind_gateway(&applied.bind, state.cfg.port).await {
+        Ok(listener) => (applied.bind.clone(), applied.error.clone(), listener),
+        Err(err) if applied.bind != "127.0.0.1" => {
+            let message = format!(
+                "Couldn't listen on {}:{} ({err}). hbots is listening on this device only.",
+                applied.bind, state.cfg.port
+            );
+            tracing::error!("{message}");
+            let listener = bind_gateway("127.0.0.1", state.cfg.port).await?;
+            ("127.0.0.1".into(), Some(message), listener)
+        }
+        Err(err) => return Err(err),
+    };
+    state
+        .remote
+        .note_listener(&bound, bind_error.clone(), applied.withheld);
+    if applied.withheld {
+        if let Some(err) = &applied.error {
+            tracing::error!("network access: {err}");
+        }
+    }
+
     // The tailnet listener from HBOTS_TAILNET_PORT starts first; Settings' Tailscale and tunnel choices
     // come back in the background.
     if state.exposure.tailnet_port > 0 {
@@ -295,7 +338,7 @@ async fn main() -> anyhow::Result<()> {
         std::process::exit(0);
     });
 
-    let addr: SocketAddr = format!("{}:{}", state.cfg.host, state.cfg.port).parse()?;
+    let addr: SocketAddr = format!("{bound}:{}", state.cfg.port).parse()?;
     tracing::info!(
         "hbots gateway on http://{addr} → T3 {}, bots in {}",
         state.cfg.t3_url,
@@ -307,7 +350,6 @@ async fn main() -> anyhow::Result<()> {
             state.cfg.static_dir.display()
         );
     }
-    let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(
         listener,
         exposure::on_public(app(state.clone()), state.clone())
@@ -315,6 +357,20 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
     Ok(())
+}
+
+async fn bind_gateway(host: &str, port: u16) -> anyhow::Result<tokio::net::TcpListener> {
+    let addr: SocketAddr = format!("{host}:{port}").parse()?;
+    Ok(tokio::net::TcpListener::bind(addr).await?)
+}
+
+/// The running process is the installed background service, so Settings can restart it.
+fn service_can_restart(home: &std::path::Path) -> bool {
+    if std::env::var("HBOTS_SERVICE").ok().as_deref() != Some("1") {
+        return false;
+    }
+    let os = std::env::consts::OS;
+    service::supported(os) && service::installed(&cli::service_spec(home), os)
 }
 
 /// Ctrl-C or SIGTERM: the gateway stops its tunnel before it exits.
@@ -413,6 +469,8 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/vault/export.csv", get(vault_csv::export))
         .route("/api/access", get(access_status))
         .route("/api/access/password", put(access_password))
+        .route("/api/access/network", put(access_network))
+        .route("/api/access/network/restart", post(access_network_restart))
         .route("/api/access/tailscale", post(access_tailscale))
         .route("/api/access/tunnel", post(access_tunnel))
         .route("/api/thread-previews", post(thread_previews))
@@ -657,13 +715,57 @@ fn access_body(body: &Bytes) -> ApiResult<Value> {
     parse(body)
 }
 
-async fn access_status(State(s): S) -> Json<Value> {
+async fn access_view(s: &AppState) -> Value {
     let mut out = s.remote.status().await;
     out["cloudflareAccess"] = match &s.access {
         Some(access) => json!({ "emails": access.emails() }),
         None => Value::Null,
     };
-    Json(out)
+    if let Some(network) = out
+        .get_mut("network")
+        .and_then(|value| value.as_object_mut())
+    {
+        network.insert(
+            "canRestart".into(),
+            json!(service_can_restart(&s.cfg.data_root)),
+        );
+    }
+    out
+}
+
+async fn access_status(State(s): S) -> Json<Value> {
+    Json(access_view(&s).await)
+}
+
+async fn access_network(
+    State(s): S,
+    body: Bytes,
+) -> Result<Json<Value>, remote_access::AccessError> {
+    let body =
+        access_body(&body).map_err(|e| remote_access::AccessError::bad_request(e.message))?;
+    let mode = body["mode"].as_str().unwrap_or("");
+    s.remote.set_network(mode, tailnet_app(&s)).await?;
+    Ok(Json(access_view(&s).await))
+}
+
+async fn access_network_restart(State(s): S) -> Result<Json<Value>, remote_access::AccessError> {
+    if !service_can_restart(&s.cfg.data_root) {
+        return Err(remote_access::AccessError::conflict(
+            "Restart hbots to apply this.",
+        ));
+    }
+    let home = s.cfg.data_root.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+        let spec = cli::service_spec(&home);
+        let os = std::env::consts::OS;
+        match tokio::task::spawn_blocking(move || service::restart(&spec, os)).await {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => tracing::error!("restarting hbots: {err:#}"),
+            Err(err) => tracing::error!("restarting hbots: {err}"),
+        }
+    });
+    Ok(Json(json!({ "ok": true })))
 }
 
 async fn access_password(
@@ -2596,6 +2698,9 @@ mod tests {
                     env_tailnet: false,
                     env_tailnet_users: vec![],
                     tailscale_bin: None,
+                    network_env: None,
+                    process_host: None,
+                    merged_host: None,
                 },
                 tailnet.clone(),
             )),

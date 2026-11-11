@@ -181,7 +181,7 @@ On wide windows Settings replaces the chat and panel, with the sidebar still vis
 | Models | Default provider, model and effort for new Bots (the same `ModelPicker` as the panel), then a list of every Bot with its model; tap a Bot to open its Model page |
 | Usage | The same `UsageView` as the panel with a Bot filter (All Bots or one), period chips, Summary or Detail, and a per-Bot breakdown. Footer: "Counted on this machine. Nothing is sent anywhere." |
 | Vault | The logins list (search, favicon rows, add) as a section page, replacing the lock tile; edit and add stay as sheets |
-| Remote access | A status card (Local only, Password set, Tailscale on, Tunnel on, with the address and a copy button), then the password field. Enabling Tailscale or Cloudflare stays in the CLI for now |
+| Access | The password, then where hbots listens: this device, the local network, or Tailscale Serve. A password is required off this device. A listener change applies on restart. The Cloudflare tunnel stays in the CLI. |
 | About | hbots version, the gateway address, the harness (T3 Code) and whether it is connected, Sign out |
 
 ### 4.7 Other

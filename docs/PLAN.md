@@ -21,7 +21,7 @@ This plan records what is implemented and what remains. “Built” means the co
 - Bot tools provide read-only memory and skills access. The larger memory store and maintenance feature below is not implemented.
 - Watch a Bot's browser and separately take control, release, and send pointer or text input through T3. See the implementation for supported actions and session limitations.
 - Site icons, attachments and local usage reporting. Token usage depends on data supplied by T3.
-- Password sessions and remote-access integrations, including Tailscale and tunnel support. The gateway currently uses T3 Code as its harness.
+- Password sessions, and a choice of where the gateway listens: this device, the local network, or Tailscale Serve, from Settings → Access → Network. `HBOTS_NETWORK_ACCESS` overrides that choice. The Cloudflare tunnel remains available. The gateway currently uses T3 Code as its harness.
 
 ### Delivery and development
 

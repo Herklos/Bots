@@ -49,8 +49,10 @@ Built: a dev script, `scripts/run-macos.sh`. Not built: the in-app shell.
 
 ## Phone access (design, not built)
 
-- Tailscale: the phone joins the tailnet and reaches the gateway's Tailscale listener (planned in T4, `exposure.rs`, not merged yet).
-- A tunnel (for example `cloudflared`; planned in T4, `remote_access.rs`, not merged yet) for access without Tailscale.
+The phone app is not built. The gateway already publishes the addresses a phone would open:
+
+- This device, the local network, or Tailscale Serve, from Settings → Access → Network. `HBOTS_NETWORK_ACCESS` overrides that choice and locks it. The local network address is HTTP on every IPv4 interface. Tailscale Serve keeps the public listener on loopback and publishes HTTPS. Both require a password. A listener change applies the next time the gateway starts.
+- A Cloudflare tunnel (`remote_access.rs`) for access without Tailscale. Turning the tunnel on is not in Settings.
 - App Transport Security: an `http:` gateway beyond the local network is refused by iOS unless `host.ios` sets
   `allowsArbitraryLoads` (`docs/reference.md`, around line 959). Prefer https through Tailscale or a tunnel.
 - Session storage: the app keeps the session token with `store.set` under the `secret.keep session` grant (Keychain on Apple,

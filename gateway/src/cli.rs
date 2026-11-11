@@ -198,7 +198,7 @@ fn port_of(settings: &HashMap<String, String>) -> u16 {
         .unwrap_or(3780)
 }
 
-fn service_spec(home: &Path) -> service::ServiceSpec {
+pub(crate) fn service_spec(home: &Path) -> service::ServiceSpec {
     let exe = std::env::current_exe().unwrap_or_default();
     // An installed copy runs through the `current` link, so an update only swaps the link.
     let exe = if release::installed_runtime(&exe, home) {
@@ -238,7 +238,7 @@ async fn up(flags: &Flags) -> Result<()> {
     let env_file = home.join(".env");
     if !env_file.exists() {
         let text = format!(
-            "# hbots settings. Every option is read from here or from the environment.\nT3_URL={t3_url}\nT3_TOKEN_FILE={}\nHOST=127.0.0.1\nPORT={port}\n",
+            "# hbots settings. Every option is read from here or from the environment.\n# HBOTS_NETWORK_ACCESS=local, lan, or tailscale overrides Settings and locks that control.\nT3_URL={t3_url}\nT3_TOKEN_FILE={}\nHOST=127.0.0.1\nPORT={port}\n",
             token_file.display()
         );
         auth::write_private(&env_file, &text)?;

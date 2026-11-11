@@ -38,7 +38,7 @@ For a terminal-only setup, run `hbots up --no-service`, then `hbots serve` using
 - **Bot details:** see routines, usage, child threads, and a library of files, pages and links. Manage per-Bot MCP connectors and watch or interact with a Bot's browser through T3 Code.
 - **Routines:** schedule work through the harness and review or run a Bot's routines.
 - **Vault:** keep logins encrypted, import or export CSV, and let Bot tools use saved credentials without exposing the password to the Bot.
-- **Remote access:** protect access with a password and configure Tailscale.
+- **Remote access:** set a password, then choose this device, the local network, or Tailscale in Settings.
 - **Installation and updates:** install checksummed releases, run a background service, update, and roll back.
 
 See [the project plan](docs/PLAN.md) for ongoing work and limitations.
@@ -66,7 +66,7 @@ The **gateway** serves the client and API, manages sessions and the Vault, and c
 
 The **workspace** is a separate storage concern. The `Workspace` interface backs Bot library records, files and MCP connectors; the running gateway currently uses its local-disk adapter. Other parts of the gateway still access local files directly, and the in-memory adapter is for tests. Additional storage and harness backends are planned, not selectable production options today. See [architecture](docs/architecture.md) and the [backend plan](docs/backends.md) for details.
 
-By default, Bot folders live under `~/.hbots/bots/`. The gateway holds the T3 token; clients use an hbots session instead. For access beyond localhost, configure authentication and an appropriate remote connection.
+By default, Bot folders live under `~/.hbots/bots/`. The gateway holds the T3 token; clients use an hbots session instead. For access beyond localhost, set a password, then choose local network or Tailscale in Settings → Access → Network. Restart hbots to apply a listener change.
 
 ## Commands
 
@@ -79,7 +79,9 @@ hbots rollback                                       Restore the previous versio
 hbots service install|uninstall|restart|status       Manage the background service
 ```
 
-Configuration comes from the environment or `~/.hbots/.env`. Common settings include `T3_URL`, `T3_TOKEN` or `T3_TOKEN_FILE`, `HOST`, `PORT`, `HBOTS_PASSWORD`, and `HBOTS_HOME`.
+Configuration comes from the environment or `~/.hbots/.env`. Common settings include `T3_URL`, `T3_TOKEN` or `T3_TOKEN_FILE`, `HOST`, `PORT`, `HBOTS_PASSWORD`, `HBOTS_NETWORK_ACCESS`, and `HBOTS_HOME`.
+
+`HBOTS_NETWORK_ACCESS` is `local`, `lan`, or `tailscale`. When it is set, it overrides Settings → Access → Network and the control is locked. `local` listens on this device. `lan` listens on every IPv4 interface over HTTP and requires a password. `tailscale` uses the existing Tailscale Serve HTTPS route and also requires a password. `HOST=127.0.0.1`, which `hbots up` writes, does not lock the control. Any other `HOST` is a legacy bind address and does. A saved choice is used the next time the gateway starts.
 
 ## Development and status
 

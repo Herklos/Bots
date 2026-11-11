@@ -1,5 +1,5 @@
 import type { Answer, Result, Sources, Storage } from './app.contract.d.ts';
-import { closeNotification, notificationStatus, setBadge, showNotification } from '@exact/notifications';
+import { closeNotification, notificationStatus, setAppBadge, showNotification } from '@exact/notifications';
 import en from './strings/en.json' with { type: 'json' };
 import fr from './strings/fr.json' with { type: 'json' };
 
@@ -656,7 +656,7 @@ async function postUnread(store: { get(name: string): string | null }, directory
     }
   }
   try {
-    await setBadge({ contents: granted && master ? badge : 0 });
+    await setAppBadge({ contents: granted && master ? badge : 0 });
   } catch (error) {
     if (!unsupported(error)) throw error;
   }
@@ -768,13 +768,33 @@ const sources: Sources = {
   },
   setNotifications: async ([enabled, sound, preview, when], store) => {
     const notifications: { sound: boolean; preview: string; when: string; enabled?: boolean } = { sound, preview, when };
-    if (enabled !== null) notifications.enabled = enabled;
+    // "" leaves a never-saved master unset. "on" and "off" write it.
+    if (enabled === 'on' || enabled === 'off') notifications.enabled = enabled === 'on';
     return reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ notifications }) }));
   },
   setUserName: async ([userName], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ userName }) })),
   setDefaultMode: async ([defaultRuntimeMode], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ defaultRuntimeMode }) })),
   setTheme: async ([theme], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ theme }) })),
   setPassword: async ([password], store) => reply(await call(store, '/api/access/password', { method: 'PUT', body: JSON.stringify({ password }) })),
+  loadNetwork: async ([gate], store): Promise<Result<'loadNetwork'>> => {
+    const blank = { mode: 'local', locked: false, restartRequired: false, canRestart: false, listening: '', urls: '', error: '', http: false };
+    if (gate !== '1') return blank;
+    const body = await read(store, '/api/access');
+    const n = body.network ?? {};
+    const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+    return {
+      mode: text(n.mode) || 'local',
+      locked: n.locked === true,
+      restartRequired: n.restartRequired === true,
+      canRestart: n.canRestart === true,
+      listening: text(n.listening),
+      urls: text(n.urls),
+      error: text(n.error),
+      http: n.http === true,
+    };
+  },
+  setNetwork: async ([mode], store) => reply(await call(store, '/api/access/network', { method: 'PUT', body: JSON.stringify({ mode }) })),
+  restartGateway: async (_args, store) => reply(await call(store, '/api/access/network/restart', { method: 'POST', body: '{}' })),
   loadVault: async (_args, store): Promise<Result<'loadVault'>> => {
     const body = await read(store, '/api/vault');
     return (body.items as any[]).filter((i) => i.type === 'login').map((i) => ({
@@ -940,10 +960,6 @@ const sources: Sources = {
     if (!r.ok) return { ok: false, version: '' };
     return { ok: true, version: String(r.body.version ?? '') };
   },
-  reloadPage: () => {
-    location.reload();
-    return { ok: true, error: '' };
-  },
   loadSuggestions: async (_args, store): Promise<Result<'loadSuggestions'>> => {
     const r = await call(store, '/api/suggestions');
     if (!r.ok) return [];
@@ -969,7 +985,7 @@ const sources: Sources = {
     }
     if (child === '') threads[slug] = threadId;
     const rows = chatRows(slug, body, Number(body.now), meta.reactions ?? {}, meta.replyTo ?? {});
-    if (child === '') await closeNotice(slug);
+    if (child === '') await shutNotice(`unread-bot-${slug}`);
     const pins: PinRow[] = Array.isArray(meta.pins)
       ? meta.pins.map((id: unknown) => {
         const key = String(id);

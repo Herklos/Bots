@@ -429,6 +429,17 @@ shape Session
   authenticated: bool
   passwordRequired: bool
 
+// Where hbots listens. `mode` is local, lan, or tailscale. `urls` is one address per line.
+shape Network
+  mode: string
+  locked: bool
+  restartRequired: bool
+  canRestart: bool
+  listening: string
+  urls: string
+  error: string
+  http: bool
+
 shape Bot
   slug: string
   name: string
@@ -835,6 +846,7 @@ fn mutedGroups(convos: Convo[]): Convo[] = convos.filter(c => c.kind == "group" 
 fn firstMutedBot(bots: Bot[]): string = match first(mutedBots(bots)) { case some(b) => b.slug, case none => "" }
 fn firstMutedGroup(convos: Convo[]): string = match first(mutedGroups(convos)) { case some(c) => c.id, case none => "" }
 fn noticeStatusLabel(available: bool, state: string, allowed: string, denied: string, unavailable: string, pending: string): string = not available ? unavailable : state == "granted" ? allowed : state == "denied" ? denied : pending
+fn networkModeLabel(mode: string, local: string, lan: string, tailscale: string): string = mode == "lan" ? lan : mode == "tailscale" ? tailscale : local
 // Colours come from design/tokens.json: change them there.
 // design:begin colours
 fn pickerColours(): string[] = ["brand.brown", "brand.red", "brand.orange", "brand.amber", "brand.green", "brand.default", "brand.blue", "brand.violet", "brand.pink", "brand.gray"]
@@ -976,6 +988,7 @@ component Bots
   resource system = loadSystem(systemGate) as shape SystemStatus else empty()
   resource prefs = loadPrefs() as shape Prefs else empty()
   resource notice = loadNotice() as shape NoticeState else empty()
+  resource network = loadNetwork(networkGate) as shape Network else empty()
   resource vault = loadVault() as shape Login[] else empty()
   resource usage = loadUsage(usageGate, hostTime.locale) as shape Usage else empty()
   resource report = loadUsageReport(slug, usagePeriod, reportGate, hostTime.locale) as shape UsageReport else empty()
@@ -1016,10 +1029,11 @@ component Bots
   mutation mainSaved as shape Reply refreshes bots
   mutation botRemoved as shape Reply refreshes bots then afterBotRemove
   mutation prefsSaved as shape Reply refreshes prefs
-  mutation passwordSet as shape Reply refreshes session then afterPassword
+  mutation passwordSet as shape Reply refreshes session, network then afterPassword
   mutation updateStarted as shape UpdateStart then afterUpdateStart
   mutation healthRead as shape Health then afterHealth
-  mutation pageReloaded as shape Reply
+  mutation networkSet as shape Reply refreshes network
+  mutation networkRestarted as shape Reply
   mutation loginSaved as shape Reply refreshes vault then afterLoginSave
   mutation loginRemoved as shape Reply refreshes vault then afterLoginRemove
   mutation revealed as shape Revealed
@@ -1075,6 +1089,9 @@ component Bots
   derive botRemoveError = match botRemoved { case some(r) => r.error, case none => "" }
   derive prefsError = match prefsSaved { case some(r) => r.error, case none => "" }
   derive passwordError = match passwordSet { case some(r) => r.error, case none => "" }
+  derive networkError = match networkSet { case some(r) => r.error, case none => "" }
+  derive networkRestartError = match networkRestarted { case some(r) => r.error, case none => "" }
+  derive networkGate = (top(nav).name == "settings" and settingsDomain == "access") ? "1" : "0"
   derive loginError = match loginSaved { case some(r) => r.error, case none => "" }
   derive loginRemoveError = match loginRemoved { case some(r) => r.error, case none => "" }
   derive revealedFor = match revealed { case some(r) => r.id, case none => "" }
@@ -1678,13 +1695,15 @@ component Bots
       case none
   action doMute(bslug: string, on: bool)
     send botMuted = setBotNotifications(bslug, on)
-  action saveNotifications(enabled: bool, sound: bool, preview: string, when: string)
-    send noticeSaved = setNotifications(enabled, sound, preview, when)
-  action saveNoticePart(sound: bool, preview: string, when: string)
+  action saveNotifications(enabled: bool, sound: bool, preview: string, noticeWhen: string)
+    send noticeSaved = setNotifications(enabled ? "on" : "off", sound, preview, noticeWhen)
+  action saveNoticePart(sound: bool, preview: string, noticeWhen: string)
     if prefs.noticeEnabledMissing
-      send noticeSaved = setNotifications(none, sound, preview, when)
+      send noticeSaved = setNotifications("", sound, preview, noticeWhen)
+    else if prefs.noticeEnabled
+      send noticeSaved = setNotifications("on", sound, preview, noticeWhen)
     else
-      send noticeSaved = setNotifications(prefs.noticeEnabled, sound, preview, when)
+      send noticeSaved = setNotifications("off", sound, preview, noticeWhen)
   action doMuteGroup(id: string, on: bool)
     if id != ""
       send groupSaved = updateGroup(id, "notifications", on ? "true" : "false")
@@ -1757,7 +1776,7 @@ component Bots
     if canUpdate and not pending(updateStarted)
       send updateStarted = startUpdate()
   action afterUpdateStart
-    match updateStarted {
+    match updateStarted
       case some(r)
         if r.ok and r.version != ""
           updateTo = r.version
@@ -1766,7 +1785,6 @@ component Bots
           updateStuck = false
       case none
         updatePolls = updatePolls
-    }
   action askHealth
     if updateTo != "" and not updateStuck and not pending(healthRead)
       updatePolls = updatePolls + 1
@@ -1775,8 +1793,9 @@ component Bots
     let target = updateTo
     let polls = updatePolls
     let arrived = match healthRead { case some(h) => h.ok and h.version == target and target != "", case none => false }
-    if arrived and not pending(pageReloaded)
-      send pageReloaded = reloadPage()
+    if arrived
+      updateTo = ""
+      reload()
     else if target != "" and polls >= 300
       updateStuck = true
   action doEditName(v: string)
@@ -1799,6 +1818,12 @@ component Bots
   action afterPassword
     if passwordError == ""
       newPassword = ""
+  action doSetNetwork(mode: string)
+    if not network.locked and mode != network.mode and not pending(networkSet)
+      send networkSet = setNetwork(mode)
+  action doRestartNetwork
+    if network.canRestart and network.restartRequired and not pending(networkRestarted)
+      send networkRestarted = restartGateway()
 
   // Vault: a login is edited in a sheet. The password is kept unless a new one is typed.
   action doCommitLogin(id: string, title: string, website: string, username: string, password: string, hints: string)
@@ -2434,6 +2459,36 @@ component Bots
                       text (session.passwordRequired ? t("settings.passwordOn") : t("settings.passwordOff")) class=SettingsFoot
                       if passwordError != "" and not pending(passwordSet)
                         text passwordError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="password-error"
+                    column
+                      text t("settings.network") class=SectionLabel
+                      column class=GroupCard padding="space.sm"
+                        row class=SettingsTrack role="radiogroup" aria-label=t("settings.network")
+                          for mode in ["local", "lan", "tailscale"] key=mode
+                            button class=SettingsTab appearance="none" role="radio" aria-checked=(network.mode == mode) press=doSetNetwork(mode) disabled=network.locked testId=`network-${mode}` background-color=(network.mode == mode ? "surface.card" : "transparent") color=(network.mode == mode ? "-exact-label" : "ink.muted")
+                              text networkModeLabel(mode, t("settings.networkLocal"), t("settings.networkLan"), t("settings.networkTailscale"))
+                      text (network.mode == "lan" ? t("settings.networkLanNote") : network.mode == "tailscale" ? t("settings.networkTailscaleNote") : t("settings.networkLocalNote")) class=SettingsFoot
+                      if network.locked
+                        text t("settings.networkManaged") class=SettingsFoot testId="network-managed"
+                      if network.listening != ""
+                        text t("settings.networkListening", address=network.listening) class=SettingsFoot testId="network-listening"
+                      if network.urls != ""
+                        text network.urls class=SettingsFoot testId="network-urls"
+                      if network.http
+                        text t("settings.networkHttp") class=SettingsFoot
+                      if network.error != ""
+                        text network.error color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="network-error"
+                      if networkError != "" and not pending(networkSet)
+                        text networkError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="network-save-error"
+                      if pending(networkRestarted)
+                        text t("settings.networkRestarting") class=SettingsFoot
+                      else if network.restartRequired
+                        row class=SettingsRow padding="space.xs space.md 0" min-height=44
+                          text t("settings.networkRestart") color="ink.muted" font="-exact-footnote" flex=1 testId="network-restart-note"
+                          if network.canRestart
+                            button appearance="none" press=doRestartNetwork min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="network-restart"
+                              text t("settings.networkRestartButton")
+                      if networkRestartError != "" and not pending(networkRestarted)
+                        text networkRestartError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0"
                   else if settingsDomain == "updates"
                     column gap="space.xl"
                       column

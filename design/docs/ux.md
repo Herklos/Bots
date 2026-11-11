@@ -85,13 +85,13 @@ The old Projects board has no navigation entry or beta toggle. Per-Bot projects,
 
 ### 6. Remote access
 
-1. Settings → Remote access sets the password. Save is disabled until a password is typed.
+1. Settings → Access sets the password. Save is disabled until a password is typed.
 2. Anyone who opens hbots from another device signs in with that password.
-3. Tailscale and Cloudflare routes are set up from the same screen.
+3. Network, on the same page, chooses this device, the local network, or Tailscale Serve. Local network and Tailscale require the password. The local network address is HTTP. Tailscale Serve is HTTPS. A listener change applies when hbots restarts. The Restart button is there only when hbots is the installed service. `HBOTS_NETWORK_ACCESS` locks the control. The Cloudflare tunnel is not on this screen.
 
 ### 7. Settings
 
-- Name, Appearance (System, Light, Dark), This machine, Vault, Remote access. Connected apps is postponed.
+- Name, Appearance (System, Light, Dark), This machine, Vault, the password, and where hbots listens. Connected apps is postponed.
 - **This machine** is one sentence: the counts since the file started, or "Nothing counted yet." The footer says "Counted on this machine. Nothing is sent anywhere." A failed load says so. It does not show zeros.
 - Changing Appearance applies at once, with no Save.
 
