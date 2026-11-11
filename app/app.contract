@@ -420,6 +420,13 @@ shape Reply
   ok: bool
   error: string
 
+// A chat or group send. `messageId` is the command id. The transcript row is that id
+// with `turn-item:message:` in front. Other mutations stay on Reply.
+shape Sent
+  ok: bool
+  error: string
+  messageId: string
+
 // A drive turn may return clipboard text after copy or cut.
 shape DriveReply
   ok: bool
@@ -917,13 +924,23 @@ fn bitState(faces: FaceBit[], n: number): string = match faces.at(n) { case some
 fn memberFaces(bots: Bot[], members: RoomMember[]): FaceBit[] = members.slice(0, 3).map(m => FaceBit(shape=shapeOf(bots, m.slug), color=colorOf(bots, m.slug), state=m.state))
 fn pickedFaces(bots: Bot[], slugs: string[]): FaceBit[] = slugs.slice(0, 3).map(slug => FaceBit(shape=shapeOf(bots, slug), color=colorOf(bots, slug), state="idle"))
 fn withWorking(messages: RoomMessage[], working: bool): RoomMessage[] = working ? messages.concat([RoomMessage(id="working", name="", text="", from="", parts=[])]) : messages
-// The person's text, shown at the end of the room log until the sent row arrives.
-fn withRoomPending(messages: RoomMessage[], text: string): RoomMessage[] = text == "" ? messages : messages.concat([RoomMessage(id="room-pending", name="", text=text, from="user", parts=[])])
+// The person's text, on the same id the room will store, until that row arrives.
+fn withRoomPending(messages: RoomMessage[], text: string, id: string): RoomMessage[] = text == "" or id == "" or messages.filter(m => m.id == id).length > 0 ? messages : messages.concat([RoomMessage(id=id, name="", text=text, from="user", parts=[])])
 // Room lines use the same row shape as the Bot transcript. The group view reads kind, mine, and the bot fields.
-fn roomLine(msg: RoomMessage): Row = Row(id=msg.id, kind=(msg.id == "working" ? "working" : (msg.id == "room-pending" ? "pending" : "message")), mine=(msg.from == "user"), text=msg.text, title="", time="", head=true, tail=true, variant="", files=[], botSlug=(msg.from == "user" ? "" : msg.from), botName=msg.name, botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=msg.parts)
+fn roomLine(msg: RoomMessage): Row = Row(id=msg.id, kind=(msg.id == "working" ? "working" : "message"), mine=(msg.from == "user"), text=msg.text, title="", time="", head=true, tail=true, variant="", files=[], botSlug=(msg.from == "user" ? "" : msg.from), botName=msg.name, botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=msg.parts)
 fn alignAt(align: string[], i: number): string = match align.at(i) { case some(a) => a == "center" or a == "right" ? a : "left", case none => "left" }
-// A local transcript row for text that is still sending or failed. It is not a gateway row.
-fn pendingRow(text: string, failed: bool): Row = Row(id="pending", kind="pending", mine=true, text=text, title="", time="", head=true, tail=true, variant=(failed ? "failed" : ""), files=[], botSlug="", botName="", botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=[])
+// The transcript id for a command id. A row already in that form is kept.
+fn transcriptId(id: string): string = id == "" or id.startsWith("turn-item:") ? id : `turn-item:message:${id}`
+fn knownSent(rows: Row[], id: string): bool = id != "" and rows.filter(r => r.id == id or r.id == transcriptId(id)).length > 0
+fn botCount(rows: Row[]): number = rows.filter(m => m.kind == "message" and not m.mine).length
+// A local row for text that is still sending or failed. A send uses the transcript id so the
+// real row replaces it without a new key. A failure keeps the retry bubble.
+fn pendingRow(id: string, text: string, failed: bool): Row = Row(id=transcriptId(id), kind=(failed ? "pending" : "message"), mine=true, text=text, title="", time="", head=true, tail=true, variant=(failed ? "failed" : ""), files=[], botSlug="", botName="", botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=[])
+fn withoutWorking(rows: Row[]): Row[] = rows.filter(r => r.id != "working")
+fn workingOnly(): Row = Row(id="working", kind="working", mine=false, text="", title="", time="", head=true, tail=true, variant="", files=[], botSlug="", botName="", botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=[])
+// One working row, after the person's line. `hold` keeps it when a poll says the turn stopped.
+fn holdWorking(rows: Row[], hold: bool): Row[] = (hold or rows.filter(r => r.id == "working").length > 0) ? withoutWorking(rows).concat([workingOnly()]) : rows
+fn withPending(rows: Row[], id: string, text: string, failed: bool): Row[] = text == "" or id == "" or knownSent(rows, id) ? rows : rows.concat([pendingRow(id, text, failed)])
 // True when the last character can continue a word, so `joe@mail` is not a mention.
 fn wordChar(c: string): bool = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".includes(c)
 fn mentionReplace(text: string, q: string, slug: string): string = `${text.slice(0, text.length - q.length)}${slug} `
@@ -959,6 +976,13 @@ component Bots
   state appliedStamp = ""
   state lastText = ""
   state failedText = ""
+  // The command id of the send on screen. The row key is `turn-item:message:` plus this.
+  state sentId = ""
+  // Kept while this send's turn is open, so a poll that says working is false does not drop the row.
+  state holdWork = false
+  // Bot messages already in the transcript when the send started. A newer one ends the turn.
+  state botMark = 0
+  state roomSentId = ""
   state answerText = ""
   state newName = ""
   state newColor = "brand.default"
@@ -1076,7 +1100,7 @@ component Bots
   mutation signedOut as shape Reply refreshes session, bots
   mutation created as shape Made refreshes bots then afterCreate
   mutation groupMade as shape Made refreshes convos then afterGroupMade
-  mutation roomSent as shape Reply refreshes room, convos then afterRoomSend
+  mutation roomSent as shape Sent refreshes room, convos then afterRoomSend
   mutation groupGone as shape Reply refreshes convos
   mutation groupSaved as shape Reply refreshes room, convos
   mutation subCreated as shape Reply refreshes bots then afterSubCreate
@@ -1090,7 +1114,7 @@ component Bots
   mutation noticeSaved as shape Reply refreshes prefs
   mutation reacted as shape Reply refreshes chat
   mutation messagePinned as shape Reply refreshes chat
-  mutation sent as shape Reply refreshes chat then afterSend
+  mutation sent as shape Sent refreshes chat then afterSend
   mutation draftSaved as shape Reply
   mutation answered as shape Reply refreshes chat then afterAnswer
   mutation stopped as shape Reply refreshes chat
@@ -1146,14 +1170,15 @@ component Bots
   derive workingMembers = room.members.filter(m => m.working)
   derive workerKey = workingMembers.map(m => m.slug).join(",")
   derive paintedWorkers = workingMembers.length > 0 ? workingMembers : room.members.filter(m => heldSlugs.filter(s => s == m.slug).length > 0)
-  derive roomRows = withRoomPending(withWorking(room.messages, paintedWorkers.length > 0), roomPending).map(m => roomLine(m))
+  derive roomRows = withRoomPending(withWorking(room.messages, paintedWorkers.length > 0), roomPending, roomSentId).map(m => roomLine(m))
   derive mentionPool = roomId != "" ? roomMentions(bots, room.members, t("group.everyone")) : botMentions(bots)
   derive mentionHits = mentionOn ? filterMentions(mentionPool, mentionQ) : []
   derive qtext = messageQuery.trim().toLowerCase()
   derive filteredRows = chat.rows.filter(m => m.kind != "message" or qtext == "" or m.text.toLowerCase().includes(qtext))
   derive pendingText = pending(sent) and lastText != "" ? lastText : (failedText != "" and not pending(sent) ? failedText : "")
   derive pendingFailed = failedText != "" and not pending(sent)
-  derive shownRows = pendingText == "" ? filteredRows : filteredRows.concat([pendingRow(pendingText, pendingFailed)])
+  derive laterBot = botCount(chat.rows) > botMark
+  derive shownRows = holdWorking(withPending(filteredRows, sentId, pendingText, pendingFailed), holdWork)
   derive searchNote = qtext != "" and chat.partial ? t("chat.searchPartial") : ""
   derive visibleBots = bots.filter(b => not b.hidden and not b.hideFromSidebar and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
   derive tiles = visibleBots.filter(b => query == "" and (b.main or b.pinned))
@@ -1201,7 +1226,7 @@ component Bots
   derive lastRowId = onGroup ? lastRoomId : lastId
   // The row a send or a jump-to-end should land on: the optimistic line, otherwise lastRowId.
   derive activePending = onGroup ? roomPending : pendingText
-  derive activeLastId = activePending != "" ? (onGroup ? "room-pending" : "pending") : lastRowId
+  derive activeLastId = activePending != "" ? (onGroup ? roomSentId : transcriptId(sentId)) : lastRowId
   // Skip a stale last id while the send is still in flight and the new row is not in the list yet.
   derive activeReady = activePending != "" or ((onGroup ? not pending(roomSent) : not pending(sent)) and lastRowId != "")
   derive followKey = `${activeLastId}:${sendTick}`
@@ -1240,6 +1265,19 @@ component Bots
 
   task pollHidden when page.visibilityState != "visible" and not pending(sent) and not pending(answered) and not pending(stopped)
     every(10000, pull)
+
+  // A later Bot line ends the turn at once. Working that stays false after the send settles drops the row.
+  task releaseWorkSoon when holdWork and not pending(sent) and laterBot
+    after(1, dropWork)
+
+  task releaseWorkLater when holdWork and not pending(sent) and not laterBot and not chat.working
+    after(800, dropWork)
+
+  task adoptSent when lastText != "" and not pending(sent) and knownSent(chat.rows, sentId)
+    after(1, forgetSentText)
+
+  task adoptRoom when roomPending != "" and not pending(roomSent) and room.messages.filter(m => m.id == roomSentId).length > 0
+    after(1, forgetRoomPending)
 
   // Notices follow the roster, the open chat, and whether this window is in front.
   // A poll does not post them again, and does not read settings or permission again.
@@ -1710,14 +1748,20 @@ component Bots
       let text = roomText.trim()
       away = false
       stickToEnd = true
+      let id = `m-${sendTick + 1}`
       sendTick = sendTick + 1
+      roomSentId = id
       roomPending = text
-      send roomSent = sendRoom(roomId, text)
+      send roomSent = sendRoom(roomId, text, id)
       roomText = ""
       clearMention()
     focus("room-composer")
   action afterRoomSend
-    roomPending = ""
+    if roomError != "" or room.messages.filter(m => m.id == roomSentId).length > 0
+      roomPending = ""
+  action forgetRoomPending
+    if room.messages.filter(m => m.id == roomSentId).length > 0
+      roomPending = ""
   action roomKey(k: string, event: KeyboardEvent)
     if mentionOn and mentionHits.length > 0 and (k == "ArrowDown" or k == "ArrowUp" or k == "Enter" or k == "Tab" or k == "Escape")
       preventDefault()
@@ -1768,11 +1812,16 @@ component Bots
       messageQuery = ""
       away = false
       stickToEnd = true
+      let id = `m-${sendTick + 1}`
       sendTick = sendTick + 1
+      sentId = id
+      botMark = botCount(chat.rows)
+      holdWork = true
       // pendingAttaches entries are `id\\tname`; the data module keeps the ids.
       lastText = draft.trim()
       failedText = ""
-      send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"), childThread, replyTo, replyQuote)
+      // Pass the local. A state read in this same action still sees the value from before the write.
+      send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"), childThread, replyTo, replyQuote, id)
       clearMention()
       edit("")
       writeDrafts()
@@ -1800,23 +1849,35 @@ component Bots
       draftFiles = dropKey(draftFiles, dkey)
       noteDraft()
       writeDrafts()
-      lastText = ""
+      if knownSent(chat.rows, sentId)
+        lastText = ""
       replyTo = ""
       replyQuote = ""
       // A search filter hides the new row, so the jump waits until this is empty.
       messageQuery = ""
     else
       failedText = lastText
+      holdWork = false
+  action forgetSentText
+    if knownSent(chat.rows, sentId)
+      lastText = ""
+  action dropWork
+    if not pending(sent) and (laterBot or not chat.working)
+      holdWork = false
   action retry
     if failedText != "" and not pending(sent)
       messageQuery = ""
       away = false
       stickToEnd = true
+      let id = `m-${sendTick + 1}`
       sendTick = sendTick + 1
+      sentId = id
+      botMark = botCount(chat.rows)
+      holdWork = true
       let again = failedText
       lastText = again
       failedText = ""
-      send sent = sendMessage(slug, again, "", childThread, replyTo, replyQuote)
+      send sent = sendMessage(slug, again, "", childThread, replyTo, replyQuote, id)
   action startReply(id: string, text: string)
     if top(nav).name == "chat"
       replyTo = id
