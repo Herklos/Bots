@@ -19,15 +19,15 @@ use std::{
 };
 use tokio::sync::{broadcast, Mutex};
 
-pub const KINDS: &[&str] = &[
+pub(crate) const KINDS: &[&str] = &[
     "project", "task", "machine", "service", "repo", "note", "link",
 ];
-pub const LINK_TYPES: &[&str] = &["thread", "bot", "item", "url", "t3project"];
-pub const PRIORITIES: &[&str] = &["high", "normal", "low"];
-pub const FIELD_NAMES: &[&str] = &[
+pub(crate) const LINK_TYPES: &[&str] = &["thread", "bot", "item", "url", "t3project"];
+pub(crate) const PRIORITIES: &[&str] = &["high", "normal", "low"];
+pub(crate) const FIELD_NAMES: &[&str] = &[
     "url", "path", "host", "port", "branch", "due", "priority", "owner", "tags",
 ];
-pub const MAX_BATCH: usize = 100;
+pub(crate) const MAX_BATCH: usize = 100;
 const MAX_ITEMS: usize = 5000;
 const MAX_ACTIVITY: usize = 300;
 const BOARD_TAIL: usize = 60;
@@ -48,7 +48,7 @@ const TRACKED: &[&str] = &[
 const ID_ALPHABET: &[u8] = b"abcdefghijkmnpqrstuvwxyz23456789";
 
 /// The statuses a kind may have. Note and link have none.
-pub fn statuses(kind: &str) -> &'static [&'static str] {
+pub(crate) fn statuses(kind: &str) -> &'static [&'static str] {
     match kind {
         "project" => &["active", "paused", "idea", "done"],
         "task" => &["todo", "doing", "waiting", "done"],
@@ -73,7 +73,7 @@ fn kind_error() -> ApiError {
 
 /// `{type: "bot", name, slug}` for a Bot, otherwise the user.
 #[allow(dead_code)]
-pub fn actor(input: Option<&Value>) -> Value {
+pub(crate) fn actor(input: Option<&Value>) -> Value {
     match input {
         Some(a) if a["type"] == "bot" => {
             let mut out = json!({ "type": "bot" });
@@ -90,7 +90,7 @@ pub fn actor(input: Option<&Value>) -> Value {
 }
 
 /// "You" for the user, otherwise the Bot's name.
-pub fn actor_label(actor: &Value) -> String {
+pub(crate) fn actor_label(actor: &Value) -> String {
     if actor.is_null() || actor["type"] == "user" {
         return "You".into();
     }
@@ -1061,7 +1061,7 @@ fn is_open_task(item: &Value) -> bool {
     item["kind"] == "task" && item["status"] != "done" && !is_archived(item)
 }
 
-pub fn item_link(id: &str, app_url: &str) -> String {
+pub(crate) fn item_link(id: &str, app_url: &str) -> String {
     let encoded: String = id
         .bytes()
         .map(|b| {
@@ -1076,7 +1076,7 @@ pub fn item_link(id: &str, app_url: &str) -> String {
 }
 
 /// The compact view agents get: ids, titles and placement, without bodies.
-pub fn brief(item: &Value, app_url: &str) -> Value {
+pub(crate) fn brief(item: &Value, app_url: &str) -> Value {
     let mut out = Map::new();
     out.insert("id".into(), item["id"].clone());
     out.insert("kind".into(), item["kind"].clone());
@@ -1105,7 +1105,7 @@ pub fn brief(item: &Value, app_url: &str) -> Value {
 
 /// The board at a glance: projects with open to-dos, open to-dos, machines with what runs on them,
 /// and the latest changes.
-pub fn overview(items: &[Value], activity: &[Value], app_url: &str) -> Value {
+pub(crate) fn overview(items: &[Value], activity: &[Value], app_url: &str) -> Value {
     let live: Vec<&Value> = items.iter().filter(|i| !is_archived(i)).collect();
     let title_of = |id: &str| {
         live.iter()
@@ -1226,7 +1226,7 @@ pub fn overview(items: &[Value], activity: &[Value], app_url: &str) -> Value {
 }
 
 /// Search with filters. Words must all appear in a title, note, area, tag, address or path.
-pub fn find(items: &[Value], query: &Value, app_url: &str) -> Value {
+pub(crate) fn find(items: &[Value], query: &Value, app_url: &str) -> Value {
     let text_of = |k: &str| {
         query
             .get(k)
@@ -1325,7 +1325,7 @@ pub fn find(items: &[Value], query: &Value, app_url: &str) -> Value {
 }
 
 /// One item in full: its children, what is on it (for a machine), its parent and what links to it.
-pub fn detail(items: &[Value], id: &str, app_url: &str) -> Option<Value> {
+pub(crate) fn detail(items: &[Value], id: &str, app_url: &str) -> Option<Value> {
     let item = items.iter().find(|i| i["id"] == id)?;
     let mut children: Vec<&Value> = items
         .iter()

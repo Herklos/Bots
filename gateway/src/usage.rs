@@ -123,7 +123,7 @@ impl Usage {
 /// Token totals T3 reported on a thread projection. Cache figures are separate
 /// from input and output, because T3 counts them that way.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
-pub struct TokenTotals {
+pub(crate) struct TokenTotals {
     pub turns: u64,
     pub input: u64,
     pub output: u64,
@@ -133,7 +133,7 @@ pub struct TokenTotals {
 
 /// Sum `providerTurns[].turnTokenUsage`. A turn with no usage object means this
 /// T3 did not report tokens. `unavailable` and local-command turns are seen, and not added.
-pub fn tokens_from_projection(projection: &Value) -> (TokenTotals, bool) {
+pub(crate) fn tokens_from_projection(projection: &Value) -> (TokenTotals, bool) {
     let mut totals = TokenTotals::default();
     let mut known = false;
     let Some(turns) = projection.get("providerTurns").and_then(Value::as_array) else {
@@ -160,7 +160,7 @@ pub fn tokens_from_projection(projection: &Value) -> (TokenTotals, bool) {
 
 /// One turn's token line, only when that turn and the message already share an id.
 /// Cache stays separate from input and output. Unavailable turns and local commands contribute nothing.
-pub fn turn_token_line(projection: &Value, message_id: &str) -> Option<Value> {
+pub(crate) fn turn_token_line(projection: &Value, message_id: &str) -> Option<Value> {
     if message_id.is_empty() {
         return None;
     }
@@ -197,7 +197,7 @@ fn shares_message(turn: &Value, message_id: &str) -> bool {
     .any(|value| value.and_then(Value::as_str) == Some(message_id))
 }
 
-pub fn bot_payload(
+pub(crate) fn bot_payload(
     messages: u64,
     attachments: u64,
     tokens: &TokenTotals,
@@ -218,7 +218,7 @@ pub fn bot_payload(
     })
 }
 
-pub async fn get_usage(State(s): State<Arc<AppState>>) -> ApiResult<Json<Value>> {
+pub(crate) async fn get_usage(State(s): State<Arc<AppState>>) -> ApiResult<Json<Value>> {
     Ok(Json(s.usage.snapshot().await?))
 }
 
@@ -244,7 +244,7 @@ async fn read_doc(path: &std::path::Path) -> ApiResult<Value> {
 }
 
 /// Add one count on `day` for the machine, and under `bots[slug]` when `slug` is set.
-pub fn record_for(doc: &mut Value, day: &str, slug: &str, key: &str, keep: usize) {
+pub(crate) fn record_for(doc: &mut Value, day: &str, slug: &str, key: &str, keep: usize) {
     record(doc, day, key, keep);
     if slug.is_empty() {
         return;
@@ -271,7 +271,7 @@ pub fn record_for(doc: &mut Value, day: &str, slug: &str, key: &str, keep: usize
     bucket[key] = json!(n + 1);
 }
 
-pub fn bot_counts(doc: &Value, slug: &str) -> (u64, u64) {
+pub(crate) fn bot_counts(doc: &Value, slug: &str) -> (u64, u64) {
     let mut messages = 0;
     let mut attachments = 0;
     let Some(days) = doc.get("days").and_then(Value::as_object) else {
@@ -299,7 +299,7 @@ fn count_u64(value: &Value) -> u64 {
 }
 
 /// Add one count on `day` and drop the oldest days past `keep`.
-pub fn record(doc: &mut Value, day: &str, key: &str, keep: usize) {
+pub(crate) fn record(doc: &mut Value, day: &str, key: &str, keep: usize) {
     if !doc.is_object() {
         *doc = json!({ "version": 1, "days": {} });
     }
@@ -324,7 +324,7 @@ pub fn record(doc: &mut Value, day: &str, key: &str, keep: usize) {
     }
 }
 
-pub fn with_totals(mut doc: Value) -> Value {
+pub(crate) fn with_totals(mut doc: Value) -> Value {
     let mut totals = Map::new();
     if let Some(days) = doc["days"].as_object() {
         for day in days.values() {
@@ -341,7 +341,7 @@ pub fn with_totals(mut doc: Value) -> Value {
     doc
 }
 
-pub fn day_key(unix_secs: u64) -> String {
+pub(crate) fn day_key(unix_secs: u64) -> String {
     // Howard Hinnant, civil_from_days. UTC, no leap seconds.
     let z = i64::try_from(unix_secs / 86_400).unwrap_or(i64::MAX) + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
@@ -377,7 +377,7 @@ pub struct Turn {
 }
 
 /// `YYYY-MM-DDTHH:MM:SS(.sss)Z` as Unix milliseconds. T3 writes this form everywhere.
-pub fn parse_iso_ms(text: &str) -> Option<i64> {
+pub(crate) fn parse_iso_ms(text: &str) -> Option<i64> {
     let b = text.as_bytes();
     if b.len() < 19 || b[4] != b'-' || b[7] != b'-' || (b[10] != b'T' && b[10] != b' ') {
         return None;
@@ -409,7 +409,7 @@ pub fn parse_iso_ms(text: &str) -> Option<i64> {
 
 /// The finished turns of a thread projection that reported tokens. A turn is dated when it
 /// completed, or started if it never did.
-pub fn turns_from_projection(projection: &Value) -> Vec<Turn> {
+pub(crate) fn turns_from_projection(projection: &Value) -> Vec<Turn> {
     projection["providerTurns"]
         .as_array()
         .into_iter()
@@ -445,7 +445,7 @@ fn day_name(index: i64) -> String {
 }
 
 /// `(first day, last day, fill empty days)` of a period ending today, in the person's day.
-pub fn period_days(period: &str, now_ms: i64, offset_min: i64) -> Option<(i64, i64, bool)> {
+pub(crate) fn period_days(period: &str, now_ms: i64, offset_min: i64) -> Option<(i64, i64, bool)> {
     let today = day_index(now_ms, offset_min);
     match period {
         "today" => Some((today, today, true)),
@@ -458,7 +458,7 @@ pub fn period_days(period: &str, now_ms: i64, offset_min: i64) -> Option<(i64, i
 
 /// Tokens and activity in a period: totals, one row per day, and a row per model.
 /// `activity` holds each day's `(messages, attachments)` by day name.
-pub fn report(
+pub(crate) fn report(
     turns: &[Turn],
     activity: &std::collections::BTreeMap<String, (u64, u64)>,
     range: (i64, i64, bool),
@@ -537,7 +537,10 @@ pub fn report(
 }
 
 /// A Bot's `(messages, attachments)` for each day it has any, or the machine's with an empty slug.
-pub fn activity_by_day(doc: &Value, slug: &str) -> std::collections::BTreeMap<String, (u64, u64)> {
+pub(crate) fn activity_by_day(
+    doc: &Value,
+    slug: &str,
+) -> std::collections::BTreeMap<String, (u64, u64)> {
     doc["days"]
         .as_object()
         .into_iter()

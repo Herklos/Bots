@@ -51,7 +51,7 @@ const NAMES: [&str; 5] = [
 ];
 
 /// What the tools need, passed in so tests can supply their own.
-pub struct Deps<'a> {
+pub(crate) struct Deps<'a> {
     pub t3: &'a T3,
     pub vault: &'a Vault,
     /// The Bots, as `bots.list()` gives them (each has `mainThreadId`).
@@ -63,7 +63,7 @@ pub struct Deps<'a> {
 }
 
 /// `T3_SECRETS_DIR`, or T3's default `~/.t3/userdata/secrets/files`.
-pub fn secrets_dir_from_env() -> PathBuf {
+pub(crate) fn secrets_dir_from_env() -> PathBuf {
     std::env::var("T3_SECRETS_DIR")
         .ok()
         .filter(|s| !s.is_empty())
@@ -75,7 +75,7 @@ pub fn secrets_dir_from_env() -> PathBuf {
 }
 
 /// The MCP tool definitions for this module.
-pub fn tool_defs() -> Vec<Value> {
+pub(crate) fn tool_defs() -> Vec<Value> {
     let thread = json!({ "type": "string", "description": "Your main conversation's T3 thread id (in AGENTS.md, or mainThreadId in .bot/bot.json)." });
     let login = json!({ "type": "string", "description": "The login's id from vault_list." });
     let tab = json!({ "type": "string", "description": "Your browser tab id, if you have more than one open." });
@@ -140,12 +140,12 @@ pub fn tool_defs() -> Vec<Value> {
     ]
 }
 
-pub fn is_vault_tool(name: &str) -> bool {
+pub(crate) fn is_vault_tool(name: &str) -> bool {
     NAMES.contains(&name)
 }
 
 /// Entry point from `mcp.rs`: the live Bots, Vault and T3 of this process.
-pub async fn call(state: &AppState, name: &str, args: &Value) -> Result<Value, String> {
+pub(crate) async fn call(state: &AppState, name: &str, args: &Value) -> Result<Value, String> {
     let bots = state.bots.list().await.map_err(|e| e.message)?;
     let secrets_dir = secrets_dir_from_env();
     let token_dir = state
@@ -168,7 +168,7 @@ pub async fn call(state: &AppState, name: &str, args: &Value) -> Result<Value, S
     .await
 }
 
-pub async fn dispatch(d: &Deps<'_>, name: &str, args: &Value) -> Result<Value, String> {
+pub(crate) async fn dispatch(d: &Deps<'_>, name: &str, args: &Value) -> Result<Value, String> {
     match name {
         "vault_fill_password" => fill(d, args, "password").await,
         "vault_fill_username" => fill(d, args, "username").await,
@@ -209,7 +209,7 @@ async fn login_by_id(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
 
 /// The sites a login is saved for, as typed (`websites`, or the single `website`), without
 /// any that have no domain.
-pub fn login_sites(login: &Value) -> Vec<String> {
+pub(crate) fn login_sites(login: &Value) -> Vec<String> {
     let mut sites: Vec<String> = login["websites"]
         .as_array()
         .map(|l| {
@@ -234,13 +234,13 @@ fn site_for_page<'a>(page_url: &str, sites: &'a [String]) -> Option<&'a String> 
 
 /// A browser tab of a Bot.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Tab {
+pub(crate) struct Tab {
     pub tab_id: String,
     pub url: String,
 }
 
 /// The server-browser tabs in a `preview.list` result (other runtimes are left out).
-pub fn server_tabs(result: &Value) -> Vec<Tab> {
+pub(crate) fn server_tabs(result: &Value) -> Vec<Tab> {
     result["sessions"]
         .as_array()
         .into_iter()
@@ -263,7 +263,7 @@ fn host_of(url: &str) -> String {
 }
 
 /// The tab to type into: the one asked for, the only one open, or the only one on the login's site.
-pub fn pick_tab<'a>(
+pub(crate) fn pick_tab<'a>(
     tabs: &'a [Tab],
     tab_id: Option<&str>,
     sites: &[String],
@@ -372,7 +372,7 @@ type Ws =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Stage {
+pub(crate) enum Stage {
     /// Waiting for T3 to say we control the tab.
     Taking,
     /// The text is sent; waiting for the probe's answer.
@@ -380,7 +380,7 @@ pub enum Stage {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Step {
+pub(crate) enum Step {
     Ignore,
     /// We have control: send the text, then the probe.
     SendText,
@@ -390,7 +390,7 @@ pub enum Step {
 }
 
 /// What one frame from T3's preview stream means at this stage.
-pub fn step(stage: Stage, msg: &Value) -> Step {
+pub(crate) fn step(stage: Stage, msg: &Value) -> Step {
     match msg["type"].as_str() {
         Some("control") => {
             if msg["canOperate"] == false {
@@ -519,7 +519,7 @@ async fn wait_released(ws: &mut Ws) {
     clippy::map_err_ignore,
     reason = "an IO error includes the path of the secret file the Bot asked to read"
 )]
-pub fn read_secret(root: &Path, file: &str) -> Result<(String, PathBuf), String> {
+pub(crate) fn read_secret(root: &Path, file: &str) -> Result<(String, PathBuf), String> {
     let real = std::fs::canonicalize(file).map_err(|_| SECRET_MISSING.to_string())?;
     let root = std::fs::canonicalize(root).map_err(|_| SECRET_MISSING.to_string())?;
     if real.parent() != Some(root.as_path()) {
@@ -669,7 +669,7 @@ fn prepare_token_dir(dir: &Path) -> Result<(), String> {
 }
 
 /// Removes the files in `dir` last modified before `older_than`.
-pub fn sweep(dir: &Path, older_than: SystemTime) {
+pub(crate) fn sweep(dir: &Path, older_than: SystemTime) {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };

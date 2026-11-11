@@ -98,7 +98,7 @@ impl Icons {
     }
 }
 
-pub async fn get_icon(
+pub(crate) async fn get_icon(
     State(s): State<std::sync::Arc<AppState>>,
     Path(host): Path<String>,
 ) -> ApiResult<Response> {
@@ -128,7 +128,7 @@ pub async fn get_icon(
 }
 
 /// A hostname this cache will store. Dots are fine; slashes, spaces and `..` are not.
-pub fn cache_name(host: &str) -> Option<String> {
+pub(crate) fn cache_name(host: &str) -> Option<String> {
     let host = host.trim().trim_end_matches('.').to_ascii_lowercase();
     if host.is_empty()
         || host.len() > 253
@@ -150,7 +150,7 @@ fn normalize_host(host: &str) -> ApiResult<String> {
     cache_name(host).ok_or_else(|| ApiError::bad_request("give a public hostname"))
 }
 
-pub fn ip_is_public(ip: IpAddr) -> bool {
+pub(crate) fn ip_is_public(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v) => ipv4_is_public(v),
         IpAddr::V6(v) => ipv6_is_public(v),
@@ -191,7 +191,7 @@ fn ipv6_is_public(v: Ipv6Addr) -> bool {
 }
 
 /// Every address the name resolves to must be public. One private answer refuses the host.
-pub async fn assert_public(host: &str) -> ApiResult<()> {
+pub(crate) async fn assert_public(host: &str) -> ApiResult<()> {
     if let Ok(ip) = host.parse::<IpAddr>() {
         if ip_is_public(ip) {
             return Ok(());
@@ -224,7 +224,7 @@ pub async fn assert_public(host: &str) -> ApiResult<()> {
 }
 
 /// The first `<link rel="…icon…">` href, quotes either way.
-pub fn icon_href(html: &str) -> Option<&str> {
+pub(crate) fn icon_href(html: &str) -> Option<&str> {
     let mut rest = html;
     while let Some(at) = rest.to_ascii_lowercase().find("<link") {
         rest = &rest[at + 5..];
@@ -266,7 +266,7 @@ fn attr<'a>(tag: &'a str, name: &str) -> Option<&'a str> {
     Some(&value[..end])
 }
 
-pub fn image_type(header: &str, bytes: &[u8]) -> Option<&'static str> {
+pub(crate) fn image_type(header: &str, bytes: &[u8]) -> Option<&'static str> {
     let header = header
         .split(';')
         .next()
@@ -311,7 +311,10 @@ fn sniff(bytes: &[u8]) -> Option<&'static str> {
 }
 
 /// `favicon.ico` on `origin`, else the icon linked from the page. The link must stay on that host.
-pub async fn load_site(client: &reqwest::Client, origin: &Url) -> ApiResult<(Vec<u8>, String)> {
+pub(crate) async fn load_site(
+    client: &reqwest::Client,
+    origin: &Url,
+) -> ApiResult<(Vec<u8>, String)> {
     if origin.scheme() != "https" && origin.scheme() != "http" {
         return Err(ApiError::bad_request("the site must be http or https"));
     }

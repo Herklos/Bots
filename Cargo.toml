@@ -16,6 +16,9 @@ strip = true
 [workspace.lints.rust]
 unsafe_code = "forbid"
 rust_2018_idioms = { level = "deny", priority = -1 }
+# `pub` in a private module of the gateway binary is not visible to another crate.
+# Keep `pub` for the design crate's API. `gateway/src/computer.rs` is allowed at its module.
+unreachable_pub = "warn"
 
 [workspace.lints.clippy]
 dbg_macro = "deny"

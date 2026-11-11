@@ -2,17 +2,21 @@
 use serde_json::Value;
 use std::path::Path;
 
-pub async fn read_json(path: &Path) -> Option<Value> {
+pub(crate) async fn read_json(path: &Path) -> Option<Value> {
     let text = tokio::fs::read_to_string(path).await.ok()?;
     serde_json::from_str(&text).ok()
 }
 
-pub async fn write_json(path: &Path, value: &Value) -> std::io::Result<()> {
+pub(crate) async fn write_json(path: &Path, value: &Value) -> std::io::Result<()> {
     let text = serde_json::to_string_pretty(value).expect("JSON values serialize") + "\n";
     write_atomic(path, text.as_bytes(), None).await
 }
 
-pub async fn write_atomic(path: &Path, bytes: &[u8], mode: Option<u32>) -> std::io::Result<()> {
+pub(crate) async fn write_atomic(
+    path: &Path,
+    bytes: &[u8],
+    mode: Option<u32>,
+) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         tokio::fs::create_dir_all(dir).await?;
     }
@@ -31,7 +35,7 @@ pub async fn write_atomic(path: &Path, bytes: &[u8], mode: Option<u32>) -> std::
 }
 
 /// Shallow merge, as JavaScript's `{ ...a, ...b }`.
-pub fn merge(base: &Value, patch: &Value) -> Value {
+pub(crate) fn merge(base: &Value, patch: &Value) -> Value {
     let mut out = base.as_object().cloned().unwrap_or_default();
     if let Some(p) = patch.as_object() {
         for (k, v) in p {

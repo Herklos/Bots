@@ -9,11 +9,11 @@ use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
 use tokio::sync::Mutex;
 
-pub const MANAGED_START: &str = "<!-- bot:managed:start -->";
-pub const MANAGED_END: &str = "<!-- bot:managed:end -->";
+pub(crate) const MANAGED_START: &str = "<!-- bot:managed:start -->";
+pub(crate) const MANAGED_END: &str = "<!-- bot:managed:end -->";
 
 /// The shape names a Bot may have, from the design crate. The old default, `sphere`, reads as the ball.
-pub fn shape_name(raw: &str) -> Option<String> {
+pub(crate) fn shape_name(raw: &str) -> Option<String> {
     let shapes = hbots_design::tokens().face.shape_names();
     if raw == "sphere" {
         return shapes.first().map(|s| s.to_string());
@@ -22,9 +22,9 @@ pub fn shape_name(raw: &str) -> Option<String> {
 }
 
 /// Bots pinned as tiles above the inbox, besides the main Bot.
-pub const MAX_PINNED: usize = 2;
+pub(crate) const MAX_PINNED: usize = 2;
 
-pub fn valid_slug(slug: &str) -> bool {
+pub(crate) fn valid_slug(slug: &str) -> bool {
     let b = slug.as_bytes();
     !b.is_empty()
         && b.len() <= 63
@@ -34,7 +34,7 @@ pub fn valid_slug(slug: &str) -> bool {
 }
 
 /// "Ada Lovelace" → "ada-lovelace".
-pub fn slugify(name: &str) -> String {
+pub(crate) fn slugify(name: &str) -> String {
     use unicode_normalization::UnicodeNormalization;
     let lowered: String = name
         .to_lowercase()
@@ -763,7 +763,7 @@ async fn write_if_missing(path: &Path, text: &str) -> std::io::Result<()> {
 /// The brief names T3 Code because that is the harness wired today. Other backends may be added.
 /// `parent` is the parent Bot record when this Bot is a subagent. `children` are that parent's
 /// subagents. A parent's prompt is its `prompt` field.
-pub fn render_agents_md(
+pub(crate) fn render_agents_md(
     bot: &Value,
     root: &Path,
     parent: Option<&Value>,
@@ -849,7 +849,7 @@ fn plain_prompt(text: &str) -> String {
     text.replace(MANAGED_START, "").replace(MANAGED_END, "")
 }
 
-pub fn merge_managed(existing: &str, block: &str) -> String {
+pub(crate) fn merge_managed(existing: &str, block: &str) -> String {
     if existing.is_empty() {
         return block.to_string();
     }

@@ -33,23 +33,23 @@ use std::{
 };
 
 /// GitHub releases for this repository. Override the list with HBOTS_RELEASES_URL.
-pub const REPO: &str = "Herklos/Bots";
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+pub(crate) const REPO: &str = "Herklos/Bots";
+pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 const USER_AGENT_NAME: &str = "hbots-updater";
 /// How long a successful check is kept before the next one.
 const CHECK_TTL: Duration = Duration::from_secs(15 * 60);
 /// A failed check waits longer each time, up to this.
 const MAX_BACKOFF: Duration = Duration::from_secs(2 * 60 * 60);
 /// An update that hasn't restarted us by then failed (systemd can't tell us the updater exited).
-pub const PENDING_MS: u64 = 30 * 60 * 1000;
+pub(crate) const PENDING_MS: u64 = 30 * 60 * 1000;
 /// How long a release waits for hbots to go quiet before the automatic update gives up on it.
-pub const MAX_WAIT_MS: u64 = 24 * 60 * 60 * 1000;
+pub(crate) const MAX_WAIT_MS: u64 = 24 * 60 * 60 * 1000;
 
 // ---------- paths ----------
 
 /// `HBOTS_HOME`, or `~/.hbots`.
 #[allow(dead_code)]
-pub fn home_dir() -> PathBuf {
+pub(crate) fn home_dir() -> PathBuf {
     match std::env::var("HBOTS_HOME") {
         Ok(h) if !h.is_empty() => PathBuf::from(h),
         _ => PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into())).join(".hbots"),
@@ -58,14 +58,14 @@ pub fn home_dir() -> PathBuf {
 
 /// Where installed versions and their links live.
 #[derive(Clone, Debug, PartialEq)]
-pub struct RuntimePaths {
+pub(crate) struct RuntimePaths {
     pub versions: PathBuf,
     pub current: PathBuf,
     pub previous: PathBuf,
 }
 
 impl RuntimePaths {
-    pub fn new(home: &Path) -> Self {
+    pub(crate) fn new(home: &Path) -> Self {
         let runtime = home.join("runtime");
         Self {
             versions: runtime.join("versions"),
@@ -76,7 +76,7 @@ impl RuntimePaths {
 }
 
 /// True when `exe` runs from an installed version folder, so the copy can update itself.
-pub fn installed_runtime(exe: &Path, home: &Path) -> bool {
+pub(crate) fn installed_runtime(exe: &Path, home: &Path) -> bool {
     let real = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
     let Some(version_dir) = real(exe).parent().map(Path::to_path_buf) else {
         return false;
@@ -86,7 +86,7 @@ pub fn installed_runtime(exe: &Path, home: &Path) -> bool {
 
 /// The version folder's `hbots` binary, through the `current` link, so the service follows updates.
 #[allow(dead_code)]
-pub fn current_binary(home: &Path) -> PathBuf {
+pub(crate) fn current_binary(home: &Path) -> PathBuf {
     RuntimePaths::new(home).current.join("hbots")
 }
 
@@ -142,7 +142,7 @@ fn compare_pre(a: &str, b: &str) -> Ordering {
 }
 
 /// Compare two `X.Y.Z[-pre]` versions. A release comes after its own pre-releases.
-pub fn compare_versions(a: &str, b: &str) -> Result<Ordering> {
+pub(crate) fn compare_versions(a: &str, b: &str) -> Result<Ordering> {
     let x = parse_version(a).ok_or_else(|| anyhow!("Not a version: {a}"))?;
     let y = parse_version(b).ok_or_else(|| anyhow!("Not a version: {b}"))?;
     Ok(match x.core.cmp(&y.core) {
@@ -157,12 +157,12 @@ pub fn compare_versions(a: &str, b: &str) -> Result<Ordering> {
 }
 
 /// Previews are versions with a pre-release tag; they follow the preview channel.
-pub fn is_preview(version: &str) -> bool {
+pub(crate) fn is_preview(version: &str) -> bool {
     version.contains('-')
 }
 
 /// The rustc target triple the release archive is named with, matching `scripts/pack-release.sh`.
-pub fn target() -> String {
+pub(crate) fn target() -> String {
     match (std::env::consts::ARCH, std::env::consts::OS) {
         ("x86_64", "linux") => "x86_64-unknown-linux-gnu",
         ("aarch64", "linux") => "aarch64-unknown-linux-gnu",
@@ -173,12 +173,12 @@ pub fn target() -> String {
     .to_string()
 }
 
-pub fn asset_name(version: &str, target: &str) -> String {
+pub(crate) fn asset_name(version: &str, target: &str) -> String {
     format!("hbots-{version}-{target}.tar.gz")
 }
 
 /// The hash for `name` in a `SHA256SUMS` file (`<sha256>  <name>`, `*` before a binary name allowed).
-pub fn expected_sum(sums: &str, name: &str) -> Option<String> {
+pub(crate) fn expected_sum(sums: &str, name: &str) -> Option<String> {
     sums.lines().find_map(|line| {
         let mut fields = line.split_whitespace();
         let hash = fields.next()?;
@@ -193,7 +193,7 @@ pub fn expected_sum(sums: &str, name: &str) -> Option<String> {
 
 /// A release to install: its version, where to download the archive and the sums, and what GitHub says.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Release {
+pub(crate) struct Release {
     pub version: String,
     pub archive: String,
     pub sums: String,
@@ -204,13 +204,13 @@ pub struct Release {
 
 /// Where releases come from: the GitHub API list (or a mirror of it) and, optionally, a download base.
 #[derive(Clone, Debug)]
-pub struct ReleaseSource {
+pub(crate) struct ReleaseSource {
     pub api: String,
     pub base: Option<String>,
 }
 
 impl ReleaseSource {
-    pub fn from_env() -> Self {
+    pub(crate) fn from_env() -> Self {
         let get = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
         Self {
             api: get("HBOTS_RELEASES_URL").unwrap_or_else(|| {
@@ -229,7 +229,7 @@ fn tag_of(release: &Value) -> &str {
 }
 
 /// Pick the release from a GitHub-API-shaped list: an exact `version`, or the newest one.
-pub fn pick_release(
+pub(crate) fn pick_release(
     releases: &[Value],
     version: Option<&str>,
     preview: bool,
@@ -281,14 +281,14 @@ pub fn pick_release(
     })
 }
 
-pub fn http_client() -> Result<reqwest::Client> {
+pub(crate) fn http_client() -> Result<reqwest::Client> {
     Ok(reqwest::Client::builder()
         .user_agent(USER_AGENT_NAME)
         .timeout(Duration::from_secs(300))
         .build()?)
 }
 
-pub async fn find_release(
+pub(crate) async fn find_release(
     client: &reqwest::Client,
     source: &ReleaseSource,
     version: Option<&str>,
@@ -354,7 +354,7 @@ fn unpack_and_check(bytes: &[u8], dir: &Path, version: &str) -> Result<()> {
 }
 
 /// Download, verify and unpack a release into `versions/<version>`. Returns that folder.
-pub async fn install_release(
+pub(crate) async fn install_release(
     client: &reqwest::Client,
     home: &Path,
     release: &Release,
@@ -407,7 +407,7 @@ fn swap_link(link: &Path, target: &Path) -> Result<()> {
 }
 
 /// Where a link points, as an absolute path.
-pub fn read_link(link: &Path) -> Option<PathBuf> {
+pub(crate) fn read_link(link: &Path) -> Option<PathBuf> {
     let target = std::fs::read_link(link).ok()?;
     Some(if target.is_absolute() {
         target
@@ -417,7 +417,7 @@ pub fn read_link(link: &Path) -> Option<PathBuf> {
 }
 
 /// Point `current` at `version_dir`, remembering the version it replaces. Returns that one.
-pub fn activate(version_dir: &Path, home: &Path) -> Result<Option<PathBuf>> {
+pub(crate) fn activate(version_dir: &Path, home: &Path) -> Result<Option<PathBuf>> {
     let paths = RuntimePaths::new(home);
     std::fs::create_dir_all(paths.current.parent().unwrap_or(home))?;
     let before = read_link(&paths.current);
@@ -431,7 +431,7 @@ pub fn activate(version_dir: &Path, home: &Path) -> Result<Option<PathBuf>> {
 }
 
 /// Switch `current` back to the version before the last `activate`.
-pub fn rollback(home: &Path) -> Result<PathBuf> {
+pub(crate) fn rollback(home: &Path) -> Result<PathBuf> {
     let paths = RuntimePaths::new(home);
     let previous = read_link(&paths.previous)
         .filter(|p| p.exists())
@@ -442,7 +442,7 @@ pub fn rollback(home: &Path) -> Result<PathBuf> {
 }
 
 /// Delete every installed version except `current` and `previous`. Returns the names removed.
-pub fn prune(home: &Path) -> Result<Vec<String>> {
+pub(crate) fn prune(home: &Path) -> Result<Vec<String>> {
     let paths = RuntimePaths::new(home);
     let keep: Vec<PathBuf> = [read_link(&paths.current), read_link(&paths.previous)]
         .into_iter()
@@ -467,7 +467,7 @@ pub fn prune(home: &Path) -> Result<Vec<String>> {
 // ---------- health and switching ----------
 
 /// GET /api/health on the gateway, with a plain TCP request so the CLI needs no async runtime.
-pub fn probe_health(port: u16, timeout: Duration) -> Option<Value> {
+pub(crate) fn probe_health(port: u16, timeout: Duration) -> Option<Value> {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let mut stream = TcpStream::connect_timeout(&addr, timeout).ok()?;
     stream.set_read_timeout(Some(timeout)).ok()?;
@@ -484,7 +484,7 @@ pub fn probe_health(port: u16, timeout: Duration) -> Option<Value> {
     serde_json::from_str(body).ok()
 }
 
-pub fn wait_until(timeout: Duration, mut check: impl FnMut() -> bool) -> bool {
+pub(crate) fn wait_until(timeout: Duration, mut check: impl FnMut() -> bool) -> bool {
     let end = Instant::now() + timeout;
     loop {
         if check() {
@@ -498,7 +498,7 @@ pub fn wait_until(timeout: Duration, mut check: impl FnMut() -> bool) -> bool {
 }
 
 /// What switching to a new version needs from its surroundings.
-pub struct Switch<'a> {
+pub(crate) struct Switch<'a> {
     pub home: &'a Path,
     /// Whether a service runs the gateway (so it must be restarted); otherwise the user does it.
     pub managed: bool,
@@ -511,7 +511,7 @@ pub struct Switch<'a> {
 }
 
 /// Point `current` at `version_dir` and restart. If `version` doesn't answer, switch back.
-pub fn switch_to(version_dir: &Path, version: &str, s: &Switch<'_>) -> Result<()> {
+pub(crate) fn switch_to(version_dir: &Path, version: &str, s: &Switch<'_>) -> Result<()> {
     activate(version_dir, s.home)?;
     (s.log)(&format!("Switched to {version}"));
     if !s.managed {
@@ -551,7 +551,7 @@ pub fn switch_to(version_dir: &Path, version: &str, s: &Switch<'_>) -> Result<()
 
 // ---------- update log and time ----------
 
-pub fn unix_now() -> u64 {
+pub(crate) fn unix_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -559,7 +559,7 @@ pub fn unix_now() -> u64 {
 }
 
 /// `YYYY-MM-DDTHH:MM:SSZ` for a Unix time (UTC).
-pub fn iso8601(unix_secs: u64) -> String {
+pub(crate) fn iso8601(unix_secs: u64) -> String {
     let days = i64::try_from(unix_secs / 86_400).unwrap_or(i64::MAX);
     let rem = unix_secs % 86_400;
     let (h, mi, s) = (rem / 3600, rem % 3600 / 60, rem % 60);
@@ -577,7 +577,7 @@ pub fn iso8601(unix_secs: u64) -> String {
 }
 
 /// logs/update.log: every update step, with the time, whoever started it.
-pub fn log_update(home: &Path, line: &str) {
+pub(crate) fn log_update(home: &Path, line: &str) {
     let file = home.join("logs").join("update.log");
     if let Some(dir) = file.parent() {
         std::fs::create_dir_all(dir).ok();
@@ -612,14 +612,14 @@ pub struct Latest {
 
 /// Stores the last answer; a check only reaches GitHub when the answer is older than `CHECK_TTL`.
 #[derive(Default)]
-pub struct UpdateChecker {
+pub(crate) struct UpdateChecker {
     status: UpdateStatus,
     next_at: Option<Instant>,
     failures: u32,
 }
 
 /// How long to wait after the `failures`-th failed check in a row.
-pub fn backoff(failures: u32) -> Duration {
+pub(crate) fn backoff(failures: u32) -> Duration {
     CHECK_TTL
         .saturating_mul(2u32.saturating_pow(failures.min(16)))
         .min(MAX_BACKOFF)
@@ -660,7 +660,7 @@ impl UpdateChecker {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct AutoState {
+pub(crate) struct AutoState {
     #[serde(default)]
     pub auto: bool,
     #[serde(default)]
@@ -677,7 +677,7 @@ pub struct AutoState {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct Pending {
+pub(crate) struct Pending {
     pub from: String,
     pub to: String,
     pub url: String,
@@ -686,14 +686,14 @@ pub struct Pending {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct Waiting {
+pub(crate) struct Waiting {
     pub version: String,
     pub since: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct Notice {
+pub(crate) struct Notice {
     pub kind: String,
     pub version: String,
     pub from: String,
@@ -703,7 +703,7 @@ pub struct Notice {
 
 /// What `consider` decided. The caller carries it out.
 #[derive(Debug, PartialEq)]
-pub enum Step {
+pub(crate) enum Step {
     Nothing,
     Wait,
     GaveUp,
@@ -728,7 +728,7 @@ fn notice(kind: &str, version: &str, from: &str, url: &str, at: &str) -> Notice 
 
 /// On start-up: an update the previous process began either worked (we run its version) or didn't.
 /// Returns the log line for the outcome, if there was an update to settle.
-pub fn settle(
+pub(crate) fn settle(
     state: &mut AutoState,
     version: &str,
     installed: &dyn Fn(&str) -> bool,
@@ -766,7 +766,7 @@ pub fn settle(
 }
 
 /// The updater ended without restarting us: don't retry that release.
-pub fn mark_failed(
+pub(crate) fn mark_failed(
     state: &mut AutoState,
     version: &str,
     target: &str,
@@ -784,7 +784,7 @@ pub fn mark_failed(
 }
 
 /// Decide what to do with a fresh check. `busy` is how many Bot threads a restart would interrupt.
-pub fn consider(
+pub(crate) fn consider(
     state: &mut AutoState,
     check: &UpdateStatus,
     version: &str,
@@ -875,14 +875,14 @@ fn chrono_free_ms(iso: &str) -> Option<u64> {
         .map(|secs| secs * 1000)
 }
 
-pub fn read_auto_state(file: &Path) -> AutoState {
+pub(crate) fn read_auto_state(file: &Path) -> AutoState {
     std::fs::read_to_string(file)
         .ok()
         .and_then(|text| serde_json::from_str(&text).ok())
         .unwrap_or_default()
 }
 
-pub fn write_auto_state(file: &Path, state: &AutoState) -> Result<()> {
+pub(crate) fn write_auto_state(file: &Path, state: &AutoState) -> Result<()> {
     if let Some(dir) = file.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -894,7 +894,7 @@ pub fn write_auto_state(file: &Path, state: &AutoState) -> Result<()> {
 
 /// Start `hbots update --yes <version>` outside this process, so a restart of the service doesn't stop it.
 /// On Linux systemd-run runs it in its own unit, since systemd stops every process in the service's cgroup.
-pub fn start_updater(version: &str, preview: bool, home: &Path) -> Result<()> {
+pub(crate) fn start_updater(version: &str, preview: bool, home: &Path) -> Result<()> {
     let exe = std::env::current_exe()?;
     let mut args = vec!["update".to_string(), "--yes".into()];
     if preview {
@@ -1049,7 +1049,7 @@ impl System {
 
 /// Start-up hook: settle a finished update, and for copies that can update themselves keep the
 /// stored check fresh every minute, so the update button and the automatic update need no browser.
-pub async fn start(state: Arc<AppState>) {
+pub(crate) async fn start(state: Arc<AppState>) {
     state.system.settle_on_start().await;
     if installed_runtime(
         &std::env::current_exe().unwrap_or_default(),
@@ -1137,7 +1137,7 @@ pub(crate) fn thread_is_busy(thread: &Value) -> bool {
 
 // ---------- routes ----------
 
-pub fn routes() -> Router<Arc<AppState>> {
+pub(crate) fn routes() -> Router<Arc<AppState>> {
     Router::new()
         .route("/api/system", get(system_status))
         .route("/api/system/auto-update", put(set_auto_update))

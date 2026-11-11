@@ -11,17 +11,17 @@ use crate::error::ApiResult;
 use crate::t3::T3;
 use serde_json::{json, Value};
 
-pub const SECRET_TAG: &str = "secrets.answerRequest";
-pub const RESPOND: &str = "runtime-request.respond";
+pub(crate) const SECRET_TAG: &str = "secrets.answerRequest";
+pub(crate) const RESPOND: &str = "runtime-request.respond";
 
-pub enum Outbound {
+pub(crate) enum Outbound {
     /// `secrets.answerRequest`. The secret, when there is one, stays inside this value.
     Secret(Value),
     /// A `runtime-request.respond` command. `dispatch` adds the command id.
     Command(Value),
 }
 
-pub fn outbound(
+pub(crate) fn outbound(
     kind: &str,
     thread_id: &str,
     request_id: &str,
@@ -79,7 +79,7 @@ fn command(thread_id: &str, request_id: &str, body: &Value) -> Result<Outbound, 
     Ok(Outbound::Command(cmd))
 }
 
-pub async fn send(t3: &T3, outbound: Outbound) -> ApiResult<Value> {
+pub(crate) async fn send(t3: &T3, outbound: Outbound) -> ApiResult<Value> {
     let rpc = t3.rpc().await?;
     match outbound {
         Outbound::Secret(payload) => Ok(rpc.call(SECRET_TAG, payload).await?),

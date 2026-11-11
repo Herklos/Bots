@@ -56,7 +56,7 @@ impl Exposure {
 }
 
 /// Comma-separated logins, trimmed, lowercased, de-duplicated, empties dropped.
-pub fn normalize_users(list: &str) -> Vec<String> {
+pub(crate) fn normalize_users(list: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for user in list.split(',').map(|u| u.trim().to_lowercase()) {
         if !user.is_empty() && !out.contains(&user) {
@@ -68,7 +68,7 @@ pub fn normalize_users(list: &str) -> Vec<String> {
 
 /// Which listener a request came in on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Surface {
+pub(crate) enum Surface {
     Public,
     Tailnet,
 }
@@ -136,7 +136,7 @@ impl Tailnet {
 }
 
 /// Whether a request on the tailnet listener comes from an allowed Tailscale user.
-pub fn tailnet_user_allowed(headers: &HeaderMap, users: &[String]) -> bool {
+pub(crate) fn tailnet_user_allowed(headers: &HeaderMap, users: &[String]) -> bool {
     headers
         .get("tailscale-user-login")
         .and_then(|v| v.to_str().ok())
@@ -145,12 +145,12 @@ pub fn tailnet_user_allowed(headers: &HeaderMap, users: &[String]) -> bool {
 }
 
 /// The only paths the internet-facing port serves in landing-only mode.
-pub fn landing_path(path: &str) -> bool {
+pub(crate) fn landing_path(path: &str) -> bool {
     matches!(path, "/" | "/welcome" | "/welcome/") || is_landing_asset(path)
 }
 
 /// An image or font under the landing page: `/welcome/img/<name>` or `/welcome/fonts/<name>`.
-pub fn is_landing_asset(path: &str) -> bool {
+pub(crate) fn is_landing_asset(path: &str) -> bool {
     let rest = path
         .strip_prefix("/welcome/img/")
         .or_else(|| path.strip_prefix("/welcome/fonts/"));
@@ -172,7 +172,7 @@ fn welcome_escape(path: &str) -> bool {
 }
 
 /// The file behind a landing path, under the built web app.
-pub fn landing_file(static_dir: &Path, path: &str) -> Option<PathBuf> {
+pub(crate) fn landing_file(static_dir: &Path, path: &str) -> Option<PathBuf> {
     if matches!(path, "/" | "/welcome" | "/welcome/") {
         return Some(static_dir.join("welcome").join("index.html"));
     }
@@ -180,7 +180,7 @@ pub fn landing_file(static_dir: &Path, path: &str) -> Option<PathBuf> {
 }
 
 /// Marks requests that arrive on the tailnet listener.
-pub fn on_tailnet(router: Router) -> Router {
+pub(crate) fn on_tailnet(router: Router) -> Router {
     router.layer(middleware::from_fn(
         |mut req: Request, next: Next| async move {
             req.extensions_mut().insert(Surface::Tailnet);
@@ -190,7 +190,7 @@ pub fn on_tailnet(router: Router) -> Router {
 }
 
 /// Marks requests on the public port and applies landing-only mode and the landing page routes.
-pub fn on_public(router: Router, state: Arc<AppState>) -> Router {
+pub(crate) fn on_public(router: Router, state: Arc<AppState>) -> Router {
     router.layer(middleware::from_fn_with_state(state, public_guard))
 }
 

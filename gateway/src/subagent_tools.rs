@@ -10,14 +10,14 @@ const MAX_TEXT: usize = 2000;
 const NAMES: [&str; 2] = ["subagent_list", "subagent_create"];
 
 /// What the tools need, passed in so tests can supply their own.
-pub struct Deps<'a> {
+pub(crate) struct Deps<'a> {
     pub bots: &'a Bots,
     /// The Bots, as `bots.list()` gives them (each has `mainThreadId`).
     pub roster: &'a [Value],
     pub provision_now: &'a Notify,
 }
 
-pub fn tool_defs() -> Vec<Value> {
+pub(crate) fn tool_defs() -> Vec<Value> {
     let thread = json!({
         "type": "string",
         "description": "Your main conversation's T3 thread id (in AGENTS.md, or mainThreadId in .bot/bot.json)."
@@ -50,12 +50,12 @@ pub fn tool_defs() -> Vec<Value> {
     ]
 }
 
-pub fn is_subagent_tool(name: &str) -> bool {
+pub(crate) fn is_subagent_tool(name: &str) -> bool {
     NAMES.contains(&name)
 }
 
 /// Entry point from `mcp.rs`.
-pub async fn call(state: &AppState, name: &str, args: &Value) -> Result<Value, String> {
+pub(crate) async fn call(state: &AppState, name: &str, args: &Value) -> Result<Value, String> {
     let roster = state.bots.list().await.map_err(|e| e.message)?;
     dispatch(
         &Deps {
@@ -69,7 +69,7 @@ pub async fn call(state: &AppState, name: &str, args: &Value) -> Result<Value, S
     .await
 }
 
-pub async fn dispatch(d: &Deps<'_>, name: &str, args: &Value) -> Result<Value, String> {
+pub(crate) async fn dispatch(d: &Deps<'_>, name: &str, args: &Value) -> Result<Value, String> {
     match name {
         "subagent_list" => list(d, args),
         "subagent_create" => create(d, args).await,

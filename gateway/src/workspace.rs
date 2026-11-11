@@ -18,7 +18,7 @@ pub struct DirEntry {
 }
 
 /// Relative paths only, under one root. `..`, absolute paths, and empty segments are refused.
-pub fn safe_rel(rel: &str) -> io::Result<()> {
+pub(crate) fn safe_rel(rel: &str) -> io::Result<()> {
     if rel.is_empty()
         || rel.starts_with('/')
         || rel.contains('\\')
@@ -43,12 +43,12 @@ pub trait Workspace: Send + Sync {
     fn root_for_harness(&self, slug: &str) -> String;
 }
 
-pub struct LocalDisk {
+pub(crate) struct LocalDisk {
     root: PathBuf,
 }
 
 impl LocalDisk {
-    pub fn new(root: PathBuf) -> Self {
+    pub(crate) fn new(root: PathBuf) -> Self {
         Self { root }
     }
 
@@ -114,13 +114,13 @@ impl Workspace for LocalDisk {
 
 /// In-memory store for tests. Keys are the relative paths `safe_rel` accepts.
 #[cfg(test)]
-pub struct MemoryWorkspace {
+pub(crate) struct MemoryWorkspace {
     files: Mutex<HashMap<String, (Vec<u8>, u64)>>,
 }
 
 #[cfg(test)]
 impl MemoryWorkspace {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             files: Mutex::new(HashMap::new()),
         }

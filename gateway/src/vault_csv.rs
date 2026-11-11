@@ -31,7 +31,7 @@ const CONTACT_KEY_FIELDS: [&str; 9] = [
 // ---------- parsing (vaultCsv.ts) ----------
 
 /// RFC 4180 CSV: quoted fields, doubled quotes, CRLF or LF, a leading BOM. Blank rows are dropped.
-pub fn parse_csv(text: &str) -> Vec<Vec<String>> {
+pub(crate) fn parse_csv(text: &str) -> Vec<Vec<String>> {
     let s = text.strip_prefix('\u{feff}').unwrap_or(text);
     let mut rows: Vec<Vec<String>> = Vec::new();
     let mut row: Vec<String> = Vec::new();
@@ -103,7 +103,7 @@ fn detect(h: &[String]) -> &'static str {
 }
 
 #[derive(Debug)]
-pub struct CsvImport {
+pub(crate) struct CsvImport {
     pub format: &'static str,
     pub items: Vec<Value>,
     pub skipped: usize,
@@ -197,7 +197,7 @@ fn is_lastpass_note(url: &str) -> bool {
 }
 
 /// Parses a password manager's export (or a Bot contact export) into Vault items.
-pub fn parse_vault_csv(text: &str) -> CsvImport {
+pub(crate) fn parse_vault_csv(text: &str) -> CsvImport {
     let rows = parse_csv(text);
     if rows.len() < 2 {
         return CsvImport {
@@ -321,7 +321,7 @@ fn csv_cell(v: &str) -> String {
 }
 
 /// RFC 4180 rows joined with CRLF, with a trailing CRLF.
-pub fn to_csv(rows: &[Vec<String>]) -> String {
+pub(crate) fn to_csv(rows: &[Vec<String>]) -> String {
     let lines: Vec<String> = rows
         .iter()
         .map(|r| r.iter().map(|c| csv_cell(c)).collect::<Vec<_>>().join(","))
@@ -488,7 +488,7 @@ fn contact_signature(item: &Value) -> Value {
 
 /// The CSV for logins (with passwords) or contacts. Repeated values get extra JSON columns
 /// only when some item has more than one.
-pub async fn export_csv(vault: &Vault, kind: &str) -> ApiResult<String> {
+pub(crate) async fn export_csv(vault: &Vault, kind: &str) -> ApiResult<String> {
     let all = vault.list().await?;
     if kind == "contact" {
         let contacts: Vec<&Value> = all.iter().filter(|i| i["type"] == "contact").collect();
@@ -560,7 +560,7 @@ pub async fn export_csv(vault: &Vault, kind: &str) -> ApiResult<String> {
 // ---------- import (vault.mts importItems) ----------
 
 #[derive(Debug, Default, PartialEq, Eq)]
-pub struct ImportCounts {
+pub(crate) struct ImportCounts {
     pub added: usize,
     pub updated: usize,
     pub skipped: usize,
@@ -581,7 +581,7 @@ enum Outcome {
 /// Adds imported items. A login with the same domain and username as a saved one updates it
 /// (password and hints), and an identical one is skipped. A contact identical to a saved one is
 /// skipped. An item the Vault would refuse counts as skipped.
-pub async fn import_items(vault: &Vault, list: &Value) -> ApiResult<ImportCounts> {
+pub(crate) async fn import_items(vault: &Vault, list: &Value) -> ApiResult<ImportCounts> {
     let list = list
         .as_array()
         .ok_or_else(|| ApiError::bad_request("items must be a list"))?;
@@ -673,7 +673,7 @@ async fn import_one(vault: &Vault, raw: &Value) -> ApiResult<Outcome> {
 // ---------- routes ----------
 
 /// POST /api/vault/import: `{items}` as JSON.
-pub async fn import(
+pub(crate) async fn import(
     State(s): State<Arc<AppState>>,
     h: HeaderMap,
     body: Bytes,
@@ -692,7 +692,7 @@ pub async fn import(
 
 /// POST /api/vault/import-csv: the raw CSV text, sent as `text/csv`. A cross-site form can't send
 /// that type, so the request needs the same guard as the JSON writes.
-pub async fn import_csv(
+pub(crate) async fn import_csv(
     State(s): State<Arc<AppState>>,
     h: HeaderMap,
     body: Bytes,
@@ -729,7 +729,7 @@ pub async fn import_csv(
 }
 
 /// GET /api/vault/export.csv[?type=contact]: the file carries passwords, so it is not cached.
-pub async fn export(
+pub(crate) async fn export(
     State(s): State<Arc<AppState>>,
     Query(q): Query<HashMap<String, String>>,
 ) -> ApiResult<Response> {

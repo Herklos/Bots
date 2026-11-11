@@ -57,7 +57,7 @@ fn efforts(model: &Value) -> Vec<Value> {
 }
 
 /// The providers a person can pick from: enabled, installed and ready, each with its visible models.
-pub fn from_config(config: &Value) -> Value {
+pub(crate) fn from_config(config: &Value) -> Value {
     let default = crate::provisioner::default_model();
     let providers: Vec<Value> = config["providers"]
         .as_array()
@@ -104,7 +104,7 @@ pub fn from_config(config: &Value) -> Value {
 /// The selection T3 stores for a choice, checked against what the provider offers. An effort the
 /// model doesn't offer is refused; no effort means the model's own default. A choice that is the
 /// Bot's current one is kept even when T3 no longer lists it.
-pub fn selection(
+pub(crate) fn selection(
     list: &Value,
     instance: &str,
     model: &str,
@@ -153,7 +153,7 @@ pub fn selection(
 }
 
 /// The effort in a stored selection.
-pub fn effort_of(selection: &Value) -> String {
+pub(crate) fn effort_of(selection: &Value) -> String {
     selection["options"]
         .as_array()
         .into_iter()

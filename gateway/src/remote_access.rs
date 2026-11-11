@@ -34,7 +34,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-pub const MIN_PASSWORD: usize = 8;
+pub(crate) const MIN_PASSWORD: usize = 8;
 const CMD_TIMEOUT: Duration = Duration::from_secs(10);
 const STATUS_TIMEOUT: Duration = Duration::from_secs(5);
 const TUNNEL_START_TIMEOUT: Duration = Duration::from_secs(60);
@@ -42,7 +42,7 @@ const TUNNEL_STOP_TIMEOUT: Duration = Duration::from_secs(2);
 /// Tailscale Serve's HTTPS ports,.
 const WEB_PORTS: [u16; 5] = [443, 8443, 8444, 8445, 9443];
 /// The same pinned cloudflared and checksums T3 Code downloads.
-pub const CLOUDFLARED_VERSION: &str = "2026.10.4";
+pub(crate) const CLOUDFLARED_VERSION: &str = "2026.10.4";
 const CF_BASE: &str = "https://github.com/cloudflare/cloudflared/releases/download/2026.10.4";
 
 // ---------- errors ----------
@@ -107,7 +107,7 @@ impl IntoResponse for AccessError {
 /// A saved password: its scrypt hash and salt, base64.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StoredPassword {
+pub(crate) struct StoredPassword {
     pub salt: String,
     pub hash: String,
     pub set_at: String,
@@ -116,7 +116,7 @@ pub struct StoredPassword {
 /// The saved Tailscale route. An enabled route always has its ports and users saved with it.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TailscaleSaved {
+pub(crate) struct TailscaleSaved {
     #[serde(default)]
     pub enabled: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -129,7 +129,7 @@ pub struct TailscaleSaved {
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TunnelSaved {
+pub(crate) struct TunnelSaved {
     #[serde(default)]
     pub enabled: bool,
 }
@@ -137,7 +137,7 @@ pub struct TunnelSaved {
 /// What `access.json` holds.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AccessState {
+pub(crate) struct AccessState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub password: Option<StoredPassword>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -174,7 +174,7 @@ fn scrypt_bytes(password: &[u8], salt: &[u8], len: usize) -> anyhow::Result<Vec<
     Ok(out)
 }
 
-pub async fn hash_password(password: String) -> anyhow::Result<StoredPassword> {
+pub(crate) async fn hash_password(password: String) -> anyhow::Result<StoredPassword> {
     tokio::task::spawn_blocking(move || {
         let salt: [u8; 16] = rand::random();
         let hash = scrypt_bytes(password.as_bytes(), &salt, 32)?;
@@ -187,7 +187,7 @@ pub async fn hash_password(password: String) -> anyhow::Result<StoredPassword> {
     .await?
 }
 
-pub async fn verify_password(password: String, stored: StoredPassword) -> bool {
+pub(crate) async fn verify_password(password: String, stored: StoredPassword) -> bool {
     tokio::task::spawn_blocking(move || {
         let (Ok(salt), Ok(expected)) = (B64.decode(&stored.salt), B64.decode(&stored.hash)) else {
             return false;
@@ -238,7 +238,7 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
 
 /// The fields of `tailscale status --json` this file reads, reduced to what the setup needs.
 #[derive(Debug, Default, PartialEq)]
-pub struct TailscaleFacts {
+pub(crate) struct TailscaleFacts {
     pub state: String,
     pub running: bool,
     pub needs_login: bool,
@@ -248,7 +248,7 @@ pub struct TailscaleFacts {
     pub login: Option<String>,
 }
 
-pub fn parse_tailscale_status(s: &Value) -> TailscaleFacts {
+pub(crate) fn parse_tailscale_status(s: &Value) -> TailscaleFacts {
     let state = s["BackendState"].as_str().unwrap_or("Unknown").to_string();
     let me = &s["Self"];
     let caps_https = me["CapMap"]
@@ -278,7 +278,7 @@ pub fn parse_tailscale_status(s: &Value) -> TailscaleFacts {
 }
 
 /// An HTTPS port already serving this listener, or the first one nothing else uses.
-pub fn pick_serve_port(serve: &Value, local_url: &str) -> Option<(u16, bool)> {
+pub(crate) fn pick_serve_port(serve: &Value, local_url: &str) -> Option<(u16, bool)> {
     let mut used: Vec<u16> = serve["TCP"]
         .as_object()
         .into_iter()
@@ -301,7 +301,7 @@ pub fn pick_serve_port(serve: &Value, local_url: &str) -> Option<(u16, bool)> {
 }
 
 /// What serves `port` on the tailnet, if anything.
-pub fn serve_owner(serve: &Value, port: u16) -> Option<String> {
+pub(crate) fn serve_owner(serve: &Value, port: u16) -> Option<String> {
     serve["Web"]
         .as_object()?
         .iter()
@@ -313,7 +313,7 @@ fn port_of(host_port: &str) -> Option<u16> {
     host_port.rsplit(':').next()?.parse().ok()
 }
 
-pub fn tailnet_url(dns_name: &str, port: u16) -> String {
+pub(crate) fn tailnet_url(dns_name: &str, port: u16) -> String {
     if port == 443 {
         format!("https://{dns_name}")
     } else {
@@ -322,7 +322,7 @@ pub fn tailnet_url(dns_name: &str, port: u16) -> String {
 }
 
 /// The `tailscale` to run: `HBOTS_TAILSCALE_PATH` (or legacy `TAILSCALE_PATH`), else PATH, else the macOS app binary.
-pub fn find_tailscale() -> Option<String> {
+pub(crate) fn find_tailscale() -> Option<String> {
     const MAC_APP: &str = "/Applications/Tailscale.app/Contents/MacOS/Tailscale";
     for key in ["HBOTS_TAILSCALE_PATH", "TAILSCALE_PATH"] {
         if let Some(path) = std::env::var(key).ok().filter(|p| !p.is_empty()) {
@@ -337,7 +337,7 @@ pub fn find_tailscale() -> Option<String> {
 
 /// The result of `tailscale status`: whether it is installed, the facts, and an error if it failed.
 #[derive(Debug, Default)]
-pub struct TailscaleStatus {
+pub(crate) struct TailscaleStatus {
     pub installed: bool,
     pub facts: TailscaleFacts,
     pub error: Option<String>,
@@ -394,7 +394,7 @@ async fn run_cmd(bin: &str, args: &[&str], timeout: Duration) -> Result<String, 
 
 /// `tailscale status`, as the app's setup needs it. Tailscale exits non-zero while logged out but
 /// still prints the state, so that output counts.
-pub async fn tailscale_status(bin: Option<&str>) -> TailscaleStatus {
+pub(crate) async fn tailscale_status(bin: Option<&str>) -> TailscaleStatus {
     let Some(bin) = bin else {
         return TailscaleStatus::default();
     };
@@ -485,7 +485,7 @@ fn cloudflared_asset(platform: &str, arch: &str) -> Option<CloudflaredAsset> {
 }
 
 /// This machine's platform and arch in Node's names.
-pub fn host_platform() -> (&'static str, &'static str) {
+pub(crate) fn host_platform() -> (&'static str, &'static str) {
     let platform = match std::env::consts::OS {
         "macos" => "darwin",
         "linux" => "linux",
@@ -514,7 +514,7 @@ fn find_on_path(name: &str) -> Option<PathBuf> {
 }
 
 /// The cloudflared to run: `HBOTS_CLOUDFLARED_PATH` (or legacy `CLOUDFLARED_PATH`), else the pinned copy, else PATH.
-pub fn find_cloudflared(home: &Path) -> Option<PathBuf> {
+pub(crate) fn find_cloudflared(home: &Path) -> Option<PathBuf> {
     for key in ["HBOTS_CLOUDFLARED_PATH", "CLOUDFLARED_PATH"] {
         if let Some(path) = std::env::var_os(key).filter(|p| !p.is_empty()) {
             return Some(PathBuf::from(path));
@@ -537,7 +537,7 @@ fn verify_sha256(bytes: &[u8], expected: &str) -> anyhow::Result<()> {
 }
 
 /// Download the pinned cloudflared, check its checksum, and install it under `home`.
-pub async fn install_cloudflared(home: &Path) -> anyhow::Result<PathBuf> {
+pub(crate) async fn install_cloudflared(home: &Path) -> anyhow::Result<PathBuf> {
     let (platform, arch) = host_platform();
     let asset = cloudflared_asset(platform, arch).ok_or_else(|| {
         anyhow::anyhow!(
@@ -589,7 +589,7 @@ fn set_executable(_path: &Path) -> std::io::Result<()> {
 }
 
 /// The first `https://<name>.trycloudflare.com` in the text.
-pub fn find_quick_url(text: &str) -> Option<String> {
+pub(crate) fn find_quick_url(text: &str) -> Option<String> {
     let mut rest = text;
     while let Some(i) = rest.find("https://") {
         let after = &rest[i + "https://".len()..];

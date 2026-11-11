@@ -52,4 +52,4 @@ impl IntoResponse for ApiError {
     }
 }
 
-pub type ApiResult<T> = Result<T, ApiError>;
+pub(crate) type ApiResult<T> = Result<T, ApiError>;

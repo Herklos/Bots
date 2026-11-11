@@ -64,7 +64,7 @@ async fn call_tool(state: &AppState, name: &str, args: &Value) -> Result<Value, 
 }
 
 /// One JSON-RPC message; notifications get no reply.
-pub async fn handle(state: &Arc<AppState>, msg: &Value) -> Option<Value> {
+pub(crate) async fn handle(state: &Arc<AppState>, msg: &Value) -> Option<Value> {
     let id = msg.get("id").cloned()?;
     let ok = |result: Value| json!({ "jsonrpc": "2.0", "id": id, "result": result });
     Some(match msg["method"].as_str().unwrap_or("") {

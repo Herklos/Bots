@@ -11,7 +11,7 @@ use std::{
 };
 use subtle::ConstantTimeEq;
 
-pub const COOKIE: &str = "bot_session";
+pub(crate) const COOKIE: &str = "bot_session";
 const SESSION_MS: u128 = 30 * 24 * 3600 * 1000;
 const LOCKOUT: Duration = Duration::from_secs(15 * 60);
 
@@ -25,7 +25,7 @@ pub struct Auth {
     pub close_sockets: Arc<tokio::sync::Notify>,
 }
 
-pub fn safe_equal(a: &str, b: &str) -> bool {
+pub(crate) fn safe_equal(a: &str, b: &str) -> bool {
     a.len() == b.len() && bool::from(a.as_bytes().ct_eq(b.as_bytes()))
 }
 
@@ -174,11 +174,11 @@ impl Auth {
     }
 }
 
-pub fn needs_origin_check(method: &Method) -> bool {
+pub(crate) fn needs_origin_check(method: &Method) -> bool {
     !matches!(*method, Method::GET | Method::HEAD)
 }
 
-pub fn cookie(headers: &HeaderMap, name: &str) -> Option<String> {
+pub(crate) fn cookie(headers: &HeaderMap, name: &str) -> Option<String> {
     let raw = headers.get("cookie")?.to_str().ok()?;
     raw.split(';').find_map(|part| {
         let (k, v) = part.trim().split_once('=')?;
@@ -186,7 +186,7 @@ pub fn cookie(headers: &HeaderMap, name: &str) -> Option<String> {
     })
 }
 
-pub fn session_cookie(value: &str, https: bool) -> String {
+pub(crate) fn session_cookie(value: &str, https: bool) -> String {
     let secure = if https { "; Secure" } else { "" };
     format!(
         "{COOKIE}={value}; HttpOnly; SameSite=Lax; Path=/; Max-Age={}{secure}",
@@ -194,7 +194,7 @@ pub fn session_cookie(value: &str, https: bool) -> String {
     )
 }
 
-pub fn write_private(path: &std::path::Path, text: &str) -> std::io::Result<()> {
+pub(crate) fn write_private(path: &std::path::Path, text: &str) -> std::io::Result<()> {
     use std::io::Write;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;

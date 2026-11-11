@@ -52,7 +52,7 @@ async fn read(s: &AppState) -> anyhow::Result<HashMap<String, Fact>> {
     Ok(facts_in(item.get("snapshot").unwrap_or(&Value::Null)))
 }
 
-pub fn facts_in(snapshot: &Value) -> HashMap<String, Fact> {
+pub(crate) fn facts_in(snapshot: &Value) -> HashMap<String, Fact> {
     snapshot
         .get("threads")
         .and_then(Value::as_array)
@@ -74,7 +74,7 @@ pub fn facts_in(snapshot: &Value) -> HashMap<String, Fact> {
 
 /// A Bot has something new when its latest message is the Bot's own, and newer than the last
 /// time the person had its chat open. A hidden Bot never shows one.
-pub fn is_unread(bot: &Value, preview: &Value) -> bool {
+pub(crate) fn is_unread(bot: &Value, preview: &Value) -> bool {
     if bot["hidden"] == true || preview.is_null() {
         return false;
     }
@@ -85,7 +85,11 @@ pub fn is_unread(bot: &Value, preview: &Value) -> bool {
 }
 
 /// `bots` with `preview`, `working` and `unread` added.
-pub fn enrich(bots: Vec<Value>, facts: &HashMap<String, Fact>, previews: &Value) -> Vec<Value> {
+pub(crate) fn enrich(
+    bots: Vec<Value>,
+    facts: &HashMap<String, Fact>,
+    previews: &Value,
+) -> Vec<Value> {
     bots.into_iter()
         .map(|mut bot| {
             let thread = bot["mainThreadId"].as_str().unwrap_or("").to_string();
@@ -102,7 +106,7 @@ pub fn enrich(bots: Vec<Value>, facts: &HashMap<String, Fact>, previews: &Value)
 
 /// The list the inbox shows. Bots that predate `lastSeenAt` are marked seen now, once, so an
 /// old conversation doesn't start out unread.
-pub async fn list(s: &AppState, bots: Vec<Value>) -> Vec<Value> {
+pub(crate) async fn list(s: &AppState, bots: Vec<Value>) -> Vec<Value> {
     let mut bots = bots;
     for bot in bots.iter_mut() {
         if bot["lastSeenAt"].as_str().is_none() {

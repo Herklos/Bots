@@ -12,7 +12,7 @@ use std::path::Path;
 ///
 /// The file is replaced only when its bytes differ. A symlink whose target leaves
 /// `workspace` is refused, and nothing is written through it.
-pub fn write_face(workspace: &Path, shape: &str, color: &str) -> io::Result<String> {
+pub(crate) fn write_face(workspace: &Path, shape: &str, color: &str) -> io::Result<String> {
     let svg = face_svg(shape, color);
     let hash = short_hash(svg.as_bytes());
     let name = format!("avatar-{hash}.svg");
@@ -35,7 +35,7 @@ pub fn write_face(workspace: &Path, shape: &str, color: &str) -> io::Result<Stri
 }
 
 /// The idle face: one filled outline and two idle eyes. Unknown shapes are a ball.
-pub fn face_svg(shape: &str, color: &str) -> String {
+pub(crate) fn face_svg(shape: &str, color: &str) -> String {
     let tokens = hbots_design::tokens();
     let face = &tokens.face;
     let (path, dy, k) = face
