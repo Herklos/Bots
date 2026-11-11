@@ -397,6 +397,7 @@ shape Bot
   subagent: bool
   prompt: string
   inheritParentPrompt: bool
+  notifications: bool
 
 // A file on a message: an image shows in place, audio plays, any other file is a card.
 shape FileRef
@@ -487,6 +488,7 @@ shape Room
   shape: string
   members: RoomMember[]
   messages: RoomMessage[]
+  notifications: bool
 
 // One @ completion row above the composer.
 shape MentionHit
@@ -516,6 +518,7 @@ shape Convo
   unread: bool
   working: bool
   ready: bool
+  notifications: bool
 
 shape Made
   ok: bool
@@ -894,7 +897,8 @@ component Bots
   mutation subSaved as shape Reply refreshes bots then afterSubSave
   mutation childRemoved as shape Reply refreshes bots then afterChildRemove
   mutation seen as shape Reply refreshes bots
-  mutation noticeAsked as shape NotificationStatus
+  mutation noticeAsked as shape NotificationStatus then afterNotice
+  mutation noticeEnabled as shape Reply
   mutation reacted as shape Reply refreshes chat
   mutation messagePinned as shape Reply refreshes chat
   mutation sent as shape Reply refreshes chat then afterSend
@@ -905,6 +909,7 @@ component Bots
   mutation recoloured as shape Reply refreshes bots
   mutation reshaped as shape Reply refreshes bots
   mutation pinned as shape Reply refreshes bots
+  mutation botMuted as shape Reply refreshes bots, convos
   mutation hidSaved as shape Reply refreshes bots
   mutation mainSaved as shape Reply refreshes bots
   mutation botRemoved as shape Reply refreshes bots then afterBotRemove
@@ -1548,6 +1553,17 @@ component Bots
     if on and bslug != "fixture" and bslug != "bea" and bslug != "tabs"
       send noticeAsked = requestNotificationPermission()
     send hidSaved = hideBot(bslug, on)
+  action afterNotice
+    match noticeAsked
+      case some(status)
+        if status.state == "granted"
+          send noticeEnabled = enableNotifications()
+      case none
+  action doMute(bslug: string, on: bool)
+    send botMuted = setBotNotifications(bslug, on)
+  action doMuteGroup(id: string, on: bool)
+    if id != ""
+      send groupSaved = updateGroup(id, "notifications", on ? "true" : "false")
   action doMain(bslug: string)
     send mainSaved = makeMainBot(bslug)
   action doDropBot(bslug: string)
@@ -1869,7 +1885,7 @@ component Bots
                 scroll id="bots-list" flex=1 min-height=0
                   column padding="0 space.sm" gap="2px"
                     for c in convos key=c.key
-                      InboxRow(row=c, bots=bots, current=(c.kind == "group" ? roomId == c.id : slug == c.id), menuOpen=(rowMenu == c.key), openMenu=openRowMenu, closeMenu=closeRowMenu, pin=doPin, hide=doHide, makeMain=doMain, editBot=editBotFromRow, editGroup=editGroupFromRow)
+                      InboxRow(row=c, bots=bots, current=(c.kind == "group" ? roomId == c.id : slug == c.id), menuOpen=(rowMenu == c.key), openMenu=openRowMenu, closeMenu=closeRowMenu, pin=doPin, hide=doHide, mute=doMute, muteGroup=doMuteGroup, makeMain=doMain, editBot=editBotFromRow, editGroup=editGroupFromRow)
                     if hiddenBots.length > 0
                       button class=ConversationLink appearance="none" press=toggleHidden aria-expanded=hiddenOpen testId="hidden-toggle"
                         row gap="space.sm" align-items="center" flex=1 min-width=0
@@ -2065,7 +2081,7 @@ component Bots
                       button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="send"
                         Glyph(name="send", size=18)
               for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), showComputerLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, openBrowser=doOpenBrowser, opening=openingBrowser, openError=openError, closeBrowser=doCloseBrowser, closing=closingBrowser, closeError=closeError, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
+                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, mute=doMute, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), showComputerLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, openBrowser=doOpenBrowser, opening=openingBrowser, openError=openError, closeBrowser=doCloseBrowser, closing=closingBrowser, closeError=closeError, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
           else if e.name == "group"
             column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
               header appearance="none" class=PageHeader position="relative" testId="room-header"
@@ -2403,11 +2419,14 @@ component InboxRow
     closeMenu: action
     pin: action
     hide: action
+    mute: action
+    muteGroup: action
     makeMain: action
     editBot: action
     editGroup: action
   derive mine = bots.filter(b => row.kind == "bot" and b.slug == row.id)
   derive pinned = mine.filter(b => b.pinned).length > 0
+  derive botMuted = mine.filter(b => not b.notifications).length > 0
   action openFromSecondary()
     preventDefault()
     openMenu(row.key)
@@ -2423,6 +2442,15 @@ component InboxRow
       case some(b)
         hide(b.slug, true)
       case none
+  action chooseMute()
+    closeMenu()
+    if row.kind == "group"
+      muteGroup(row.id, not row.notifications)
+    else
+      match first(mine)
+        case some(b)
+          mute(b.slug, not b.notifications)
+        case none
   action chooseMain()
     closeMenu()
     match first(mine)
@@ -2453,12 +2481,16 @@ component InboxRow
                 column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${row.id}`
       if menuOpen and row.kind == "group"
         column role="menu" aria-label=row.name gap="2px" padding="space.xs" border-radius="radius.md" background-color="surface.card" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="row-menu"
+          button class=TextControl appearance="none" press=chooseMute aria-label=(row.notifications ? t("edit.mute") : t("edit.unmute")) width="100%" justify-content="flex-start"
+            text (row.notifications ? t("edit.mute") : t("edit.unmute")) testId=`menu-mute-${row.id}`
           button class=TextControl appearance="none" press=chooseEdit aria-label=t("group.edit") width="100%" justify-content="flex-start"
             text t("group.edit") testId=`menu-edit-${row.id}`
       if menuOpen and row.kind == "bot"
         column role="menu" aria-label=row.name gap="2px" padding="space.xs" border-radius="radius.md" background-color="surface.card" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="row-menu"
           button class=TextControl appearance="none" press=choosePin aria-label=(pinned ? t("edit.unpin") : t("edit.pin")) width="100%" justify-content="flex-start"
             text (pinned ? t("edit.unpin") : t("edit.pin")) testId=`menu-pin-${row.id}`
+          button class=TextControl appearance="none" press=chooseMute aria-label=(botMuted ? t("edit.unmute") : t("edit.mute")) width="100%" justify-content="flex-start"
+            text (botMuted ? t("edit.unmute") : t("edit.mute")) testId=`menu-mute-${row.id}`
           button class=TextControl appearance="none" press=chooseHide aria-label=t("edit.hide") width="100%" justify-content="flex-start"
             text t("edit.hide") testId=`menu-hide-${row.id}`
           button class=TextControl appearance="none" press=chooseEdit aria-label=t("panel.edit") width="100%" justify-content="flex-start"
@@ -2833,6 +2865,15 @@ component GroupPanel
                         Glyph(name="check", size=18)
             if error != ""
               text error color="-exact-system-red" testId="group-error-panel"
+            row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
+              column class=IconTile color="ink.muted"
+                Glyph(name="pause", size=18)
+              column flex=1 gap="2px"
+                text (room.notifications ? t("edit.mute") : t("edit.unmute")) font-weight=600 testId="mute-group-label"
+                text t("edit.muteNote") color="ink.muted" font="-exact-footnote"
+              button class=ToggleControl appearance="none" role="switch" aria-checked=(not room.notifications) press=patch("notifications", room.notifications ? "false" : "true") aria-label=(room.notifications ? t("edit.mute") : t("edit.unmute")) testId="mute-group"
+                row width=44 height=26 border-radius="radius.full" background-color=(room.notifications ? "surface.line" : "AccentColor") align-items="center" justify-content=(room.notifications ? "flex-start" : "flex-end")
+                  column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
             row align-items="center" gap="space.md" min-height=56 padding="0 space.md" border-top="1px solid surface.line"
               column class=IconTile color="-exact-system-red"
                 Glyph(name="trash", size=18)
@@ -2883,6 +2924,7 @@ component BotPanel
     reshape: action
     pin: action
     hide: action
+    mute: action
     makeMain: action
     drop: action
     models: ModelList
@@ -2993,7 +3035,7 @@ component BotPanel
           UsageView(report=report, down=reportDown, period=period, view=usageView, pickPeriod=pickPeriod, pickView=pickView, showBots=false)
       else if page == "edit"
         scroll flex=1 min-height=0
-          EditBotPage(bot=bot, error=error, rename=rename, recolour=recolour, reshape=reshape, pin=pin, hide=hide, makeMain=makeMain, drop=drop)
+          EditBotPage(bot=bot, error=error, rename=rename, recolour=recolour, reshape=reshape, pin=pin, hide=hide, mute=mute, makeMain=makeMain, drop=drop)
       else if page == "subagent"
         scroll flex=1 min-height=0
           column gap="space.lg" padding="space.sm space.lg space.xl" testId="subagent-page"
@@ -3438,6 +3480,7 @@ component EditBotPage
     reshape: action
     pin: action
     hide: action
+    mute: action
     makeMain: action
     drop: action
   state name = bot.name
@@ -3490,6 +3533,15 @@ component EditBotPage
             text t("edit.hideNote") color="ink.muted" font="-exact-footnote"
           button class=ToggleControl appearance="none" role="switch" aria-checked=bot.hidden disabled=bot.main press=hide(bot.slug, not bot.hidden) aria-label=t("edit.hidden") testId="hide-bot"
             row width=44 height=26 border-radius="radius.full" background-color=(bot.hidden ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.hidden ? "flex-end" : "flex-start")
+              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+        row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
+          column class=IconTile color="ink.muted"
+            Glyph(name="pause", size=18)
+          column flex=1 gap="2px"
+            text (bot.notifications ? t("edit.mute") : t("edit.unmute")) font-weight=600 testId="mute-label"
+            text t("edit.muteNote") color="ink.muted" font="-exact-footnote"
+          button class=ToggleControl appearance="none" role="switch" aria-checked=(not bot.notifications) press=mute(bot.slug, not bot.notifications) aria-label=(bot.notifications ? t("edit.mute") : t("edit.unmute")) testId="mute-bot"
+            row width=44 height=26 border-radius="radius.full" background-color=(bot.notifications ? "surface.line" : "AccentColor") align-items="center" justify-content=(bot.notifications ? "flex-start" : "flex-end")
               column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
       if bot.main
         text t("edit.mainStays") color="ink.muted" font="-exact-footnote" padding="0 space.md"

@@ -14,6 +14,7 @@
 //   deleteGroup: (args: [string]) => Reply
 //   deleteLogin: (args: [string]) => Reply
 //   dropVoice: (args: [string, string]) => Reply
+//   enableNotifications: (args: []) => Reply
 //   hideBot: (args: [string, boolean]) => Reply
 //   loadAbout: (args: []) => About
 //   loadBots: (args: [string]) => Bot[]
@@ -54,6 +55,7 @@
 //   setDefaultModel: (args: [string, string, string]) => Reply
 //   setModel: (args: [string, string, string, string, string]) => Reply
 //   setPassword: (args: [string]) => Reply
+//   setBotNotifications: (args: [string, boolean]) => Reply
 //   setTheme: (args: [string]) => Reply
 //   setUserName: (args: [string]) => Reply
 //   signIn: (args: [string]) => Reply
@@ -66,7 +68,7 @@
 //   Reply = { ok: boolean; error: string }
 //   DriveReply = { ok: boolean; error: string; text: string }
 //   Session = { authenticated: boolean; passwordRequired: boolean }
-//   Bot = { slug: string; name: string; label: string; line: string; time: string; initials: string; color: string; shape: string; main: boolean; pinned: boolean; hidden: boolean; ready: boolean; working: boolean; unread: boolean; parentSlug: string; hideFromSidebar: boolean; subagent: boolean; prompt: string; inheritParentPrompt: boolean }
+//   Bot = { slug: string; name: string; label: string; line: string; time: string; initials: string; color: string; shape: string; main: boolean; pinned: boolean; hidden: boolean; ready: boolean; working: boolean; unread: boolean; parentSlug: string; hideFromSidebar: boolean; subagent: boolean; prompt: string; inheritParentPrompt: boolean; notifications: boolean }
 //   FileRef = { id: string; name: string; kind: string; size: string; url: string }
 //   Choice = { label: string; value: string; key: string; warn: string }
 //   Row = { id: string; kind: string; mine: boolean; text: string; title: string; time: string; head: boolean; tail: boolean; variant: string; files: FileRef[]; botSlug: string; botName: string; botColor: string; botShape: string; choices: Choice[]; placeholder: string; key: string; react: string; quote: string; tokens: string }
@@ -76,9 +78,9 @@
 //   Chat = { slug: string; rows: Row[]; working: boolean; partial: boolean; readOnly: boolean; pins: Pin[]; threadId: string }
 //   RoomMember = { slug: string; name: string; line: string; state: string; ready: boolean; working: boolean }
 //   RoomMessage = { id: string; name: string; text: string; from: string }
-//   Room = { id: string; title: string; description: string; color: string; shape: string; members: RoomMember[]; messages: RoomMessage[] }
+//   Room = { id: string; title: string; description: string; color: string; shape: string; members: RoomMember[]; messages: RoomMessage[]; notifications: boolean }
 //   FaceBit = { shape: string; color: string; state: string }
-//   Convo = { kind: string; key: string; id: string; name: string; color: string; shape: string; faces: FaceBit[]; line: string; time: string; at: string; unread: boolean; working: boolean; ready: boolean }
+//   Convo = { kind: string; key: string; id: string; name: string; color: string; shape: string; faces: FaceBit[]; line: string; time: string; at: string; unread: boolean; working: boolean; ready: boolean; notifications: boolean }
 //   Made = { ok: boolean; id: string; error: string }
 //   Prefs = { userName: string; theme: string; defaultInstance: string; defaultModel: string; defaultEffort: string; defaultRuntimeMode: string }
 //   Attached = { ok: boolean; id: string; name: string; error: string }
@@ -334,7 +336,7 @@ type T1 = string;
 type T2 = { "ok": T0; "error": T1; };
 type T3 = { "ok": T0; "error": T1; "text": T1; };
 type T4 = { "authenticated": T0; "passwordRequired": T0; };
-type T5 = { "slug": T1; "name": T1; "label": T1; "line": T1; "time": T1; "initials": T1; "color": T1; "shape": T1; "main": T0; "pinned": T0; "hidden": T0; "ready": T0; "working": T0; "unread": T0; "parentSlug": T1; "hideFromSidebar": T0; "subagent": T0; "prompt": T1; "inheritParentPrompt": T0; };
+type T5 = { "slug": T1; "name": T1; "label": T1; "line": T1; "time": T1; "initials": T1; "color": T1; "shape": T1; "main": T0; "pinned": T0; "hidden": T0; "ready": T0; "working": T0; "unread": T0; "parentSlug": T1; "hideFromSidebar": T0; "subagent": T0; "prompt": T1; "inheritParentPrompt": T0; "notifications": T0; };
 type T6 = { "id": T1; "name": T1; "kind": T1; "size": T1; "url": T1; };
 type T7 = { "label": T1; "value": T1; "key": T1; "warn": T1; };
 type T8 = T6[];
@@ -350,11 +352,11 @@ type T17 = { "slug": T1; "name": T1; "line": T1; "state": T1; "ready": T0; "work
 type T18 = { "id": T1; "name": T1; "text": T1; "from": T1; };
 type T19 = T17[];
 type T20 = T18[];
-type T21 = { "id": T1; "title": T1; "description": T1; "color": T1; "shape": T1; "members": T19; "messages": T20; };
+type T21 = { "id": T1; "title": T1; "description": T1; "color": T1; "shape": T1; "members": T19; "messages": T20; "notifications": T0; };
 type T22 = { "slug": T1; "name": T1; "color": T1; "shape": T1; };
 type T23 = { "shape": T1; "color": T1; "state": T1; };
 type T24 = T23[];
-type T25 = { "kind": T1; "key": T1; "id": T1; "name": T1; "color": T1; "shape": T1; "faces": T24; "line": T1; "time": T1; "at": T1; "unread": T0; "working": T0; "ready": T0; };
+type T25 = { "kind": T1; "key": T1; "id": T1; "name": T1; "color": T1; "shape": T1; "faces": T24; "line": T1; "time": T1; "at": T1; "unread": T0; "working": T0; "ready": T0; "notifications": T0; };
 type T26 = { "ok": T0; "id": T1; "error": T1; };
 type T27 = { "userName": T1; "theme": T1; "defaultInstance": T1; "defaultModel": T1; "defaultEffort": T1; "defaultRuntimeMode": T1; };
 type T28 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
@@ -547,7 +549,7 @@ type T214 = { "offsetX": T29; "offsetY": T29; "deltaX": T29; "deltaY": T29; "del
 type T215 = { "target": T1; "relatedTarget": T75; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "closeComputer" | "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "hideBot" | "makeMainBot" | "markSeen" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setDefaultMode" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "closeComputer" | "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markSeen" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "closeComputer": { args: [T1]; result: T2 };
@@ -560,6 +562,7 @@ export interface SourceMap {
   "deleteGroup": { args: [T1]; result: T2 };
   "deleteLogin": { args: [T1]; result: T2 };
   "dropVoice": { args: [T1, T1]; result: T2 };
+  "enableNotifications": { args: []; result: T2 };
   "hideBot": { args: [T1, T0]; result: T2 };
   "loadAbout": { args: []; result: T12 };
   "loadBots": { args: [T1]; result: T192 };
@@ -596,6 +599,7 @@ export interface SourceMap {
   "sendMessage": { args: [T1, T1, T1, T1, T1, T1]; result: T2 };
   "sendRoom": { args: [T1, T1]; result: T2 };
   "sendVoice": { args: [T1, T29, T1, T1]; result: T2 };
+  "setBotNotifications": { args: [T1, T0]; result: T2 };
   "setDefaultMode": { args: [T1]; result: T2 };
   "setDefaultModel": { args: [T1, T1, T1]; result: T2 };
   "setModel": { args: [T1, T1, T1, T1, T1]; result: T2 };
