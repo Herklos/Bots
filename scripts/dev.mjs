@@ -187,6 +187,7 @@ for (const port of lan ? [webPort, exactPort] : [webPort]) {
   const taken = listeners(port);
   if (taken.length) {
     console.error(`port ${port} is in use (${command(taken[0]) || taken[0]})`);
+    console.error(`stop the existing server with: kill ${taken.join(' ')}`);
     process.exit(1);
   }
 }
