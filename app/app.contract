@@ -480,6 +480,15 @@ shape Choice
 // One row of the transcript: a day mark, a message, a line between messages, a request the
 // Bot is waiting on, or the working line. `head` and `tail` mark a run of one sender's messages
 // for the bubble corners. `variant` is the kind of an event or a request.
+// One slice of a Bot message. `text` is markdown. A `table` has header cells, body
+// rows, and one alignment per header cell (`left`, `center`, or `right`).
+shape Part
+  kind: string
+  text: string
+  head: string[]
+  rows: string[][]
+  align: string[]
+
 shape Row
   id: string
   kind: string
@@ -502,6 +511,7 @@ shape Row
   quote: string
   tokens: string
   resetAt: string
+  parts: Part[]
 
 shape Suggestion
   name: string
@@ -562,6 +572,7 @@ shape RoomMessage
   name: string
   text: string
   from: string
+  parts: Part[]
 
 shape Room
   id: string
@@ -888,13 +899,14 @@ fn bitColor(faces: FaceBit[], n: number): string = match faces.at(n) { case some
 fn bitState(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.state, case none => "idle" }
 fn memberFaces(bots: Bot[], members: RoomMember[]): FaceBit[] = members.slice(0, 3).map(m => FaceBit(shape=shapeOf(bots, m.slug), color=colorOf(bots, m.slug), state=m.state))
 fn pickedFaces(bots: Bot[], slugs: string[]): FaceBit[] = slugs.slice(0, 3).map(slug => FaceBit(shape=shapeOf(bots, slug), color=colorOf(bots, slug), state="idle"))
-fn withWorking(messages: RoomMessage[], working: bool): RoomMessage[] = working ? messages.concat([RoomMessage(id="working", name="", text="", from="")]) : messages
+fn withWorking(messages: RoomMessage[], working: bool): RoomMessage[] = working ? messages.concat([RoomMessage(id="working", name="", text="", from="", parts=[])]) : messages
 // The person's text, shown at the end of the room log until the sent row arrives.
-fn withRoomPending(messages: RoomMessage[], text: string): RoomMessage[] = text == "" ? messages : messages.concat([RoomMessage(id="room-pending", name="", text=text, from="user")])
+fn withRoomPending(messages: RoomMessage[], text: string): RoomMessage[] = text == "" ? messages : messages.concat([RoomMessage(id="room-pending", name="", text=text, from="user", parts=[])])
 // Room lines use the same row shape as the Bot transcript. The group view reads kind, mine, and the bot fields.
-fn roomLine(msg: RoomMessage): Row = Row(id=msg.id, kind=(msg.id == "working" ? "working" : (msg.id == "room-pending" ? "pending" : "message")), mine=(msg.from == "user"), text=msg.text, title="", time="", head=true, tail=true, variant="", files=[], botSlug=(msg.from == "user" ? "" : msg.from), botName=msg.name, botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="")
+fn roomLine(msg: RoomMessage): Row = Row(id=msg.id, kind=(msg.id == "working" ? "working" : (msg.id == "room-pending" ? "pending" : "message")), mine=(msg.from == "user"), text=msg.text, title="", time="", head=true, tail=true, variant="", files=[], botSlug=(msg.from == "user" ? "" : msg.from), botName=msg.name, botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=msg.parts)
+fn alignAt(align: string[], i: number): string = match align.at(i) { case some(a) => a == "center" or a == "right" ? a : "left", case none => "left" }
 // A local transcript row for text that is still sending or failed. It is not a gateway row.
-fn pendingRow(text: string, failed: bool): Row = Row(id="pending", kind="pending", mine=true, text=text, title="", time="", head=true, tail=true, variant=(failed ? "failed" : ""), files=[], botSlug="", botName="", botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="")
+fn pendingRow(text: string, failed: bool): Row = Row(id="pending", kind="pending", mine=true, text=text, title="", time="", head=true, tail=true, variant=(failed ? "failed" : ""), files=[], botSlug="", botName="", botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=[])
 // True when the last character can continue a word, so `joe@mail` is not a mention.
 fn wordChar(c: string): bool = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".includes(c)
 fn mentionReplace(text: string, q: string, slug: string): string = `${text.slice(0, text.length - q.length)}${slug} `
@@ -2434,11 +2446,7 @@ component Bots
                                     border-radius="radius.lg"
                                     border-bottom-right-radius="radius.sm"
                                 else
-                                  text msg.text markup="markdown" class=Bubble white-space="normal" testId=`room-text-${msg.id}`
-                                    background-color="surface.bubble"
-                                    color="-exact-label"
-                                    border-radius="radius.lg"
-                                    border-bottom-left-radius="radius.sm"
+                                  MessageParts(id=msg.id, parts=msg.parts, tail=msg.tail, textTestId=`room-text-${msg.id}`)
                 column width="calc(100% - 32px)" max-width="44rem" min-width=0 align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.sm" flex-shrink=0 position="relative"
                   if roomError != "" and not pending(roomSent)
                     text roomError color="-exact-system-red" font="-exact-footnote" testId="room-send-error"
@@ -2917,6 +2925,51 @@ component InboxRow
           button class=TextControl appearance="none" press=chooseMain aria-label=t("edit.makeMain") width="100%" justify-content="flex-start"
             text t("edit.makeMain") testId=`menu-main-${row.id}`
 
+// A Bot bubble: one markdown text when the message has no table, otherwise each
+// text slice and each pipe table. Both the 1:1 transcript and a room use this.
+component MessageParts
+  props
+    id: string
+    parts: Part[]
+    tail: bool
+    textTestId: string
+  view
+    match parts.at(0)
+      case some(first)
+        if parts.length == 1 and first.kind == "text"
+          text first.text markup="markdown" class=Bubble white-space="normal" testId=textTestId
+            background-color="surface.bubble"
+            color="-exact-label"
+            border-top-left-radius="radius.lg"
+            border-top-right-radius="radius.lg"
+            border-bottom-left-radius=(tail ? "radius.sm" : "radius.lg")
+            border-bottom-right-radius="radius.lg"
+        else
+          column gap="space.xs" max-width="100%" min-width=0
+            for part, i in parts key=`${id}-${i}`
+              if part.kind == "text" and part.text != ""
+                text part.text markup="markdown" class=Bubble white-space="normal" testId=(i == 0 ? textTestId : `message-${id}-text-${i}`)
+                  background-color="surface.bubble"
+                  color="-exact-label"
+                  border-top-left-radius="radius.lg"
+                  border-top-right-radius="radius.lg"
+                  border-bottom-left-radius=(tail ? "radius.sm" : "radius.lg")
+                  border-bottom-right-radius="radius.lg"
+              else if part.kind == "table"
+                row overflow-x="auto" max-width="100%" min-width=0 testId=`message-${id}-table-${i}`
+                  column min-width="100%" width="max-content" border="1px solid surface.line" border-radius="radius.md" background-color="surface.bubble" color="-exact-label"
+                    row
+                      for cell, c in part.head key=`h-${c}`
+                        column flex=1 min-width=96 padding="space.xs space.sm" border-bottom="1px solid surface.line" border-right=(c == part.head.length - 1 ? "none" : "1px solid surface.line")
+                          text cell markup="markdown" white-space="normal" font-weight=700 text-align=alignAt(part.align, c) overflow-wrap="break-word"
+                    for cells, r in part.rows key=`r-${r}`
+                      row
+                        for cell, c in cells key=`c-${c}`
+                          column flex=1 min-width=96 padding="space.xs space.sm" border-bottom=(r == part.rows.length - 1 ? "none" : "1px solid surface.line") border-right=(c == cells.length - 1 ? "none" : "1px solid surface.line")
+                            text cell markup="markdown" white-space="normal" text-align=alignAt(part.align, c) overflow-wrap="break-word"
+      case none
+        column
+
 // One transcript message. Time and reply stay in the tree so the keyboard
 // can focus the action. They paint while the pointer is over the message, while a tap
 // has left them open, or while an action is focused. The tap that opens them
@@ -3008,13 +3061,7 @@ component ChatMessage
                   border-bottom-left-radius="radius.lg"
                   border-bottom-right-radius=(row.tail ? "radius.sm" : "radius.lg")
               else if row.text != ""
-                text row.text markup="markdown" class=Bubble white-space="normal" testId=`message-${row.id}`
-                  background-color="surface.bubble"
-                  color="-exact-label"
-                  border-top-left-radius="radius.lg"
-                  border-top-right-radius="radius.lg"
-                  border-bottom-left-radius=(row.tail ? "radius.sm" : "radius.lg")
-                  border-bottom-right-radius="radius.lg"
+                MessageParts(id=row.id, parts=row.parts, tail=row.tail, textTestId=`message-${row.id}`)
               if row.react != ""
                 button class=ReactionChip appearance="none" position="absolute" bottom="-4px" left=(row.mine ? "0" : "auto") right=(row.mine ? "auto" : "0") z-index=1 press=react(row.id, row.react) aria-label=t("chat.removeReaction") testId=`react-${row.id}`
                   text row.react

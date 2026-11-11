@@ -4,6 +4,7 @@
 
 ### Improvements
 
+- Render a Markdown pipe table in a chat or a room as a grid. A header that has not yet got its rule line stays text.
 - Bots avoid Markdown tables and prefer bullet lists.
 - Poll the open screen on its own: the inbox refreshes its conversation list, a chat refreshes that chat, and a hidden window waits about ten seconds. Sending, answering, or stopping a run pauses the poll.
 - A new Bot can keep a goal, an approval mode, and routines that are created once its thread exists. A routine that fails to save leaves the Bot in place. A new group can start with one kickoff message.
