@@ -219,6 +219,56 @@ test "a secondary click on a Bot message offers reply and pin"
   expect tree has "message-menu"
   expect tree has "menu-reply-m2"
   expect tree has "menu-pin-m2"
+  expect tree has "menu-copy-m2"
+  expect tree has "menu-react-m2"
+  expect text "menu-pin-m2" == "Pin"
+  expect text "menu-reply-m2" == "Reply"
+  expect text "menu-copy-m2" == "Copy"
+
+test "the message menu copies, unpins, and closes from the strip, Esc, outside, and arrows"
+  at "/bot/fixture"
+  clock data
+  tap "message-m1" contextmenu
+  expect text "menu-pin-m1" == "Unpin"
+  tap "message-menu-scrim"
+  expect tree missing "message-menu"
+  tap "message-m2" contextmenu
+  expect tree has "pick-🔥"
+  expect tree has "pick-👍"
+  tap "pick-🔥"
+  expect tree missing "message-menu"
+  tap "message-m3" contextmenu
+  expect tree missing "react-picker"
+  tap "pick-👍"
+  expect tree missing "message-menu"
+  tap "message-m2" contextmenu
+  key "menu-reply-m2" "ArrowDown"
+  key "menu-pin-m2" "ArrowDown"
+  expect tree has "menu-copy-m2"
+  key "menu-copy-m2" "Escape"
+  expect tree missing "message-menu"
+  tap "message-m2" contextmenu
+  tap "menu-copy-m2"
+  expect text "menu-copy-m2" == "Copied"
+  expect tree has "toast"
+  clock +700
+  clock settle
+  expect tree missing "message-menu"
+
+test "a group message uses the same menu"
+  at "/group/fixture"
+  clock data
+  expect tree missing "message-menu"
+  tap "room-text-r2" contextmenu
+  expect tree has "message-menu"
+  expect tree has "menu-reply-r2"
+  expect tree has "menu-pin-r2"
+  expect tree has "menu-copy-r2"
+  expect tree has "menu-react-r2"
+  expect text "menu-pin-r2" == "Pin"
+  expect text "room-from-r2" == "Ada"
+  tap "message-menu-scrim"
+  expect tree missing "message-menu"
 
 test "the open chat is clear and a hidden Bot keeps its mark"
   size 1440x900

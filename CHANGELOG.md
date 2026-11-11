@@ -7,6 +7,7 @@
 - Settings can record where Bots are stored. The file system stays the default.
 - Run the contract check again on a clean checkout.
 - Bots receive their prompt in every thread.
+- The message menu floats on the bubble in a Bot chat and a group, with a reaction strip, reply, pin or unpin, and copy.
 - Post unread notices when the roster changes, using the notification settings and permission already on screen. A chat reuses thread reactions and pins for about ten seconds, until a new last message, a reaction, or a pin.
 
 ## 0.2.1
