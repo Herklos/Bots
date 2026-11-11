@@ -197,7 +197,9 @@ async fn read_capped(path: &Path) -> Result<(String, bool), String> {
 }
 
 fn skill_file_name(name: &str) -> bool {
-    name.ends_with(".md")
+    Path::new(name)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
         && name.len() > ".md".len()
         && !name.contains('/')
         && !name.contains('\\')
@@ -337,6 +339,9 @@ mod tests {
             .iter()
             .all(|t| t["description"].as_str().unwrap().contains("16384"));
         assert!(described);
+        assert!(skill_file_name("Open.MD"));
+        assert!(!skill_file_name(".md"));
+        assert!(!skill_file_name("notes.txt"));
     }
 
     #[tokio::test]
