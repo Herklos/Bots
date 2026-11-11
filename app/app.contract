@@ -2332,7 +2332,7 @@ component Bots
                     text t("group.emptyBody") color="ink.muted" text-align="center" max-width="24rem"
                 else
                   column flex=1 min-height=0 justify-content="flex-end" position="relative"
-                    list id="room-log" appearance="none" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" flex=1 min-height=0 padding="space.sm space.lg space.xl" virtualized=true scroll-start="end" scrollFollowEnd=true testId="room-log"
+                    list id="room-log" appearance="none" width="100%" box-sizing="border-box" flex=1 min-height=0 padding="space.sm max(0px, calc((100% - 46rem) / 2)) space.xl" virtualized=true scroll-start="end" scrollFollowEnd=true testId="room-log"
                       for msg in roomRows key=msg.id
                         column
                           if msg.id == "working"
