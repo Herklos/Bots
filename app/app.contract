@@ -799,6 +799,8 @@ component Bots
   state newColor = "brand.default"
   state newShape = "ball"
   state newFirst = ""
+  // Set once when the roster becomes empty, so a poll does not wipe a half-typed name.
+  state welcomed = false
   state groupName = ""
   state groupAbout = ""
   state groupMembers: string[] = []
@@ -926,6 +928,7 @@ component Bots
   mutation openedBrowser as shape Reply refreshes computer then afterOpen
   mutation closedBrowser as shape Reply refreshes computer then afterClose
   derive slug = match stack(nav).filter(e => e.name == "chat").at(-1) { case some(e) => e.params.slug, case none => "" }
+  derive firstRun = bots.length == 0 and not pending(bots) and not failed(bots)
   derive signInError = match signedIn { case some(r) => r.error, case none => "" }
   derive createError = match created { case some(r) => r.error, case none => "" }
   derive sendError = match sent { case some(r) => r.error, case none => "" }
@@ -1026,6 +1029,13 @@ component Bots
 
   task keepDrafts when draftRev != savedRev
     after(1, writeDrafts)
+
+  // Once per empty roster, not once per poll. A Bot coming back clears the flag.
+  task welcomeEmpty when not welcomed and bots.length == 0 and not pending(bots) and not failed(bots)
+    after(1, beginWelcome)
+
+  task endWelcome when welcomed and bots.length > 0
+    after(1, forgetWelcome)
 
   action fitView
     let box = frame("app-shell")
@@ -1238,6 +1248,16 @@ component Bots
     newShape = "ball"
     newFirst = ""
     nav = push(nav, "/new")
+  action beginWelcome
+    newName = ""
+    newColor = "brand.default"
+    newShape = "ball"
+    newFirst = ""
+    plusOpen = false
+    welcomed = true
+    focus("first-name")
+  action forgetWelcome
+    welcomed = false
   action editBotQuery(v: string)
     botQuery = v
   action openSearch
@@ -1790,7 +1810,11 @@ component Bots
                         text initialsOf(prefs.userName) font="-exact-footnote" font-weight=600 testId="you-name"
                       else
                         Glyph(name="person", size=16)
-                if searching
+                if firstRun
+                  if wide
+                    text "hbots" class=PageTitle
+                  column flex=1
+                else if searching
                   input type="search" class=SearchField value=botQuery input=editBotQuery placeholder=t("inbox.search") aria-label=t("inbox.search") testId="bot-search" flex=1 min-width=0
                   button class=TextControl appearance="none" press=closeSearch testId="search-cancel"
                     text t("common.cancel")
@@ -1802,7 +1826,7 @@ component Bots
                   button class=IconControl appearance="none" press=togglePlus aria-label=t("inbox.newMenu") title=t("inbox.newMenu") aria-expanded=plusOpen testId="new-bot"
                     column class=Disc
                       Glyph(name="add", size=18)
-              if plusOpen
+              if plusOpen and not firstRun
                 button appearance="none" press=togglePlus aria-label=t("inbox.closeMenu") position="absolute" inset=0 z-index=9 background-color="transparent" border="none" testId="new-menu-backdrop"
                 column position="absolute" top=52 right=8 z-index=10 width=208 box-sizing="border-box" padding="space.xs" gap="2px" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-menu"
                   button class=ConversationLink appearance="none" press=openNew testId="new-bot-option" padding="space.sm space.md"
@@ -1816,23 +1840,21 @@ component Bots
                         text t("group.new") font-weight=500
                         if bots.length < 2
                           text t("group.needsTwo") font="-exact-footnote" color="ink.faint"
-              column navigationSplit="placeholder" flex=1 align-items="center" justify-content="center" gap="space.lg" padding="space.xl"
-                Face(shape="ball", color="teal", state="idle", size=72, still=false)
-                text t("inbox.tagline") class=HeroTitle text-align="center"
-                text t("inbox.placeholderBody") color="ink.muted" text-align="center" max-width="24rem"
-                button class=PrimaryButton press=openNew buttonStyle="filled"
-                  text t("inbox.newBot")
+              column navigationSplit="placeholder" flex=1 min-height=0 background-color=(wide and firstRun ? "surface.canvas" : "transparent") align-items=(wide and firstRun ? "stretch" : "center") justify-content=(wide and firstRun ? "flex-start" : "center") gap="space.lg" padding=(wide and firstRun ? "0" : "space.xl")
+                if wide and firstRun
+                  FirstBot(name=newName, color=newColor, shape=newShape, suggestions=suggestions, error=createError, creating=pending(created), editName=editName, pick=pick, pickShape=pickShape, useStart=useStart, create=create)
+                else if not firstRun
+                  Face(shape="ball", color="teal", state="idle", size=72, still=false)
+                  text t("inbox.tagline") class=HeroTitle text-align="center"
+                  text t("inbox.placeholderBody") color="ink.muted" text-align="center" max-width="24rem"
+                  button class=PrimaryButton press=openNew buttonStyle="filled"
+                    text t("inbox.newBot")
               if failed(bots) and bots.length == 0
                 EmptyState(symbol="symbol:alert", title=t("error.gatewayTitle"), message=t("error.gatewayHint"))
                   button press=pull testId="retry"
                     text t("common.tryAgain")
-              else if bots.length == 0 and not pending(bots)
-                column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="empty-bots"
-                  Face(shape="ball", color="teal", state="idle", size=72, still=false)
-                  text t("inbox.emptyTitle") role="heading" aria-level=2 class=PageTitle
-                  text t("inbox.emptyBody") color="-exact-secondary-label" text-align="center" max-width="22rem"
-                  button press=openNew buttonStyle="filled" testId="empty-new"
-                    text t("inbox.emptyAction")
+              else if firstRun and not wide
+                FirstBot(name=newName, color=newColor, shape=newShape, suggestions=suggestions, error=createError, creating=pending(created), editName=editName, pick=pick, pickShape=pickShape, useStart=useStart, create=create)
               else if query != "" and visibleBots.length == 0 and hiddenBots.length == 0
                 column flex=1 min-height=0 align-items="center" justify-content="center" padding="space.xl" testId="no-bot-match"
                   EmptyState(symbol="symbol:search", title=t("inbox.noMatch", query=botQuery.trim()), message=t("inbox.searchHint"))
@@ -2291,8 +2313,8 @@ component Bots
                     Avatar(shape=newShape, color=faceColor(newColor), state="idle", size=96, still=false, presence="")
                     row gap="space.xs" flex-wrap="wrap" justify-content="center"
                       for c in pickerColours() key=c
-                        button class=SwatchControl press=pick(c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(newColor == c) testId=`colour-${c}` width=36 height=36 padding=0
-                          column width=26 height=26 box-sizing="border-box" margin="space.xs" border-radius="radius.full" background-color=c border=(newColor == c ? "3px solid AccentColor" : "3px solid transparent")
+                        button class=SwatchControl press=pick(c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(newColor == c) testId=`colour-${c}` width=44 height=44 padding=0
+                          column width=32 height=32 box-sizing="border-box" border-radius="radius.full" background-color=c border=(newColor == c ? "3px solid AccentColor" : "3px solid transparent")
                     row gap="space.xs" flex-wrap="wrap" justify-content="center"
                       for s in shapeNames() key=s
                         button class=SwatchControl press=pickShape(s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(newShape == s) testId=`shape-${s}` width=44 height=44 padding=0 border-radius="radius.md" background-color=(newShape == s ? "surface.raised" : "transparent")
@@ -2304,7 +2326,7 @@ component Bots
                     text createError color="-exact-system-red" testId="create-error"
                   if suggestions.length > 0
                     column gap="space.sm"
-                      text t("create.suggestions") font="-exact-subheadline" font-weight=600 color="ink.muted"
+                      text t("create.or") font="-exact-subheadline" color="ink.muted"
                       column gap="space.sm"
                         for s in suggestions key=s.name
                           button class=PanelRow appearance="none" press=useStart(s.name, s.color, s.shape, s.first) testId=`start-${s.name}`
@@ -2323,6 +2345,49 @@ component Bots
           text toast font="-exact-subheadline" font-weight=500
 
 // A group's face is its members, at most three, overlapped. It has no colour or shape of its own.
+
+// The empty roster: name a Face and create it. The phone inbox and the wide placeholder share this.
+component FirstBot
+  props
+    name: string
+    color: string
+    shape: string
+    suggestions: Suggestion[]
+    error: string
+    creating: bool
+    editName: action
+    pick: action
+    pickShape: action
+    useStart: action
+    create: action
+  view
+    scroll flex=1 min-height=0 width="100%" background-color="surface.canvas" testId="first-bot"
+      column width="100%" max-width="24rem" box-sizing="border-box" margin="0 auto" align-items="center" gap="space.md" padding="space.xl"
+        Avatar(shape=shape, color=faceColor(color), state="idle", size=96, still=false, presence="")
+        text t("inbox.emptyTitle") role="heading" aria-level=2 class=HeroTitle text-align="center"
+        text t("inbox.emptyBody") color="ink.muted" text-align="center" max-width="22rem"
+        input appearance="none" class=Field value=name input=editName submit=create placeholder=t("create.namePlaceholder") aria-label=t("common.name") width="100%" box-sizing="border-box" padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="first-name"
+        if error != "" and not creating
+          text error color="-exact-system-red" testId="create-error"
+        row gap="space.xs" flex-wrap="wrap" justify-content="center"
+          for c in pickerColours() key=c
+            button class=SwatchControl press=pick(c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(color == c) testId=`colour-${c}` width=44 height=44 padding=0
+              column width=32 height=32 box-sizing="border-box" border-radius="radius.full" background-color=c border=(color == c ? "3px solid AccentColor" : "3px solid transparent")
+        row gap="space.xs" flex-wrap="wrap" justify-content="center"
+          for s in shapeNames() key=s
+            button class=SwatchControl press=pickShape(s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(shape == s) testId=`shape-${s}` width=44 height=44 padding=0 border-radius="radius.md" background-color=(shape == s ? "surface.raised" : "transparent")
+              Avatar(shape=s, color=faceColor(color), state="idle", size=30, still=true, presence="")
+        button buttonStyle="filled" press=create disabled=(name.trim() == "" or creating) testId="first-create"
+          text (creating ? t("common.creating") : t("inbox.emptyAction"))
+        if suggestions.length > 0
+          text t("create.or") color="ink.muted" text-align="center"
+          column gap="space.sm" width="100%"
+            for s in suggestions key=s.name
+              button class=PanelRow appearance="none" press=useStart(s.name, s.color, s.shape, s.first) testId=`start-${s.name}`
+                Avatar(shape=s.shape, color=faceColor(s.color), state="idle", size=44, still=true, presence="")
+                column flex=1 gap="2px" min-width=0
+                  text s.name font-weight=600
+                  text s.about color="ink.muted" font="-exact-footnote"
 
 // One inbox row, a Bot or a group. A normal click still opens the chat or the group.
 // A secondary click or a long press (both a contextmenu) opens one menu on this row.
