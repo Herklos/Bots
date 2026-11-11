@@ -25,7 +25,7 @@ This design ports the full memory maintenance surface from threebot PR #40 into 
 | Workspace | `LocalDisk` + test `MemoryWorkspace`; used by `library::Library` |
 | Routines | `routines.rs` wraps T3 `scheduledTasks.*`; `new_routine` binds `threadId` to the Bot main thread |
 | Settings | `defaultModel`, `avatarDrawingModel` in `settings.json` |
-| AGENTS.md | Static Memory section in `render_agents_md`; no `<memory>` snapshot |
+| AGENTS.md | Static Memory section in `render_agents_md`; the Bot prompt is the managed block (`docs/architecture.md`); no `<memory>` snapshot |
 
 ### Pain points
 
