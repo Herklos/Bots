@@ -48,7 +48,10 @@ pub(crate) const MAX_WAIT_MS: u64 = 24 * 60 * 60 * 1000;
 // ---------- paths ----------
 
 /// `HBOTS_HOME`, or `~/.hbots`.
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "the CLI commands are the callers; the helper stays allowed so the release module typechecks without them"
+)]
 pub(crate) fn home_dir() -> PathBuf {
     match std::env::var("HBOTS_HOME") {
         Ok(h) if !h.is_empty() => PathBuf::from(h),
@@ -85,7 +88,10 @@ pub(crate) fn installed_runtime(exe: &Path, home: &Path) -> bool {
 }
 
 /// The version folder's `hbots` binary, through the `current` link, so the service follows updates.
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "the service spec is the caller; the helper stays allowed so the release module typechecks without it"
+)]
 pub(crate) fn current_binary(home: &Path) -> PathBuf {
     RuntimePaths::new(home).current.join("hbots")
 }

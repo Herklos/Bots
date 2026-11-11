@@ -48,7 +48,10 @@ const MAX_STAMPS: usize = 200;
 /// Pins stay a short list. One past this is refused.
 pub(crate) const PIN_CAP: usize = 20;
 // Nothing in the gateway calls this yet.
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "only the pin tests read this; the gateway does not show pins yet"
+)]
 pub(crate) const NOT_IN_VIEW: &str = "This message is not in view.";
 
 fn bad(message: &str) -> ApiError {
@@ -321,7 +324,10 @@ pub(crate) fn inbox_unread(
 
 /// Pins in stored order. An id that is not in the loaded messages stays, and says so.
 // Nothing in the gateway calls this yet.
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "only the pin tests call this; the gateway does not show pins yet"
+)]
 pub(crate) fn pin_lines(pins: &[Value], messages: &[Value]) -> Vec<Value> {
     pins.iter()
         .filter_map(Value::as_str)
