@@ -32,6 +32,7 @@
 //   loadSession: (args: [string]) => Session
 //   loadShelf: (args: [string, string]) => Shelf
 //   loadSuggestions: (args: []) => Suggestion[]
+//   loadSystem: (args: [string]) => SystemStatus
 //   loadUsage: (args: [string, string]) => Usage
 //   loadUsageReport: (args: [string, string, string, string]) => UsageReport
 //   loadVault: (args: []) => Login[]
@@ -42,6 +43,7 @@
 //   pinBot: (args: [string, boolean]) => Reply
 //   pinMessage: (args: [string, string, string, string]) => Reply
 //   reactTo: (args: [string, string, string]) => Reply
+//   readHealth: (args: []) => Health
 //   recolourBot: (args: [string, string]) => Reply
 //   renameBot: (args: [string, string]) => Reply
 //   reshapeBot: (args: [string, string]) => Reply
@@ -64,6 +66,7 @@
 //   signIn: (args: [string]) => Reply
 //   signOut: (args: []) => Reply
 //   stageVoice: (args: [string, string, string, number]) => VoiceHeld
+//   startUpdate: (args: []) => UpdateStart
 //   stopRun: (args: [string, string]) => Reply
 //   updateGroup: (args: [string, string, string]) => Reply
 //   uploadAttachment: (args: [string, string, string, string, string]) => Attached
@@ -77,6 +80,9 @@
 //   Row = { id: string; kind: string; mine: boolean; text: string; title: string; time: string; head: boolean; tail: boolean; variant: string; files: FileRef[]; botSlug: string; botName: string; botColor: string; botShape: string; choices: Choice[]; placeholder: string; key: string; react: string; quote: string; tokens: string }
 //   Suggestion = { name: string; about: string; color: string; shape: string; first: string }
 //   About = { ok: boolean; version: string; harness: string; connected: boolean }
+//   SystemStatus = { ok: boolean; installed: boolean; service: boolean; version: string; latest: string; updateAvailable: boolean; error: string }
+//   UpdateStart = { ok: boolean; version: string; error: string }
+//   Health = { ok: boolean; version: string }
 //   Pin = { id: string; text: string; missing: boolean }
 //   Chat = { slug: string; rows: Row[]; working: boolean; partial: boolean; readOnly: boolean; pins: Pin[]; threadId: string }
 //   RoomMember = { slug: string; name: string; line: string; state: string; ready: boolean; working: boolean }
@@ -364,6 +370,9 @@ type T25 = { "kind": T1; "key": T1; "id": T1; "name": T1; "color": T1; "shape": 
 type T26 = { "ok": T0; "id": T1; "error": T1; };
 type T27 = { "userName": T1; "theme": T1; "defaultInstance": T1; "defaultModel": T1; "defaultEffort": T1; "defaultRuntimeMode": T1; "noticeEnabled": T0; "noticeSound": T0; "noticePreview": T1; "noticeWhen": T1; "noticeEnabledMissing": T0; };
 type T216 = { "available": T0; "state": T1; };
+type T217 = { "ok": T0; "installed": T0; "service": T0; "version": T1; "latest": T1; "updateAvailable": T0; "error": T1; };
+type T218 = { "ok": T0; "version": T1; "error": T1; };
+type T219 = { "ok": T0; "version": T1; };
 type T28 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
 type T29 = number;
 type T30 = { "ok": T0; "id": T1; "name": T1; "url": T1; "seconds": T29; "error": T1; };
@@ -554,7 +563,7 @@ type T214 = { "offsetX": T29; "offsetY": T29; "deltaX": T29; "deltaY": T29; "del
 type T215 = { "target": T1; "relatedTarget": T75; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "closeComputer" | "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setModel" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "closeComputer" | "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setModel" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startUpdate" | "stopRun" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "closeComputer": { args: [T1]; result: T2 };
@@ -585,6 +594,7 @@ export interface SourceMap {
   "loadSession": { args: [T1]; result: T4 };
   "loadShelf": { args: [T1, T1]; result: T56 };
   "loadSuggestions": { args: []; result: T195 };
+  "loadSystem": { args: [T1]; result: T217 };
   "loadUsage": { args: [T1, T1]; result: T33 };
   "loadUsageReport": { args: [T1, T1, T1, T1]; result: T53 };
   "loadVault": { args: []; result: T193 };
@@ -595,6 +605,7 @@ export interface SourceMap {
   "pinBot": { args: [T1, T0]; result: T2 };
   "pinMessage": { args: [T1, T1, T1, T1]; result: T2 };
   "reactTo": { args: [T1, T1, T1]; result: T2 };
+  "readHealth": { args: []; result: T219 };
   "recolourBot": { args: [T1, T1]; result: T2 };
   "renameBot": { args: [T1, T1]; result: T2 };
   "reshapeBot": { args: [T1, T1]; result: T2 };
@@ -617,6 +628,7 @@ export interface SourceMap {
   "signIn": { args: [T1]; result: T2 };
   "signOut": { args: []; result: T2 };
   "stageVoice": { args: [T1, T1, T1, T29]; result: T30 };
+  "startUpdate": { args: []; result: T218 };
   "stopRun": { args: [T1, T1]; result: T2 };
   "updateGroup": { args: [T1, T1, T1]; result: T2 };
   "uploadAttachment": { args: [T1, T1, T1, T1, T1]; result: T28 };

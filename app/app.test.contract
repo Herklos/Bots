@@ -1,6 +1,17 @@
 locale "en-US"
 
 // Navigation reflects the features available today. No live gateway is used.
+test "About shows the version and changelog and no update when none is available"
+  tap "Settings"
+  clock data
+  tap "settings-domain-updates"
+  clock data
+  expect text "settings-domain-updates" == "About"
+  expect tree has "about-version"
+  expect tree has "about-changelog"
+  expect tree has "update-status"
+  expect tree missing "start-update"
+
 test "Settings owns the Vault and does not expose Projects"
   expect tree missing "open-vault"
   expect tree missing "open-projects"
