@@ -227,6 +227,10 @@ impl Bots {
         // A missing file is no choice yet; an unreadable one is an error, so this can't overwrite it.
         let selection = match tokio::fs::read_to_string(self.selection_file()).await {
             Ok(text) => Some(
+                #[allow(
+                    clippy::map_err_ignore,
+                    reason = "serde quotes the choice file, which names the main Bot"
+                )]
                 serde_json::from_str::<Value>(&text)
                     .map_err(|_| ApiError::new(500, "The main Bot choice file can't be read."))?,
             ),
@@ -735,6 +739,10 @@ async fn read_connector_list(path: &Path) -> ApiResult<Vec<Value>> {
         Err(e) => Err(e.into()),
         Ok(text) if text.trim().is_empty() => Ok(Vec::new()),
         Ok(text) => {
+            #[allow(
+                clippy::map_err_ignore,
+                reason = "serde quotes connectors.json, which can hold a connector secret"
+            )]
             let doc: Value = serde_json::from_str(&text)
                 .map_err(|_| ApiError::new(500, "connectors.json is not valid JSON"))?;
             Ok(doc["connectors"].as_array().cloned().unwrap_or_default())

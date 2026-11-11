@@ -705,6 +705,10 @@ pub async fn import_csv(
     if !ct.starts_with("text/csv") {
         return Err(ApiError::new(415, "content-type must be text/csv"));
     }
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "a UTF-8 error quotes the CSV, which is a vault export of secrets"
+    )]
     let text = std::str::from_utf8(&body)
         .map_err(|_| ApiError::bad_request("the CSV must be UTF-8 text"))?;
     let parsed = parse_vault_csv(text);

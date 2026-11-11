@@ -86,6 +86,10 @@ impl Icons {
             return Ok(hit);
         }
         assert_public(&host).await?;
+        #[allow(
+            clippy::map_err_ignore,
+            reason = "the URL parser echoes the host the client sent"
+        )]
         let origin = Url::parse(&format!("https://{host}/"))
             .map_err(|_| ApiError::bad_request("bad host"))?;
         let (bytes, ctype) = load_site(&self.client, &origin).await?;
@@ -100,6 +104,10 @@ pub async fn get_icon(
 ) -> ApiResult<Response> {
     let (bytes, ctype) = s.icons.fetch_public(&host).await?;
     s.usage.note(crate::usage::Event::IconFetch).await;
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "HeaderValue echoes the icon type; a bad stored type is a 500 for the client"
+    )]
     let value = HeaderValue::from_str(&ctype).map_err(|_| ApiError::new(500, "bad icon type"))?;
     Ok((
         StatusCode::OK,
@@ -195,6 +203,10 @@ pub async fn assert_public(host: &str) -> ApiResult<()> {
     {
         return Err(ApiError::bad_request("that host is not a public site"));
     }
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "a DNS error can include the resolver's detail for a host the client named"
+    )]
     let looked = tokio::net::lookup_host((host, 443))
         .await
         .map_err(|_| ApiError::new(502, "could not resolve that host"))?;
@@ -303,6 +315,10 @@ pub async fn load_site(client: &reqwest::Client, origin: &Url) -> ApiResult<(Vec
     if origin.scheme() != "https" && origin.scheme() != "http" {
         return Err(ApiError::bad_request("the site must be http or https"));
     }
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "the URL parser echoes the host or the page's icon link"
+    )]
     let favicon = origin
         .join("favicon.ico")
         .map_err(|_| ApiError::bad_request("bad host"))?;
@@ -319,6 +335,10 @@ pub async fn load_site(client: &reqwest::Client, origin: &Url) -> ApiResult<(Vec
     if href.starts_with("data:") || href.starts_with("javascript:") {
         return Err(ApiError::new(502, "the site has no icon"));
     }
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "the URL parser echoes the host or the page's icon link"
+    )]
     let icon_url = origin
         .join(&href)
         .map_err(|_| ApiError::new(502, "the site has no icon"))?;
@@ -348,6 +368,10 @@ async fn pull(client: &reqwest::Client, url: &Url, limit: usize) -> ApiResult<(V
         .and_then(|v| v.to_str().ok())
         .unwrap_or("")
         .to_string();
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "a body error can include the site URL; the client only hears that the site did not answer"
+    )]
     let bytes = res
         .bytes()
         .await

@@ -192,6 +192,10 @@ fn bot_for<'a>(bots: &'a [Value], args: &Value) -> Result<&'a Value, String> {
 
 async fn login_by_id(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
     let id = args["loginId"].as_str().ok_or(NO_LOGIN)?;
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "a vault error can name the secret store; the Bot only hears that the login is missing"
+    )]
     let item = d
         .vault
         .get(id, true)
@@ -303,6 +307,10 @@ async fn list_tabs(t3: &T3, thread: &str) -> Result<Vec<Tab>, String> {
         Ok(r) => r,
         Err(_) => Err(anyhow::anyhow!("timed out")),
     };
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "the T3 error can include the harness address; the Bot gets a fixed retry message"
+    )]
     let result = result.map_err(|_| {
         "Couldn't reach your browser on T3 right now. Try again in a moment.".to_string()
     })?;
@@ -401,6 +409,10 @@ pub fn step(stage: Stage, msg: &Value) -> Step {
     }
 }
 
+#[allow(
+    clippy::map_err_ignore,
+    reason = "the URL error can echo the stream address and the header error can echo the bearer token"
+)]
 async fn type_into_tab(t3: &T3, thread: &str, tab_id: &str, text: &str) -> Result<(), String> {
     let mut url = url::Url::parse(&format!("{}/api/preview-stream/ws", ws_base(&t3.base_url)))
         .map_err(|_| NOT_A_TAB_STREAM.to_string())?;
@@ -437,6 +449,10 @@ async fn type_into_tab(t3: &T3, thread: &str, tab_id: &str, text: &str) -> Resul
 }
 
 /// Takes control, types, probes and releases. Errors never include the text.
+#[allow(
+    clippy::map_err_ignore,
+    reason = "a socket error can include the typed text or the stream address; the Bot only hears that the browser closed"
+)]
 async fn drive(mut ws: Ws, text: &str) -> Result<(), String> {
     const CLOSED: &str = "The browser closed the connection before the text was typed.";
     let send = |ws_msg: String| Message::text(ws_msg);
@@ -499,6 +515,10 @@ async fn wait_released(ws: &mut Ws) {
 
 /// The value of a file T3's `request_secret` wrote, without its trailing newline, and the file's
 /// real path. Only a small, non-empty file directly inside `root` is accepted.
+#[allow(
+    clippy::map_err_ignore,
+    reason = "an IO error includes the path of the secret file the Bot asked to read"
+)]
 pub fn read_secret(root: &Path, file: &str) -> Result<(String, PathBuf), String> {
     let real = std::fs::canonicalize(file).map_err(|_| SECRET_MISSING.to_string())?;
     let root = std::fs::canonicalize(root).map_err(|_| SECRET_MISSING.to_string())?;
@@ -602,6 +622,10 @@ async fn secret_file(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
         .ok_or("That login has no saved token.")?;
     prepare_token_dir(d.token_dir)?;
     let file = d.token_dir.join(hex::encode(rand::random::<[u8; 16]>()));
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "an IO error includes the path of the token file, next to the token itself"
+    )]
     write_private(&file, token).map_err(|_| "Couldn't write the token file.".to_string())?;
     let path = file.clone();
     tokio::spawn(async move {
@@ -630,6 +654,10 @@ fn write_private(file: &Path, text: &str) -> std::io::Result<()> {
 
 /// Creates the private folder and removes token files older than the TTL (left by an earlier run).
 fn prepare_token_dir(dir: &Path) -> Result<(), String> {
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "an IO error includes the token-folder path"
+    )]
     std::fs::create_dir_all(dir).map_err(|_| "Couldn't prepare the token folder.".to_string())?;
     #[cfg(unix)]
     {

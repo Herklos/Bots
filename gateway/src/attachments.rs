@@ -58,7 +58,17 @@ pub async fn download(
         .as_str()
         .unwrap_or("application/octet-stream");
     let name = meta["name"].as_str().unwrap_or("file");
+    // HeaderValue's error echoes the string it rejected. A stored type or name must
+    // not come back to the client; a bad header is a server fault (500).
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "the header parser echoes the media type or file name, and the client only gets a 500"
+    )]
     let ctype = HeaderValue::from_str(media).map_err(|_| ApiError::new(500, "bad media type"))?;
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "the header parser echoes the media type or file name, and the client only gets a 500"
+    )]
     let disposition =
         HeaderValue::from_str(&format!("attachment; filename=\"{}\"", file_token(name)))
             .map_err(|_| ApiError::new(500, "bad file name"))?;
@@ -101,6 +111,10 @@ pub fn prepare(body: &Value) -> ApiResult<(String, String, Vec<u8>)> {
     if data.len() > MAX_BYTES * 2 {
         return Err(ApiError::bad_request("the file is too large"));
     }
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "a base64 error quotes the payload, which is the uploaded file"
+    )]
     let bytes = B64
         .decode(data.trim())
         .map_err(|_| ApiError::bad_request("data must be base64"))?;
@@ -226,6 +240,10 @@ pub async fn read_file(
     let meta = crate::store::read_json(&json_path(&dir, id)?)
         .await
         .ok_or_else(|| ApiError::not_found("no such file"))?;
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "the IO error includes the on-disk path; the client only hears that the file is missing"
+    )]
     let bytes = tokio::fs::read(bin_path(&dir, id)?)
         .await
         .map_err(|_| ApiError::not_found("no such file"))?;

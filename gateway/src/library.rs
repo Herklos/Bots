@@ -230,6 +230,10 @@ impl Library {
     async fn read_records(&self, slug: &str) -> ApiResult<Vec<Value>> {
         match self.ws.read(&Self::records_path(slug)).await {
             Ok(bytes) => {
+                #[allow(
+                    clippy::map_err_ignore,
+                    reason = "serde quotes library.json, which holds the user's records"
+                )]
                 let doc: Value = serde_json::from_slice(&bytes)
                     .map_err(|_| ApiError::new(500, "library.json is not valid JSON"))?;
                 Ok(doc["items"].as_array().cloned().unwrap_or_default())
@@ -379,6 +383,10 @@ impl Library {
     async fn read_connectors(&self, slug: &str) -> ApiResult<Vec<Value>> {
         match self.ws.read(&Self::connectors_path(slug)).await {
             Ok(bytes) => {
+                #[allow(
+                    clippy::map_err_ignore,
+                    reason = "serde quotes connectors.json, which can hold a connector secret"
+                )]
                 let doc: Value = serde_json::from_slice(&bytes)
                     .map_err(|_| ApiError::new(500, "connectors.json is not valid JSON"))?;
                 Ok(doc["connectors"].as_array().cloned().unwrap_or_default())

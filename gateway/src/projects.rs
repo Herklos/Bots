@@ -155,6 +155,10 @@ fn clean_url(v: &Value, field: &str) -> ApiResult<Option<String>> {
     let Some(s) = oneline(v, field, 2000)? else {
         return Ok(None);
     };
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "the URL parser echoes the address the user typed, which the reply already refuses"
+    )]
     let url = url::Url::parse(&s).map_err(|_| {
         invalid(format!(
             "{field} must be a full address, like https://example.com."
@@ -937,6 +941,10 @@ impl Projects {
     async fn load<'a>(&self, g: &'a mut Option<Value>) -> ApiResult<&'a mut Value> {
         if g.is_none() {
             let raw = match tokio::fs::read_to_string(&self.file).await {
+                #[allow(
+                    clippy::map_err_ignore,
+                    reason = "serde quotes the board file; the client only hears that it is unreadable"
+                )]
                 Ok(text) => serde_json::from_str::<Value>(&text).map_err(|_| unreadable())?,
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => json!({}),
                 Err(_) => return Err(unreadable()),

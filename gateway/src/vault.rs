@@ -276,6 +276,10 @@ impl Vault {
 
     async fn key(&self, create: bool) -> ApiResult<[u8; 32]> {
         match tokio::fs::read(&self.key_file).await {
+            #[allow(
+                clippy::map_err_ignore,
+                reason = "TryFrom's error is the key bytes themselves"
+            )]
             Ok(k) => k.try_into().map_err(|_| ApiError::new(500, "The vault key file is not a 32-byte key.")),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound && create => {
                 let key: [u8; 32] = rand::random();
@@ -307,6 +311,10 @@ impl Vault {
         json!({ "format": FORMAT, "version": 1, "cipher": "aes-256-gcm", "iv": B64.encode(iv), "tag": B64.encode(tag), "data": B64.encode(sealed) })
     }
 
+    #[allow(
+        clippy::map_err_ignore,
+        reason = "a decrypt or parse failure can carry vault plaintext; the client only hears that the vault is damaged"
+    )]
     pub fn decrypt(key: &[u8; 32], envelope: &Value) -> ApiResult<Value> {
         if envelope["format"] != FORMAT {
             return Err(ApiError::new(500, "This file is not a Bot vault."));
@@ -347,6 +355,10 @@ impl Vault {
         if guard.is_none() {
             let items = match tokio::fs::read_to_string(&self.file).await {
                 Ok(text) => {
+                    #[allow(
+                        clippy::map_err_ignore,
+                        reason = "serde quotes the vault file, which is the encrypted secret store"
+                    )]
                     let envelope: Value = serde_json::from_str(&text)
                         .map_err(|_| ApiError::new(500, "This file is not a Bot vault."))?;
                     let payload = Self::decrypt(&self.key(false).await?, &envelope)?;
