@@ -1,15 +1,21 @@
 # Changelog
 
-## Unreleased
+## 0.2.1
+
+This release makes conversations easier to follow, improves the visibility of provider failures, and adds options when creating Bots and groups.
+
+### New features
+
+- Show completed Markdown pipe tables as grids in Bot and group conversations.
+- Accept a goal, approval mode and deferred routines when creating a Bot, and an optional kickoff message when creating a group. A failed routine setup leaves the Bot in place.
+- Show which Bots are working in a group.
 
 ### Improvements
 
-- Render a Markdown pipe table in a chat or a room as a grid. A header that has not yet got its rule line stays text.
-- Bots avoid Markdown tables and prefer bullet lists.
-- Poll the open screen on its own: the inbox refreshes its conversation list, a chat refreshes that chat, and a hidden window waits about ten seconds. Sending, answering, or stopping a run pauses the poll.
-- A new Bot can keep a goal, an approval mode, and routines that are created once its thread exists. A routine that fails to save leaves the Bot in place. A new group can start with one kickoff message.
-- Record a terminal provider failure on the thread transcript as a rate limit, a transport failure, or another provider error. A retry that is still in progress stays off the transcript.
-- Show a terminal provider rate limit or provider error in the chat, and when the limit resets.
+- Show terminal provider failures in chat, including rate limits and reset times when available. Retries still in progress stay off the transcript.
+- Give group chat the same jump-to-end and reply-following behavior as Bot chat.
+- Poll the inbox and open chat independently, with a longer interval while hidden and polling paused during sends, answers and stops.
+- Guide Bots to prefer bullet lists over Markdown tables.
 
 ## 0.2.0
 
@@ -36,10 +42,6 @@ This release gives you more control over network access, notifications and group
 - Report browser-control authorization failures and allow the T3 token to be reissued when it cannot operate the browser.
 - Keep authentication, Vault and T3 secrets out of debug output.
 - Correct Contract syntax and preserve navigation state through the Exact router.
-
-### Improvements
-
-- Group chat uses the same jump-to-end control and follow behavior as a Bot chat, including replies that arrive while you are already at the end.
 
 ## 0.1.6
 

@@ -2957,7 +2957,7 @@ component MessageParts
                   border-bottom-right-radius="radius.lg"
               else if part.kind == "table"
                 row overflow-x="auto" max-width="100%" min-width=0 testId=`message-${id}-table-${i}`
-                  column min-width="100%" width="max-content" border="1px solid surface.line" border-radius="radius.md" background-color="surface.bubble" color="-exact-label"
+                  column min-width="100%" width=`max(100%, ${part.head.length * 96}px)` border="1px solid surface.line" border-radius="radius.md" background-color="surface.bubble" color="-exact-label"
                     row
                       for cell, c in part.head key=`h-${c}`
                         column flex=1 min-width=96 padding="space.xs space.sm" border-bottom="1px solid surface.line" border-right=(c == part.head.length - 1 ? "none" : "1px solid surface.line")

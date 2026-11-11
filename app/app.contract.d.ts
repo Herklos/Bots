@@ -82,7 +82,7 @@
 //   FileRef = { id: string; name: string; kind: string; size: string; url: string }
 //   Choice = { label: string; value: string; key: string; warn: string }
 //   Part = { kind: string; text: string; head: string[]; rows: string[][]; align: string[] }
-//   Row = { id: string; kind: string; mine: boolean; text: string; title: string; time: string; head: boolean; tail: boolean; variant: string; files: FileRef[]; botSlug: string; botName: string; botColor: string; botShape: string; choices: Choice[]; placeholder: string; key: string; react: string; quote: string; tokens: string; parts: Part[] }
+//   Row = { id: string; kind: string; mine: boolean; text: string; title: string; time: string; head: boolean; tail: boolean; variant: string; files: FileRef[]; botSlug: string; botName: string; botColor: string; botShape: string; choices: Choice[]; placeholder: string; key: string; react: string; quote: string; tokens: string; resetAt: string; parts: Part[] }
 //   Suggestion = { name: string; about: string; color: string; shape: string; first: string }
 //   About = { ok: boolean; version: string; harness: string; connected: boolean }
 //   SystemStatus = { ok: boolean; installed: boolean; service: boolean; version: string; latest: string; updateAvailable: boolean; error: string }
@@ -357,7 +357,7 @@ type T7 = { "id": T1; "name": T1; "kind": T1; "size": T1; "url": T1; };
 type T8 = { "label": T1; "value": T1; "key": T1; "warn": T1; };
 type T9 = T7[];
 type T10 = T8[];
-type T11 = { "id": T1; "kind": T1; "mine": T0; "text": T1; "title": T1; "time": T1; "head": T0; "tail": T0; "variant": T1; "files": T9; "botSlug": T1; "botName": T1; "botColor": T1; "botShape": T1; "choices": T10; "placeholder": T1; "key": T1; "react": T1; "quote": T1; "tokens": T1; "parts": { "kind": T1; "text": T1; "head": T1[]; "rows": T1[][]; "align": T1[] }[]; };
+type T11 = { "id": T1; "kind": T1; "mine": T0; "text": T1; "title": T1; "time": T1; "head": T0; "tail": T0; "variant": T1; "files": T9; "botSlug": T1; "botName": T1; "botColor": T1; "botShape": T1; "choices": T10; "placeholder": T1; "key": T1; "react": T1; "quote": T1; "tokens": T1; "resetAt": T1; "parts": { "kind": T1; "text": T1; "head": T1[]; "rows": T1[][]; "align": T1[] }[]; };
 type T12 = { "name": T1; "about": T1; "color": T1; "shape": T1; "first": T1; };
 type T13 = { "ok": T0; "version": T1; "harness": T1; "connected": T0; };
 type T14 = { "ok": T0; "installed": T0; "service": T0; "version": T1; "latest": T1; "updateAvailable": T0; "error": T1; };
