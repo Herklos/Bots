@@ -20,7 +20,7 @@
 //   loadBots: (args: [string]) => Bot[]
 //   loadChat: (args: [string, string]) => Chat
 //   loadComputer: (args: [string, string, string, string, string]) => Computer
-//   loadConvos: (args: [string, string, string, string, boolean]) => Convo[]
+//   loadConvos: (args: [string, string, string]) => Convo[]
 //   loadDrafts: (args: []) => DraftPack
 //   loadLineage: (args: [string, string, string]) => Lineage
 //   loadModels: (args: [string, string, string]) => ModelList
@@ -40,6 +40,7 @@
 //   makeMainBot: (args: [string]) => Reply
 //   markRoomSeen: (args: [string]) => Reply
 //   markSeen: (args: [string]) => Reply
+//   noteUnread: (args: [string, boolean, boolean, string, boolean, boolean, boolean, string, string, string, string]) => Reply
 //   openComputer: (args: [string]) => Reply
 //   pinBot: (args: [string, boolean]) => Reply
 //   pinMessage: (args: [string, string, string, string]) => Reply
@@ -572,7 +573,7 @@ type T222 = { "offsetX": T35; "offsetY": T35; "deltaX": T35; "deltaY": T35; "del
 type T223 = { "target": T1; "relatedTarget": T81; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "closeComputer" | "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startUpdate" | "stopRun" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "closeComputer" | "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "noteUnread" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startUpdate" | "stopRun" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "closeComputer": { args: [T1]; result: T2 };
@@ -591,7 +592,7 @@ export interface SourceMap {
   "loadBots": { args: [T1]; result: T198 };
   "loadChat": { args: [T1, T1]; result: T20 };
   "loadComputer": { args: [T1, T1, T1, T1, T1]; result: T65 };
-  "loadConvos": { args: [T1, T1, T1, T1, T0]; result: T200 };
+  "loadConvos": { args: [T1, T1, T1]; result: T200 };
   "loadDrafts": { args: []; result: T67 };
   "loadLineage": { args: [T1, T1, T1]; result: T52 };
   "loadModels": { args: [T1, T1, T1]; result: T46 };
@@ -611,6 +612,7 @@ export interface SourceMap {
   "makeMainBot": { args: [T1]; result: T2 };
   "markRoomSeen": { args: [T1]; result: T2 };
   "markSeen": { args: [T1]; result: T2 };
+  "noteUnread": { args: [T1, T0, T0, T1, T0, T0, T0, T1, T1, T1, T1]; result: T2 };
   "openComputer": { args: [T1]; result: T2 };
   "pinBot": { args: [T1, T0]; result: T2 };
   "pinMessage": { args: [T1, T1, T1, T1]; result: T2 };

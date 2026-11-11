@@ -1017,7 +1017,7 @@ component Bots
   resource keptDrafts = loadDrafts() as shape DraftPack else empty()
   resource bots = loadBots(slug != "" ? slug : roomId) as shape Bot[] else empty()
   resource page = exactPage() as shape PageState
-  resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId, page.visibilityState, page.hasFocus) as shape Convo[] else empty()
+  resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId) as shape Convo[] else empty()
   resource chat = loadChat(slug, childThread) as shape Chat else empty()
   resource room = loadRoom(roomId) as shape Room else empty()
   resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
@@ -1048,6 +1048,7 @@ component Bots
   mutation subSaved as shape Reply refreshes bots then afterSubSave
   mutation childRemoved as shape Reply refreshes bots then afterChildRemove
   mutation seen as shape Reply refreshes bots
+  mutation noted as shape Reply
   mutation roomSeen as shape Reply refreshes convos, room
   mutation noticeAsked as shape NotificationStatus refreshes notice then afterNotice
   mutation noticeEnabled as shape Reply refreshes prefs
@@ -1196,6 +1197,13 @@ component Bots
   task pollHidden when page.visibilityState != "visible" and not pending(sent) and not pending(answered) and not pending(stopped)
     every(10000, pull)
 
+  // Notices follow the roster, the open chat, and whether this window is in front.
+  // A poll does not post them again, and does not read settings or permission again.
+  derive noticeStamp = pending(convos) or pending(prefs) or pending(notice) or failed(convos) ? "" : convos.map(c => c.kind + "\t" + c.id + "\t" + c.line + "\t" + c.at + "\t" + (c.unread ? "1" : "0") + "\t" + (c.notifications ? "1" : "0")).join("\n") + "\n" + bots.map(b => b.slug + "\t" + b.line + "\t" + (b.unread ? "1" : "0") + "\t" + (b.notifications ? "1" : "0") + "\t" + (b.hideFromSidebar ? "1" : "0") + "\t" + (b.subagent ? "1" : "0") + "\t" + (b.hidden ? "1" : "0")).join("\n") + "\n" + page.visibilityState + "\t" + (page.hasFocus ? "1" : "0") + "\t" + (notice.available ? "1" : "0") + "\t" + notice.state + "\t" + (prefs.noticeEnabled ? "1" : "0") + "\t" + (prefs.noticeEnabledMissing ? "1" : "0") + "\t" + (prefs.noticeSound ? "1" : "0") + "\t" + prefs.noticePreview + "\t" + prefs.noticeWhen + "\t" + slug + "\t" + roomId
+
+  task noteRoster when noticeStamp != "" key=noticeStamp
+    after(1, postNotices)
+
   task fadeToast when toast != ""
     after(3000, clearToast)
 
@@ -1327,6 +1335,9 @@ component Bots
     panelPage = "root"
     panelOpen = true
     nav = go(nav, path("chat", bslug))
+
+  action postNotices
+    send noted = noteUnread(page.visibilityState, page.hasFocus, notice.available, notice.state, prefs.noticeEnabled, prefs.noticeEnabledMissing, prefs.noticeSound, prefs.noticePreview, prefs.noticeWhen, slug, roomId)
 
   action pull
     refresh bots

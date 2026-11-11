@@ -153,6 +153,35 @@ function botsBody(store: any): Promise<any> {
   if (!botsInflight) botsInflight = read(store, '/api/bots').finally(() => { botsInflight = null; });
   return botsInflight;
 }
+// The conversation list and the unread poster both read rooms in one tick. The settled
+// list stays briefly so the poster, which runs just after the roster changes, reuses it.
+let roomsInflight: Promise<any> | null = null;
+function roomsBody(store: any): Promise<any> {
+  if (!roomsInflight) {
+    const run = call(store, '/api/rooms').finally(() => {
+      setTimeout(() => { if (roomsInflight === run) roomsInflight = null; }, 100);
+    });
+    roomsInflight = run;
+  }
+  return roomsInflight;
+}
+// The host's notification permission. A tick reads the notice resource; this remembers the last answer.
+let noticeHost: { available: boolean; state: string } | null = null;
+let noticeHostInflight: Promise<{ available: boolean; state: string } | null> | null = null;
+async function hostNotice(): Promise<{ available: boolean; state: string } | null> {
+  if (noticeHost) return noticeHost;
+  if (!noticeHostInflight) {
+    noticeHostInflight = notificationStatus({}).then((status) => {
+      const next = { available: status?.available === true, state: String(status?.state ?? 'unknown') };
+      noticeHost = next;
+      return next;
+    }).catch((error: unknown) => {
+      if (unsupported(error)) return null;
+      throw error;
+    }).finally(() => { noticeHostInflight = null; });
+  }
+  return noticeHostInflight;
+}
 const reply = (r: Answered) => (r.ok ? { ok: true, error: '' } : { ok: false, error: localize(r.error) });
 // The first read on the About tab asks GitHub. Later refreshes use the stored answer.
 let systemChecked = false;
@@ -522,6 +551,37 @@ function usageReport(b: any) {
 let lastNow = 0;
 const frames: Record<string, string> = {};
 const threads: Record<string, string> = {};
+// Reactions and pins for a thread. A poll reuses them for about ten seconds, or until the last message changes.
+// A reaction or a pin clears the cache so that refresh reads them again.
+const META_MS = 10_000;
+const metaByThread = new Map<string, { at: number; lastId: string; meta: any }>();
+function forgetMeta(): void {
+  metaByThread.clear();
+}
+function lastMessageId(body: any): string {
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  let id = '';
+  let ordinal = -1;
+  for (const message of messages) {
+    const next = Number(message?.ordinal ?? -1);
+    if (id === '' || next >= ordinal) {
+      ordinal = Number.isFinite(next) ? next : ordinal;
+      id = String(message?.id ?? '');
+    }
+  }
+  return id;
+}
+async function threadMeta(store: any, threadId: string, lastId: string): Promise<any> {
+  const hit = metaByThread.get(threadId);
+  if (hit && hit.lastId === lastId && Date.now() - hit.at < META_MS) return hit.meta;
+  try {
+    const meta = await read(store, `/api/threads/${encodeURIComponent(threadId)}/meta`);
+    metaByThread.set(threadId, { at: Date.now(), lastId, meta });
+    return meta;
+  } catch {
+    return {};
+  }
+}
 const TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', pdf: 'application/pdf', txt: 'text/plain', md: 'text/markdown', csv: 'text/csv', json: 'application/json', mp4: 'video/mp4', m4a: 'audio/mp4' };
 const guessType = (name: string): string => TYPES[name.split('.').pop()?.toLowerCase() ?? ''] ?? 'application/octet-stream';
 const GAP = 60 * 60_000;
@@ -730,23 +790,19 @@ async function shutNotice(tag: string): Promise<void> {
   }
 }
 
-// One notice per unread chat, from the inbox poll. A subagent, a fixture, a muted
+// One notice per unread chat, when the roster changes. A subagent, a fixture, a muted
 // chat, the open route, a status line and the person's own message stay quiet.
-async function postUnread(store: { get(name: string): string | null }, directory: any[], rooms: any[], openSlug: string, openRoom: string, visibility: string, focused: boolean): Promise<void> {
-  let host: { available?: boolean; state?: string };
-  try {
-    host = await notificationStatus({});
-  } catch (error) {
-    if (unsupported(error)) return;
-    throw error;
-  }
-  if (host?.available !== true) return;
+// Permission and settings are the notice and prefs resources, not another settings read.
+async function postUnread(store: { get(name: string): string | null }, openSlug: string, openRoom: string, visibility: string, focused: boolean, host: { available: boolean; state: string }, prefs: NoticePrefs): Promise<void> {
+  if (host.available !== true) return;
   const granted = host.state === 'granted';
-  const settings = await call(store, '/api/settings');
-  const prefs = settings.ok ? noticePrefs(settings.body) : noticePrefs({});
   const master = prefs.enabled === null ? granted : prefs.enabled;
   const away = visibility === 'hidden' || focused === false;
   const mayPost = granted && master && (prefs.when !== 'background' || away);
+  const body = await botsBody(store);
+  const directory = Array.isArray(body.bots) ? body.bots : [];
+  const roomsReply = await roomsBody(store);
+  const rooms = roomsReply.ok && Array.isArray(roomsReply.body?.rooms) ? roomsReply.body.rooms : [];
   type Chat = { tag: string; title: string; line: string; navigate: string; id: string; close: boolean; post: boolean };
   const chats: Chat[] = [];
   let badge = 0;
@@ -873,8 +929,12 @@ const sources: Sources = {
   hideBot: async ([slug, hidden], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ hidden }) })),
   makeMainBot: async ([slug], store) => reply(await call(store, '/api/main-bot', { method: 'PUT', body: JSON.stringify({ slug }) })),
   reshapeBot: async ([slug, shape], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ shape }) })),
-  reactTo: async ([slug, item, emoji], store) => reply(await call(store, `/api/threads/${encodeURIComponent(threads[slug] ?? '')}/reactions`, { method: 'POST', body: JSON.stringify({ item, emoji }) })),
+  reactTo: async ([slug, item, emoji], store) => {
+    forgetMeta();
+    return reply(await call(store, `/api/threads/${encodeURIComponent(threads[slug] ?? '')}/reactions`, { method: 'POST', body: JSON.stringify({ item, emoji }) }));
+  },
   pinMessage: async ([slug, thread, item, text], store) => {
+    forgetMeta();
     if (slug === 'fixture') {
       const key = thread || 'fixture-thread';
       const list = fixturePins[key] ?? (fixturePins[key] = []);
@@ -908,9 +968,12 @@ const sources: Sources = {
     };
   },
   loadNotice: async (): Promise<Result<'loadNotice'>> => {
+    // Permission can change from Settings. Ask the host, then remember it for the poster.
+    noticeHost = null;
     try {
-      const status = await notificationStatus({});
-      return { available: status?.available === true, state: String(status?.state ?? 'unknown') };
+      const status = await hostNotice();
+      if (!status) return { available: false, state: 'unknown' };
+      return status;
     } catch (error) {
       if (!unsupported(error)) console.log(`notification status failed: ${String(error)}`);
       return { available: false, state: 'unknown' };
@@ -967,7 +1030,7 @@ const sources: Sources = {
     return reply(r);
   },
   deleteLogin: async ([id], store) => reply(await call(store, `/api/vault/${encodeURIComponent(id)}`, { method: 'DELETE' })),
-  loadConvos: async ([query, focus, room, visibility, focused], store): Promise<Result<'loadConvos'>> => {
+  loadConvos: async ([query, focus, room], store): Promise<Result<'loadConvos'>> => {
     if (focus === 'tabs') {
       return [
         { kind: 'bot', key: 'bot-tabs', id: 'tabs', name: 'Tabs', color: fill('brand.default'), shape: 'ball', faces: [], line: 'Ready to chat', time: '', at: '', unread: false, working: false, ready: true, notifications: wantsNotice(fixtureBotNotify.get('tabs')) },
@@ -997,7 +1060,7 @@ const sources: Sources = {
         ready: typeof b.mainThreadId === 'string', notifications: wantsNotice(b.notifications),
       }));
     // A rooms failure must not hide the Bots. An empty list is the honest fallback.
-    const roomsReply = await call(store, '/api/rooms');
+    const roomsReply = await roomsBody(store);
     const listed = roomsReply.ok && Array.isArray(roomsReply.body?.rooms) ? roomsReply.body.rooms : [];
     const groups = listed
       .filter((g: any) => match(String(g.title ?? '')))
@@ -1012,11 +1075,6 @@ const sources: Sources = {
           line: last !== '' ? last : String(g.description ?? ''), time: when(said, now), at: said, unread: g.unread === true, working: g.working === true, ready: true, notifications: wantsNotice(g.notifications),
         };
       });
-    try {
-      await postUnread(store, directory, listed, focus, room, visibility, focused);
-    } catch {
-      // A missing notification host still lists the chats.
-    }
     // The most recent conversation first, a Bot or a group alike; one with nothing said goes last.
     return [...bots, ...groups].sort((x, y) => y.at.localeCompare(x.at));
   },
@@ -1121,6 +1179,21 @@ const sources: Sources = {
     return ((r.body.suggestions ?? []) as any[]).map((s) => ({ name: String(s.name), about: String(s.about ?? ''), color: fill(s.color), shape: String(s.shape ?? 'ball'), first: String(s.firstMessage ?? '') }));
   },
   markSeen: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/seen`, { method: 'POST', body: '{}' })),
+  noteUnread: async ([visibility, focused, available, state, enabled, enabledMissing, sound, preview, when, openSlug, openRoom], store): Promise<Result<'noteUnread'>> => {
+    if (FIXTURE_SLUG(openSlug) || FIXTURE_SLUG(openRoom) || openSlug === 'fixture-busy' || openRoom === 'fixture-busy') return { ok: true, error: '' };
+    const prefs: NoticePrefs = {
+      enabled: enabledMissing ? null : enabled,
+      sound,
+      preview: preview === 'hidden' ? 'hidden' : 'full',
+      when: when === 'background' ? 'background' : 'any',
+    };
+    try {
+      await postUnread(store, openSlug, openRoom, visibility, focused, { available, state }, prefs);
+    } catch {
+      // A missing notification host still leaves the roster alone.
+    }
+    return { ok: true, error: '' };
+  },
   loadChat: async ([slug, child], store): Promise<Result<'loadChat'>> => {
     if (slug === '') return blankChat('');
     if (slug === 'fixture') return fixtureChat(child);
@@ -1130,14 +1203,7 @@ const sources: Sources = {
     const query = child !== '' ? `?child=${encodeURIComponent(child)}` : '';
     const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat${query}`);
     const threadId = String(body.threadId ?? '');
-    let meta: any = {};
-    if (threadId !== '') {
-      try {
-        meta = await read(store, `/api/threads/${encodeURIComponent(threadId)}/meta`);
-      } catch {
-        meta = {};
-      }
-    }
+    const meta = threadId === '' ? {} : await threadMeta(store, threadId, lastMessageId(body));
     if (child === '') threads[slug] = threadId;
     const rows = chatRows(slug, body, Number(body.now), meta.reactions ?? {}, meta.replyTo ?? {});
     if (child === '') await shutNotice(`unread-bot-${slug}`);
