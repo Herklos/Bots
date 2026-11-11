@@ -71,7 +71,8 @@ By default, Bot folders live under `~/.hbots/bots/`. The gateway holds the T3 to
 ## Commands
 
 ```text
-hbots up [--port N] [--t3-url URL] [--no-service]   Set up and start hbots
+hbots up [--port N] [--t3-url URL] [--no-service] [--refresh-token]
+                                                     Set up and start hbots. Re-issues the T3 token when it lacks preview:operate; --refresh-token re-issues it anyway
 hbots serve                                          Run the gateway in the foreground
 hbots status [--json]                                Show service and gateway status
 hbots update [version] [--check] [--preview] [--yes] Check or install a release
