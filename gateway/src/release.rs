@@ -826,8 +826,8 @@ pub fn consider(
                 "auto-update: hbots stayed busy for a day; not waiting for {target} any longer"
             ));
             state.waiting = None;
-            state.gave_up = Some(target.clone());
             state.notice = Some(notice("waited", &target, version, &latest.url, at));
+            state.gave_up = Some(target);
             return (Step::GaveUp, lines);
         }
         lines.push(format!(
@@ -1372,7 +1372,7 @@ mod tests {
         assert_eq!(read_link(&p.current), Some(v2.clone()));
         assert_eq!(read_link(&p.previous), Some(v1.clone()));
         assert_eq!(rollback(home).unwrap(), v1);
-        assert_eq!(read_link(&p.current), Some(v1.clone()));
+        assert_eq!(read_link(&p.current), Some(v1));
         assert!(read_link(&p.previous).is_none());
         activate(&v2, home).unwrap();
         let removed = prune(home).unwrap();

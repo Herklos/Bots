@@ -645,15 +645,15 @@ async fn start_quick_tunnel(
         });
     }
     if let Some(err) = child.stderr.take() {
-        let tx = tx.clone();
         tokio::spawn(async move {
             let mut lines = BufReader::new(err).lines();
             while let Ok(Some(line)) = lines.next_line().await {
                 let _ = tx.send(line);
             }
         });
+    } else {
+        drop(tx);
     }
-    drop(tx);
     let mut tail = String::new();
     let mut url: Option<String> = None;
     let mut registered = false;
@@ -667,8 +667,8 @@ async fn start_quick_tunnel(
             }
             url = url.or_else(|| find_quick_url(&tail));
             registered |= tail.contains("Registered tunnel connection");
-            if let (Some(u), true) = (&url, registered) {
-                return Some(u.clone());
+            if registered && url.is_some() {
+                return url;
             }
         }
         None
@@ -898,12 +898,12 @@ impl RemoteAccess {
                 "Turn on HTTPS certificates for your tailnet first.",
             ));
         }
-        let Some(login) = f.login.clone() else {
+        let Some(login) = f.login else {
             return Err(AccessError::conflict(
                 "Couldn't tell which Tailscale user this machine belongs to.",
             ));
         };
-        let Some(dns) = f.dns_name.clone() else {
+        let Some(dns) = f.dns_name else {
             return Err(AccessError::conflict(
                 "Couldn't tell this machine's Tailscale name.",
             ));
@@ -1161,7 +1161,7 @@ mod tests {
             pick_serve_port(&json!({}), "http://127.0.0.1:3781"),
             Some((443, false))
         );
-        let mut mine = serve.clone();
+        let mut mine = serve;
         mine["Web"]["box:8444"] =
             json!({ "Handlers": { "/": { "Proxy": "http://127.0.0.1:3781" } } });
         assert_eq!(
