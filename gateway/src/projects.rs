@@ -72,7 +72,10 @@ fn kind_error() -> ApiError {
 }
 
 /// `{type: "bot", name, slug}` for a Bot, otherwise the user.
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "board rows build the actor object inline, so this helper has no caller yet"
+)]
 pub(crate) fn actor(input: Option<&Value>) -> Value {
     match input {
         Some(a) if a["type"] == "bot" => {

@@ -276,12 +276,18 @@ fn project_turns(items: &[Value], peers: &Peers, projection: &Value) -> Value {
 }
 
 // Nothing in the gateway calls this yet.
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "only the chat tests read this; the live search path is not wired yet"
+)]
 pub(crate) const LOADED_SENTENCE: &str = "Search covers the loaded conversation.";
 
 /// Filters messages already loaded from a projection. Nothing else is searched.
 // Nothing in the gateway calls this yet.
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "only the chat tests call this; the live search path is not wired yet"
+)]
 pub(crate) fn search_messages(messages: &[Value], query: &str, partial: bool) -> Value {
     let query = query.trim().to_lowercase();
     let hits: Vec<Value> = if query.is_empty() {

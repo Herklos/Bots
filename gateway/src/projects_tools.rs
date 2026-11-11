@@ -238,7 +238,10 @@ async fn run(state: &AppState, name: &str, args: &Value) -> Result<Value, String
 /// A write must come from this app's own page, never from another website using the user's session.
 /// Works behind a proxy that forwards `x-forwarded-host`.
 // Nothing in the gateway calls this yet.
-#[allow(dead_code)]
+#[allow(
+    dead_code,
+    reason = "only the projects-tools tests call this; the live check is auth::same_origin"
+)]
 pub(crate) fn same_origin(headers: &HeaderMap) -> bool {
     let header = |name: &str| headers.get(name).and_then(|v| v.to_str().ok());
     let Some(origin) = header("origin") else {
