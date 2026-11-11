@@ -317,7 +317,13 @@ impl Bots {
             if current.is_none() && !create {
                 return Err(ApiError::not_found("Bot not found"));
             }
-            for key in ["primary", "hidden", "pinned", "hideFromSidebar", "notifications"] {
+            for key in [
+                "primary",
+                "hidden",
+                "pinned",
+                "hideFromSidebar",
+                "notifications",
+            ] {
                 if patch.get(key).is_some_and(|v| !v.is_boolean()) {
                     return Err(ApiError::bad_request(format!("{key} must be a boolean")));
                 }
@@ -963,10 +969,7 @@ mod tests {
             .unwrap();
         assert_eq!(saved["notifications"], false);
 
-        let junior = bots
-            .create(&json!({ "parentSlug": slug }))
-            .await
-            .unwrap();
+        let junior = bots.create(&json!({ "parentSlug": slug })).await.unwrap();
         let child = junior["slug"].as_str().unwrap();
         let muted = bots
             .save(child, &json!({ "notifications": false }), false)
