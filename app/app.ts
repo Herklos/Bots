@@ -940,6 +940,10 @@ const sources: Sources = {
     if (!r.ok) return { ok: false, version: '' };
     return { ok: true, version: String(r.body.version ?? '') };
   },
+  reloadPage: () => {
+    location.reload();
+    return { ok: true, error: '' };
+  },
   loadSuggestions: async (_args, store): Promise<Result<'loadSuggestions'>> => {
     const r = await call(store, '/api/suggestions');
     if (!r.ok) return [];

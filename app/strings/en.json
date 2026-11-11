@@ -268,7 +268,7 @@
   "settings.updateChecking": "Checking for updates…",
   "settings.updateCurrent": "hbots {version} is up to date.",
   "settings.updateFailed": "Couldn’t check for updates.",
-  "settings.updateNotService": "This process is not the background service.",
+  "settings.updateNotService": "This process is not the background service, so hbots has to be restarted by hand.",
   "settings.updateRestart": "Update and restart",
   "settings.updateSource": "This copy runs from source. Install a release to update it.",
   "settings.updateStuck": "The update did not finish. hbots is still on {version}.",

@@ -1019,6 +1019,7 @@ component Bots
   mutation passwordSet as shape Reply refreshes session then afterPassword
   mutation updateStarted as shape UpdateStart then afterUpdateStart
   mutation healthRead as shape Health then afterHealth
+  mutation pageReloaded as shape Reply
   mutation loginSaved as shape Reply refreshes vault then afterLoginSave
   mutation loginRemoved as shape Reply refreshes vault then afterLoginRemove
   mutation revealed as shape Revealed
@@ -1774,8 +1775,8 @@ component Bots
     let target = updateTo
     let polls = updatePolls
     let arrived = match healthRead { case some(h) => h.ok and h.version == target and target != "", case none => false }
-    if arrived
-      relaunch()
+    if arrived and not pending(pageReloaded)
+      send pageReloaded = reloadPage()
     else if target != "" and polls >= 300
       updateStuck = true
   action doEditName(v: string)

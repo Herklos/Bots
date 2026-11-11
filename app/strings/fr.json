@@ -268,7 +268,7 @@
   "settings.updateChecking": "Recherche de mises à jour…",
   "settings.updateCurrent": "hbots {version} est à jour.",
   "settings.updateFailed": "Impossible de vérifier les mises à jour.",
-  "settings.updateNotService": "Ce processus n’est pas le service en arrière-plan.",
+  "settings.updateNotService": "Ce processus n’est pas le service en arrière-plan, donc hbots doit être redémarré à la main.",
   "settings.updateRestart": "Mettre à jour et redémarrer",
   "settings.updateSource": "Cette copie tourne depuis les sources. Installez une version pour la mettre à jour.",
   "settings.updateStuck": "La mise à jour ne s’est pas terminée. hbots est toujours en version {version}.",
