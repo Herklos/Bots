@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.6
+
+- Complete bot mentions in chat and group composers, including group members and `@all`, using the keyboard or touch.
+- Simplify bot details and sidebar controls on small screens.
+- Show localized activity chips for bot tools and routines, including the other Bot’s name where available.
+- Allow the development stack to be accessed over a trusted local network with `bun scripts/dev.mjs --lan`.
+- Document the development workflow and the proposed memory maintenance design.
+
 ## 0.1.5
 
 - Fixed build-time rendering of the host clock.
