@@ -58,7 +58,7 @@
 //   setModel: (args: [string, string, string, string, string]) => Reply
 //   setPassword: (args: [string]) => Reply
 //   setBotNotifications: (args: [string, boolean]) => Reply
-//   setNotifications: (args: [boolean, boolean, string, string]) => Reply
+//   setNotifications: (args: [boolean | null, boolean, string, string]) => Reply
 //   setTheme: (args: [string]) => Reply
 //   setUserName: (args: [string]) => Reply
 //   signIn: (args: [string]) => Reply
@@ -607,7 +607,7 @@ export interface SourceMap {
   "sendRoom": { args: [T1, T1]; result: T2 };
   "sendVoice": { args: [T1, T29, T1, T1]; result: T2 };
   "setBotNotifications": { args: [T1, T0]; result: T2 };
-  "setNotifications": { args: [T0, T0, T1, T1]; result: T2 };
+  "setNotifications": { args: [T0 | null, T0, T1, T1]; result: T2 };
   "setDefaultMode": { args: [T1]; result: T2 };
   "setDefaultModel": { args: [T1, T1, T1]; result: T2 };
   "setModel": { args: [T1, T1, T1, T1, T1]; result: T2 };
