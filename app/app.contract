@@ -904,13 +904,6 @@ keyframes dot
   40% opacity=1, translate="0 -3px"
   to opacity=0.3, translate="0 0"
 
-// The three working marks. Each one lags the last. Reduced motion is the host's job.
-component WorkingDots
-  view
-    row gap="6px" align-items="center"
-      for n in [0, 1, 2] key=n
-        column width=7 height=7 border-radius="radius.full" background-color="ink.muted" animation=`dot 1.2s ease-in-out infinite ${n * 0.16}s`
-
 component Bots
   state password = ""
   state draftTexts: string[] = []
@@ -2698,6 +2691,14 @@ component Bots
       if toast != ""
         row position="absolute" bottom=88 left="50%" translate="-50% 0" padding="space.md space.lg" border-radius="radius.full" background-color="-exact-label" color="surface.canvas" max-width="90%" box-sizing="border-box" testId="toast" role="status" aria-live="polite"
           text toast font="-exact-subheadline" font-weight=500
+
+// The three working marks. Each one lags the last. Reduced motion is the host's job.
+// Declared after Bots: the first component is the root, and it owns `routes nav`.
+component WorkingDots
+  view
+    row gap="6px" align-items="center"
+      for n in [0, 1, 2] key=n
+        column width=7 height=7 border-radius="radius.full" background-color="ink.muted" animation=`dot 1.2s ease-in-out infinite ${n * 0.16}s`
 
 // A group's face is its members, at most three, overlapped. It has no colour or shape of its own.
 
