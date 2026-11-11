@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Improvements
+
+- Post unread notices when the roster changes, using the notification settings and permission already on screen. A chat reuses thread reactions and pins for about ten seconds, until a new last message, a reaction, or a pin.
+
 ## 0.2.1
 
 This release makes conversations easier to follow, improves the visibility of provider failures, and adds options when creating Bots and groups.
