@@ -20,7 +20,8 @@
 //   loadBots: (args: [string]) => Bot[]
 //   loadChat: (args: [string, string]) => Chat
 //   loadComputer: (args: [string, string, string, string]) => Computer
-//   loadConvos: (args: [string, string, string]) => Convo[]
+//   loadConvos: (args: [string, string, string, string, boolean]) => Convo[]
+//   loadNotice: (args: []) => NoticeState
 //   loadDrafts: (args: []) => DraftPack
 //   loadLineage: (args: [string, string, string]) => Lineage
 //   loadModels: (args: [string, string, string]) => ModelList
@@ -35,6 +36,7 @@
 //   loadUsageReport: (args: [string, string, string, string]) => UsageReport
 //   loadVault: (args: []) => Login[]
 //   makeMainBot: (args: [string]) => Reply
+//   markRoomSeen: (args: [string]) => Reply
 //   markSeen: (args: [string]) => Reply
 //   openComputer: (args: [string]) => Reply
 //   pinBot: (args: [string, boolean]) => Reply
@@ -56,6 +58,7 @@
 //   setModel: (args: [string, string, string, string, string]) => Reply
 //   setPassword: (args: [string]) => Reply
 //   setBotNotifications: (args: [string, boolean]) => Reply
+//   setNotifications: (args: [boolean, boolean, string, string]) => Reply
 //   setTheme: (args: [string]) => Reply
 //   setUserName: (args: [string]) => Reply
 //   signIn: (args: [string]) => Reply
@@ -82,7 +85,8 @@
 //   FaceBit = { shape: string; color: string; state: string }
 //   Convo = { kind: string; key: string; id: string; name: string; color: string; shape: string; faces: FaceBit[]; line: string; time: string; at: string; unread: boolean; working: boolean; ready: boolean; notifications: boolean }
 //   Made = { ok: boolean; id: string; error: string }
-//   Prefs = { userName: string; theme: string; defaultInstance: string; defaultModel: string; defaultEffort: string; defaultRuntimeMode: string }
+//   Prefs = { userName: string; theme: string; defaultInstance: string; defaultModel: string; defaultEffort: string; defaultRuntimeMode: string; noticeEnabled: boolean; noticeSound: boolean; noticePreview: string; noticeWhen: string; noticeEnabledMissing: boolean }
+//   NoticeState = { available: boolean; state: string }
 //   Attached = { ok: boolean; id: string; name: string; error: string }
 //   VoiceHeld = { ok: boolean; id: string; name: string; url: string; seconds: number; error: string }
 //   Login = { id: string; title: string; website: string; username: string; hasPassword: boolean; hints: string; icon: string }
@@ -358,7 +362,8 @@ type T23 = { "shape": T1; "color": T1; "state": T1; };
 type T24 = T23[];
 type T25 = { "kind": T1; "key": T1; "id": T1; "name": T1; "color": T1; "shape": T1; "faces": T24; "line": T1; "time": T1; "at": T1; "unread": T0; "working": T0; "ready": T0; "notifications": T0; };
 type T26 = { "ok": T0; "id": T1; "error": T1; };
-type T27 = { "userName": T1; "theme": T1; "defaultInstance": T1; "defaultModel": T1; "defaultEffort": T1; "defaultRuntimeMode": T1; };
+type T27 = { "userName": T1; "theme": T1; "defaultInstance": T1; "defaultModel": T1; "defaultEffort": T1; "defaultRuntimeMode": T1; "noticeEnabled": T0; "noticeSound": T0; "noticePreview": T1; "noticeWhen": T1; "noticeEnabledMissing": T0; };
+type T216 = { "available": T0; "state": T1; };
 type T28 = { "ok": T0; "id": T1; "name": T1; "error": T1; };
 type T29 = number;
 type T30 = { "ok": T0; "id": T1; "name": T1; "url": T1; "seconds": T29; "error": T1; };
@@ -549,7 +554,7 @@ type T214 = { "offsetX": T29; "offsetY": T29; "deltaX": T29; "deltaY": T29; "del
 type T215 = { "target": T1; "relatedTarget": T75; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "closeComputer" | "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markSeen" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setModel" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "closeComputer" | "computerControl" | "computerInput" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setModel" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "stopRun" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "closeComputer": { args: [T1]; result: T2 };
@@ -568,10 +573,11 @@ export interface SourceMap {
   "loadBots": { args: [T1]; result: T192 };
   "loadChat": { args: [T1, T1]; result: T16 };
   "loadComputer": { args: [T1, T1, T1, T1]; result: T59 };
-  "loadConvos": { args: [T1, T1, T1]; result: T194 };
+  "loadConvos": { args: [T1, T1, T1, T1, T0]; result: T194 };
   "loadDrafts": { args: []; result: T61 };
   "loadLineage": { args: [T1, T1, T1]; result: T46 };
   "loadModels": { args: [T1, T1, T1]; result: T40 };
+  "loadNotice": { args: []; result: T216 };
   "loadPrefs": { args: []; result: T27 };
   "loadProviders": { args: []; result: T39 };
   "loadRoom": { args: [T1]; result: T21 };
@@ -583,6 +589,7 @@ export interface SourceMap {
   "loadUsageReport": { args: [T1, T1, T1, T1]; result: T53 };
   "loadVault": { args: []; result: T193 };
   "makeMainBot": { args: [T1]; result: T2 };
+  "markRoomSeen": { args: [T1]; result: T2 };
   "markSeen": { args: [T1]; result: T2 };
   "openComputer": { args: [T1]; result: T2 };
   "pinBot": { args: [T1, T0]; result: T2 };
@@ -600,6 +607,7 @@ export interface SourceMap {
   "sendRoom": { args: [T1, T1]; result: T2 };
   "sendVoice": { args: [T1, T29, T1, T1]; result: T2 };
   "setBotNotifications": { args: [T1, T0]; result: T2 };
+  "setNotifications": { args: [T0, T0, T1, T1]; result: T2 };
   "setDefaultMode": { args: [T1]; result: T2 };
   "setDefaultModel": { args: [T1, T1, T1]; result: T2 };
   "setModel": { args: [T1, T1, T1, T1, T1]; result: T2 };

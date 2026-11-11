@@ -584,6 +584,21 @@ shape Prefs
   defaultModel: string
   defaultEffort: string
   defaultRuntimeMode: string
+  noticeEnabled: bool
+  noticeSound: bool
+  noticePreview: string
+  noticeWhen: string
+  noticeEnabledMissing: bool
+
+// The host page, as the poster reads it. `hidden` or an unfocused window is background.
+shape PageState
+  visibilityState: string
+  hasFocus: bool
+
+// Whether this host can post, and the permission it already has.
+shape NoticeState
+  available: bool
+  state: string
 
 // Result of uploading one chat attachment to the gateway.
 shape Attached
@@ -921,13 +936,15 @@ component Bots
   resource session = loadSession(hostTime.locale) as shape Session else empty()
   resource keptDrafts = loadDrafts() as shape DraftPack else empty()
   resource bots = loadBots(slug != "" ? slug : roomId) as shape Bot[] else empty()
-  resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId) as shape Convo[] else empty()
+  resource page = exactPage() as shape PageState
+  resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId, page.visibilityState, page.hasFocus) as shape Convo[] else empty()
   resource chat = loadChat(slug, childThread) as shape Chat else empty()
   resource room = loadRoom(roomId) as shape Room else empty()
   resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
   resource providers = loadProviders() as shape Provider[] else empty()
   resource about = loadAbout() as shape About else empty()
   resource prefs = loadPrefs() as shape Prefs else empty()
+  resource notice = loadNotice() as shape NoticeState else empty()
   resource vault = loadVault() as shape Login[] else empty()
   resource usage = loadUsage(usageGate, hostTime.locale) as shape Usage else empty()
   resource report = loadUsageReport(slug, usagePeriod, reportGate, hostTime.locale) as shape UsageReport else empty()
@@ -1143,6 +1160,8 @@ component Bots
       send seen = markSeen(slug)
     if top(nav).name == "group"
       refresh room
+      if roomId != "" and not pending(roomSeen)
+        send roomSeen = markRoomSeen(roomId)
     if top(nav).name == "settings"
       refresh usage
       refresh report
@@ -1613,6 +1632,8 @@ component Bots
       case none
   action doMute(bslug: string, on: bool)
     send botMuted = setBotNotifications(bslug, on)
+  action saveNotifications(enabled: bool, sound: bool, preview: string, when: string)
+    send noticeSaved = setNotifications(enabled, sound, preview, when)
   action doMuteGroup(id: string, on: bool)
     if id != ""
       send groupSaved = updateGroup(id, "notifications", on ? "true" : "false")
