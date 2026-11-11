@@ -247,6 +247,7 @@ fn clean_port(v: &Value) -> ApiResult<Option<Value>> {
         Some(n) if n.fract() == 0.0 && (1.0..=65535.0).contains(&n) => {
             #[allow(
                 clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
                 reason = "port is a whole number from 1 to 65535"
             )]
             let port = n as u64;
@@ -1302,6 +1303,7 @@ pub fn find(items: &[Value], query: &Value, app_url: &str) -> Value {
     let limit = limit.clamp(1.0, 200.0);
     #[allow(
         clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
         reason = "search limit is clamped to 1..=200 before the fractional part is dropped"
     )]
     let limit = limit as usize;
