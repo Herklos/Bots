@@ -6,6 +6,8 @@ Bots use **Claude Haiku** (`claude-haiku-5-5` via `claudeAgent`). Do not pick Op
 
 Default is set in `gateway/src/provisioner.rs` (`default_model`) and live settings `defaultModel`.
 
+Where a Bot runs is specified in [docs/bot-execution-environment.md](docs/bot-execution-environment.md). Keep the local T3 as the broker and select among links it already has. Settings sets the default computer. A Bot's details page, and a durable child's edit sheet, show the current computer and can change the setting. The model list follows that computer. Do not send `environmentId` on an RPC this T3 build does not accept. Do not change `default_model()` unless the user asks.
+
 ## Repository skills
 
 - [dev-watch](.agents/skills/dev-watch/SKILL.md): start or troubleshoot the local development watch environment.

@@ -10,3 +10,5 @@ Start with the relevant gateway implementation and tests: `gateway/src/t3.rs` fo
 Long-lived `orchestration.subscribeShell` and `scheduledTasks.subscribe` reads need a snapshot and must interrupt the subscription. In particular, preserve the update safeguard that waits when a busy-thread snapshot fails or returns `snapshot-required`. Keep remote child environment and thread identities distinct from local and parent threads.
 
 Keep harness tokens and secret values out of clients, logs and test output. Add or run focused tests for the affected protocol behavior, and report limitations where real T3 behavior was not verified. Follow the default Bot model in `AGENTS.md` when creating Bot threads.
+
+Where a Bot runs is specified in `docs/bot-execution-environment.md`. Keep the local T3 as the broker. Settings, the Bot details page, and a durable child's sheet are the places that choose the computer, and the model list follows that computer. Do not send `environmentId` on an RPC the installed T3 build does not accept. Do not change `default_model()`.

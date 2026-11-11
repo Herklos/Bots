@@ -184,6 +184,8 @@ On wide windows Settings replaces the chat and panel, with the sidebar still vis
 | Access | The password, then where hbots listens: this device, the local network, or Tailscale Serve. A password is required off this device. A listener change applies on restart. The Cloudflare tunnel stays in the CLI. |
 | About | hbots version, the gateway address, the harness (T3 Code) and whether it is connected, Sign out |
 
+The Models section lists this computer's providers, which is what this redesign ships. Choosing which computer a Bot runs on, and listing that computer's models, is a later design. See [the execution environment design](bot-execution-environment.md). Settings sets the default computer. The Bot details page and a durable child's sheet show the current computer and can change the setting. `server.getConfig` on the current T3 build cannot name a link, so a Bot set to a link does not reuse this computer's list.
+
 ### 4.7 Other
 
 - Sign-in: Face 96 and the existing copy.

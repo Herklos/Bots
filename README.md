@@ -66,6 +66,8 @@ The **gateway** serves the client and API, manages sessions and the Vault, and c
 
 The **workspace** is a separate storage concern. The `Workspace` interface backs Bot library records, files and MCP connectors; the running gateway currently uses its local-disk adapter. Other parts of the gateway still access local files directly, and the in-memory adapter is for tests. Additional storage and harness backends are planned, not selectable production options today. See [architecture](docs/architecture.md) and the [backend plan](docs/backends.md) for details.
 
+A Bot's thread is created on that local T3. Choosing a linked computer from Settings or from a Bot's config, and listing that computer's models, is specified in [the execution environment design](docs/bot-execution-environment.md). It is not a setting in the app today.
+
 By default, Bot folders live under `~/.hbots/bots/`. The gateway holds the T3 token; clients use an hbots session instead. For access beyond localhost, set a password, then choose local network or Tailscale in Settings → Access → Network. Restart hbots to apply a listener change.
 
 ## Commands

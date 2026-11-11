@@ -4,7 +4,7 @@ Status: proposal, nothing built. Scope: a family or a few trusted people on one 
 
 ## Decisions
 
-- **Trust model.** Everyone is trusted not to attack the machine. The gateway keeps people out of each other's Bots, Vault and settings. It is not a sandbox: all Bot threads still run as the one machine account under T3 Code.
+- **Trust model.** Everyone is trusted not to attack the machine. The gateway keeps people out of each other's Bots, Vault and settings. It is not a sandbox: Bot threads on this computer still run as the one machine account under T3 Code. A Bot placed on a linked T3 computer runs on that computer. Placement is [the execution environment design](bot-execution-environment.md): one app-wide default computer, a per-Bot setting on the details page and on a durable child's sheet, and a model list taken from the chosen computer. This proposal leaves that computer as one setting for the install.
 - **Conversations.** Each Bot chooses `per-user` (each person has their own thread with it) or `everyone` (one thread all members share).
 - **Sharing.** Each Bot and room is `private` (owner only) or `shared` (owner plus a named list of users). The owner can change this at any time.
 - **Vault.** Per user. A Bot only ever uses its owner's logins, even when shared.

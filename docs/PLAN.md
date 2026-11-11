@@ -40,7 +40,7 @@ Build the opt-in durable memory store, provenance, reflection, defrag and note s
 
 T3 Code is the only production harness. The workspace interface covers the library and connectors, not every filesystem access; other storage adapters and a harness abstraction are not yet production options. See [the backend plan](backends.md), whose original phase status predates the workspace adapter.
 
-Per-Bot execution on linked machines remains a design, not a shipped setting. See [the execution environment design](bot-execution-environment.md). Remote children cannot be treated as local threads.
+Per-Bot execution on a linked T3 computer remains a design, not a shipped setting. See [the execution environment design](bot-execution-environment.md). The local T3 stays the broker. Settings, on the models domain, sets the default computer for new Bots. A Bot's details page, and a durable child's edit sheet, show the computer the conversation is on and the computer it is set to, and can change that setting. The model list is the providers of the computer that Bot is set to. Until T3 can name a link on `server.getConfig`, a Bot set to a link does not show this computer's providers. A one-off child thread that T3 reports on another machine stays associated with that machine. This placement is separate from the harness abstraction in the backend plan.
 
 ### Native clients and distribution
 

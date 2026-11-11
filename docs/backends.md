@@ -1,6 +1,8 @@
 # Multiple backends: plan
 
-Status: plan only, nothing implemented (2026-11-10). The gateway talks to one harness today, T3 Code. This plan makes the harness and the Bot folder's location swappable behind interfaces, so a second backend (another machine, another agent runtime) is an addition, not a rewrite.
+Status: plan only, nothing implemented (2026-11-10). The gateway talks to one harness today, T3 Code. This plan makes the harness and the Bot folder's location swappable behind interfaces, so a second agent runtime is an addition, not a rewrite.
+
+A linked T3 computer is specified in [the execution environment design](bot-execution-environment.md). hbots keeps this one T3 broker and selects a link T3 already has. Settings sets the default computer. A Bot's details page, and a durable child's edit sheet, set that Bot's computer and show where the conversation is running. The model list is that computer's providers. That design does not add a `Harness` implementation and does not move the Bot folder.
 
 ## What is T3-specific today
 
@@ -74,6 +76,6 @@ Phases 1 to 4 are one focused change each.
 Which backend comes second? It shapes the trait:
 
 - **Another local agent CLI** (Claude Code or Codex, headless): the gateway must own threads and transcripts itself, so `Harness` needs a storage side.
-- **A remote machine or container running T3:** the harness trait barely changes, and phase 6 moves up to phase 2.
+- **A remote machine or container running T3:** place the Bot with the execution environment design (one broker, an existing link). Phase 6 of this plan is a workspace that is not the local Bot folder. It is the wrong tool for choosing which linked computer runs a Bot.
 
 Phase 1 is the same either way, so it can start first.

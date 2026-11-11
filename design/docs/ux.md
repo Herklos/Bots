@@ -95,6 +95,15 @@ The old Projects board has no navigation entry or beta toggle. Per-Bot projects,
 - **This machine** is one sentence: the counts since the file started, or "Nothing counted yet." The footer says "Counted on this machine. Nothing is sent anywhere." A failed load says so. It does not show zeros.
 - Changing Appearance applies at once, with no Save.
 
+### 8. Where a Bot runs (designed, not on these screens yet)
+
+Specified in [the execution environment design](../../docs/bot-execution-environment.md). The screens above still create every thread on the local T3 and list this computer's models.
+
+- Settings, on the models domain, sets the default computer for new Bots, next to the approval choice and the default model. Changing it does not move a Bot that already has a conversation.
+- A Bot's details page shows the computer the conversation is on, and the computer it is set to when those differ. The same lines and the same choice sit on a durable child's edit sheet.
+- The model list is the providers of the computer that Bot is set to. A model this computer offers, and that computer does not, stays off the list and is not used to start the thread. Until the link's catalog can be read, the picker says the list is unavailable.
+- Pairing a computer stays in T3 Code, Settings, Environments.
+
 ## Empty and failure states
 
 Each has a title, a message that says what to do, and a symbol.
