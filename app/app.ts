@@ -147,6 +147,30 @@ async function read(store: any, path: string): Promise<any> {
   if (!r.ok) throw new Error(r.error);
   return r.body;
 }
+// A chat or group read may be held for about 25 seconds. 304 keeps the previous answer.
+const CHAT_HOLD_MS = 30_000;
+async function fresh(store: any, path: string, etag: string): Promise<{ status: number; body: any; etag: string }> {
+  const session = store.get('session');
+  try {
+    const res = await fetch(`${API}${path}`, {
+      exactTimeout: CHAT_HOLD_MS,
+      headers: {
+        ...(session ? { authorization: `Bearer ${session}` } : {}),
+        ...(etag !== '' ? { 'if-none-match': etag } : {}),
+      },
+    });
+    const next = res.headers.get('etag') ?? etag;
+    if (res.status === 304) return { status: 304, body: null, etag: next };
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(typeof body.error === 'string' ? body.error : GATEWAY_PROBLEM);
+    return { status: res.status, body, etag: next };
+  } catch (e) {
+    if ((e as { code?: string }).code === 'bake') throw e;
+    if (e instanceof Error && (e as { code?: string }).code === undefined) throw e;
+    console.log(`gateway request failed: ${path}: ${String((e as { code?: string }).code ?? '')} ${String(e)}`);
+    throw new Error(REACH_GATEWAY);
+  }
+}
 // Two lists read the Bots in one tick; the second shares the first's request.
 let botsInflight: Promise<any> | null = null;
 function botsBody(store: any): Promise<any> {
@@ -450,6 +474,17 @@ const fixturePins: Record<string, PinRow[]> = {
   'child-thread': [],
 };
 
+// The contract runner does not speak HTTP. This is the 304 path it can see: a second read
+// of an unchanged chat returns the same answer, so the transcript list is not a new one.
+let quietChat: Result<'loadChat'> | null = null;
+function quietChatView(): Result<'loadChat'> {
+  if (quietChat) return quietChat;
+  const text = 'Still here';
+  const row = { ...blank, id: 'q1', kind: 'message', mine: false, text, head: true, tail: true, parts: splitTables(text) } as ChatRow;
+  quietChat = { slug: 'quiet', working: false, partial: false, readOnly: false, pins: [], threadId: 'quiet-thread', rows: [row] };
+  return quietChat;
+}
+
 function fixtureChat(child: string) {
   const row = (r: Record<string, unknown>) => {
     const text = String(r.text ?? '');
@@ -562,6 +597,14 @@ function usageReport(b: any) {
 let lastNow = 0;
 const frames: Record<string, string> = {};
 const threads: Record<string, string> = {};
+// The last chat or group answer, kept when the gateway says nothing changed.
+const chatKept = new Map<string, { etag: string; view: Result<'loadChat'> }>();
+const roomKept = new Map<string, { etag: string; view: Result<'loadRoom'> }>();
+function forgetChat(slug: string): void {
+  for (const key of [...chatKept.keys()]) {
+    if (key.startsWith(`${slug}\n`)) chatKept.delete(key);
+  }
+}
 // Reactions and pins for a thread. A poll reuses them for about ten seconds, or until the last message changes.
 // A reaction or a pin clears the cache so that refresh reads them again.
 const META_MS = 10_000;
@@ -766,7 +809,7 @@ function draftRows(raw: string | null): { stamp: string; texts: string[]; files:
 }
 
 // The contract runner's slugs. A real Bot still notifies.
-const FIXTURE_SLUG = (slug: string): boolean => slug === 'fixture' || slug === 'bea' || slug === 'tabs' || slug === 'frame';
+const FIXTURE_SLUG = (slug: string): boolean => slug === 'fixture' || slug === 'bea' || slug === 'tabs' || slug === 'frame' || slug === 'quiet';
 
 const STATUS_LINE = (line: string): boolean => line === '' || line === 'Ready to chat' || line === 'Getting set up…' || line === 'Working…';
 
@@ -902,6 +945,11 @@ const sources: Sources = {
         { slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get(slug)) },
       ];
     }
+    if (focus === 'quiet') {
+      return [
+        { slug: 'quiet', name: 'Quiet', label: '', initials: 'Q', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get('quiet')) },
+      ];
+    }
     if (focus === 'fixture' || focus === 'bea') {
       return [
         { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get('fixture')) },
@@ -942,6 +990,8 @@ const sources: Sources = {
   reshapeBot: async ([slug, shape], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ shape }) })),
   reactTo: async ([slug, item, emoji], store) => {
     forgetMeta();
+    // A reaction is not part of the transcript tag, so the next read must take the new body.
+    forgetChat(slug);
     return reply(await call(store, `/api/threads/${encodeURIComponent(threads[slug] ?? '')}/reactions`, { method: 'POST', body: JSON.stringify({ item, emoji }) }));
   },
   pinMessage: async ([slug, thread, item, text], store) => {
@@ -1247,29 +1297,40 @@ const sources: Sources = {
   },
   loadChat: async ([slug, child], store): Promise<Result<'loadChat'>> => {
     if (slug === '') return blankChat('');
+    if (slug === 'quiet') return quietChatView();
     if (slug === 'fixture') return fixtureChat(child);
     if (slug === 'bea') return blankChat('bea');
     if (slug === 'tabs') return blankChat('tabs');
     if (slug === 'frame') return blankChat('frame');
     const query = child !== '' ? `?child=${encodeURIComponent(child)}` : '';
-    const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat${query}`);
+    const key = `${slug}\n${child}`;
+    const kept = chatKept.get(key);
+    const res = await fresh(store, `/api/bots/${encodeURIComponent(slug)}/chat${query}`, kept?.etag ?? '');
+    if (res.status === 304 && kept) {
+      if (res.etag !== '') chatKept.set(key, { etag: res.etag, view: kept.view });
+      return kept.view;
+    }
+    const body = res.body;
     const threadId = String(body.threadId ?? '');
     const now = Number(body.now);
     const meta = threadId === '' ? {} : await threadMeta(store, threadId, lastMessageId(body), now);
     if (child === '') threads[slug] = threadId;
     const rows = chatRows(slug, body, now, meta.reactions ?? {}, meta.replyTo ?? {});
     if (child === '') await shutNotice(`unread-bot-${slug}`);
-    const pins: PinRow[] = Array.isArray(meta.pins)
-      ? meta.pins.map((id: unknown) => {
+    const pinSource = Array.isArray(body.pins) ? body.pins : meta.pins;
+    const pins: PinRow[] = Array.isArray(pinSource)
+      ? pinSource.map((id: unknown) => {
         const key = String(id);
         const hit = rows.find((row) => row.id === key);
         return hit ? { id: key, text: hit.text, missing: false } : { id: key, text: NOT_IN_VIEW, missing: true };
       })
       : [];
-    return {
+    const view = {
       slug, rows, working: body.working === true, partial: body.partial === true,
       readOnly: body.readOnly === true, pins, threadId,
     };
+    chatKept.set(key, { etag: res.etag, view });
+    return view;
   },
   respondRequest: async ([slug, id, kind, key, value, child], store) => {
     const body: Record<string, unknown> = kind === 'secret_request'
@@ -1586,10 +1647,16 @@ const sources: Sources = {
         notifications: wantsNotice(fixtureRoomNotify.get('fixture-busy')),
       };
     }
-    const body = await read(store, `/api/rooms/${encodeURIComponent(id)}`);
+    const kept = roomKept.get(id);
+    const res = await fresh(store, `/api/rooms/${encodeURIComponent(id)}`, kept?.etag ?? '');
+    if (res.status === 304 && kept) {
+      if (res.etag !== '') roomKept.set(id, { etag: res.etag, view: kept.view });
+      return kept.view;
+    }
+    const body = res.body;
     const members = Array.isArray(body.members) ? body.members : [];
     const messages = Array.isArray(body.messages) ? body.messages : [];
-    return {
+    const view = {
       id: String(body.id ?? id),
       title: String(body.title ?? ''), description: String(body.description ?? ''),
       color: String(body.color ?? 'brand.default'), shape: String(body.shape ?? 'ball'),
@@ -1600,6 +1667,8 @@ const sources: Sources = {
       messages: messages.map((m: any) => roomMessage(m)),
       notifications: wantsNotice(body.notifications),
     };
+    roomKept.set(id, { etag: res.etag, view });
+    return view;
   },
   loadDrafts: async (_args, store) => {
     try {

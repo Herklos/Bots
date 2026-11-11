@@ -171,6 +171,14 @@ test "a tool line is a chip with the translated verb, not a message bubble"
   expect text "event-verb-e2" == "Messaged"
   expect text "event-bot-e2" == "Inbox"
 
+test "an unchanged open chat keeps its transcript"
+  at "/bot/quiet"
+  clock data
+  expect text "message-q1" == "Still here"
+  clock +1600
+  clock data
+  expect text "message-q1" == "Still here"
+
 test "a message shows a reaction, a quote, and a pin that is not in view"
   at "/bot/fixture"
   clock data

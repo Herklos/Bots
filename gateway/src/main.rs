@@ -115,6 +115,8 @@ pub struct AppState {
     pub library: library::Library,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
+    /// One held chat or group read at a time. Shutdown wakes it.
+    pub(crate) holds: chat::HeldReads,
 }
 
 impl AppState {
@@ -280,6 +282,7 @@ async fn main() -> anyhow::Result<()> {
         ),
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
+        holds: chat::HeldReads::new(),
         cfg,
     });
     // Write the defaults once; an existing file, even an unreadable one, is left alone.
@@ -353,7 +356,10 @@ async fn main() -> anyhow::Result<()> {
     let stopping = state.clone();
     tokio::spawn(async move {
         shutdown_signal().await;
+        stopping.holds.stop();
         stopping.remote.stop().await;
+        // Held reads are waiting on `holds`. Give them a moment to answer, then leave.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         std::process::exit(0);
     });
 
@@ -961,17 +967,51 @@ async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
     Ok(Json(rooms::present(&room, &members, policy)))
 }
 
-async fn room_get(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>> {
-    let room = s.rooms.get(&id).await?;
-    let (members, threads) = room_snapshot(&s, &room, false).await?;
+async fn room_document(s: &AppState, id: &str) -> ApiResult<Value> {
+    let room = s.rooms.get(id).await?;
+    let (members, threads) = room_snapshot(s, &room, false).await?;
     // Replies the members have finished since the last read join the room here, and a reply that
     // mentions another member wakes that member.
     let policy = group_answer_policy(&s.settings().await);
-    let (room, wake) = s.rooms.sync(&id, &members, &threads, policy).await?;
-    if let Err(err) = dispatch_room(&s, &wake).await {
+    let (room, wake) = s.rooms.sync(id, &members, &threads, policy).await?;
+    if let Err(err) = dispatch_room(s, &wake).await {
         tracing::warn!("group wake-up failed: {}", err.message);
     }
-    Ok(Json(rooms::present(&room, &members, policy)))
+    Ok(rooms::present(&room, &members, policy))
+}
+
+async fn room_get(State(s): S, Path(id): Path<String>, headers: HeaderMap) -> ApiResult<Response> {
+    let view = room_document(&s, &id).await?;
+    let tag = chat::room_tag(&view);
+    let seen = headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok());
+    if !chat::none_match(seen, &tag) {
+        return Ok(with_etag(&tag, view, true));
+    }
+    let key = format!("room\n{id}");
+    let outcome = s
+        .holds
+        .hold_until_change(&key, &tag, chat::LOOK_EVERY, chat::HOLD_FOR, || {
+            let s = s.clone();
+            let id = id.clone();
+            async move {
+                match room_document(&s, &id).await {
+                    Ok(next) => {
+                        let next_tag = chat::room_tag(&next);
+                        Some((next, next_tag))
+                    }
+                    Err(_) => None,
+                }
+            }
+        })
+        .await;
+    match outcome {
+        chat::Hold::Changed(next) => Ok(with_etag(&chat::room_tag(&next), next, true)),
+        chat::Hold::Same | chat::Hold::Superseded | chat::Hold::Stopped => {
+            Ok(with_etag(&tag, Value::Null, false))
+        }
+    }
 }
 
 async fn room_update(
@@ -2302,21 +2342,31 @@ async fn resolve_chat_thread(s: &AppState, slug: &str, asked: Option<&str>) -> A
     lineage::thread_for(&rows, &parent, child).map_err(ApiError::bad_request)
 }
 
-async fn read_chat(
-    State(s): S,
-    Path(slug): Path<String>,
-    Query(q): Query<HashMap<String, String>>,
-) -> ApiResult<Response> {
-    let parent = main_thread(&s, &slug).await?;
+/// `send_body` is the 200. A match that did not change is a 304 with an empty body and the same tag.
+fn with_etag(tag: &str, body: Value, send_body: bool) -> Response {
+    let etag = HeaderValue::from_str(tag).unwrap_or(HeaderValue::from_static("\"0\""));
+    let cache = HeaderValue::from_static("no-store");
+    if !send_body {
+        return (
+            StatusCode::NOT_MODIFIED,
+            [(header::ETAG, etag), (header::CACHE_CONTROL, cache)],
+        )
+            .into_response();
+    }
+    (
+        StatusCode::OK,
+        [(header::ETAG, etag), (header::CACHE_CONTROL, cache)],
+        Json(body),
+    )
+        .into_response()
+}
+
+async fn chat_view(s: &AppState, slug: &str, asked: Option<&str>) -> ApiResult<Value> {
+    let parent = main_thread(s, slug).await?;
     let rpc =
         s.t3.rpc()
             .await
             .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
-    let asked = q
-        .get("child")
-        .map(String::as_str)
-        .map(str::trim)
-        .filter(|id| !id.is_empty());
     let (thread, read_only) = if let Some(child) = asked {
         let parent_projection = rpc
             .call(
@@ -2342,7 +2392,7 @@ async fn read_chat(
     let listed = s.bots.list().await?;
     let hidden = listed
         .iter()
-        .any(|b| b["slug"].as_str() == Some(slug.as_str()) && b["hidden"] == true);
+        .any(|b| b["slug"].as_str() == Some(slug) && b["hidden"] == true);
     let peers: chat::Peers = listed
         .iter()
         .filter_map(|b| {
@@ -2367,9 +2417,60 @@ async fn read_chat(
     out["threadId"] = json!(thread);
     out["readOnly"] = json!(read_only);
     out["hidden"] = json!(hidden);
+    let pins = match s.threads.get(Some(&thread)).await {
+        Ok(meta) => meta.get("pins").cloned().unwrap_or(json!([])),
+        Err(_) => json!([]),
+    };
+    out["pins"] = pins;
     // The client has no clock it may read in its data code, so the gateway says what time it is.
+    // The tag ignores this field: a body that only moves `now` is not a new transcript.
     out["now"] = json!(unix_now() * 1000);
-    Ok(([(header::CACHE_CONTROL, "no-store")], Json(out)).into_response())
+    Ok(out)
+}
+
+async fn read_chat(
+    State(s): S,
+    Path(slug): Path<String>,
+    Query(q): Query<HashMap<String, String>>,
+    headers: HeaderMap,
+) -> ApiResult<Response> {
+    let asked = q
+        .get("child")
+        .map(String::as_str)
+        .map(str::trim)
+        .filter(|id| !id.is_empty());
+    let view = chat_view(&s, &slug, asked).await?;
+    let tag = chat::transcript_tag(&view);
+    let seen = headers
+        .get(header::IF_NONE_MATCH)
+        .and_then(|value| value.to_str().ok());
+    if !chat::none_match(seen, &tag) {
+        return Ok(with_etag(&tag, view, true));
+    }
+    let key = format!("chat\n{slug}\n{}", asked.unwrap_or(""));
+    let outcome = s
+        .holds
+        .hold_until_change(&key, &tag, chat::LOOK_EVERY, chat::HOLD_FOR, || {
+            let s = s.clone();
+            let slug = slug.clone();
+            let asked = asked.map(str::to_string);
+            async move {
+                match chat_view(&s, &slug, asked.as_deref()).await {
+                    Ok(next) => {
+                        let next_tag = chat::transcript_tag(&next);
+                        Some((next, next_tag))
+                    }
+                    Err(_) => None,
+                }
+            }
+        })
+        .await;
+    match outcome {
+        chat::Hold::Changed(next) => Ok(with_etag(&chat::transcript_tag(&next), next, true)),
+        chat::Hold::Same | chat::Hold::Superseded | chat::Hold::Stopped => {
+            Ok(with_etag(&tag, Value::Null, false))
+        }
+    }
 }
 
 async fn send_chat(
@@ -2805,6 +2906,50 @@ fn request_origin(h: &HeaderMap) -> String {
 mod tests {
     use super::*;
 
+    #[tokio::test]
+    async fn a_matching_if_none_match_is_not_modified_and_a_new_message_changes_the_tag() {
+        let view = json!({
+            "messages": [{ "id": "m1", "text": "Hello" }],
+            "events": [],
+            "requests": [],
+            "working": false,
+            "pins": [],
+            "readOnly": false,
+            "threadId": "t",
+            "now": 10,
+        });
+        let mut later = view.clone();
+        later["now"] = json!(99);
+        let tag = chat::transcript_tag(&view);
+        assert_eq!(tag, chat::transcript_tag(&later));
+        assert!(chat::none_match(Some(&tag), &tag));
+        let same = with_etag(&tag, Value::Null, false);
+        assert_eq!(same.status(), StatusCode::NOT_MODIFIED);
+        assert_eq!(
+            same.headers()
+                .get(header::ETAG)
+                .and_then(|v| v.to_str().ok()),
+            Some(tag.as_str())
+        );
+        let bytes = axum::body::to_bytes(same.into_body(), 1024).await.unwrap();
+        assert!(bytes.is_empty());
+        later["messages"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({ "id": "m2", "text": "Next" }));
+        let next = chat::transcript_tag(&later);
+        assert_ne!(tag, next);
+        let fresh = with_etag(&next, later, true);
+        assert_eq!(fresh.status(), StatusCode::OK);
+        assert_eq!(
+            fresh
+                .headers()
+                .get(header::ETAG)
+                .and_then(|v| v.to_str().ok()),
+            Some(next.as_str())
+        );
+    }
+
     #[test]
     fn origin_comes_from_the_request() {
         let mut h = HeaderMap::new();
@@ -2877,6 +3022,7 @@ mod tests {
             system: release::System::new(cfg.data_root.clone(), cfg.app_dir()),
             mcp_token: "fixture-only".into(),
             provision_now: tokio::sync::Notify::new(),
+            holds: chat::HeldReads::new(),
             access: None,
             exposure: exposure::Exposure::from_env(|_| None),
             remote: Arc::new(remote_access::RemoteAccess::new(
