@@ -396,6 +396,7 @@ pub fn app(state: Arc<AppState>) -> Router {
             get(room_get).put(room_update).delete(room_delete),
         )
         .route("/api/rooms/{id}/messages", post(room_send))
+        .route("/api/rooms/{id}/seen", post(room_seen))
         .route("/api/threads/{thread}/meta", get(thread_meta_get))
         .route("/api/threads/{thread}/reactions", post(thread_reaction))
         .route("/api/threads/{thread}/pins", post(thread_pin))
@@ -768,6 +769,12 @@ async fn room_update(
         Vec::new()
     };
     let room = s.rooms.update(&id, &body, &known).await?;
+    let (members, _) = room_snapshot(&s, &room, false).await?;
+    Ok(Json(rooms::present(&room, &members)))
+}
+
+async fn room_seen(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>> {
+    let room = s.rooms.seen(&id).await?;
     let (members, _) = room_snapshot(&s, &room, false).await?;
     Ok(Json(rooms::present(&room, &members)))
 }

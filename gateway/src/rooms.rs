@@ -1,7 +1,8 @@
 //! A local room of Bots. This is not a T3 channel and not the Working on list.
 //! The file is `groups.json` in the app directory: an id, a title, a description, optional
 //! colour and shape (kept for older rooms; the app shows stacked member faces), member slugs,
-//! and the messages stored on this machine.
+//! and the messages stored on this machine. `lastSeenAt` is when the person last opened the
+//! room. `notifications` is the mute switch: missing means on. Mute does not clear unread.
 //!
 //! A send is stored here, then dispatched to the members it wakes: everyone named with `@`,
 //! `@all` for everyone, a single plain name, otherwise whoever spoke last (everyone while no
@@ -54,9 +55,24 @@ impl Rooms {
         }
     }
 
+    /// Rooms on disk. A room that predates `lastSeenAt` is marked seen now, once, so an old
+    /// transcript does not start out unread.
     pub async fn list(&self) -> ApiResult<Vec<Value>> {
         let _g = self.lock.lock().await;
-        let doc = read_doc(&self.path).await?;
+        let mut doc = read_doc(&self.path).await?;
+        let mut stamped = false;
+        let now = crate::vault::now_iso();
+        if let Some(rooms) = doc.get_mut("rooms").and_then(Value::as_array_mut) {
+            for room in rooms {
+                if room["lastSeenAt"].as_str().is_none() {
+                    room["lastSeenAt"] = json!(now);
+                    stamped = true;
+                }
+            }
+        }
+        if stamped {
+            write_doc(&self.path, &doc).await?;
+        }
         Ok(rooms_of(&doc))
     }
 
@@ -97,6 +113,7 @@ impl Rooms {
             "anchors": {},
             "threads": {},
             "hops": 0,
+            "notifications": true,
         });
         push_room(&mut doc, room.clone())?;
         write_doc(&self.path, &doc).await?;
@@ -151,6 +168,12 @@ impl Rooms {
         if let Some(list) = replacement {
             room["members"] = json!(list);
         }
+        if let Some(value) = patch.get("notifications") {
+            let on = value
+                .as_bool()
+                .ok_or_else(|| ApiError::bad_request("notifications must be a boolean"))?;
+            room["notifications"] = json!(on);
+        }
         let stored = room.clone();
         write_doc(&self.path, &doc).await?;
         Ok(stored)
@@ -171,6 +194,17 @@ impl Rooms {
     /// Nothing stored, or the Bot's one-to-one thread, is not a thread for this group.
     pub fn group_thread_missing(stored: &str, main_thread_id: &str) -> bool {
         stored.is_empty() || stored == main_thread_id
+    }
+
+    /// Marks the room seen now. A later Bot message is unread again.
+    pub async fn seen(&self, room_id: &str) -> ApiResult<Value> {
+        let _g = self.lock.lock().await;
+        let mut doc = read_doc(&self.path).await?;
+        let room = room_mut(&mut doc, room_id)?;
+        room["lastSeenAt"] = json!(crate::vault::now_iso());
+        let stored = room.clone();
+        write_doc(&self.path, &doc).await?;
+        Ok(stored)
     }
 
     pub async fn delete(&self, room_id: &str) -> ApiResult<()> {
@@ -564,6 +598,7 @@ pub fn present(room: &Value, directory: &[Member]) -> Value {
         "shape": room["shape"].as_str().unwrap_or("ball"),
         "members": members.iter().map(member_row).collect::<Vec<_>>(),
         "messages": room["messages"].as_array().cloned().unwrap_or_default(),
+        "notifications": notifications_on(room),
     })
 }
 
@@ -572,7 +607,7 @@ pub fn summary(room: &Value) -> Value {
     let last = room["messages"]
         .as_array()
         .and_then(|l| l.last())
-        .map(|m| json!({ "name": m["name"], "text": m["text"], "at": m["at"] }));
+        .map(|m| json!({ "name": m["name"], "text": m["text"], "at": m["at"], "from": m["from"] }));
     json!({
         "id": room["id"],
         "title": room["title"],
@@ -581,7 +616,25 @@ pub fn summary(room: &Value) -> Value {
         "shape": room["shape"].as_str().unwrap_or("ball"),
         "members": room["members"],
         "last": last,
+        "unread": is_unread(room),
+        "notifications": notifications_on(room),
     })
+}
+
+/// Missing means on. `false` mutes the room and leaves the unread dot as it is.
+fn notifications_on(room: &Value) -> bool {
+    room["notifications"].as_bool().unwrap_or(true)
+}
+
+/// The last message is new when a Bot wrote it after the person last opened the room.
+fn is_unread(room: &Value) -> bool {
+    let Some(last) = room["messages"].as_array().and_then(|list| list.last()) else {
+        return false;
+    };
+    let from = last["from"].as_str().unwrap_or("");
+    let at = last["at"].as_str().unwrap_or("");
+    let seen = room["lastSeenAt"].as_str().unwrap_or("");
+    !from.is_empty() && from != "user" && !at.is_empty() && at > seen
 }
 
 pub fn member_row(member: &Member) -> Value {
@@ -1040,6 +1093,106 @@ mod tests {
             .update("missing", &json!({ "title": "x" }), &[])
             .await
             .is_err());
+    }
+
+    #[tokio::test]
+    async fn a_room_without_last_seen_is_stamped_and_only_a_later_bot_message_is_unread() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("groups.json");
+        let old = json!({
+            "version": 1,
+            "rooms": [{
+                "id": "room-1",
+                "title": "Team",
+                "description": "",
+                "color": "blue",
+                "shape": "ball",
+                "members": ["ada", "bea"],
+                "messages": [{
+                    "id": "m0", "at": "2020-01-01T00:00:00.000Z",
+                    "from": "ada", "name": "Ada", "text": "old"
+                }],
+                "anchors": {},
+                "threads": {},
+                "hops": 0
+            }]
+        });
+        tokio::fs::write(&path, serde_json::to_vec(&old).unwrap())
+            .await
+            .unwrap();
+        let rooms = Rooms::new(path);
+        let listed = rooms.list().await.unwrap();
+        let stamp = listed[0]["lastSeenAt"].as_str().unwrap().to_string();
+        assert!(!stamp.is_empty());
+        let row = summary(&listed[0]);
+        assert_eq!(row["unread"], false, "an old room is not unread");
+        assert_eq!(row["notifications"], true, "a missing key stays on");
+        assert_eq!(row["last"]["from"], "ada");
+        assert_eq!(present(&listed[0], &[])["notifications"], true);
+        let again = rooms.list().await.unwrap();
+        assert_eq!(
+            again[0]["lastSeenAt"],
+            json!(stamp),
+            "the stamp is written once"
+        );
+
+        let created = rooms
+            .create("Design", "", "", "", &["ada".into(), "bea".into()], &[])
+            .await
+            .unwrap();
+        assert_eq!(created["notifications"], true);
+
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        let bot_at = crate::vault::now_iso();
+        assert!(bot_at.as_str() > stamp.as_str());
+        rooms
+            .reply("room-1", "ada", "Ada", "new", "m1", &bot_at)
+            .await
+            .unwrap();
+        let after_bot = rooms.get("room-1").await.unwrap();
+        assert_eq!(summary(&after_bot)["unread"], true);
+        assert_eq!(summary(&after_bot)["last"]["from"], "ada");
+
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        let user_at = crate::vault::now_iso();
+        rooms
+            .send("room-1", &directory(), "mine", "m2", &user_at)
+            .await
+            .unwrap();
+        let after_user = rooms.get("room-1").await.unwrap();
+        assert_eq!(summary(&after_user)["unread"], false);
+        assert_eq!(summary(&after_user)["last"]["from"], "user");
+
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        let later = crate::vault::now_iso();
+        rooms
+            .reply("room-1", "bea", "Bea", "again", "m3", &later)
+            .await
+            .unwrap();
+        let muted = rooms
+            .update("room-1", &json!({ "notifications": false }), &[])
+            .await
+            .unwrap();
+        assert_eq!(muted["notifications"], false);
+        let muted_row = summary(&muted);
+        assert_eq!(muted_row["unread"], true, "mute does not clear the dot");
+        assert_eq!(muted_row["notifications"], false);
+        assert_eq!(present(&muted, &[])["notifications"], false);
+        let err = rooms
+            .update("room-1", &json!({ "notifications": "no" }), &[])
+            .await
+            .unwrap_err();
+        assert_eq!(err.message, "notifications must be a boolean");
+        assert_eq!(
+            rooms.get("room-1").await.unwrap()["notifications"],
+            false,
+            "a bad value is not stored"
+        );
+
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        let seen = rooms.seen("room-1").await.unwrap();
+        assert!(seen["lastSeenAt"].as_str().unwrap() > later.as_str());
+        assert_eq!(summary(&seen)["unread"], false);
     }
 
     async fn patch_bot(root: &std::path::Path, slug: &str, patch: Value) {
