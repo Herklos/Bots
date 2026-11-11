@@ -153,13 +153,13 @@ function botsBody(store: any): Promise<any> {
   if (!botsInflight) botsInflight = read(store, '/api/bots').finally(() => { botsInflight = null; });
   return botsInflight;
 }
-// The conversation list and the unread poster both read rooms in one tick. The settled
-// list stays briefly so the poster, which runs just after the roster changes, reuses it.
+// The conversation list and the unread poster share a rooms read that is still in flight.
 let roomsInflight: Promise<any> | null = null;
 function roomsBody(store: any): Promise<any> {
   if (!roomsInflight) {
-    const run = call(store, '/api/rooms').finally(() => {
-      setTimeout(() => { if (roomsInflight === run) roomsInflight = null; }, 100);
+    // No timer: Exact forbids setTimeout in a resource. Clear when the read settles.
+    const run: Promise<Answered> = call(store, '/api/rooms').finally(() => {
+      if (roomsInflight === run) roomsInflight = null;
     });
     roomsInflight = run;
   }
