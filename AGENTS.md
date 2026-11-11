@@ -6,6 +6,15 @@ Bots use **Claude Haiku** (`claude-haiku-5-5` via `claudeAgent`). Do not pick Op
 
 Default is set in `gateway/src/provisioner.rs` (`default_model`) and live settings `defaultModel`.
 
+## Repository skills
+
+- [dev-watch](.agents/skills/dev-watch/SKILL.md): start or troubleshoot the local development watch environment.
+- [release](.agents/skills/release/SKILL.md): prepare changelogs, version bumps and releases.
+- [exact-client](.agents/skills/exact-client/SKILL.md): implement and verify Exact client and localized UI changes.
+- [t3-integration](.agents/skills/t3-integration/SKILL.md): work on the T3 harness protocol and gateway integration.
+- [native-builds](.agents/skills/native-builds/SKILL.md): build and troubleshoot native Exact clients.
+- [compatibility](.agents/skills/compatibility/SKILL.md): assess persisted-data and shared-home compatibility.
+
 ## Stack
 
 For setup, the watch loop, LAN access, and troubleshooting, see [DEV.md](DEV.md).
