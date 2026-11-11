@@ -90,7 +90,38 @@ impl AppState {
             "userName": "", "theme": "dark", "palette": "amoled", "accent": "bot", "timezone": "", "autoReview": true,
             "rules": { "alwaysAsk": [], "allowWithoutAsking": [] }, "sections": [], "defaultModel": null, "avatarDrawingModel": null,
             "beta": { "projects": false },
+            "notifications": { "enabled": false, "sound": true, "preview": "full", "when": "any" },
         })
+    }
+
+    /// Known notification fields from the file. Missing or invalid values stay at the defaults.
+    /// Unknown keys are dropped, the same way `beta` keeps only `projects`.
+    fn notifications_view(saved: &Value) -> Value {
+        let mut out = Self::settings_defaults()["notifications"].clone();
+        let Some(given) = saved.get("notifications").and_then(|v| v.as_object()) else {
+            return out;
+        };
+        for (k, v) in given {
+            match k.as_str() {
+                "enabled" | "sound" => {
+                    if let Some(on) = v.as_bool() {
+                        out[k] = json!(on);
+                    }
+                }
+                "preview" => {
+                    if matches!(v.as_str(), Some("full" | "hidden")) {
+                        out[k] = v.clone();
+                    }
+                }
+                "when" => {
+                    if matches!(v.as_str(), Some("any" | "background")) {
+                        out[k] = v.clone();
+                    }
+                }
+                _ => {}
+            }
+        }
+        out
     }
 
     /// `settings.json` with hbots defaults filled in.
@@ -100,6 +131,7 @@ impl AppState {
             .unwrap_or_else(|| json!({}));
         let mut out = store::merge(&Self::settings_defaults(), &saved);
         out["beta"] = json!({ "projects": saved["beta"]["projects"] == true });
+        out["notifications"] = Self::notifications_view(&saved);
         out
     }
 }
@@ -1126,6 +1158,42 @@ async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
                 .ok_or_else(|| ApiError::bad_request(format!("beta.{k} must be true or false")))?);
         }
         next["beta"] = merged;
+    }
+    if let Some(notifications) = patch.get("notifications") {
+        let notifications = notifications
+            .as_object()
+            .ok_or_else(|| ApiError::bad_request("notifications must be an object"))?;
+        let mut merged = current["notifications"].clone();
+        for (k, v) in notifications {
+            match k.as_str() {
+                "enabled" | "sound" => {
+                    merged[k] = json!(v.as_bool().ok_or_else(|| {
+                        ApiError::bad_request(format!("notifications.{k} must be true or false"))
+                    })?);
+                }
+                "preview" => {
+                    let preview = v.as_str().filter(|p| matches!(*p, "full" | "hidden")).ok_or_else(
+                        || ApiError::bad_request("notifications.preview must be full or hidden"),
+                    )?;
+                    merged[k] = json!(preview);
+                }
+                "when" => {
+                    let when = v
+                        .as_str()
+                        .filter(|w| matches!(*w, "any" | "background"))
+                        .ok_or_else(|| {
+                            ApiError::bad_request("notifications.when must be any or background")
+                        })?;
+                    merged[k] = json!(when);
+                }
+                _ => {
+                    return Err(ApiError::bad_request(format!(
+                        "Unknown notifications setting: {k}"
+                    )));
+                }
+            }
+        }
+        next["notifications"] = merged;
     }
     store::write_json(&s.settings_path(), &next).await?;
     Ok(Json(next))
@@ -2403,6 +2471,140 @@ mod tests {
             request_origin(&h),
             "https://127.0.0.1",
             "a host that could break out of a string is replaced"
+        );
+    }
+
+    fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
+        let app_dir = dir.join("bots/.botapp");
+        let cfg = config::Config {
+            host: "127.0.0.1".into(),
+            port: 0,
+            t3_url: "http://127.0.0.1:1".into(),
+            t3_token: "fixture-only".into(),
+            data_root: dir.to_path_buf(),
+            bots_root: dir.join("bots"),
+            static_dir: dir.join("dist"),
+            password: String::new(),
+            vault_file: dir.join("vault.enc"),
+            vault_key_file: dir.join("vault-key"),
+            bot_mcp_url: "http://127.0.0.1:1/mcp/bot".into(),
+            allowed_origins: vec![],
+            app_url: String::new(),
+            access_team: String::new(),
+            access_aud: String::new(),
+            access_emails: vec![],
+        };
+        let tailnet = Arc::new(exposure::Tailnet::new());
+        Arc::new(AppState {
+            auth: auth::Auth::load(&app_dir, String::new(), vec![]).unwrap(),
+            t3: t3::T3::new(cfg.t3_url.clone(), cfg.t3_token.clone()),
+            bots: bots::Bots::new(
+                cfg.bots_root.clone(),
+                cfg.bot_mcp_url.clone(),
+                "fixture-only".into(),
+            ),
+            vault: vault::Vault::new(cfg.vault_file.clone(), cfg.vault_key_file.clone()),
+            projects: projects::Projects::new(app_dir.join("projects.json")),
+            threads: thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
+            roster: roster::Roster::default(),
+            providers: providers::Providers::default(),
+            rooms: rooms::Rooms::new(app_dir.join("groups.json")),
+            routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
+            icons: icons::Icons::new(dir.join("icons")),
+            usage: usage::Usage::new(app_dir.join("usage.json")),
+            library: library::Library::new(
+                Arc::new(workspace::LocalDisk::new(cfg.bots_root.clone())),
+                cfg.bot_mcp_url.clone(),
+                "fixture-only".into(),
+            ),
+            system: release::System::new(cfg.data_root.clone(), cfg.app_dir()),
+            mcp_token: "fixture-only".into(),
+            provision_now: tokio::sync::Notify::new(),
+            access: None,
+            exposure: exposure::Exposure::from_env(|_| None),
+            remote: Arc::new(remote_access::RemoteAccess::new(
+                remote_access::RemoteConfig {
+                    home: dir.to_path_buf(),
+                    store_file: app_dir.join("access.json"),
+                    url_file: app_dir.join("tunnel-url"),
+                    local_port: 0,
+                    env_password: String::new(),
+                    env_tailnet: false,
+                    env_tailnet_users: vec![],
+                    tailscale_bin: None,
+                },
+                tailnet.clone(),
+            )),
+            tailnet,
+            cfg,
+        })
+    }
+
+    fn json_headers() -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+        h
+    }
+
+    async fn put(state: &Arc<AppState>, body: Value) -> Result<Value, ApiError> {
+        put_settings(
+            State(state.clone()),
+            json_headers(),
+            Bytes::from(body.to_string()),
+        )
+        .await
+        .map(|Json(v)| v)
+    }
+
+    #[tokio::test]
+    async fn user_name_put_keeps_notifications() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = settings_state(dir.path());
+        let saved = json!({
+            "userName": "Ada",
+            "notifications": { "enabled": true, "sound": false, "preview": "hidden", "when": "background" }
+        });
+        store::write_json(&state.settings_path(), &saved).await.unwrap();
+        let next = put(&state, json!({ "userName": "Bea" })).await.unwrap();
+        assert_eq!(next["userName"], "Bea");
+        assert_eq!(next["notifications"], saved["notifications"]);
+        let on_disk = store::read_json(&state.settings_path()).await.unwrap();
+        assert_eq!(on_disk["notifications"], saved["notifications"]);
+    }
+
+    #[tokio::test]
+    async fn bad_notifications_when_is_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = settings_state(dir.path());
+        store::write_json(&state.settings_path(), &json!({ "userName": "Ada" }))
+            .await
+            .unwrap();
+        let err = put(&state, json!({ "notifications": { "when": "always" } }))
+            .await
+            .unwrap_err();
+        assert_eq!(err.status, StatusCode::BAD_REQUEST);
+        let on_disk = store::read_json(&state.settings_path()).await.unwrap();
+        assert!(on_disk.get("notifications").is_none());
+    }
+
+    #[tokio::test]
+    async fn notifications_patch_keeps_other_fields() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = settings_state(dir.path());
+        store::write_json(
+            &state.settings_path(),
+            &json!({
+                "notifications": { "enabled": false, "sound": false, "preview": "hidden", "when": "background" }
+            }),
+        )
+        .await
+        .unwrap();
+        let next = put(&state, json!({ "notifications": { "enabled": true } }))
+            .await
+            .unwrap();
+        assert_eq!(
+            next["notifications"],
+            json!({ "enabled": true, "sound": false, "preview": "hidden", "when": "background" })
         );
     }
 }
