@@ -38,21 +38,28 @@ For a terminal-only setup, run `hbots up --no-service`, then `hbots serve` using
 - **Bot details:** see routines, usage, child threads, and a library of files, pages and links. Manage per-Bot MCP connectors and watch or interact with a Bot's browser through T3 Code.
 - **Routines:** schedule work through the harness and review or run a Bot's routines.
 - **Vault:** keep logins encrypted, import or export CSV, and let Bot tools use saved credentials without exposing the password to the Bot.
-- **Remote access:** protect access with a password and configure Tailscale, Cloudflare Tunnel or Cloudflare Access.
+- **Remote access:** protect access with a password and configure Tailscale.
 - **Installation and updates:** install checksummed releases, run a background service, update, and roll back.
 
-The older Projects board is not part of the default experience. See [the project plan](docs/PLAN.md) for ongoing work and limitations.
+See [the project plan](docs/PLAN.md) for ongoing work and limitations.
 
 ## How it works
 
 ```text
-Browser / Exact client
-        │  hbots session
-        ▼
-hbots gateway ──────────► T3 Code harness ──► Bot runs
-        │                    │
-        ▼                    ▼
-workspace storage       provider credentials
+ Browser / Exact client                     Machine running hbots
+┌──────────────────────────┐       ┌────────────────────────────────────┐
+│ Chats · groups · Vault   │       │ hbots gateway                      │
+│ Bot details · Settings   │◄─────►│ Web app · API · sessions · Vault   │
+└──────────────────────────┘       │ Bot tools (MCP) · T3 token         │
+           hbots session           └──────────────┬───────────┬─────────┘
+                                                  │           │
+                               workspace interface│           │harness connection
+                                                  ▼           ▼
+                                    ┌─────────────────┐  ┌──────────────────┐
+                                    │ Workspace store │  │ T3 Code harness  │
+                                    │ Local disk today│  │ Threads · runs   │
+                                    └─────────────────┘  │ Provider logins  │
+                                                         └──────────────────┘
 ```
 
 The **gateway** serves the client and API, manages sessions and the Vault, and connects to the harness. The **harness** runs Bot threads and holds provider logins. T3 Code is the harness currently wired into hbots.
