@@ -611,7 +611,7 @@ pub struct Latest {
 }
 
 /// Stores the last answer; a check only reaches GitHub when the answer is older than `CHECK_TTL`.
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(crate) struct UpdateChecker {
     status: UpdateStatus,
     next_at: Option<Instant>,
@@ -933,6 +933,7 @@ pub(crate) fn start_updater(version: &str, preview: bool, home: &Path) -> Result
 // ---------- the running gateway ----------
 
 /// The update state the gateway keeps: the checker, the automatic update and the last check it acted on.
+#[derive(Debug)]
 pub struct System {
     home: PathBuf,
     auto_file: PathBuf,

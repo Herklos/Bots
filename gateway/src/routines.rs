@@ -21,6 +21,7 @@ pub(crate) const RUN_NOW: &str = "scheduledTasks.runNow";
 
 const HISTORY_LIMIT: usize = 50;
 
+#[derive(Debug)]
 pub struct RoutineHistory {
     file: PathBuf,
 }

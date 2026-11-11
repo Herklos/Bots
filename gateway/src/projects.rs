@@ -921,6 +921,7 @@ fn commit_entries(next: &mut Value, entries: &[Value]) {
     next["activity"] = Value::Array(activity.split_off(excess));
 }
 
+#[derive(Debug)]
 pub struct Projects {
     file: PathBuf,
     state: Mutex<Option<Value>>,

@@ -80,6 +80,7 @@ use error::{ApiError, ApiResult};
 use serde_json::{json, Value};
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
+#[derive(Debug)]
 pub struct AppState {
     pub cfg: config::Config,
     pub auth: auth::Auth,

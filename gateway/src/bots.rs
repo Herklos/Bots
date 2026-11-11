@@ -62,6 +62,7 @@ pub(crate) fn slugify(name: &str) -> String {
     }
 }
 
+#[derive(Debug)]
 pub struct Bots {
     pub root: PathBuf,
     pub mcp_url: String,

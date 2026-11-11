@@ -24,6 +24,7 @@ const MAX_ICON: usize = 256 * 1024;
 const MAX_HTML: usize = 64 * 1024;
 const CACHE_FOR: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
+#[derive(Debug)]
 pub struct Icons {
     dir: PathBuf,
     client: reqwest::Client,

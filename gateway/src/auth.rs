@@ -25,6 +25,19 @@ pub struct Auth {
     pub close_sockets: Arc<tokio::sync::Notify>,
 }
 
+impl std::fmt::Debug for Auth {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Auth")
+            .field("secret", &"…")
+            .field("secret_path", &self.secret_path)
+            .field("password", &"…")
+            .field("attempts", &self.attempts)
+            .field("allowed_origins", &self.allowed_origins)
+            .field("close_sockets", &self.close_sockets)
+            .finish()
+    }
+}
+
 pub(crate) fn safe_equal(a: &str, b: &str) -> bool {
     a.len() == b.len() && bool::from(a.as_bytes().ct_eq(b.as_bytes()))
 }

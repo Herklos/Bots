@@ -21,11 +21,13 @@ use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message as WsMsg};
 
 /// One stream item, or the Exit that ended the request.
+#[derive(Debug)]
 enum Note {
     Chunk(Value),
     Ended(anyhow::Result<Value>),
 }
 
+#[derive(Debug)]
 enum Waiter {
     /// First chunk, or the Exit when a call has no chunks.
     Once(oneshot::Sender<anyhow::Result<Value>>),
@@ -35,6 +37,7 @@ enum Waiter {
 
 type Pending = Arc<Mutex<HashMap<String, Waiter>>>;
 
+#[derive(Debug)]
 pub struct T3Client {
     out: mpsc::UnboundedSender<WsMsg>,
     pending: Pending,
@@ -306,6 +309,17 @@ pub struct T3 {
     pub token: String,
     pub http: reqwest::Client,
     client: Mutex<Option<Arc<T3Client>>>,
+}
+
+impl std::fmt::Debug for T3 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("T3")
+            .field("base_url", &self.base_url)
+            .field("token", &"…")
+            .field("http", &self.http)
+            .field("client", &self.client)
+            .finish()
+    }
 }
 
 impl T3 {

@@ -383,6 +383,7 @@ fn stamp_entries(stamps: Option<&Value>) -> ApiResult<Vec<(String, String)>> {
         .collect()
 }
 
+#[derive(Debug)]
 pub struct ThreadMeta {
     file: PathBuf,
     state: Mutex<Option<Map<String, Value>>>,

@@ -27,6 +27,16 @@ pub struct Vault {
     items: Mutex<Option<Vec<Value>>>,
 }
 
+impl std::fmt::Debug for Vault {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Vault")
+            .field("file", &self.file)
+            .field("key_file", &self.key_file)
+            .field("items", &"…")
+            .finish()
+    }
+}
+
 fn now() -> String {
     // RFC 3339 in UTC, like JavaScript's toISOString.
     let d = std::time::SystemTime::now()
