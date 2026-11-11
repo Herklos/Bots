@@ -1,5 +1,5 @@
 ---
-name: hbots-release
+name: release
 description: Prepare hbots changelogs and releases when asked to summarize changes, bump a version, or tag a release.
 ---
 
