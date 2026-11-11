@@ -1872,7 +1872,12 @@ async fn computer_get(
     match held {
         Some(frame) => image = frame,
         None if !selected.is_empty() => {
-            match computer::one_frame(&s.t3, &thread, &selected).await {
+            let size = if q.get("view").is_some_and(|view| view == "large") {
+                computer::WatchSize::Large
+            } else {
+                computer::WatchSize::Card
+            };
+            match computer::one_frame(&s.t3, &thread, &selected, size).await {
                 Ok(bytes) => image = library::encode_file(&bytes),
                 Err(reason) => error = reason,
             }

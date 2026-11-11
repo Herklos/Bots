@@ -1160,7 +1160,7 @@ const sources: Sources = {
     const list = (k: string) => ((body[k] ?? []) as any[]).map(item);
     return { ok: true, total: Number(body.counts?.pictures ?? 0) + Number(body.counts?.files ?? 0) + Number(body.counts?.links ?? 0), pictures: list('pictures'), files: list('files'), links: list('links') };
   },
-  loadComputer: async ([slug, gate, locale, tab], store): Promise<Result<'loadComputer'>> => {
+  loadComputer: async ([slug, gate, locale, tab, view], store): Promise<Result<'loadComputer'>> => {
     noteLocale(locale);
     const none = { ok: true, tabs: [] as { id: string; title: string; url: string }[], image: '', error: '', selected: '' };
     if (slug === '' || gate !== '1') return none;
@@ -1200,7 +1200,8 @@ const sources: Sources = {
     const [tag, image] = kept === '' ? ['', ''] : [kept.slice(0, kept.indexOf(':')), kept.slice(kept.indexOf(':') + 1)];
     const since = tag !== '' ? `since=${encodeURIComponent(tag)}` : '';
     const picked = tab !== '' ? `tab=${encodeURIComponent(tab)}` : '';
-    const query = [since, picked].filter((part) => part !== '').join('&');
+    const sharp = view === 'large' ? 'view=large' : '';
+    const query = [since, picked, sharp].filter((part) => part !== '').join('&');
     const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/computer${query !== '' ? `?${query}` : ''}`);
     if (!r.ok) {
       if (r.error.includes('no conversation') || r.error.includes('getting set up')) {

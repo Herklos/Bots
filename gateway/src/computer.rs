@@ -369,9 +369,31 @@ pub fn tabs_for_screen(list: &Value) -> Vec<Value> {
         .collect()
 }
 
+/// The inline card. Lighter than a frame the person is looking at up close.
+const CARD_MAX_WIDTH: &str = "960";
+const CARD_MAX_HEIGHT: &str = "540";
+const CARD_QUALITY: &str = "60";
+
+/// Interactive control and the large view.
+const VIEW_MAX_WIDTH: &str = "1920";
+const VIEW_MAX_HEIGHT: &str = "1200";
+const VIEW_QUALITY: &str = "80";
+
+/// Which preview size a watch should ask for. A held page does not open a second socket.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WatchSize {
+    Card,
+    Large,
+}
+
 /// One JPEG from the preview stream, without taking control.
-pub async fn one_frame(t3: &T3, thread: &str, tab_id: &str) -> Result<Vec<u8>, String> {
-    let mut ws = connect(t3, thread, tab_id, false).await?;
+pub async fn one_frame(
+    t3: &T3,
+    thread: &str,
+    tab_id: &str,
+    size: WatchSize,
+) -> Result<Vec<u8>, String> {
+    let mut ws = connect(t3, thread, tab_id, false, size).await?;
     read_one_jpeg(&mut ws).await
 }
 
@@ -428,7 +450,7 @@ async fn deliver(
     messages: &[Value],
 ) -> Result<Vec<u8>, String> {
     use futures_util::SinkExt;
-    let mut ws = connect(t3, thread, tab_id, true).await?;
+    let mut ws = connect(t3, thread, tab_id, true, WatchSize::Large).await?;
     for message in messages {
         ws.send(tokio_tungstenite::tungstenite::Message::text(
             message.to_string(),
@@ -458,7 +480,7 @@ async fn drive(
     want_clipboard: bool,
 ) -> Result<Driven, String> {
     use futures_util::SinkExt;
-    let mut ws = connect(t3, thread, tab_id, true).await?;
+    let mut ws = connect(t3, thread, tab_id, true, WatchSize::Large).await?;
     ws.send(tokio_tungstenite::tungstenite::Message::text(
         control_message("take").map_err(str::to_string)?.to_string(),
     ))
@@ -492,11 +514,47 @@ async fn drive(
     })
 }
 
+/// Preview query for one socket. Interactive and the large view share the sharper cap.
+/// The inline card keeps the lighter cap. This does not send a resize message.
+fn preview_stream_url(
+    ws_base: &str,
+    thread: &str,
+    tab_id: &str,
+    interactive: bool,
+    size: WatchSize,
+) -> Result<url::Url, &'static str> {
+    let (max_width, max_height, quality) = preview_limits(interactive, size);
+    let mut url = url::Url::parse(&format!("{ws_base}/api/preview-stream/ws"))
+        .map_err(|_| "Couldn't open the browser stream.")?;
+    url.query_pairs_mut()
+        .append_pair("threadId", thread)
+        .append_pair("tabId", tab_id)
+        .append_pair("interactive", if interactive { "true" } else { "false" })
+        .append_pair("maxWidth", max_width)
+        .append_pair("maxHeight", max_height)
+        .append_pair("quality", quality);
+    Ok(url)
+}
+
+fn preview_limits(
+    interactive: bool,
+    size: WatchSize,
+) -> (&'static str, &'static str, &'static str) {
+    if interactive {
+        return (VIEW_MAX_WIDTH, VIEW_MAX_HEIGHT, VIEW_QUALITY);
+    }
+    match size {
+        WatchSize::Card => (CARD_MAX_WIDTH, CARD_MAX_HEIGHT, CARD_QUALITY),
+        WatchSize::Large => (VIEW_MAX_WIDTH, VIEW_MAX_HEIGHT, VIEW_QUALITY),
+    }
+}
+
 async fn connect(
     t3: &T3,
     thread: &str,
     tab_id: &str,
     interactive: bool,
+    size: WatchSize,
 ) -> Result<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
     String,
@@ -510,15 +568,8 @@ async fn connect(
     } else {
         base.to_string()
     };
-    let mut url = url::Url::parse(&format!("{ws_base}/api/preview-stream/ws"))
-        .map_err(|_| "Couldn't open the browser stream.".to_string())?;
-    url.query_pairs_mut()
-        .append_pair("threadId", thread)
-        .append_pair("tabId", tab_id)
-        .append_pair("interactive", if interactive { "true" } else { "false" })
-        .append_pair("maxWidth", "960")
-        .append_pair("maxHeight", "540")
-        .append_pair("quality", "60");
+    let url =
+        preview_stream_url(&ws_base, thread, tab_id, interactive, size).map_err(str::to_string)?;
     let mut req = url
         .as_str()
         .into_client_request()
@@ -687,6 +738,31 @@ mod tests {
             sessions.get("ada").map(|hold| hold.tab.as_str()),
             Some("tab-1")
         );
+    }
+
+    #[test]
+    fn preview_sizes_are_sharper_for_the_large_view_and_a_hold() {
+        let card = preview_stream_url("ws://t3", "thread", "tab", false, WatchSize::Card).unwrap();
+        let pairs = card.query_pairs().collect::<Vec<_>>();
+        assert!(pairs.contains(&("maxWidth".into(), CARD_MAX_WIDTH.into())));
+        assert!(pairs.contains(&("maxHeight".into(), CARD_MAX_HEIGHT.into())));
+        assert!(pairs.contains(&("quality".into(), CARD_QUALITY.into())));
+        assert!(pairs.contains(&("interactive".into(), "false".into())));
+
+        let large =
+            preview_stream_url("ws://t3", "thread", "tab", false, WatchSize::Large).unwrap();
+        let sharp = large.query_pairs().collect::<Vec<_>>();
+        assert!(sharp.contains(&("maxWidth".into(), VIEW_MAX_WIDTH.into())));
+        assert!(sharp.contains(&("maxHeight".into(), VIEW_MAX_HEIGHT.into())));
+        assert!(sharp.contains(&("quality".into(), VIEW_QUALITY.into())));
+
+        let held = preview_stream_url("ws://t3", "thread", "tab", true, WatchSize::Card).unwrap();
+        let driving = held.query_pairs().collect::<Vec<_>>();
+        assert!(driving.contains(&("interactive".into(), "true".into())));
+        assert!(driving.contains(&("maxWidth".into(), VIEW_MAX_WIDTH.into())));
+        assert!(driving.contains(&("maxHeight".into(), VIEW_MAX_HEIGHT.into())));
+        assert!(driving.contains(&("quality".into(), VIEW_QUALITY.into())));
+        assert!(!held.as_str().contains("resize"));
     }
 
     #[test]

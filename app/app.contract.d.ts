@@ -19,7 +19,7 @@
 //   loadAbout: (args: []) => About
 //   loadBots: (args: [string]) => Bot[]
 //   loadChat: (args: [string, string]) => Chat
-//   loadComputer: (args: [string, string, string, string]) => Computer
+//   loadComputer: (args: [string, string, string, string, string]) => Computer
 //   loadConvos: (args: [string, string, string, string, boolean]) => Convo[]
 //   loadDrafts: (args: []) => DraftPack
 //   loadLineage: (args: [string, string, string]) => Lineage
@@ -589,7 +589,7 @@ export interface SourceMap {
   "loadAbout": { args: []; result: T13 };
   "loadBots": { args: [T1]; result: T198 };
   "loadChat": { args: [T1, T1]; result: T20 };
-  "loadComputer": { args: [T1, T1, T1, T1]; result: T65 };
+  "loadComputer": { args: [T1, T1, T1, T1, T1]; result: T65 };
   "loadConvos": { args: [T1, T1, T1, T1, T0]; result: T200 };
   "loadDrafts": { args: []; result: T67 };
   "loadLineage": { args: [T1, T1, T1]; result: T52 };

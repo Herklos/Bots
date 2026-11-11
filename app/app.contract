@@ -1001,7 +1001,7 @@ component Bots
   resource routines = loadRoutines(slug, detailGate, hostTime.locale) as shape RoutineList else empty()
   resource lineage = loadLineage(slug, detailGate, hostTime.locale) as shape Lineage else empty()
   resource shelf = loadShelf(slug, libraryGate) as shape Shelf else empty()
-  resource computer = loadComputer(slug, computerGate, hostTime.locale, computerTab) as shape Computer else empty()
+  resource computer = loadComputer(slug, computerGate, hostTime.locale, computerTab, computerEnlarged ? "large" : "") as shape Computer else empty()
   resource clipType = isTypeSupported(type="audio/mp4") as shape TypeSupport else empty()
   mutation signedIn as shape Reply refreshes session, bots
   mutation signedOut as shape Reply refreshes session, bots
