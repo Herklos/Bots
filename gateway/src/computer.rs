@@ -212,29 +212,45 @@ pub fn text_message(text: &str) -> Result<Value, &'static str> {
     Ok(json!({ "type": "text", "text": text }))
 }
 
+/// CDP modifier bits. Meta (4) matches T3's editingCommand for copy, cut and select-all.
+pub const ALT: i64 = 1;
+pub const CTRL: i64 = 2;
+pub const META: i64 = 4;
+pub const SHIFT: i64 = 8;
+
+/// Shift, Alt and Ctrl. Meta stays on the copy, cut and select-all path.
+const KEY_MODIFIERS: i64 = ALT | CTRL | SHIFT;
+
 /// A navigation or editing key for T3's server browser stream (CDP-shaped).
 /// Escape is the phone's back gesture, so it is not sent.
-pub fn key_message(key: &str) -> Result<Value, &'static str> {
-    let (key, code) = match key {
-        "ArrowUp" => ("ArrowUp", "ArrowUp"),
-        "ArrowDown" => ("ArrowDown", "ArrowDown"),
-        "ArrowLeft" => ("ArrowLeft", "ArrowLeft"),
-        "ArrowRight" => ("ArrowRight", "ArrowRight"),
-        "Tab" => ("Tab", "Tab"),
-        "Enter" => ("Enter", "Enter"),
-        "Backspace" => ("Backspace", "Backspace"),
-        "Delete" => ("Delete", "Delete"),
-        "Home" => ("Home", "Home"),
-        "End" => ("End", "End"),
-        "PageUp" => ("PageUp", "PageUp"),
-        "PageDown" => ("PageDown", "PageDown"),
+/// `modifiers` is the CDP bit field: Alt 1, Ctrl 2, Shift 8.
+pub fn key_message(key: &str, modifiers: i64) -> Result<Value, &'static str> {
+    if modifiers < 0 || (modifiers & !KEY_MODIFIERS) != 0 {
+        return Err("Those modifiers are not sent.");
+    }
+    let (key, code, key_code) = match key {
+        "ArrowUp" => ("ArrowUp", "ArrowUp", 38),
+        "ArrowDown" => ("ArrowDown", "ArrowDown", 40),
+        "ArrowLeft" => ("ArrowLeft", "ArrowLeft", 37),
+        "ArrowRight" => ("ArrowRight", "ArrowRight", 39),
+        "Tab" => ("Tab", "Tab", 9),
+        "Enter" => ("Enter", "Enter", 13),
+        "Backspace" => ("Backspace", "Backspace", 8),
+        "Delete" => ("Delete", "Delete", 46),
+        "Home" => ("Home", "Home", 36),
+        "End" => ("End", "End", 35),
+        "PageUp" => ("PageUp", "PageUp", 33),
+        "PageDown" => ("PageDown", "PageDown", 34),
         _ => return Err("That key is not sent."),
     };
-    Ok(json!({ "type": "key", "key": key, "code": code, "modifiers": 0 }))
+    Ok(json!({
+        "type": "key",
+        "key": key,
+        "code": code,
+        "keyCode": key_code,
+        "modifiers": modifiers,
+    }))
 }
-
-/// Meta (4) matches T3's editingCommand for copy, cut and select-all on the server browser.
-pub const META: i64 = 4;
 
 /// Copy, cut or select-all on the held page. The clipboard text comes back on the same socket.
 pub fn edit_message(action: &str) -> Result<Value, &'static str> {
@@ -780,18 +796,19 @@ mod tests {
 
     #[test]
     fn keys_use_the_browser_stream_shape_and_escape_is_not_back() {
-        let enter = key_message("Enter").unwrap();
+        let enter = key_message("Enter", 0).unwrap();
         assert_eq!(enter["type"], "key");
         assert_eq!(enter["key"], "Enter");
         assert_eq!(enter["code"], "Enter");
+        assert_eq!(enter["keyCode"], 13);
         assert_eq!(enter["modifiers"], 0);
         assert!(enter.get("keycode").is_none());
-        assert_eq!(key_message("Backspace").unwrap()["key"], "Backspace");
-        assert_eq!(key_message("Tab").unwrap()["code"], "Tab");
-        assert_eq!(key_message("ArrowLeft").unwrap()["key"], "ArrowLeft");
-        assert_eq!(key_message("Delete").unwrap()["key"], "Delete");
-        assert_eq!(key_message("PageDown").unwrap()["code"], "PageDown");
-        let escape = key_message("Escape");
+        assert_eq!(key_message("Backspace", 0).unwrap()["key"], "Backspace");
+        assert_eq!(key_message("Tab", 0).unwrap()["code"], "Tab");
+        assert_eq!(key_message("ArrowLeft", 0).unwrap()["key"], "ArrowLeft");
+        assert_eq!(key_message("Delete", 0).unwrap()["key"], "Delete");
+        assert_eq!(key_message("PageDown", 0).unwrap()["code"], "PageDown");
+        let escape = key_message("Escape", 0);
         assert!(escape.is_err());
         assert_ne!(escape.unwrap_or(json!({ "type": "nope" }))["type"], "back");
         let copy = edit_message("copy").unwrap();
@@ -799,6 +816,45 @@ mod tests {
         assert_eq!(copy["code"], "KeyC");
         assert_eq!(copy["modifiers"], META);
         assert!(edit_message("paste").is_err());
+    }
+
+    #[test]
+    fn navigation_keys_carry_windows_key_codes() {
+        let codes = [
+            ("Enter", 13),
+            ("Tab", 9),
+            ("Backspace", 8),
+            ("Delete", 46),
+            ("ArrowLeft", 37),
+            ("ArrowUp", 38),
+            ("ArrowRight", 39),
+            ("ArrowDown", 40),
+            ("Home", 36),
+            ("End", 35),
+            ("PageUp", 33),
+            ("PageDown", 34),
+        ];
+        for (key, code) in codes {
+            let message = key_message(key, 0).unwrap();
+            assert_eq!(message["keyCode"], code, "{key}");
+            assert_eq!(message["key"], key);
+            assert_eq!(message["modifiers"], 0);
+        }
+    }
+
+    #[test]
+    fn key_modifiers_forward_shift_alt_and_ctrl() {
+        let shift_enter = key_message("Enter", SHIFT).unwrap();
+        assert_eq!(shift_enter["keyCode"], 13);
+        assert_eq!(shift_enter["modifiers"], SHIFT);
+        let chord = key_message("ArrowLeft", ALT | CTRL).unwrap();
+        assert_eq!(chord["keyCode"], 37);
+        assert_eq!(chord["modifiers"], ALT | CTRL);
+        let all = key_message("Tab", ALT | CTRL | SHIFT).unwrap();
+        assert_eq!(all["modifiers"], ALT | CTRL | SHIFT);
+        assert!(key_message("Enter", META).is_err());
+        assert!(key_message("Enter", -1).is_err());
+        assert!(key_message("Enter", ALT | META).is_err());
     }
 
     #[test]

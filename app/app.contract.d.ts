@@ -6,7 +6,7 @@
 // answering its shape, or a Promise of it.
 //   closeComputer: (args: [string]) => Reply
 //   computerControl: (args: [string, string, string]) => Reply
-//   computerInput: (args: [string, string, number, number, number, number, number, string]) => DriveReply
+//   computerInput: (args: [string, string, number, number, number, number, number, string, number, number]) => DriveReply
 //   createBot: (args: [string, string, string, string]) => Made
 //   createGroup: (args: [string, string, string, string, string]) => Made
 //   createSubagent: (args: [string, string, string, string, string, boolean]) => Reply
@@ -576,7 +576,7 @@ export type MutationSource = "closeComputer" | "computerControl" | "computerInpu
 export interface SourceMap {
   "closeComputer": { args: [T1]; result: T2 };
   "computerControl": { args: [T1, T1, T1]; result: T2 };
-  "computerInput": { args: [T1, T1, T35, T35, T35, T35, T35, T1]; result: T3 };
+  "computerInput": { args: [T1, T1, T35, T35, T35, T35, T35, T1, T35, T35]; result: T3 };
   "createBot": { args: [T1, T1, T1, T1]; result: T30 };
   "createGroup": { args: [T1, T1, T1, T1, T1]; result: T30 };
   "createSubagent": { args: [T1, T1, T1, T1, T1, T0]; result: T2 };
