@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Improvements
+
+- Settings shows Storage with Access: the file system, the Bots folder, and a restart when that folder changes.
+
 ## 0.2.2
 
 This release keeps Bot instructions and memory available across threads, improves message controls, and adds groundwork for configurable Bot storage.
