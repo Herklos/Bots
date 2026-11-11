@@ -571,12 +571,12 @@ function lastMessageId(body: any): string {
   }
   return id;
 }
-async function threadMeta(store: any, threadId: string, lastId: string): Promise<any> {
+async function threadMeta(store: any, threadId: string, lastId: string, now: number): Promise<any> {
   const hit = metaByThread.get(threadId);
-  if (hit && hit.lastId === lastId && Date.now() - hit.at < META_MS) return hit.meta;
+  if (hit && hit.lastId === lastId && now - hit.at < META_MS) return hit.meta;
   try {
     const meta = await read(store, `/api/threads/${encodeURIComponent(threadId)}/meta`);
-    metaByThread.set(threadId, { at: Date.now(), lastId, meta });
+    metaByThread.set(threadId, { at: now, lastId, meta });
     return meta;
   } catch {
     return {};
@@ -1203,9 +1203,10 @@ const sources: Sources = {
     const query = child !== '' ? `?child=${encodeURIComponent(child)}` : '';
     const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat${query}`);
     const threadId = String(body.threadId ?? '');
-    const meta = threadId === '' ? {} : await threadMeta(store, threadId, lastMessageId(body));
+    const now = Number(body.now);
+    const meta = threadId === '' ? {} : await threadMeta(store, threadId, lastMessageId(body), now);
     if (child === '') threads[slug] = threadId;
-    const rows = chatRows(slug, body, Number(body.now), meta.reactions ?? {}, meta.replyTo ?? {});
+    const rows = chatRows(slug, body, now, meta.reactions ?? {}, meta.replyTo ?? {});
     if (child === '') await shutNotice(`unread-bot-${slug}`);
     const pins: PinRow[] = Array.isArray(meta.pins)
       ? meta.pins.map((id: unknown) => {
