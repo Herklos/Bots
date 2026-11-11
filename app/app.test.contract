@@ -228,6 +228,13 @@ test "the open chat is clear and a hidden Bot keeps its mark"
   tap "hidden-toggle"
   expect tree has "unread-bea"
 
+test "a pipe table is a grid"
+  at "/bot/fixture"
+  clock data
+  expect tree has "message-m4-table-0"
+  expect tree has "message-m2"
+  expect tree missing "message-m4"
+
 test "search filters the loaded conversation"
   at "/bot/fixture"
   clock data

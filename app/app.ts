@@ -191,6 +191,147 @@ function quoteOf(replyTo: unknown, id: string): string {
   return String((entry as { text?: unknown }).text ?? '');
 }
 
+type TableAlign = 'left' | 'center' | 'right';
+type MessagePart = { kind: 'text' | 'table'; text: string; head: string[]; rows: string[][]; align: TableAlign[] };
+
+function textPart(text: string): MessagePart {
+  return { kind: 'text', text, head: [], rows: [], align: [] };
+}
+
+function fenceMark(trimmed: string): { ch: string; n: number } | null {
+  const ch = trimmed[0];
+  if (ch !== '`' && ch !== '~') return null;
+  let n = 0;
+  while (trimmed[n] === ch) n += 1;
+  if (n < 3) return null;
+  return { ch, n };
+}
+
+// Block-quote depth, the same gate Exact uses: a table starts only at quote == 0.
+function quoteDepth(line: string): number {
+  const trimmed = line.trimStart();
+  let depth = 0;
+  let i = 0;
+  while (trimmed[i] === '>') {
+    depth += 1;
+    i += 1;
+    if (trimmed[i] === ' ') i += 1;
+  }
+  return depth;
+}
+
+function isRule(line: string | undefined): boolean {
+  if (line === undefined) return false;
+  const trimmed = line.trim();
+  if (!trimmed.includes('-')) return false;
+  for (const c of trimmed) {
+    if (c !== '|' && c !== '-' && c !== ':' && c !== ' ') return false;
+  }
+  return true;
+}
+
+function cellsOf(line: string): string[] {
+  const body = line.trim();
+  const cells: string[] = [];
+  let cur = '';
+  let escaped = false;
+  for (const c of body) {
+    if (escaped) {
+      if (c !== '|') cur += '\\';
+      cur += c;
+      escaped = false;
+      continue;
+    }
+    if (c === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (c === '|') {
+      cells.push(cur);
+      cur = '';
+      continue;
+    }
+    cur += c;
+  }
+  if (escaped) cur += '\\';
+  cells.push(cur);
+  if (cells.length > 0 && cells[0]!.trim() === '' && body.startsWith('|')) cells.shift();
+  if (cells.length > 0 && cells[cells.length - 1]!.trim() === '' && body.endsWith('|')) cells.pop();
+  return cells.map((cell) => cell.trim());
+}
+
+function alignsOf(rule: string, width: number): TableAlign[] {
+  const cells = cellsOf(rule);
+  const align: TableAlign[] = [];
+  for (let i = 0; i < width; i++) {
+    const cell = cells[i] ?? '';
+    const left = cell.startsWith(':');
+    const right = cell.endsWith(':');
+    align.push(left && right ? 'center' : right ? 'right' : 'left');
+  }
+  return align;
+}
+
+// A pipe table is a line containing `|` whose next line is a rule of `|`, `-`, `:`, and
+// spaces, with at least one `-`. It ends at the first blank or pipe-less line. A header
+// with no rule yet stays text, so a half-arrived message does not flash a grid.
+export function splitTables(text: string): MessagePart[] {
+  const lines = text.split('\n');
+  const parts: MessagePart[] = [];
+  const buf: string[] = [];
+  let saw = false;
+  let fence: { ch: string; n: number } | null = null;
+  const pushText = () => {
+    if (buf.length === 0) return;
+    const chunk = buf.join('\n');
+    buf.length = 0;
+    if (chunk.trim() === '') return;
+    parts.push(textPart(chunk));
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? '';
+    const trimmed = line.trim();
+    const mark = fenceMark(trimmed);
+    if (fence) {
+      if (mark && mark.ch === fence.ch && mark.n >= fence.n && trimmed === mark.ch.repeat(mark.n)) fence = null;
+      buf.push(line);
+      continue;
+    }
+    if (mark) {
+      fence = mark;
+      buf.push(line);
+      continue;
+    }
+    const next = lines[i + 1];
+    if (quoteDepth(line) === 0 && line.includes('|') && isRule(next)) {
+      pushText();
+      const head = cellsOf(line);
+      const rows: string[][] = [];
+      let j = i + 2;
+      while (j < lines.length) {
+        const rowLine = lines[j] ?? '';
+        if (rowLine.trim() === '' || !rowLine.includes('|') || quoteDepth(rowLine) !== 0) break;
+        rows.push(cellsOf(rowLine));
+        j += 1;
+      }
+      parts.push({ kind: 'table', text: '', head, rows, align: alignsOf(next ?? '', head.length) });
+      saw = true;
+      i = j - 1;
+      continue;
+    }
+    buf.push(line);
+  }
+  if (!saw) return [textPart(text)];
+  pushText();
+  return parts.length > 0 ? parts : [textPart(text)];
+}
+
+function roomMessage(m: any) {
+  const from = String(m.from ?? '');
+  const text = String(m.text ?? '');
+  return { id: String(m.id ?? ''), name: String(m.name ?? ''), text, from, parts: from === 'user' ? [] : splitTables(text) };
+}
+
 function blankChat(slug: string) {
   return { slug, rows: [] as ChatRow[], working: false, partial: false, readOnly: false, pins: [] as PinRow[], threadId: '' };
 }
@@ -271,7 +412,11 @@ const fixturePins: Record<string, PinRow[]> = {
 };
 
 function fixtureChat(child: string) {
-  const row = (r: Record<string, unknown>) => ({ ...blank, head: true, tail: true, mine: false, text: '', ...r, kind: 'message' }) as ChatRow;
+  const row = (r: Record<string, unknown>) => {
+    const text = String(r.text ?? '');
+    const mine = r.mine === true;
+    return { ...blank, head: true, tail: true, mine: false, text: '', ...r, kind: 'message', parts: mine ? [] : splitTables(text) } as ChatRow;
+  };
   if (child === 'child-thread') {
     return { slug: 'fixture', working: false, partial: false, readOnly: false, threadId: 'child-thread', pins: [...(fixturePins['child-thread'] ?? [])], rows: [row({ id: 'c1', text: 'Notes' })] };
   }
@@ -285,6 +430,7 @@ function fixtureChat(child: string) {
       row({ id: 'm1', mine: true, text: 'Hello', tail: false }),
       row({ id: 'm2', time: '9:00 AM', text: 'Hi there', react: '🔥', quote: 'Hello', tokens: '12 in, 3 out, 4 read from cache, 1 written to cache.', head: true }),
       row({ id: 'm3', time: '9:01 AM', text: 'No tokens here', head: false }),
+      row({ id: 'm4', time: '9:02 AM', text: '| Item | Count |\n| :--- | ---: |\n| apple | 2 |', head: true }),
       row({ id: 'voice1', mine: true, files: [{ id: 'voice', name: 'voice.m4a', kind: 'audio', size: '1 KB', url: '/api/bots/fixture/attachments/voice' }] }),
       { ...blank, id: 'e1', kind: 'event', mine: false, text: 'Created routine', title: 'Morning', head: true, tail: true, variant: 'routine-created' },
       { ...blank, id: 'e2', kind: 'event', mine: false, text: 'Messaged', botName: 'Inbox', botSlug: 'inbox', botShape: 'hex', botColor: 'brand.pink', head: true, tail: true, variant: 'sent' },
@@ -387,7 +533,7 @@ function dayLabel(at: string, now: number): string {
   const day = days <= 0 ? 'Today' : days === 1 ? 'Yesterday' : days < 7 ? DAYS[d.getDay()]! : `${MONTHS[d.getMonth()]} ${d.getDate()}`;
   return `${day} ${clock(d)}`;
 }
-const blank = { quote: '', tokens: '', react: '', key: '', time: '', title: '', files: [] as any[], botSlug: '', botName: '', botColor: 'brand.default', botShape: 'ball', variant: '', choices: [] as any[], placeholder: '', resetAt: '' };
+const blank = { quote: '', tokens: '', react: '', key: '', time: '', title: '', files: [] as any[], botSlug: '', botName: '', botColor: 'brand.default', botShape: 'ball', variant: '', choices: [] as any[], placeholder: '', resetAt: '', parts: [] as MessagePart[] };
 
 // The transcript as rows: day marks, messages in runs, the lines between them, what the Bot is
 // waiting on, and the working line. A run is one sender's messages with no break between them.
@@ -424,7 +570,8 @@ function chatRows(slug: string, body: any, now: number, reactions: Record<string
       id: String(f.id), name: String(f.name), kind: String(f.kind), size: fileSize(Number(f.bytes ?? 0)),
       url: `${API}/api/bots/${encodeURIComponent(slug)}/attachments/${encodeURIComponent(String(f.id))}`,
     }));
-    const row = { ...blank, ...peer(item.from), id: String(item.id), kind: 'message', mine, text: String(item.text ?? ''), react: ((reactions[String(item.id)] ?? []) as string[]).join(' '), quote: quoteOf(replyTo, String(item.id)), tokens: tokenText(item.tokens), files, head: !(prev && prev.who === who && t - prev.t < 5 * 60_000), tail: true,
+    const text = String(item.text ?? '');
+    const row = { ...blank, ...peer(item.from), id: String(item.id), kind: 'message', mine, text, parts: mine ? [] : splitTables(text), react: ((reactions[String(item.id)] ?? []) as string[]).join(' '), quote: quoteOf(replyTo, String(item.id)), tokens: tokenText(item.tokens), files, head: !(prev && prev.who === who && t - prev.t < 5 * 60_000), tail: true,
       time: Number.isFinite(t) ? clock(new Date(t)) : '' };
     if (prev && !row.head) rows[prev.index].tail = false;
     rows.push(row);
@@ -1295,8 +1442,8 @@ const sources: Sources = {
           { slug: 'bea', name: 'Bea', line: 'Getting set up…', state: 'asleep', ready: false, working: false },
         ],
         messages: [
-          { id: 'r1', name: 'You', text: 'Hello', from: 'user' },
-          { id: 'r2', name: 'Ada', text: 'On it', from: 'ada' },
+          roomMessage({ id: 'r1', name: 'You', text: 'Hello', from: 'user' }),
+          roomMessage({ id: 'r2', name: 'Ada', text: 'On it', from: 'ada' }),
         ],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
       };
@@ -1309,7 +1456,7 @@ const sources: Sources = {
           { slug: 'bea', name: 'Bea', line: 'Working', state: 'working', ready: true, working: true },
         ],
         messages: [
-          { id: 'r1', name: 'Ada', text: 'On it', from: 'ada' },
+          roomMessage({ id: 'r1', name: 'Ada', text: 'On it', from: 'ada' }),
         ],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture-busy')),
       };
@@ -1325,7 +1472,7 @@ const sources: Sources = {
         slug: String(m.slug ?? ''), name: String(m.name ?? ''), line: String(m.line ?? ''),
         state: String(m.state ?? 'idle'), ready: m.ready === true, working: m.working === true,
       })),
-      messages: messages.map((m: any) => ({ id: String(m.id ?? ''), name: String(m.name ?? ''), text: String(m.text ?? ''), from: String(m.from ?? '') })),
+      messages: messages.map((m: any) => roomMessage(m)),
       notifications: wantsNotice(body.notifications),
     };
   },
