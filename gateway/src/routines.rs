@@ -94,7 +94,7 @@ fn days_label(days: &[u64]) -> Option<String> {
         other => Some(
             other
                 .iter()
-                .map(|d| WEEKDAYS[*d as usize])
+                .map(|d| WEEKDAYS[usize::try_from(*d).unwrap_or(0)])
                 .collect::<Vec<_>>()
                 .join(", "),
         ),
@@ -260,13 +260,13 @@ fn now() -> String {
 
 fn format_unix(secs: u64) -> String {
     // Civil date from Unix days (Howard Hinnant), UTC.
-    let days = (secs / 86_400) as i64;
+    let days = i64::try_from(secs / 86_400).unwrap_or(i64::MAX);
     let tod = secs % 86_400;
     let z = days + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = (z - era * 146_097) as u64;
+    let doe = u64::try_from(z - era * 146_097).unwrap_or(0);
     let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
-    let y = yoe as i64 + era * 400;
+    let y = i64::try_from(yoe).unwrap_or(0) + era * 400;
     let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
     let mp = (5 * doy + 2) / 153;
     let d = doy - (153 * mp + 2) / 5 + 1;

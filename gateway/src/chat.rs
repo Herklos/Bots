@@ -236,7 +236,9 @@ fn project_turns(items: &[Value], peers: &Peers, projection: &Value) -> Value {
         let kind = item["type"].as_str().unwrap_or("");
         let status = item["status"].as_str().unwrap_or("");
         let live = LIVE.contains(&status) || item["streaming"] == true;
-        let ordinal = item["ordinal"].as_i64().unwrap_or(index as i64);
+        let ordinal = item["ordinal"]
+            .as_i64()
+            .unwrap_or_else(|| i64::try_from(index).unwrap_or(i64::MAX));
         if let Some(event) = event_for(&item, peers, ordinal) {
             events.push(event);
         }

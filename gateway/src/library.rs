@@ -533,7 +533,7 @@ fn encode_query(path: &str) -> String {
     path.bytes()
         .map(|b| match b {
             b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'/' | b'~' => {
-                (b as char).to_string()
+                char::from(b).to_string()
             }
             other => format!("%{other:02X}"),
         })
@@ -561,7 +561,7 @@ fn new_id() -> String {
     const ABC: &[u8] = b"abcdefghijkmnpqrstuvwxyz23456789";
     let n = rand::random::<u64>();
     (0..8)
-        .map(|i| ABC[((n >> (i * 5)) as usize) % ABC.len()] as char)
+        .map(|i| char::from(ABC[usize::try_from(n >> (i * 5)).unwrap_or(0) % ABC.len()]))
         .collect()
 }
 

@@ -153,7 +153,7 @@ impl Avatar {
 // ---------- contrast (WCAG 2.x) ----------
 
 fn channel(hex: &str, at: usize) -> f64 {
-    let c = u8::from_str_radix(&hex[at..at + 2], 16).unwrap_or(0) as f64 / 255.0;
+    let c = f64::from(u8::from_str_radix(&hex[at..at + 2], 16).unwrap_or(0)) / 255.0;
     if c <= 0.04045 {
         c / 12.92
     } else {

@@ -244,7 +244,14 @@ fn clean_port(v: &Value) -> ApiResult<Option<Value>> {
         _ => None,
     };
     match n {
-        Some(n) if n.fract() == 0.0 && (1.0..=65535.0).contains(&n) => Ok(Some(json!(n as u64))),
+        Some(n) if n.fract() == 0.0 && (1.0..=65535.0).contains(&n) => {
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "port is a whole number from 1 to 65535"
+            )]
+            let port = n as u64;
+            Ok(Some(json!(port)))
+        }
         _ => Err(invalid("port must be a number from 1 to 65535.")),
     }
 }
@@ -488,7 +495,7 @@ fn items_mut(state: &mut Value) -> ApiResult<&mut Map<String, Value>> {
 fn new_id(taken: &HashSet<String>) -> String {
     loop {
         let id: String = (0..8)
-            .map(|_| ID_ALPHABET[rand::random::<u8>() as usize % ID_ALPHABET.len()] as char)
+            .map(|_| char::from(ID_ALPHABET[usize::from(rand::random::<u8>()) % ID_ALPHABET.len()]))
             .collect();
         if !taken.contains(&id) {
             return id;
@@ -1050,7 +1057,7 @@ pub fn item_link(id: &str, app_url: &str) -> String {
         .bytes()
         .map(|b| {
             if b.is_ascii_alphanumeric() || b"-_.!~*'()".contains(&b) {
-                (b as char).to_string()
+                char::from(b).to_string()
             } else {
                 format!("%{b:02X}")
             }
@@ -1121,7 +1128,7 @@ pub fn overview(items: &[Value], activity: &[Value], app_url: &str) -> Value {
         PRIORITIES
             .iter()
             .position(|x| *x == p)
-            .map_or(-1, |x| x as i64)
+            .map_or(-1, |x| i64::try_from(x).unwrap_or(i64::MAX))
     };
     let mut tasks: Vec<&Value> = live.iter().copied().filter(|i| is_open_task(i)).collect();
     tasks.sort_by(|a, b| {
@@ -1292,7 +1299,12 @@ pub fn find(items: &[Value], query: &Value, app_url: &str) -> Value {
         Some(Value::String(s)) => s.parse::<f64>().unwrap_or(50.0),
         _ => 50.0,
     };
-    let limit = limit.clamp(1.0, 200.0) as usize;
+    let limit = limit.clamp(1.0, 200.0);
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "search limit is clamped to 1..=200 before the fractional part is dropped"
+    )]
+    let limit = limit as usize;
     let total = matches.len();
     let items: Vec<Value> = matches
         .into_iter()

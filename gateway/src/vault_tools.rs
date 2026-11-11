@@ -815,7 +815,11 @@ mod tests {
             .contains("empty"));
 
         let big = root.join("big");
-        std::fs::write(&big, vec![b'a'; MAX_SECRET_BYTES as usize + 1]).unwrap();
+        std::fs::write(
+            &big,
+            vec![b'a'; usize::try_from(MAX_SECRET_BYTES).unwrap_or(0) + 1],
+        )
+        .unwrap();
         assert!(read_secret(&root, big.to_str().unwrap())
             .unwrap_err()
             .contains("isn't a secret"));

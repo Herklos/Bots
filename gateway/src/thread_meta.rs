@@ -348,6 +348,17 @@ fn thread_entry<'a>(
         .ok_or_else(corrupt)
 }
 
+fn rounded_seconds(seconds: f64) -> i64 {
+    let seconds = seconds.round();
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "duration is finite and within 0..=86400, so the rounded second fits in i64"
+    )]
+    {
+        seconds as i64
+    }
+}
+
 /// Validates `stamps` as `createThreadPreviews` does: an object of at most 200 thread IDs to strings.
 fn stamp_entries(stamps: Option<&Value>) -> ApiResult<Vec<(String, String)>> {
     let Some(Value::Object(map)) = stamps else {
@@ -453,7 +464,7 @@ impl ThreadMeta {
             .or_insert_with(|| json!([]))
             .as_array_mut()
             .ok_or_else(corrupt)?
-            .push(json!({ "at": at, "seconds": seconds.round() as i64 }));
+            .push(json!({ "at": at, "seconds": rounded_seconds(seconds) }));
         save(&self.file, state).await?;
         Ok(view(state, thread))
     }
@@ -735,7 +746,7 @@ mod tests {
                     anyhow::bail!("offline");
                 }
                 Ok(
-                    json!({ "turnItems": [message(n as i64, "assistant_message", json!({ "text": format!("reply {n}") }))] }),
+                    json!({ "turnItems": [message(i64::try_from(n).unwrap_or(i64::MAX), "assistant_message", json!({ "text": format!("reply {n}") }))] }),
                 )
             }
         };

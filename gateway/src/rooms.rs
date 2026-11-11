@@ -305,11 +305,11 @@ impl Rooms {
                     .collect();
                 let named = mentioned(&others, text);
                 let mut chosen = targets(&others, &named);
-                chosen.truncate((MAX_HOPS - hops) as usize);
+                chosen.truncate(usize::try_from(MAX_HOPS - hops).unwrap_or(0));
                 if chosen.is_empty() {
                     continue;
                 }
-                room["hops"] = json!(hops + chosen.len() as u64);
+                room["hops"] = json!(hops + u64::try_from(chosen.len()).unwrap_or(0));
                 let framed = frame(&title, &members, &member.title, text, chosen);
                 anchor_all(room, &framed);
                 wake.extend(framed);
@@ -1447,7 +1447,7 @@ mod tests {
             woken.extend(wake);
         }
         assert_eq!(
-            turns as u64,
+            u64::try_from(turns).unwrap_or(0),
             MAX_HOPS + 1,
             "the person's first wake-up, then at most {MAX_HOPS} more"
         );

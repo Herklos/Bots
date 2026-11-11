@@ -178,7 +178,7 @@ async fn read_capped(path: &Path) -> Result<(String, bool), String> {
         .await
         .map_err(|e| e.to_string())?;
     let mut buf = Vec::new();
-    file.take((FILE_CAP as u64) + 1)
+    file.take(u64::try_from(FILE_CAP).unwrap_or(u64::MAX) + 1)
         .read_to_end(&mut buf)
         .await
         .map_err(|e| e.to_string())?;
