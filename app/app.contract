@@ -809,7 +809,9 @@ fn nameOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.sl
 fn labelOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.ready ? (b.label != "" ? b.label : "Ready to chat") : "Getting set up…", case none => "" }
 fn initialsOf(name: string): string = name.trim().split(" ").filter(w => w != "").slice(0, 2).map(w => w.slice(0, 1).toUpperCase()).join("")
 fn botCountLabel(n: number, one: string, many: string): string = n == 1 ? one : many
-fn settingsDomainLabel(domain: string, user: string, models: string, access: string, updates: string): string = domain == "user" ? user : domain == "models" ? models : domain == "access" ? access : updates
+fn settingsDomainLabel(domain: string, user: string, notifications: string, models: string, access: string, updates: string): string = domain == "user" ? user : domain == "notifications" ? notifications : domain == "models" ? models : domain == "access" ? access : updates
+fn noticeOn(missing: bool, enabled: bool, state: string): bool = missing ? state == "granted" : enabled
+fn noticeStatusLabel(available: bool, state: string, allowed: string, denied: string, unavailable: string, pending: string): string = not available ? unavailable : state == "granted" ? allowed : state == "denied" ? denied : pending
 // Colours come from design/tokens.json: change them there.
 // design:begin colours
 fn pickerColours(): string[] = ["brand.brown", "brand.red", "brand.orange", "brand.amber", "brand.green", "brand.default", "brand.blue", "brand.violet", "brand.pink", "brand.gray"]
@@ -967,8 +969,8 @@ component Bots
   mutation childRemoved as shape Reply refreshes bots then afterChildRemove
   mutation seen as shape Reply refreshes bots
   mutation roomSeen as shape Reply refreshes convos, room
-  mutation noticeAsked as shape NotificationStatus then afterNotice
-  mutation noticeEnabled as shape Reply
+  mutation noticeAsked as shape NotificationStatus refreshes notice then afterNotice
+  mutation noticeEnabled as shape Reply refreshes prefs
   mutation noticeSaved as shape Reply refreshes prefs
   mutation reacted as shape Reply refreshes chat
   mutation messagePinned as shape Reply refreshes chat
@@ -1639,6 +1641,8 @@ component Bots
   action doMuteGroup(id: string, on: bool)
     if id != ""
       send groupSaved = updateGroup(id, "notifications", on ? "true" : "false")
+  action doAllowNotices
+    send noticeAsked = requestNotificationPermission()
   action doMain(bslug: string)
     send mainSaved = makeMainBot(bslug)
   action doDropBot(bslug: string)
@@ -2238,9 +2242,9 @@ component Bots
                 text t("settings.title") role="heading" aria-level=1 class=PageTitle flex=1
               column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" padding="space.md space.lg space.sm"
                 row class=SettingsTrack role="tablist" aria-label=t("settings.domains")
-                  for d in ["user", "models", "access", "updates"] key=d
+                  for d in ["user", "notifications", "models", "access", "updates"] key=d
                     button class=SettingsTab appearance="none" role="tab" aria-selected=(settingsDomain == d) press=pickSettingsDomain(d) testId=`settings-domain-${d}` background-color=(settingsDomain == d ? "surface.card" : "transparent") color=(settingsDomain == d ? "-exact-label" : "ink.muted")
-                      text settingsDomainLabel(d, t("settings.domainUser"), t("settings.domainModels"), t("settings.domainAccess"), t("settings.about"))
+                      text settingsDomainLabel(d, t("settings.domainUser"), t("settings.domainNotifications"), t("settings.domainModels"), t("settings.domainAccess"), t("settings.about"))
               scroll id="settings-form" flex=1 min-height=0
                 column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" margin="0 auto" padding="space.lg space.lg space.xl" gap="space.xl"
                   if settingsDomain == "user"
@@ -2271,6 +2275,52 @@ component Bots
                       column class=GroupCard padding="0"
                         UsageView(report=report, down=failed(report), period=usagePeriod, view=usageView, pickPeriod=pickPeriod, pickView=pickView, showBots=true)
                       text t("settings.usageNote") class=SettingsFoot
+                  else if settingsDomain == "notifications"
+                    column
+                      text t("settings.notifications") class=SectionLabel
+                      column class=GroupCard padding="0"
+                        row align-items="center" gap="space.md" min-height=44 padding="0 space.md" box-sizing="border-box"
+                          text noticeStatusLabel(notice.available, notice.state, t("settings.noticeAllowed"), t("settings.noticeDenied"), t("settings.noticeUnavailable"), t("settings.noticeAllow")) flex=1 font="-exact-subheadline" testId="notice-status"
+                          if notice.available and notice.state != "granted"
+                            button appearance="none" press=doAllowNotices disabled=pending(noticeAsked) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="notice-allow"
+                              text t("settings.noticeAllow")
+                        row align-items="center" gap="space.md" min-height=44 padding="0 space.md" box-sizing="border-box" border-top="1px solid surface.line"
+                          text t("settings.noticeNew") flex=1 font="-exact-subheadline"
+                          button class=ToggleControl appearance="none" role="switch" aria-checked=noticeOn(prefs.noticeEnabledMissing, prefs.noticeEnabled, notice.state) press=saveNotifications(not noticeOn(prefs.noticeEnabledMissing, prefs.noticeEnabled, notice.state), prefs.noticeSound, prefs.noticePreview, prefs.noticeWhen) aria-label=t("settings.noticeNew") testId="notice-enabled"
+                            row width=44 height=26 border-radius="radius.full" background-color=(noticeOn(prefs.noticeEnabledMissing, prefs.noticeEnabled, notice.state) ? "AccentColor" : "surface.line") align-items="center" justify-content=(noticeOn(prefs.noticeEnabledMissing, prefs.noticeEnabled, notice.state) ? "flex-end" : "flex-start")
+                              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+                        row align-items="center" gap="space.md" min-height=44 padding="0 space.md" box-sizing="border-box" border-top="1px solid surface.line"
+                          text t("settings.noticeSound") flex=1 font="-exact-subheadline"
+                          button class=ToggleControl appearance="none" role="switch" aria-checked=prefs.noticeSound press=saveNotifications(noticeOn(prefs.noticeEnabledMissing, prefs.noticeEnabled, notice.state), not prefs.noticeSound, prefs.noticePreview, prefs.noticeWhen) aria-label=t("settings.noticeSound") testId="notice-sound"
+                            row width=44 height=26 border-radius="radius.full" background-color=(prefs.noticeSound ? "AccentColor" : "surface.line") align-items="center" justify-content=(prefs.noticeSound ? "flex-end" : "flex-start")
+                              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+                        row align-items="center" gap="space.md" min-height=44 padding="0 space.md" box-sizing="border-box" border-top="1px solid surface.line"
+                          text t("settings.noticePreview") flex=1 font="-exact-subheadline"
+                          button class=ToggleControl appearance="none" role="switch" aria-checked=(prefs.noticePreview == "full") press=saveNotifications(noticeOn(prefs.noticeEnabledMissing, prefs.noticeEnabled, notice.state), prefs.noticeSound, prefs.noticePreview == "full" ? "hidden" : "full", prefs.noticeWhen) aria-label=t("settings.noticePreview") testId="notice-preview"
+                            row width=44 height=26 border-radius="radius.full" background-color=(prefs.noticePreview == "full" ? "AccentColor" : "surface.line") align-items="center" justify-content=(prefs.noticePreview == "full" ? "flex-end" : "flex-start")
+                              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+                      text t("settings.notificationsNote") class=SettingsFoot
+                    column
+                      text t("settings.noticeAlso") class=SectionLabel
+                      column class=GroupCard padding="space.sm"
+                        row class=SettingsTrack role="radiogroup" aria-label=t("settings.noticeAlso")
+                          button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.noticeWhen == "any") press=saveNotifications(noticeOn(prefs.noticeEnabledMissing, prefs.noticeEnabled, notice.state), prefs.noticeSound, prefs.noticePreview, "any") testId="notice-when-any" background-color=(prefs.noticeWhen == "any" ? "surface.card" : "transparent") color=(prefs.noticeWhen == "any" ? "-exact-label" : "ink.muted")
+                            text t("settings.noticeWhen")
+                          button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.noticeWhen == "background") press=saveNotifications(noticeOn(prefs.noticeEnabledMissing, prefs.noticeEnabled, notice.state), prefs.noticeSound, prefs.noticePreview, "background") testId="notice-when-background" background-color=(prefs.noticeWhen == "background" ? "surface.card" : "transparent") color=(prefs.noticeWhen == "background" ? "-exact-label" : "ink.muted")
+                            text t("settings.noticeAway")
+                    column
+                      text t("settings.muted") class=SectionLabel
+                      column class=GroupCard padding="0"
+                        for b in bots.filter(b => not b.notifications and not b.subagent) key=b.slug
+                          row align-items="center" gap="space.md" min-height=44 padding="0 space.md" box-sizing="border-box" border-top="1px solid surface.line"
+                            text b.name flex=1 font="-exact-subheadline"
+                            button appearance="none" press=doMute(b.slug, true) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId=`unmute-bot-${b.slug}`
+                              text t("settings.unmute")
+                        for c in convos.filter(c => c.kind == "group" and not c.notifications) key=c.key
+                          row align-items="center" gap="space.md" min-height=44 padding="0 space.md" box-sizing="border-box" border-top="1px solid surface.line"
+                            text c.name flex=1 font="-exact-subheadline"
+                            button appearance="none" press=doMuteGroup(c.id, true) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId=`unmute-group-${c.id}`
+                              text t("settings.unmute")
                   else if settingsDomain == "models"
                     column
                       text t("settings.defaultModel") class=SectionLabel

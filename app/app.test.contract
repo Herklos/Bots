@@ -611,6 +611,15 @@ test "a subagent stays out of the inbox, Hidden, search, and group pickers"
   expect tree has "group-edit-member-fixture"
   expect tree has "group-edit-member-bea"
 
+test "Settings shows the notification switch and the two timing choices"
+  tap "Settings"
+  clock data
+  expect tree has "settings-domain-notifications"
+  tap "settings-domain-notifications"
+  expect tree has "notice-enabled"
+  expect tree has "notice-when-any"
+  expect tree has "notice-when-background"
+
 test "mute flips on a Bot edit page and a group menu"
   size 1200x800
   at "/bot/fixture"
