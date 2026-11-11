@@ -2,11 +2,18 @@
 
 ## 0.1.6
 
+This release makes conversations easier to navigate on small screens and adds faster ways to mention Bots.
+
+### New features
+
 - Complete bot mentions in chat and group composers, including group members and `@all`, using the keyboard or touch.
-- Simplify bot details and sidebar controls on small screens.
+- Access the development stack over a trusted local network with `bun scripts/dev.mjs --lan`.
+
+### Improvements
+
+- Simplified bot details and sidebar controls on small screens.
 - Show localized activity chips for bot tools and routines, including the other Bot’s name where available.
-- Allow the development stack to be accessed over a trusted local network with `bun scripts/dev.mjs --lan`.
-- Document the development workflow and the proposed memory maintenance design.
+- Documented the development workflow and proposed memory maintenance design.
 
 ## 0.1.5
 

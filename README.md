@@ -2,182 +2,92 @@
 
 # hbots
 
-**Personal AI Bots in a messaging app. One Rust binary. One client for web, desktop and phone.**
+**Your personal AI Bots, together in one messaging app.**
 
-Each Bot is a folder on your machine with its own memory, tools and thread.
-You talk to them from anywhere. Your keys never leave home.
+Run Bots on your own machine, give each one a workspace, and talk to them from the web.
 
-[Quick start](#quick-start) · [Development](#development) · [How it works](#how-it-works) · [Backends](#backends) · [Status](#status) · [Docs](docs/architecture.md)
+[Get started](#quick-start) · [Features](#features) · [How it works](#how-it-works) · [Development](DEV.md) · [Changelog](CHANGELOG.md)
 
 </div>
 
----
+## What is hbots?
 
-## Why
+hbots connects a messaging interface to [T3 Code](https://github.com/pingdotgg/t3code), the agent harness that runs your Bots. Each Bot has its own name, instructions, workspace and conversation. The gateway runs on your machine, keeps the T3 token away from clients, and serves the web app.
 
-- **Bots, not chats.** A Bot has a name, a face, a folder, a memory and a thread. It keeps working when you close the app.
-- **Your machine, your files.** Bots are plain folders (`AGENTS.md`, `memory/`, `.mcp.json`) under `~/.hbots`. Read them, edit them, back them up with `cp`.
-- **A Vault the Bots can use, not read.** Logins live in an AES-256-GCM encrypted file. Bots see an entry without its password; tools use the secret on their behalf.
-- **One small server.** `hbots` is a single binary. It signs you in, guards the harness token, serves the web app and exposes the Bots' tool server. No Node, no database.
-- **One client, written once.** The app is a single [Exact](https://github.com/expo/exact) source for web, macOS, iOS and Linux.
-- **Built to reach you safely.** Password sign-in with lockout, Tailscale, Cloudflare Tunnel and Cloudflare Access are built in.
+The client is built with [Exact](https://github.com/expo/exact). Release archives currently include the gateway and web app for macOS and Linux; native clients are still in development.
 
 ## Quick start
 
-You need a running [T3 Code](https://github.com/pingdotgg/t3code) harness and a published hbots release for your platform. Install the latest stable release:
+Start the T3 Code desktop app, then install the latest release on your Mac or Linux machine:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/Herklos/Bots/main/install.sh | sh
 ~/.hbots/runtime/current/hbots up
 ```
 
-The installer selects the archive for your platform, verifies it against `SHA256SUMS`, and installs the binary and web files together. To install a specific release, download the script and run `sh install.sh --version VERSION`; add `HBOTS_RELEASE_BASE=<url>` to use a mirror.
+The installer verifies the archive against `SHA256SUMS`. `hbots up` configures the gateway and T3 token, installs a background service, and prints the address. Open **http://127.0.0.1:3780** on the same machine.
 
-`hbots up` writes `~/.hbots/.env`, asks T3 Code for a token, installs a background service (launchd on macOS, systemd on Linux) and prints the address:
+For a terminal-only setup, run `hbots up --no-service`, then `hbots serve` using the installed binary. To install a specific release, download `install.sh` and run `sh install.sh --version VERSION`.
 
-```
-hbots 0.1.0 is running: http://127.0.0.1:3780
-```
-
-Prefer a terminal-only run? Use `~/.hbots/runtime/current/hbots up --no-service`, then `~/.hbots/runtime/current/hbots serve`.
-
-<details>
-<summary><b><code>t3: command not found</code></b></summary>
-
-The T3 Code desktop app doesn't always put its command line on your `PATH`. Try, in order (none of these are verified against every T3 Code version):
-
-1. `npx t3 auth session issue --ttl 365d --label hbots --token-only`, if Node is installed. Save the output in `~/.hbots/t3-token`.
-2. Look for a `t3` the app carries: `mdfind -name t3 | grep -i t3`, or `/Applications/T3 Code.app/Contents/Resources`. Run it by full path.
-3. Install the command line from the T3 Code README.
-
-`hbots up` looks on your `PATH`, then in `~/.t3/bin/t3`. If it finds nothing, it tells you to set `T3_TOKEN` yourself.
-</details>
-
-### Before you expose it
-
-Without a password the gateway listens on localhost and signs nobody in. Set `HBOTS_PASSWORD` (or a password in Settings) before using Tailscale or a tunnel.
-
-## Development
-
-See [DEV.md](DEV.md) for setup, the live development loop, LAN access, testing, and troubleshooting. To build from source, install [Rust](https://rustup.rs), start T3 Code, and clone the repository:
-
-```sh
-git clone https://github.com/Herklos/Bots && cd Bots
-cargo build --release
-```
-
-### The web app
-
-The gateway serves the built client. Build it once (needs an [Exact](https://github.com/expo/exact) checkout; local path is in gitignored `.exact-path`, see `AGENTS.md`):
-
-```sh
-set -a; source .exact-path; set +a
-EXACT_APP_DIR=$PWD/app bun "$EXACT_DIR/host/web/build.mjs" bots-web   # → app/target/web-dist
-./target/release/hbots up
-```
-
-Release archives carry a `web/` folder next to the binary, and the gateway serves it with no setting.
-Native apps have no page address, so build them with `HBOTS_URL=https://your-gateway`.
-
-## How it works
-
-```
- phone · browser · desktop           your machine
-┌───────────────────────┐        ┌────────────────────────────────────┐
-│  Exact client (app/)  │  HTTPS │  hbots gateway (gateway/)          │      ┌───────────────┐
-│  inbox · chat · Vault │◄──────►│  sessions · Vault · Projects · MCP │◄────►│ harness       │
-│  Projects · Settings  │ cookie │  Bot folders · remote access       │ token│ (T3 Code now) │
-└───────────────────────┘ /bearer└────────────────────────────────────┘      └───────────────┘
-                                          │
-                                          ▼
-                                   ~/.hbots/bots/<slug>/
-```
-
-**Does it need a server?** Yes, one small process on the machine that runs the harness. The client can't do these by itself:
-
-1. **The harness is the agent runtime** and holds your provider logins. It runs on a machine, not in a phone or a browser.
-2. **The harness token stays off the client.** It grants full control of your agents. Browsers can't set `Authorization` on a WebSocket, and a client that held the token would hand every device (and every XSS) a long-lived key. The gateway holds it and gives clients a password-gated session.
-3. **Bots live on disk.** A Bot is a folder the agent process reads. A client can't write there.
-4. **The Bots' tools are an HTTP server.** Agents call `POST /mcp/bot` (Vault, Projects) from that machine.
-5. **Some work has no client open:** giving a new Bot its project and thread, delivering its brief.
-
-The client does everything on screen, drafts, theme and notifications. A desktop build can start the gateway as a child process so it feels like one app (not built yet).
-
-## Backends
-
-The gateway talks to a **harness**: the process that actually runs the agent. The client never sees the harness, only an hbots session.
-
-| Harness | State |
-|---|---|
-| [T3 Code](https://github.com/pingdotgg/t3code) | Wired today: RPC client, `/t3/*` proxy, provisioning, chat, routines. See `gateway/src/t3.rs`. |
-| Others | Designed for, not written. A backend is a module beside `t3.rs`. See [docs/architecture.md](docs/architecture.md). |
-
-Storage is a second seam, separate from the harness: where a Bot's folder (`AGENTS.md`, `memory/`, `.mcp.json`) lives.
-
-| Storage | State |
-|---|---|
-| Local disk (`~/.hbots/bots/<slug>/`) | Wired today. The harness reads the same folder as its workspace. |
-| Anything else (another machine, a container) | Planned. It needs a `Workspace` trait, and a remote harness needs a reachable `HBOTS_MCP_URL`. |
-
-The plan, in seven phases, is in [docs/backends.md](docs/backends.md). The brand and design guidelines are in [design/](design/README.md).
+**Before enabling remote access**, set a password in Settings or with `HBOTS_PASSWORD`. See [DEV.md](DEV.md) for local development and troubleshooting.
 
 ## Features
 
-| | |
-|---|---|
-| **Bots** | Folder per Bot, a main Bot, instructions for Claude and Codex (`AGENTS.md`, `.mcp.json`) |
-| **Chat** | Read, send and stop; reactions, voice-call records, roster previews, file attachments |
-| **Vault** | Encrypted logins, CSV import and export, used by tools without the Bot reading the password |
-| **Projects** | A board with a live stream, also reachable by the Bots as MCP tools |
-| **Routines** | Scheduled tasks on the harness |
-| **Approvals** | Answer a Bot's request from the app |
-| **Remote access** | Password, Tailscale (own listener, landing-only mode), Cloudflare quick tunnel, Cloudflare Access |
-| **Install and update** | `hbots up`, checksummed releases, `hbots update`, `hbots rollback` |
+- **Personal Bots:** create and customize Bots, choose models and approval modes, and give each Bot its own instructions and workspace. Claude Haiku is the default model.
+- **Conversations:** chat with individual Bots or groups, mention Bots, attach files and voice clips, reply, react, and pin messages. Stop a run or answer an approval request from the app.
+- **Bot details:** see routines, usage, child threads, and a library of files, pages and links. Manage per-Bot MCP connectors and watch or interact with a Bot's browser through T3 Code.
+- **Routines:** schedule work through the harness and review or run a Bot's routines.
+- **Vault:** keep logins encrypted, import or export CSV, and let Bot tools use saved credentials without exposing the password to the Bot.
+- **Remote access:** protect access with a password and configure Tailscale, Cloudflare Tunnel or Cloudflare Access.
+- **Installation and updates:** install checksummed releases, run a background service, update, and roll back.
+
+The older Projects board is not part of the default experience. See [the project plan](docs/PLAN.md) for ongoing work and limitations.
+
+## How it works
+
+```text
+Browser / Exact client
+        │  hbots session
+        ▼
+hbots gateway ──────────► T3 Code harness ──► Bot runs
+        │                    │
+        ▼                    ▼
+workspace storage       provider credentials
+```
+
+The **gateway** serves the client and API, manages sessions and the Vault, and connects to the harness. The **harness** runs Bot threads and holds provider logins. T3 Code is the harness currently wired into hbots.
+
+The **workspace** is a separate storage concern. The `Workspace` interface backs Bot library records, files and MCP connectors; the running gateway currently uses its local-disk adapter. Other parts of the gateway still access local files directly, and the in-memory adapter is for tests. Additional storage and harness backends are planned, not selectable production options today. See [architecture](docs/architecture.md) and the [backend plan](docs/backends.md) for details.
+
+By default, Bot folders live under `~/.hbots/bots/`. The gateway holds the T3 token; clients use an hbots session instead. For access beyond localhost, configure authentication and an appropriate remote connection.
 
 ## Commands
 
+```text
+hbots up [--port N] [--t3-url URL] [--no-service]   Set up and start hbots
+hbots serve                                          Run the gateway in the foreground
+hbots status [--json]                                Show service and gateway status
+hbots update [version] [--check] [--preview] [--yes] Check or install a release
+hbots rollback                                       Restore the previous version
+hbots service install|uninstall|restart|status       Manage the background service
 ```
-hbots up [--port N] [--t3-url URL] [--no-service]   set up and start in the background
-hbots serve                                          run the gateway in this terminal
-hbots status [--json]                                version, service and gateway
-hbots update [version] [--check] [--preview] [--yes] install a release and restart
-hbots rollback                                       go back to the previous version
-hbots service install|uninstall|restart|status       manage the background service
-```
 
-Settings come from the environment or `~/.hbots/.env`: `T3_URL`, `T3_TOKEN` (or `T3_TOKEN_FILE`), `HOST`, `PORT`,
-`HBOTS_PASSWORD`, `HBOTS_HOME`, `HBOTS_ROOT`, `HBOTS_MCP_URL`, `HBOTS_MCP_TOKEN`, `ALLOWED_ORIGINS`, `STATIC_DIR`.
+Configuration comes from the environment or `~/.hbots/.env`. Common settings include `T3_URL`, `T3_TOKEN` or `T3_TOKEN_FILE`, `HOST`, `PORT`, `HBOTS_PASSWORD`, and `HBOTS_HOME`.
 
-## Repository
+## Development and status
 
-| Path | What |
+See [DEV.md](DEV.md) for prerequisites, the watch loop, LAN access, tests and troubleshooting. The [native builds guide](docs/native.md) describes the current macOS, iOS and Linux client status; native phone builds and distribution are not yet release artifacts.
+
+The project is early. The published release workflow builds the gateway and web assets for macOS and Linux. Other harnesses, storage backends and native client distribution need further work.
+
+| Path | Contents |
 |---|---|
-| `gateway/` | The `hbots` binary (Rust, axum) |
-| `app/` | The Exact client: one source for web, macOS, iOS and Linux |
-| `tests/` | A mock T3 Code, an end-to-end browser test and a shared-home compatibility harness |
-| `docs/` | [Vision](docs/vision.md), [architecture](docs/architecture.md), [native builds](docs/native.md), [plan](docs/PLAN.md) |
-
-```sh
-cargo test          # unit tests
-tests/e2e.sh        # mock T3 + gateway + Chromium: create a Bot, chat, see the reply
-```
-
-## Status
-
-**Early.** Gateway unit tests and the shared-home compat harness pass. Verified on a Mac checkout with a real T3 Code + Exact web build + Settings/Vault UI.
-
-On a Bot: a model picker (Haiku by default), routines, a thread-family list, a library (files, pages, links, and per-Bot projects, notes, tasks, and plans), and a watch of one browser tab. Settings counts messages, attachments, vault writes, and icon fetches on this machine. Connectors are http(s) MCP servers for that Bot. The old Projects board stays off, and connected apps stay postponed.
-
-Still open:
-
-- macOS, iOS and Linux native Exact hosts (tools ready; full apple build not finished here)
-- the release workflow on GitHub Actions
-- GitHub Actions release has not run. `EXACT_REF` is pinned to `956ae33a35ffa5313d7be3cebc55ed84f9480e0a`
-- persistent computer hold socket (each input still takes on its own turn)
-- connected apps, voice, and the full avatar system
-
-The rest is tracked in [docs/PLAN.md](docs/PLAN.md).
+| [`gateway/`](gateway/) | Rust gateway and CLI |
+| [`app/`](app/) | Exact client and localized strings |
+| [`tests/`](tests/) | Integration and compatibility tests |
+| [`docs/`](docs/) | Architecture, plans and native build notes |
+| [`design/`](design/) | Brand and design guidelines |
 
 ## Credits
 
-The idea came from [Threebot](https://github.com/RokaSwK/threebot). The client is built with [Exact](https://github.com/expo/exact). The harness wired today is [T3 Code](https://github.com/pingdotgg/t3code). See [NOTICE](NOTICE) and [LICENSE](LICENSE).
+Inspired by [Threebot](https://github.com/RokaSwK/threebot), built with [Exact](https://github.com/expo/exact), and powered by [T3 Code](https://github.com/pingdotgg/t3code). See [NOTICE](NOTICE) and [LICENSE](LICENSE).
