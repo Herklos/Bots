@@ -1,5 +1,9 @@
 # hbots memory store + maintenance
 
+## Context injection
+
+Injection reads `memory/MEMORY.md`, `memory/log.md`, and `.botapp/shared-memory.md` through `gateway/src/agent_context.rs`, because `memory.rs` does not exist yet. The text is the managed block of `AGENTS.md`. Threads that are not a Bot's are not touched, and an ephemeral child thread inherits nothing unless it starts in that folder. See `docs/architecture.md`.
+
 | Field | Value |
 |---|---|
 | Author | TBD |

@@ -105,12 +105,12 @@ fn parent_slug(bot: &Value) -> Option<&str> {
         .filter(|s| !s.is_empty())
 }
 
-enum Folder {
+pub(crate) enum Folder {
     Ready(PathBuf),
     Absent,
 }
 
-async fn folder(root: &Path, slug: &str) -> Result<Folder, String> {
+pub(crate) async fn folder(root: &Path, slug: &str) -> Result<Folder, String> {
     if !valid_slug(slug) {
         return Ok(Folder::Absent);
     }
@@ -144,7 +144,7 @@ fn file_value(text: String, truncated: bool) -> Value {
 }
 
 /// Read `rel` under `bot_dir`. A missing file, a directory, or a symlink is empty.
-async fn read_rel(bot_dir: &Path, rel: &[&str]) -> Result<Value, String> {
+pub(crate) async fn read_rel(bot_dir: &Path, rel: &[&str]) -> Result<Value, String> {
     let mut path = bot_dir.to_path_buf();
     for part in rel {
         if part.is_empty()
@@ -169,31 +169,69 @@ async fn read_rel(bot_dir: &Path, rel: &[&str]) -> Result<Value, String> {
     if !meta.file_type().is_file() {
         return Ok(empty_file());
     }
-    let (text, truncated) = read_capped(&path).await?;
+    let (text, truncated) = read_default(&path).await?;
     Ok(file_value(text, truncated))
 }
 
-async fn read_capped(path: &Path) -> Result<(String, bool), String> {
+async fn read_default(path: &Path) -> Result<(String, bool), String> {
+    read_capped(path, FILE_CAP).await
+}
+
+/// Read at most `cap` bytes from the start. A split UTF-8 character is dropped.
+pub(crate) async fn read_capped(path: &Path, cap: usize) -> Result<(String, bool), String> {
     let file = tokio::fs::File::open(path)
         .await
         .map_err(|e| e.to_string())?;
     let mut buf = Vec::new();
-    file.take(u64::try_from(FILE_CAP).unwrap_or(u64::MAX) + 1)
+    file.take(u64::try_from(cap).unwrap_or(u64::MAX).saturating_add(1))
         .read_to_end(&mut buf)
         .await
         .map_err(|e| e.to_string())?;
-    let truncated = buf.len() > FILE_CAP;
+    let truncated = buf.len() > cap;
     if truncated {
-        buf.truncate(FILE_CAP);
-        // Drop a character that the cap split in half.
-        while buf.last().is_some_and(|b| b & 0b1100_0000 == 0b1000_0000) {
-            buf.pop();
-        }
-        if buf.last().is_some_and(|b| *b >= 0xC0) {
-            buf.pop();
-        }
+        buf.truncate(cap);
+        trim_partial_char_end(&mut buf);
     }
     Ok((String::from_utf8_lossy(&buf).into_owned(), truncated))
+}
+
+/// Read at most `cap` bytes from the end. A split UTF-8 character at the start is dropped.
+pub(crate) async fn read_tail(path: &Path, cap: usize) -> Result<(String, bool), String> {
+    use tokio::io::AsyncSeekExt;
+    let mut file = tokio::fs::File::open(path)
+        .await
+        .map_err(|e| e.to_string())?;
+    let len = file.metadata().await.map_err(|e| e.to_string())?.len();
+    let cap_u64 = u64::try_from(cap).unwrap_or(u64::MAX);
+    if len <= cap_u64 {
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf)
+            .await
+            .map_err(|e| e.to_string())?;
+        return Ok((String::from_utf8_lossy(&buf).into_owned(), false));
+    }
+    let start = len - cap_u64;
+    file.seek(std::io::SeekFrom::Start(start))
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf)
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut i = 0;
+    while i < buf.len() && buf[i] & 0b1100_0000 == 0b1000_0000 {
+        i += 1;
+    }
+    Ok((String::from_utf8_lossy(&buf[i..]).into_owned(), true))
+}
+
+fn trim_partial_char_end(buf: &mut Vec<u8>) {
+    while buf.last().is_some_and(|b| b & 0b1100_0000 == 0b1000_0000) {
+        buf.pop();
+    }
+    if buf.last().is_some_and(|b| *b >= 0xC0) {
+        buf.pop();
+    }
 }
 
 fn skill_file_name(name: &str) -> bool {
@@ -240,7 +278,7 @@ async fn skills_in(bot_dir: &Path) -> Result<Vec<Value>, String> {
         if !meta.file_type().is_file() {
             continue;
         }
-        let (text, truncated) = read_capped(&path).await?;
+        let (text, truncated) = read_default(&path).await?;
         out.push(json!({ "name": name, "text": text, "truncated": truncated }));
     }
     Ok(out)

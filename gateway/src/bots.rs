@@ -457,26 +457,8 @@ impl Bots {
                 .find(|b| b["slug"] == slug)
                 .ok_or_else(|| ApiError::not_found("Bot not found"))?
         };
-        self.write_instructions(&saved).await?;
-        // A child's name is part of the parent's list, so the same rewrite runs for the parent.
-        // A parent's prompt is part of each child that inherits it, so a parent save rewrites them.
-        if is_subagent(&saved) {
-            if let Some(parent_slug) = parent_slug_of(&saved) {
-                if let Some(parent) = self.get(&parent_slug).await? {
-                    self.write_instructions(&parent).await?;
-                }
-            }
-        } else {
-            let slug = saved["slug"].as_str().unwrap_or("").to_string();
-            let family = self.load().await?;
-            let children: Vec<Value> = family
-                .into_iter()
-                .filter(|other| parent_slug_of(other).as_deref() == Some(slug.as_str()))
-                .collect();
-            for child in children {
-                self.write_instructions(&child).await?;
-            }
-        }
+        let slug = saved["slug"].as_str().unwrap_or("").to_string();
+        self.refresh_agents(&slug).await?;
         Ok(saved)
     }
 
@@ -782,19 +764,40 @@ impl Bots {
             });
             children
         };
-        let block = render_agents_md(
-            bot,
-            &self.root,
-            parent,
-            &children,
-            &MemorySnapshot::default(),
-        );
+        let memory = agent_context::read_snapshot(&self.root, bot, parent).await;
+        let block = render_agents_md(bot, &self.root, parent, &children, &memory);
         let merged = merge_managed(&existing_agents, &block);
         if merged != existing_agents {
             crate::store::write_atomic(&agents, merged.as_bytes(), None).await?;
         }
         #[cfg(unix)]
         self.merge_claude_md(&dir, slug, &block).await?;
+        Ok(())
+    }
+
+    /// Load this Bot and rewrite its managed block, then the parent's list or the children.
+    /// `write_instructions` skips the file when the merged text is unchanged.
+    pub async fn refresh_agents(&self, slug: &str) -> ApiResult<()> {
+        let Some(bot) = self.get(slug).await? else {
+            return Ok(());
+        };
+        self.write_instructions(&bot).await?;
+        if is_subagent(&bot) {
+            if let Some(parent_slug) = parent_slug_of(&bot) {
+                if let Some(parent) = self.get(&parent_slug).await? {
+                    self.write_instructions(&parent).await?;
+                }
+            }
+        } else {
+            let family = self.load().await?;
+            let children: Vec<Value> = family
+                .into_iter()
+                .filter(|other| parent_slug_of(other).as_deref() == Some(slug))
+                .collect();
+            for child in children {
+                self.write_instructions(&child).await?;
+            }
+        }
         Ok(())
     }
 
@@ -875,8 +878,6 @@ pub(crate) fn render_agents_md(
     children: &[&Value],
     memory: &MemorySnapshot,
 ) -> String {
-    // An empty snapshot adds no section. A filled snapshot is rendered in a later change.
-    let _ = memory.is_empty();
     let name = bot["name"].as_str().unwrap_or("Bot");
     let label = bot["label"]
         .as_str()
@@ -923,6 +924,8 @@ pub(crate) fn render_agents_md(
     } else {
         String::new()
     };
+    let snapshot = agent_context::render_snapshot(memory);
+    let child_threads = agent_context::child_threads_section();
     let instructions = if child {
         String::new()
     } else {
@@ -950,7 +953,7 @@ pub(crate) fn render_agents_md(
     format!(
         "{MANAGED_START}\n# {name}{label}\n\n\
 {intro}\n{goal}\n\
-## Memory\n\n- Your notes: `memory/MEMORY.md`. Keep durable facts there, short and current.\n- Your work log: `memory/log.md`.\n{own_folders}- Facts shared by every Bot: {}.\n- Files you keep for the person: `library/`.\n{instructions}{own_prompt}{inherited}\n\
+## Memory\n\n- Your notes: `memory/MEMORY.md`. Keep durable facts there, short and current.\n- Your work log: `memory/log.md`.\n{own_folders}- Facts shared by every Bot: {}.\n- Files you keep for the person: `library/`.\n{snapshot}{instructions}{own_prompt}{inherited}{child_threads}\n\
 ## Tools\n\nThe `bot` MCP server gives you the Vault (`vault_list`) and the Projects board (`projects_*`). Never read the vault files on disk.\n\n\
 ## Routines\n\nTo run something on a schedule, use your `schedule_task` tool. Weekdays count from 0 for Sunday to 6 for Saturday, and times are local. The person sees your routines in the app but can't change them there, so say what you set up.\n\n## Computer\n\nThe person can open or close your browser from the Computer panel. A message framed `[Computer]` means open a page (resume where you left off, or https://www.google.com) or close your browser tabs with your browser tools, without asking, and stay quiet in chat.\n\n## Other Bots\n\nTo message another Bot, use `t3_thread_send`. Say who you are and what you need.\n{subagents}\n## Writing\n\nAvoid Markdown tables. Prefer bullet lists.\n\n## Asking first\n\nAsk before anything that leaves this machine or can't be undone.\n{MANAGED_END}\n",
         shared.display()
@@ -2018,5 +2021,89 @@ mod tests {
             1
         );
         assert!(twice_reversed.contains("notes between"));
+    }
+
+    #[tokio::test]
+    async fn a_memory_edit_refreshes_the_snapshot_and_inheritance_follows_the_flag() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+        bots.create(&json!({ "name": "Ada" })).await.unwrap();
+        let agents = dir.path().join("ada/AGENTS.md");
+        let created = std::fs::read_to_string(&agents).unwrap();
+        assert!(!created.contains("<memory "));
+        assert!(created.contains("## Child threads"));
+        assert!(created.contains(agent_context::CHILD_THREADS));
+        std::fs::write(dir.path().join("ada/memory/MEMORY.md"), "Likes tea\n").unwrap();
+        bots.refresh_agents("ada").await.unwrap();
+        let refreshed = std::fs::read_to_string(&agents).unwrap();
+        let bullets = refreshed.find("## Memory").unwrap();
+        let tag = refreshed.find("<memory ").unwrap();
+        let tools = refreshed.find("## Tools").unwrap();
+        assert!(bullets < tag && tag < tools);
+        assert!(refreshed.contains("Likes tea"));
+        assert!(refreshed.contains("source=\"memory/MEMORY.md\""));
+        assert!(refreshed.contains("Do not store secrets in memory. Use the Vault."));
+
+        bots.create(&json!({
+            "parentSlug": "ada",
+            "name": "Quiet",
+            "subagent": { "inheritParentPrompt": false }
+        }))
+        .await
+        .unwrap();
+        bots.create(&json!({
+            "parentSlug": "ada",
+            "name": "Scout",
+            "subagent": { "inheritParentPrompt": true }
+        }))
+        .await
+        .unwrap();
+        let quiet = std::fs::read_to_string(dir.path().join("quiet/AGENTS.md")).unwrap();
+        let scout = std::fs::read_to_string(dir.path().join("scout/AGENTS.md")).unwrap();
+        assert!(!quiet.contains("Likes tea"));
+        assert!(!quiet.contains("<parent-memory"));
+        assert!(scout.contains("Likes tea"));
+        assert!(scout.contains("<parent-memory"));
+        assert!(scout.contains("read-only=\"true\""));
+        std::fs::write(dir.path().join("ada/memory/MEMORY.md"), "Likes coffee\n").unwrap();
+        bots.refresh_agents("ada").await.unwrap();
+        let scout = std::fs::read_to_string(dir.path().join("scout/AGENTS.md")).unwrap();
+        let quiet = std::fs::read_to_string(dir.path().join("quiet/AGENTS.md")).unwrap();
+        assert!(scout.contains("Likes coffee"));
+        assert!(!scout.contains("Likes tea"));
+        assert!(!quiet.contains("Likes coffee"));
+    }
+
+    #[tokio::test]
+    async fn two_writes_leave_one_managed_block() {
+        let dir = tempfile::tempdir().unwrap();
+        let bots = std::sync::Arc::new(Bots::new(
+            dir.path().to_path_buf(),
+            String::new(),
+            String::new(),
+        ));
+        let ada = bots
+            .create(&json!({ "name": "Ada", "prompt": "Be brief." }))
+            .await
+            .unwrap();
+        let agents = dir.path().join("ada/AGENTS.md");
+        let mut text = std::fs::read_to_string(&agents).unwrap();
+        text.push_str("\nMy own notes\n");
+        std::fs::write(&agents, &text).unwrap();
+        let left = bots.clone();
+        let right = bots.clone();
+        let ada_left = ada.clone();
+        let ada_right = ada.clone();
+        let (a, b) = tokio::join!(
+            left.write_instructions(&ada_left),
+            right.write_instructions(&ada_right),
+        );
+        a.unwrap();
+        b.unwrap();
+        let text = std::fs::read_to_string(&agents).unwrap();
+        assert_eq!(text.matches(MANAGED_START).count(), 1);
+        assert_eq!(text.matches(MANAGED_END).count(), 1);
+        assert!(text.contains("My own notes"));
+        assert!(text.contains("## Instructions\n\nBe brief."));
     }
 }
