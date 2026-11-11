@@ -764,10 +764,11 @@ const sources: Sources = {
       return { available: false, state: 'unknown' };
     }
   },
-  setNotifications: async ([enabled, sound, preview, when], store) => reply(await call(store, '/api/settings', {
-    method: 'PUT',
-    body: JSON.stringify({ notifications: { enabled, sound, preview, when } }),
-  })),
+  setNotifications: async ([enabled, sound, preview, when], store) => {
+    const notifications: { sound: boolean; preview: string; when: string; enabled?: boolean } = { sound, preview, when };
+    if (enabled !== null) notifications.enabled = enabled;
+    return reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ notifications }) }));
+  },
   setUserName: async ([userName], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ userName }) })),
   setDefaultMode: async ([defaultRuntimeMode], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ defaultRuntimeMode }) })),
   setTheme: async ([theme], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ theme }) })),
