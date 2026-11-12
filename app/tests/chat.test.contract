@@ -1,0 +1,167 @@
+locale "en-US"
+
+test "a tool line is a chip with the translated verb, not a message bubble"
+  at "/bot/fixture"
+  clock data
+  expect tree has "event-e1"
+  expect text "event-verb-e1" == "Created routine"
+  expect text "event-title-e1" == "Morning"
+  expect tree missing "event-bot-e1"
+  expect tree missing "message-e1"
+  expect text "event-verb-e2" == "Messaged"
+  expect text "event-bot-e2" == "Inbox"
+test "an unchanged open chat keeps its transcript"
+  at "/bot/quiet"
+  clock data
+  expect text "message-q1" == "Still here"
+  clock +1600
+  clock data
+  expect text "message-q1" == "Still here"
+test "a message shows a reaction, a quote, and a pin that is not in view"
+  at "/bot/fixture"
+  clock data
+  expect text "react-m2" == "🔥"
+  expect text "quote-m2" == "Hello"
+  expect text "pin-missing" == "This message is not in view."
+test "reply quotes a line and pin toggles a row"
+  at "/bot/fixture"
+  clock data
+  expect text "pin-missing" == "This message is not in view."
+  expect tree missing "pin-message-m2"
+  tap "reply-m2"
+  expect text "reply-quote" == "Hi there"
+  expect tree has "reply-cancel"
+  tap "reply-cancel"
+  expect tree missing "reply-cancel"
+  tap "message-m2" contextmenu
+  tap "menu-pin-m2"
+  clock data
+  expect text "pin-m2" == "Hi there"
+  expect text "pin-missing" == "This message is not in view."
+  tap "message-m2" contextmenu
+  tap "menu-pin-m2"
+  clock data
+  expect tree missing "pin-m2"
+  expect text "pin-missing" == "This message is not in view."
+test "a secondary click on a Bot message offers reply and pin"
+  at "/bot/fixture"
+  clock data
+  expect tree missing "message-menu"
+  tap "message-m2" contextmenu
+  expect tree has "message-menu"
+  expect tree has "menu-reply-m2"
+  expect tree has "menu-pin-m2"
+  expect tree has "menu-copy-m2"
+  expect tree has "menu-react-m2"
+  expect text "menu-pin-m2" == "Pin"
+  expect text "menu-reply-m2" == "Reply"
+  expect text "menu-copy-m2" == "Copy"
+test "the message menu copies, unpins, and closes from the strip, Esc, outside, and arrows"
+  at "/bot/fixture"
+  clock data
+  tap "message-m1" contextmenu
+  expect text "menu-pin-m1" == "Unpin"
+  tap "message-menu-scrim"
+  expect tree missing "message-menu"
+  tap "message-m2" contextmenu
+  expect tree has "pick-🔥"
+  expect tree has "pick-👍"
+  tap "pick-🔥"
+  expect tree missing "message-menu"
+  tap "message-m3" contextmenu
+  expect tree missing "react-picker"
+  tap "pick-👍"
+  expect tree missing "message-menu"
+  tap "message-m2" contextmenu
+  key "menu-reply-m2" "ArrowDown"
+  key "menu-pin-m2" "ArrowDown"
+  expect tree has "menu-copy-m2"
+  key "menu-copy-m2" "Escape"
+  expect tree missing "message-menu"
+  tap "message-m2" contextmenu
+  tap "menu-copy-m2"
+  expect text "menu-copy-m2" == "Copied"
+  expect tree has "toast"
+  clock +700
+  clock settle
+  expect tree missing "message-menu"
+test "a group message uses the same menu"
+  at "/group/fixture"
+  clock data
+  expect tree missing "message-menu"
+  tap "room-text-r2" contextmenu
+  expect tree has "message-menu"
+  expect tree has "menu-reply-r2"
+  expect tree has "menu-pin-r2"
+  expect tree has "menu-copy-r2"
+  expect tree has "menu-react-r2"
+  expect text "menu-pin-r2" == "Pin"
+  expect text "room-from-r2" == "Ada"
+  tap "message-menu-scrim"
+  expect tree missing "message-menu"
+test "the open chat is clear and a hidden Bot keeps its mark"
+  size 1440x900
+  at "/bot/fixture"
+  clock data
+  expect tree missing "unread-fixture"
+  tap "hidden-toggle"
+  expect tree has "unread-bea"
+test "a pipe table is a grid"
+  at "/bot/fixture"
+  clock data
+  expect tree has "message-m4-table-0"
+  expect tree has "message-m2"
+  expect tree missing "message-m4"
+test "search filters the loaded conversation"
+  at "/bot/fixture"
+  clock data
+  expect tree has "message-m1"
+  tap "chat-search-open"
+  type "chat-search" "there"
+  expect tree missing "message-m1"
+  expect tree has "message-m2"
+  expect text "search-note" == "Search covers the loaded conversation."
+test "a token line shows only when the turn shares an id"
+  at "/bot/fixture"
+  clock data
+  expect text "tokens-m2" == "12 in, 3 out, 4 read from cache, 1 written to cache."
+  expect tree missing "tokens-m3"
+test "the reaction picker opens beside a Bot message"
+  // The smile stays mounted. Opacity and pointer-events hide it until chrome shows, same as reply and pin.
+  at "/bot/fixture"
+  clock data
+  expect tree has "add-react-m3"
+  tap "message-m3"
+  tap "add-react-m3"
+  expect tree has "react-picker"
+  expect tree has "pick-🎉"
+test "a sent line stays one row and the working mark stays while the turn is open"
+  at "/bot/fixture"
+  clock data
+  type "composer" "Stay put"
+  tap "send"
+  clock data
+  expect tree has "message-turn-item:message:m-1"
+  expect text "message-turn-item:message:m-1" == "Stay put"
+  expect tree missing "sending"
+  expect tree has "working"
+  clock data
+  expect tree has "message-turn-item:message:m-1"
+  expect text "message-turn-item:message:m-1" == "Stay put"
+  expect tree has "working"
+  expect tree missing "sending"
+  clock +900
+  expect tree missing "working"
+  expect tree has "message-turn-item:message:m-1"
+  expect text "message-turn-item:message:m-1" == "Stay put"
+test "the Bot chat and a group both use ChatLog"
+  at "/bot/fixture"
+  clock data
+  expect tree has "chat-log"
+  expect tree has "transcript"
+  expect tree has "message-m2"
+  at "/group/fixture"
+  clock data
+  expect tree has "chat-log"
+  expect tree has "room-log"
+  expect tree has "room-text-r2"

@@ -1,0 +1,70 @@
+locale "en-US"
+
+test "the composer holds a voice clip and the sent clip is that attachment"
+  at "/bot/fixture"
+  clock data
+  expect tree has "audio-voice"
+  tap "voice-record"
+  clock settle
+  expect text "voice-hold" == "voice.m4a"
+test "rapid composer edits save once, and a pause saves the latest text"
+  size 1440x900
+  at "/bot/fixture"
+  clock +600
+  clock data
+  type "composer" "a"
+  clock +300
+  type "composer" "ab"
+  clock +300
+  type "composer" "abc"
+  clock +300
+  expect state savedRev == 0
+  expect text "composer" == "abc"
+  clock +100
+  clock data
+  expect state savedRev == 3
+  expect text "composer" == "abc"
+test "a draft stays with its Bot and a child keeps its own"
+  size 1440x900
+  at "/bot/fixture"
+  clock +600
+  clock data
+  tap "voice-record"
+  clock settle
+  expect text "voice-hold" == "voice.m4a"
+  type "composer" "Ada draft"
+  expect text "composer" == "Ada draft"
+  tap "hidden-toggle"
+  tap "hidden-bea"
+  clock data
+  expect tree missing "voice-hold"
+  type "composer" "Bea draft"
+  expect text "composer" == "Bea draft"
+  tap "bot-fixture"
+  clock +600
+  clock data
+  expect text "composer" == "Ada draft"
+  expect text "voice-hold" == "voice.m4a"
+  tap "open-local-1"
+  clock data
+  expect tree missing "voice-hold"
+  type "composer" "Child draft"
+  expect text "composer" == "Child draft"
+  tap "close-child"
+  clock data
+  expect text "composer" == "Ada draft"
+  expect text "voice-hold" == "voice.m4a"
+  tap "open-local-1"
+  clock data
+  expect text "composer" == "Child draft"
+  clock +1
+  clock data
+  reload
+  clock +1
+  clock data
+  clock +600
+  expect text "composer" == "Ada draft"
+  expect text "voice-hold" == "voice.m4a"
+  tap "open-local-1"
+  clock data
+  expect text "composer" == "Child draft"

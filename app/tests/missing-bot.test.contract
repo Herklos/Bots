@@ -1,0 +1,37 @@
+locale "en-US"
+
+test "a missing Bot has no model, routine, or library row"
+  size 340x740
+  at "/bot/ada"
+  clock data
+  tap "panel-toggle"
+  clock settle
+  expect tree missing "bot-panel"
+  expect tree missing "open-library"
+  expect tree missing "open-computer"
+  expect tree missing "add-routine"
+  expect tree missing "model-error"
+  expect tree missing "lineage-error"
+  expect tree missing "open-projects"
+test "the header does not invent Bot details when the Bot is missing"
+  size 340x740
+  at "/bot/ada"
+  clock data
+  expect tree missing "bot-panel"
+  expect tree has "panel-toggle"
+  tap "panel-toggle"
+  clock settle
+  expect tree missing "bot-panel"
+  expect tree missing "open-library"
+  tap "panel-toggle"
+  clock settle
+  expect tree missing "bot-panel"
+test "a wide window does not invent a panel for a missing Bot"
+  size 1440x900
+  at "/bot/ada"
+  clock +600
+  clock data
+  expect tree missing "bot-panel"
+  expect tree missing "open-library"
+  expect tree missing "open-projects"
+  expect tree has "panel-toggle"
