@@ -280,7 +280,6 @@ component Bots
     editName
     editFirst
     editNewPrompt
-    pick
     pickShape
     useStart
     goCreateStep
