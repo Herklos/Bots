@@ -10,7 +10,7 @@
 //   computerInput: (args: [string, string, number, number, number, number, number, string, number, number]) => DriveReply
 //   confirmPairing: (args: [string, string]) => Reply
 //   copyStorage: (args: [string]) => Reply
-//   createBot: (args: [string, string, string, string]) => Made
+//   createBot: (args: [string, string, string, string, string]) => Made
 //   createGroup: (args: [string, string, string, string, string, string, string]) => Made
 //   createSubagent: (args: [string, string, string, string, string, boolean]) => Reply
 //   deleteBot: (args: [string]) => Reply
@@ -57,6 +57,7 @@
 //   restartGateway: (args: []) => Reply
 //   restartStorage: (args: []) => Reply
 //   revealPassword: (args: [string]) => Revealed
+//   saveBotPrompt: (args: [string, string]) => Reply
 //   saveDrafts: (args: [string[], string[], string[]]) => Reply
 //   saveLogin: (args: [string, string, string, string, string, string]) => Reply
 //   saveSpace: (args: [string]) => Reply
@@ -597,7 +598,7 @@ type T232 = { "scrollLeft": T39; "scrollTop": T39; "scrollWidth": T39; "scrollHe
 type T233 = { "target": T0; "relatedTarget": T88; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "checkAnytype" | "closeComputer" | "computerControl" | "computerInput" | "confirmPairing" | "copyStorage" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "noteUnread" | "openComputer" | "pinBot" | "pinMessage" | "prepareAnytype" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSpace" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setGroupAnswerPolicy" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startPairing" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "checkAnytype" | "closeComputer" | "computerControl" | "computerInput" | "confirmPairing" | "copyStorage" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "noteUnread" | "openComputer" | "pinBot" | "pinMessage" | "prepareAnytype" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "saveBotPrompt" | "saveDrafts" | "saveLogin" | "saveSpace" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setGroupAnswerPolicy" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startPairing" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "checkAnytype": { args: []; result: T60 };
@@ -606,7 +607,7 @@ export interface SourceMap {
   "computerInput": { args: [T0, T0, T39, T39, T39, T39, T39, T0, T39, T39]; result: T55 };
   "confirmPairing": { args: [T0, T0]; result: T53 };
   "copyStorage": { args: [T0]; result: T53 };
-  "createBot": { args: [T0, T0, T0, T0]; result: T66 };
+  "createBot": { args: [T0, T0, T0, T0, T0]; result: T66 };
   "createGroup": { args: [T0, T0, T0, T0, T0, T0, T0]; result: T66 };
   "createSubagent": { args: [T0, T0, T0, T0, T0, T1]; result: T53 };
   "deleteBot": { args: [T0]; result: T53 };
@@ -654,6 +655,7 @@ export interface SourceMap {
   "restartGateway": { args: []; result: T53 };
   "restartStorage": { args: []; result: T53 };
   "revealPassword": { args: [T0]; result: T72 };
+  "saveBotPrompt": { args: [T0, T0]; result: T53 };
   "saveDrafts": { args: [T5, T5, T5]; result: T53 };
   "saveLogin": { args: [T0, T0, T0, T0, T0, T0]; result: T53 };
   "saveSpace": { args: [T0]; result: T53 };

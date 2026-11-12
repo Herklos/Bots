@@ -1,5 +1,6 @@
 use SettingsScreen from "./settings/screen.contract"
 use NewGroupScreen from "./group/new.contract"
+use CreateBotScreen from "./bot/create.contract"
 use GroupScreen from "./group/screen.contract"
 use ToastLine from "./shell/toast.contract"
 use ComputerOverlay from "./computer/overlay.contract"
@@ -9,21 +10,18 @@ use Inbox from "./inbox/screen.contract"
 use VaultScreen from "./vault/screen.contract"
 use EmptyState from "exact:content"
 use Face from "./face.contract"
-use Avatar from "./face.contract"
-use shapeNames from "./face.contract"
-use Glyph from "./glyph.contract"
 use getUserMedia, stopTrack, MediaStream, MediaStreamTrack from "@exact/media-capture"
 use startMediaRecorder, stopMediaRecorder, isTypeSupported, MediaRecorderInfo, RecordedMedia, TypeSupport from "@exact/recording"
 use requestNotificationPermission, NotificationStatus from "@exact/notifications"
 use InboxRow from "./inbox/inbox.contract"
 use Faces, GroupPanel, ChiefList from "./group/group.contract"
 use LoginSheet, ModelPicker, UsageView from "./settings/settings.contract"
-use pickerColours, shapeOf, colorOf, faceColor, showUnread, memberFaces, memberCalled, quietPolicyHint from "./ui/fns.contract"
-use PanelRow, ChoiceRow from "./ui/panel.contract"
+use shapeOf, colorOf, showUnread, memberFaces, memberCalled, quietPolicyHint from "./ui/fns.contract"
+use ChoiceRow from "./ui/panel.contract"
 use Bot, Chat, Room, Convo, Login, Provider, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer from "./ui/shapes.contract"
 use Reply, Sent, DriveReply, Session, Network, Storage, Pairing, AnytypeCheck, Suggestion, About, SystemStatus, UpdateStart, Health, Made, Prefs, PageState, NoticeState, Attached, VoiceHeld, Revealed, Usage, pageKeyKind, pageKeyCode, pageModifiers, pageChord, DraftPack, HostTime, PointerFacts, nameOf, initialsOf, botCountLabel, settingsDomainLabel, noticeOn, mutedBots, mutedGroups, firstMutedBot, firstMutedGroup, noticeStatusLabel, networkModeLabel, attachmentName, convoKey, dropKey, putText, putVoice, fieldAt, voiceNumber, entryId, hasFileId, hasVoiceId, themeLabel, pickedFaces, withWorking, withRoomPending, roomLine, transcriptId, knownSent, botCount, holdWorking, withPending, wordChar, mentionReplace, botMentions, roomMentions, filterMentions from "./ui/root-types.contract"
-use Screen, PageTitle, HeroTitle, PageHeader, TextControl, IconControl, ToggleControl, SwatchControl, ConversationLink, SectionLabel, IconTile, Field, PrimaryButton from "./ui/controls.contract"
-use SidebarBar, Disc, TileLink, HeaderToggle, SendControl, StopControl, SearchField, GroupCard, SettingsTrack, SettingsTab, SettingsRow, SettingsFoot, FieldLabel, FieldBox, ActionMain, ActionQuiet, BotRow from "./ui/sidebar.contract"
+use Screen from "./ui/controls.contract"
+use SidebarBar, Disc, TileLink, HeaderToggle, SendControl, StopControl, SearchField, SettingsTrack, SettingsTab, SettingsFoot, FieldLabel, FieldBox, ActionMain, ActionQuiet, BotRow from "./ui/sidebar.contract"
 use ChatLog from "./chat/log.contract"
 use MentionMenu from "./chat/mention.contract"
 use BotPanel from "./bot/panel.contract"
@@ -211,6 +209,7 @@ component Bots
   derive shelfFailed = failed(shelf)
   derive computerFailed = failed(computer)
   derive subCreatedPending = pending(subCreated)
+  derive createdPending = pending(created)
   derive subSavedPending = pending(subSaved)
   derive childModelsFailed = failed(childModels)
   derive signedInPending = pending(signedIn)
@@ -267,6 +266,23 @@ component Bots
     doMuteGroup
     newColor
     newShape
+    newName
+    newFirst
+    newPrompt
+    createStep
+    suggestions
+    createError
+    created
+    createdPending
+    createBack
+    createNext
+    create
+    editName
+    editFirst
+    editNewPrompt
+    pickShape
+    useStart
+    goCreateStep
     wide
     openNew
     doHide
@@ -376,6 +392,7 @@ component Bots
     pickPanelTab
     pick
     doRename
+    doSavePrompt
     doRecolour
     doDropBot
     openNewSub
@@ -603,89 +620,7 @@ component Bots
           else if e.name == "newGroup"
             NewGroupScreen(route=e.id)
           else
-            column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="new-form" position="absolute" inset=0
-              header class=PageHeader
-                if createStep != "name"
-                  button id="back" class=TextControl appearance="none" press=createBack testId="create-back"
-                    text t("common.back")
-                text t("inbox.newBot") role="heading" aria-level=1 class=PageTitle flex=1
-                button class=IconControl appearance="none" press=back aria-label=t("common.close") title=t("common.close") testId="new-close"
-                  Glyph(name="close", size=20)
-              scroll id="new-form" flex=1 min-height=0
-                column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.lg" gap="space.lg"
-                  column align-items="center" gap="space.md" testId="create-face"
-                    Avatar(shape=newShape, color=faceColor(newColor), state="idle", size=96, still=false, presence="")
-                  if createStep == "name"
-                    column gap="space.sm"
-                      text t("create.askName") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-name"
-                      input appearance="none" class=Field value=newName input=editName submit=createNext placeholder=t("create.namePlaceholder") aria-label=t("common.name") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-name"
-                  else if createStep == "colour"
-                    column gap="space.sm"
-                      text t("create.askColour") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-colour"
-                      row gap="space.xs" flex-wrap="wrap" justify-content="center"
-                        for c in pickerColours() key=c
-                          button class=SwatchControl press=pick(c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(newColor == c) testId=`colour-${c}` width=44 height=44 padding=0
-                            column width=32 height=32 box-sizing="border-box" border-radius="radius.full" background-color=c border=(newColor == c ? "3px solid AccentColor" : "3px solid transparent")
-                  else if createStep == "shape"
-                    column gap="space.sm"
-                      text t("create.askShape") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-shape"
-                      row gap="space.xs" flex-wrap="wrap" justify-content="center"
-                        for s in shapeNames() key=s
-                          button class=SwatchControl press=pickShape(s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(newShape == s) testId=`shape-${s}` width=44 height=44 padding=0 border-radius="radius.md" background-color=(newShape == s ? "surface.raised" : "transparent")
-                            Avatar(shape=s, color=faceColor(newColor), state="idle", size=30, still=true, presence="")
-                  else if createStep == "template"
-                    column gap="space.sm" width="100%"
-                      text t("create.askTemplate") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-template"
-                      text t("create.or") color="ink.muted"
-                      if suggestions.length > 0
-                        column gap="space.sm"
-                          for s in suggestions key=s.name
-                            button class=PanelRow appearance="none" press=useStart(s.name, s.color, s.shape, s.first) testId=`start-${s.name}`
-                              Avatar(shape=s.shape, color=faceColor(s.color), state="idle", size=44, still=true, presence="")
-                              column flex=1 gap="2px" min-width=0
-                                text s.name font-weight=600
-                                text s.about color="ink.muted" font="-exact-footnote"
-                  else if createStep == "message"
-                    column gap="space.sm"
-                      text t("create.askMessage") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-message"
-                      textarea appearance="none" class=Field value=newFirst input=editFirst placeholder=t("create.messagePlaceholder") aria-label=t("create.firstMessage") rows=4 maxlength=2000 padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-first"
-                  else
-                    column gap="space.sm" testId="step-review"
-                      text t("create.review") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2
-                      column class=GroupCard padding="0"
-                        button class=SettingsRow appearance="none" press=goCreateStep("name") min-height=56 padding="space.sm space.md" testId="review-edit-name"
-                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
-                            text t("common.name") color="ink.muted" font="-exact-footnote"
-                            text newName font-weight=600 testId="review-name"
-                          Glyph(name="chevron", size=18)
-                        button class=SettingsRow appearance="none" press=goCreateStep("colour") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-colour"
-                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
-                            text t("edit.colour") color="ink.muted" font="-exact-footnote"
-                            text faceColor(newColor) font-weight=600 testId="review-colour"
-                          Glyph(name="chevron", size=18)
-                        button class=SettingsRow appearance="none" press=goCreateStep("shape") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-shape"
-                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
-                            text t("edit.shape") color="ink.muted" font="-exact-footnote"
-                            text newShape font-weight=600 testId="review-shape"
-                          Glyph(name="chevron", size=18)
-                        button class=SettingsRow appearance="none" press=goCreateStep("message") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-message"
-                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
-                            text t("create.firstMessage") color="ink.muted" font="-exact-footnote"
-                            text (newFirst.trim() == "" ? t("create.noMessage") : newFirst) font-weight=600 testId="review-first"
-                          Glyph(name="chevron", size=18)
-                  if createError != "" and not pending(created)
-                    text createError color="-exact-system-red" testId="create-error"
-              row justify-content="center" padding="space.md space.lg" border-top="1px solid surface.line" box-sizing="border-box"
-                column width="100%" max-width="34rem"
-                  if createStep == "review"
-                    button class=PrimaryButton buttonStyle="filled" press=create disabled=(newName.trim() == "" or pending(created)) width="100%" testId="create"
-                      text (pending(created) ? t("common.creating") : t("create.start"))
-                  else if createStep == "template"
-                    button class=PrimaryButton buttonStyle="filled" press=createNext width="100%" testId="create-skip"
-                      text t("create.skip")
-                  else
-                    button class=PrimaryButton buttonStyle="filled" press=createNext disabled=(createStep == "name" and newName.trim() == "") width="100%" testId="create-next"
-                      text t("create.next")
+            CreateBotScreen(route=e.id)
       if computerEnlarged and not locked and onComputer and computer.image != ""
         ComputerOverlay()
       if toast != ""
