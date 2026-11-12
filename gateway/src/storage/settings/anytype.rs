@@ -190,9 +190,69 @@ pub(crate) async fn anytype_check(
     let load = read_load(&state.cfg.data_root);
     let host = effective_host(&state.cfg.storage, &load.stored);
     let space = effective_space(&state.cfg.storage, &load.stored);
-    Ok(Json(
-        crate::storage::adapters::anytype::status(&host, &key, &space).await?,
-    ))
+    let mut value = crate::storage::adapters::anytype::status(&host, &key, &space).await?;
+    value["schemaReady"] = json!(schema_ready(&host, &key, &space).await);
+    Ok(Json(value))
+}
+
+async fn schema_ready(host: &str, key: &str, space: &str) -> bool {
+    let Ok(client) = crate::storage::adapters::anytype::open_client(host, key, space).await else {
+        return false;
+    };
+    crate::storage::adapters::anytype::schema_ready(&client)
+        .await
+        .unwrap_or(false)
+}
+
+/// Creates the hbots types in the saved space. `dryRun` lists what is missing.
+pub(crate) async fn anytype_setup(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    surface: Option<Extension<Surface>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    ensure_local(peer, &headers, surface_of(surface).as_ref())?;
+    let body = parse_json(&headers, &body)?;
+    let dry_run = match body.get("dryRun") {
+        None => false,
+        Some(Value::Bool(value)) => *value,
+        Some(_) => return Err(ApiError::bad_request("dryRun must be true or false.")),
+    };
+    let key = read_key(&state.cfg.data_root, &state.cfg.storage)
+        .ok_or_else(|| ApiError::new(409, "Connect to Anytype first."))?;
+    let load = read_load(&state.cfg.data_root);
+    let host = effective_host(&state.cfg.storage, &load.stored);
+    let space = effective_space(&state.cfg.storage, &load.stored);
+    let client = crate::storage::adapters::anytype::open_client(&host, &key, &space).await?;
+    let report = crate::storage::adapters::anytype::bootstrap(&client, dry_run)
+        .await
+        .map_err(setup_error)?;
+    Ok(Json(json!({
+        "dryRun": report.dry_run,
+        "types": report.types,
+        "properties": report.properties,
+        "meta": report.meta,
+        "schemaReady": report.schema_ready,
+        "keys": report.keys,
+    })))
+}
+
+fn setup_error(error: crate::storage::adapters::anytype::AnytypeError) -> ApiError {
+    use crate::storage::adapters::anytype::AnytypeError;
+    match error {
+        AnytypeError::Unreachable => ApiError::new(
+            502,
+            "Anytype is not reachable. Open the Anytype app and check the host.",
+        ),
+        AnytypeError::NotGranted => ApiError::new(403, "Anytype did not grant this space."),
+        AnytypeError::RateLimited { .. } => ApiError::new(429, "Anytype is busy. Try again."),
+        AnytypeError::EtagMismatch { .. }
+        | AnytypeError::ObjectArchived
+        | AnytypeError::Gone
+        | AnytypeError::ApiChanged
+        | AnytypeError::Bad { .. } => ApiError::new(502, "Anytype could not prepare the space."),
+    }
 }
 
 pub(crate) async fn delete_storage_key(

@@ -21,7 +21,7 @@ mod status;
 
 pub(crate) use error::AnytypeError;
 pub(crate) use pairing::{confirm_pairing, start_pairing};
-pub(crate) use status::status;
+pub(crate) use status::{open_client, status};
 
 use limiter::Limiter;
 

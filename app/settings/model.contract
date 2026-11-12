@@ -62,6 +62,8 @@ members Bots
 
   mutation storageRestarted as shape Reply
 
+  mutation anytypePrepared as shape Reply then afterAnytypePrepare
+
   mutation modelSaved as shape Reply refreshes models then afterModel
 
   mutation defaultSaved as shape Reply refreshes prefs, models
@@ -77,6 +79,8 @@ members Bots
   derive storagePath = folderEditing ? folderDraft : (storage.root != "" ? storage.root : "~/.hbots/bots")
 
   derive storageSaveError = match storageSaved { case some(r) => r.error, case none => "" }
+
+  derive anytypePrepareError = match anytypePrepared { case some(r) => r.error, case none => "" }
 
   derive storageTestError = match storageTested { case some(r) => r.error, case none => "" }
 
@@ -243,6 +247,19 @@ members Bots
   action doRestartStorage
     if storage.canRestart and storage.restartRequired and not pending(storageRestarted)
       send storageRestarted = restartStorage()
+
+  action doPrepareAnytype
+    if anytypeFound and not match anytypeChecked { case some(r) => r.schemaReady, case none => false } and not pending(anytypePrepared)
+      send anytypePrepared = prepareAnytype()
+
+  action afterAnytypePrepare
+    match anytypePrepared
+      case some(r)
+        if r.ok and not pending(anytypeChecked)
+          anytypeProbed = true
+          send anytypeChecked = checkAnytype()
+      case none
+        anytypeProbed = anytypeProbed
 
   // Projects: a board of items by kind, edited in a sheet.
   action doPickModel(bslug: string, instanceId: string, model: string, effort: string, mode: string)

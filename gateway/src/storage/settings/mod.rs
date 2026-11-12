@@ -50,7 +50,7 @@ use stored::*;
 use view::*;
 
 pub(crate) use anytype::{
-    anytype_check, delete_storage_key, pair_confirm, pair_start, put_storage_key,
+    anytype_check, anytype_setup, delete_storage_key, pair_confirm, pair_start, put_storage_key,
 };
 pub(crate) use env::ProcessEnv;
 pub(crate) use filesystem::resolve_root;

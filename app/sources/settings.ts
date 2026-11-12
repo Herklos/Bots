@@ -123,10 +123,11 @@ export const settingsSources = {
   confirmPairing: async ([challengeId, code], store) => reply(await call(store, '/api/storage/anytype/pair/confirm', { method: 'POST', body: JSON.stringify({ challengeId, code }) })),
   checkAnytype: async (_args, store): Promise<Result<'checkAnytype'>> => {
     const r = await call(store, '/api/storage/anytype/check', { method: 'POST', body: '{}' });
-    if (!r.ok) return { ok: false, error: localize(r.error), space: '', spaceFound: false, shared: false };
+    if (!r.ok) return { ok: false, error: localize(r.error), space: '', spaceFound: false, shared: false, schemaReady: false };
     const b = r.body ?? {};
-    return { ok: b.reachable === true && b.spaceFound === true, error: '', space: typeof b.space === 'string' ? b.space : '', spaceFound: b.spaceFound === true, shared: b.shared === true };
+    return { ok: b.reachable === true && b.spaceFound === true, error: '', space: typeof b.space === 'string' ? b.space : '', spaceFound: b.spaceFound === true, shared: b.shared === true, schemaReady: b.schemaReady === true };
   },
+  prepareAnytype: async (_args, store) => reply(await call(store, '/api/storage/anytype/setup', { method: 'POST', body: JSON.stringify({ dryRun: false }) })),
   loadProviders: async (_args, store): Promise<Result<'loadProviders'>> => {
     const p = await call(store, '/api/providers');
     return (p.ok && Array.isArray(p.body.providers) ? p.body.providers : []).map((x: any) => ({
@@ -191,4 +192,4 @@ export const settingsSources = {
   setDefaultModel: async ([instanceId, model, effort], store) => reply(await call(store, '/api/settings', {
     method: 'PUT', body: JSON.stringify({ defaultModel: { instanceId, model, ...(effort !== '' ? { effort } : {}) } }),
   })),
-} satisfies Pick<Sources, 'enableNotifications' | 'loadPrefs' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'setDefaultModel'>;
+} satisfies Pick<Sources, 'enableNotifications' | 'loadPrefs' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'setDefaultModel'>;

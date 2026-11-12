@@ -47,6 +47,7 @@ pub(super) struct MockState {
     pub rate_limits_left: u32,
     pub retry_after_secs: u64,
     pub delay: Duration,
+    pub rewrites: BTreeMap<String, String>,
 }
 
 impl MockState {
@@ -66,6 +67,7 @@ impl MockState {
             rate_limits_left: 0,
             retry_after_secs: 1,
             delay: Duration::ZERO,
+            rewrites: BTreeMap::new(),
         }
     }
 
@@ -173,9 +175,17 @@ impl MockState {
         Some(object_json(object))
     }
 
+    fn rewritten(&self, body: &Value) -> String {
+        let key = body["key"].as_str().unwrap_or("custom");
+        self.rewrites
+            .get(key)
+            .cloned()
+            .unwrap_or_else(|| key.to_string())
+    }
+
     pub(super) fn add_type(&mut self, body: &Value) -> Value {
         let row = json!({
-            "key": body["key"].as_str().unwrap_or("custom"),
+            "key": self.rewritten(body),
             "name": body["name"].as_str().unwrap_or(""),
             "layout": body["layout"].as_str().unwrap_or("basic"),
         });
@@ -185,7 +195,7 @@ impl MockState {
 
     pub(super) fn add_property(&mut self, body: &Value) -> Value {
         let row = json!({
-            "key": body["key"].as_str().unwrap_or("custom"),
+            "key": self.rewritten(body),
             "name": body["name"].as_str().unwrap_or(""),
             "format": body["format"].as_str().unwrap_or("text"),
         });

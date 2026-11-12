@@ -92,9 +92,6 @@ component Bots
   derive onGroup = top(nav).name == "group"
   derive workingHere = onGroup ? (paintedWorkers.length > 0 ? "working" : "") : (onBot and chat.working ? "working" : "")
   derive onLibrary = top(nav).name == "chat" and panelOpen and panelTab == "library"
-  // The inbox list refreshes on the inbox, and a chat refreshes on that chat.
-  // A wide window keeps the list beside the open conversation, so the list still refreshes.
-  // A hidden page waits about ten seconds. Sending, answering, or stopping skips the poll.
   task probeAnytype when networkGate == "1" and storage.keySet and not anytypeProbed and not pending(anytypeChecked)
     after(1, doAnytypeCheck)
   action pull
@@ -151,7 +148,6 @@ component Bots
     if storage.backendLock == "" and not pending(storageSaved) and backend != shownBackend and (backend == "filesystem" or (backend == "anytype" and anytypeOn))
       storageHint = ""
       send storageSaved = saveStorage(storagePath, backend, "0")
-  // Anytype: start pairing, type the 4 digit code the app shows, then check the space.
   action doPairStart
     if not pending(pairStarted)
       pairCode = ""
@@ -222,6 +218,7 @@ component Bots
   derive roomFailed = failed(room)
   derive groupMadePending = pending(groupMade)
   derive anytypeCheckedPending = pending(anytypeChecked)
+  derive anytypePreparedPending = pending(anytypePrepared)
   derive networkRestartedPending = pending(networkRestarted)
   derive networkSetPending = pending(networkSet)
   derive noticeAskedPending = pending(noticeAsked)
@@ -566,6 +563,9 @@ component Bots
     updateStuck
     updateTo
     anytypeCheckedPending
+    anytypePrepareError
+    anytypePreparedPending
+    doPrepareAnytype
     networkRestartedPending
     networkSetPending
     noticeAskedPending

@@ -123,6 +123,10 @@ pub(crate) fn app(state: Arc<AppState>) -> Router {
             "/api/storage/anytype/check",
             post(storage::settings::anytype_check),
         )
+        .route(
+            "/api/storage/anytype/setup",
+            post(storage::settings::anytype_setup),
+        )
         .route("/api/access/tailscale", post(access_tailscale))
         .route("/api/access/tunnel", post(access_tunnel))
         .route("/api/thread-previews", post(thread_previews))

@@ -1,11 +1,14 @@
 use Glyph from "../glyph.contract"
 use SectionLabel, IconTile, Field from "../ui/controls.contract"
-use Session, Network, Storage, networkModeLabel from "../ui/root-types.contract"
+use Session, Network, Storage, AnytypeCheck, networkModeLabel from "../ui/root-types.contract"
 use GroupCard, SettingsTrack, SettingsTab, SettingsRow, SettingsFoot, FieldLabel, FieldBox, ActionMain, ActionQuiet from "../ui/sidebar.contract"
 // AccessSettings: one settings domain, values injected from the root through SettingsScreen.
 component AccessSettings
   inject
+    anytypeChecked: option<AnytypeCheck>
     anytypeCheckedPending: bool
+    anytypePrepareError: string
+    anytypePreparedPending: bool
     anytypeError: string
     anytypeFound: bool
     anytypeOn: bool
@@ -18,6 +21,7 @@ component AccessSettings
     doEditSpace: action
     doPairConfirm: action
     doPairStart: action
+    doPrepareAnytype: action
     doPickBackend: action
     doRestartNetwork: action
     doRestartStorage: action
@@ -164,6 +168,13 @@ component AccessSettings
               if anytypeFound
                 text t("settings.anytype.space", name=anytypeSpace) color="-exact-label" font="-exact-footnote" testId="anytype-space"
                 text (anytypeShared ? t("settings.anytype.shared") : t("settings.anytype.private")) color="ink.muted" font="-exact-footnote" testId="anytype-shared"
+                if match anytypeChecked { case some(r) => r.schemaReady, case none => false }
+                  text t("settings.anytype.ready") color="-exact-label" font="-exact-footnote" font-weight=600 testId="anytype-ready"
+                else
+                  button appearance="none" class=ActionMain press=doPrepareAnytype disabled=anytypePreparedPending min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="anytype-prepare"
+                    text t("settings.anytype.prepare")
+                if anytypePrepareError != "" and not anytypePreparedPending
+                  text anytypePrepareError color="-exact-system-red" font="-exact-footnote" testId="anytype-prepare-error"
               else
                 text t("settings.anytype.missing", name=anytypeSpace) color="-exact-system-red" font="-exact-footnote" testId="anytype-missing"
       text t("settings.storage.folder") class=SectionLabel

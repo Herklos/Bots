@@ -17,6 +17,8 @@ component SettingsScreen
   inject
     about: About
     anytypeChecked: option<AnytypeCheck>
+    anytypePrepareError: string
+    anytypePreparedPending: bool
     anytypeError: string
     anytypeFound: bool
     anytypeOn: bool
@@ -39,6 +41,7 @@ component SettingsScreen
     doMuteGroup: action
     doPairConfirm: action
     doPairStart: action
+    doPrepareAnytype: action
     doPickBackend: action
     doPickTheme: action
     doRestartNetwork: action
@@ -124,7 +127,10 @@ component SettingsScreen
     updateStartedPending: bool
   provide
     about
+    anytypeChecked
     anytypeCheckedPending
+    anytypePrepareError
+    anytypePreparedPending
     anytypeError
     anytypeFound
     anytypeOn
@@ -147,6 +153,7 @@ component SettingsScreen
     doMuteGroup
     doPairConfirm
     doPairStart
+    doPrepareAnytype
     doPickBackend
     doPickTheme
     doRestartNetwork
