@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.8
+
+This release adds side conversations and prompt links, and improves helper policy enforcement and computer preview stability. It includes the changes described under 0.3.7, which has not yet been published.
+
+### New features
+
+- Start a side chat alongside a Bot's main thread with `/side` or `/btw`, then merge it back into the main thread.
+- Open a link containing a Bot and prompt as a draft. The message is sent only when you choose to send it.
+
+### Improvements
+
+- Apply the parent's helper policy when Bots create durable subagents through MCP, including enabled state, limits and defaults.
+- Keep the large computer preview visible while the next frame loads.
+- Close the mention menu with Escape or after a completed mention, and use shared mention rules across conversations.
+- Run the standard CI test matrix on Ubuntu; macOS release packaging remains in the release workflow.
+
 ## 0.3.7
 
 This release improves group mentions and adds routine review, computer preferences and provider usage information. It also includes the independent mode and memory API described under 0.3.6.
