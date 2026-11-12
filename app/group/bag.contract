@@ -1,0 +1,31 @@
+use Reply, Sent, Prefs, PointerFacts from "../ui/root-types.contract"
+use Bot, Row, Chat, RoomMember, Room, MentionHit from "../ui/shapes.contract"
+
+shape GroupBag
+  answerError: string
+  answerText: string
+  answered: option<Reply>
+  answeredPending: bool
+  away: bool
+  bots: Bot[]
+  chat: Chat
+  copiedMenu: string
+  groupPage: string
+  groupPanel: bool
+  groupSaveError: string
+  mentionHits: MentionHit[]
+  mentionIdx: number
+  messageMenu: string
+  paintedWorkers: RoomMember[]
+  pointerFacts: PointerFacts
+  prefs: Prefs
+  reactFor: string
+  room: Room
+  roomError: string
+  roomPending: string
+  roomRows: Row[]
+  roomSent: option<Sent>
+  roomText: string
+  wide: bool
+  roomSentPending: bool
+  roomFailed: bool

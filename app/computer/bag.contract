@@ -1,0 +1,10 @@
+use Bot, Computer from "../ui/shapes.contract"
+
+shape ComputerBag
+  computerEnlarged: bool
+  computer: Computer
+  onComputer: bool
+  holding: bool
+  locked: bool
+  bots: Bot[]
+  slug: string

@@ -1,7 +1,8 @@
 // The short message that fades over the bottom of the window.
+use ToastBag from "./toast-bag.contract"
 component ToastLine
   inject
-    toast: string
+    toastBag: ToastBag
   view
     row position="absolute" bottom=88 left="50%" translate="-50% 0" padding="space.md space.lg" border-radius="radius.full" background-color="-exact-label" color="surface.canvas" max-width="90%" box-sizing="border-box" testId="toast" role="status" aria-live="polite"
-      text toast font="-exact-subheadline" font-weight=500
+      text toastBag.toast font="-exact-subheadline" font-weight=500

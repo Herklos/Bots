@@ -8,24 +8,10 @@ use LockScreen from "./session/lock.contract"
 use ChatScreen from "./chat/screen.contract"
 use Inbox from "./inbox/screen.contract"
 use VaultScreen from "./vault/screen.contract"
-use EmptyState from "exact:content"
-use Face from "./face.contract"
-use getUserMedia, stopTrack, MediaStream, MediaStreamTrack from "@exact/media-capture"
-use startMediaRecorder, stopMediaRecorder, isTypeSupported, MediaRecorderInfo, RecordedMedia, TypeSupport from "@exact/recording"
-use requestNotificationPermission, NotificationStatus from "@exact/notifications"
-use InboxRow from "./inbox/inbox.contract"
-use Faces, GroupPanel, ChiefList from "./group/group.contract"
-use LoginSheet, ModelPicker, UsageView from "./settings/settings.contract"
-use shapeOf, colorOf, showUnread, memberFaces, memberCalled, quietPolicyHint from "./ui/fns.contract"
-use ChoiceRow from "./ui/panel.contract"
-use Bot, Chat, Room, Convo, Login, Provider, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer from "./ui/shapes.contract"
-use Reply, Sent, DriveReply, Session, Network, Storage, Pairing, AnytypeCheck, Suggestion, About, SystemStatus, UpdateStart, Health, Made, Prefs, PageState, NoticeState, Attached, VoiceHeld, Revealed, Usage, pageKeyKind, pageKeyCode, pageModifiers, pageChord, DraftPack, HostTime, PointerFacts, nameOf, initialsOf, botCountLabel, settingsDomainLabel, noticeOn, mutedBots, mutedGroups, firstMutedBot, firstMutedGroup, noticeStatusLabel, networkModeLabel, attachmentName, convoKey, dropKey, putText, putVoice, fieldAt, voiceNumber, entryId, hasFileId, hasVoiceId, themeLabel, pickedFaces, withWorking, withRoomPending, roomLine, transcriptId, knownSent, botCount, holdWorking, withPending, wordChar, mentionReplace, botMentions, roomMentions, filterMentions from "./ui/root-types.contract"
+use LoginSheet from "./settings/settings.contract"
+use Login from "./ui/shapes.contract"
 use Screen from "./ui/controls.contract"
-use SidebarBar, Disc, TileLink, HeaderToggle, SendControl, StopControl, SearchField, SettingsTrack, SettingsTab, SettingsFoot, FieldLabel, FieldBox, ActionMain, ActionQuiet, BotRow from "./ui/sidebar.contract"
-use ChatLog from "./chat/log.contract"
-use MentionMenu from "./chat/mention.contract"
-use BotPanel from "./bot/panel.contract"
-use FirstBot from "./bot/first.contract"
+
 routes nav
   inbox "/"
     chat "/bot/:slug"
@@ -37,148 +23,7 @@ routes nav
         vaultAdd "/vault/new"
         vaultEdit "/vault/:id"
 component Bots
-  // Kept while this send's turn is open, so a poll that says working is false does not drop the row.
-  state holdWork = false
-  // Bot messages already in the transcript when the send started. A newer one ends the turn.
-  state botMark = 0
-  state roomSentId = ""
-  state roomText = ""
-  state plusOpen = false
-  state groupPanel = false
-  state spaceDraft = ""
-  state spaceEditing = false
-  state pairCode = ""
-  state pairStep = ""
-  state anytypeProbed = false
-  resource hostTime = exactTime() as shape HostTime
-  resource pointerFacts = exactViewport() as shape PointerFacts
-  resource session = loadSession(hostTime.locale) as shape Session else empty()
-  resource bots = loadBots(slug != "" ? slug : roomId) as shape Bot[] else empty()
-  resource page = exactPage() as shape PageState
-  resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId) as shape Convo[] else empty()
-  resource chat = loadChat(slug, childThread) as shape Chat else empty()
-  resource room = loadRoom(roomId) as shape Room else empty()
-  resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
-  resource providers = loadProviders() as shape Provider[] else empty()
-  mutation noted as shape Reply
-  mutation spaceSaved as shape Reply refreshes storage then afterSpaceSave
-  mutation pairStarted as shape Pairing then afterPairStart
-  mutation pairConfirmed as shape Reply then afterPairConfirm
-  mutation anytypeChecked as shape AnytypeCheck
-  derive slug = match stack(nav).filter(e => e.name == "chat").at(-1) { case some(e) => e.params.slug, case none => "" }
-  derive lastRoomId = match room.messages.at(-1) { case some(m) => m.id, case none => "" }
-  derive query = botQuery.trim().toLowerCase()
-  derive roomId = match stack(nav).filter(e => e.name == "group").at(-1) { case some(e) => e.params.id, case none => "" }
-  // The sidebar follows the latest conversation on the route, a chat or a group, never both.
-  derive convoName = match stack(nav).filter(e => e.name == "chat" or e.name == "group").at(-1) { case some(e) => e.name, case none => "" }
-  derive roomRows = withRoomPending(withWorking(room.messages, paintedWorkers.length > 0), roomPending, roomSentId).map(m => roomLine(m))
-  derive laterBot = botCount(chat.rows) > botMark
-  derive spaceName = spaceEditing ? spaceDraft : storage.space
-  derive spaceSaveError = match spaceSaved { case some(r) => r.error, case none => "" }
-  derive pairChallenge = match pairStarted { case some(r) => r.challengeId, case none => "" }
-  derive pairError = match pairStarted { case some(r) => r.error, case none => "" }
-  derive pairConfirmError = match pairConfirmed { case some(r) => r.error, case none => "" }
-  derive anytypeError = match anytypeChecked { case some(r) => r.error, case none => "" }
-  derive anytypeSpace = match anytypeChecked { case some(r) => r.space, case none => "" }
-  derive anytypeFound = match anytypeChecked { case some(r) => r.spaceFound, case none => false }
-  derive anytypeShared = match anytypeChecked { case some(r) => r.shared, case none => false }
-  derive anytypeOn = pairStep == "checked" and anytypeError == "" and anytypeFound and not pending(anytypeChecked)
-  derive shownBackend = (storage.backend == "anytype" and anytypeOn) ? "anytype" : "filesystem"
-  derive pendingAttaches = draftFiles.filter(f => f.startsWith(`${dkey}\u001f`)).map(f => f.slice(dkey.length + 1))
-  derive canSend = draft.trim() != "" or pendingAttaches.length > 0
-  derive onBot = top(nav).name == "chat"
-  derive onGroup = top(nav).name == "group"
-  derive workingHere = onGroup ? (paintedWorkers.length > 0 ? "working" : "") : (onBot and chat.working ? "working" : "")
-  derive onLibrary = top(nav).name == "chat" and panelOpen and panelTab == "library"
-  task probeAnytype when networkGate == "1" and storage.keySet and not anytypeProbed and not pending(anytypeChecked)
-    after(1, doAnytypeCheck)
-  action pull
-    refresh bots
-    if top(nav).name == "inbox" or wide
-      refresh convos
-    if top(nav).name == "chat"
-      refresh chat
-      if openUnread and not pending(seen)
-        send seen = markSeen(slug)
-    if top(nav).name == "group"
-      refresh room
-      if roomId != "" and not pending(roomSeen)
-        send roomSeen = markRoomSeen(roomId)
-    if top(nav).name == "settings"
-      refresh usage
-      refresh report
-      if settingsDomain == "updates"
-        refresh system
-    if onLibrary
-      refresh shelf
-    if onComputer
-      refresh computer
-    if onBot and panelOpen and panelTab == "details"
-      refresh models
-      refresh routines
-      refresh lineage
-      refresh report
-  action goCreateStep(s: string)
-    createStep = s
-  action goGroupStep(s: string)
-    groupStep = s
-  action togglePlus
-    plusOpen = not plusOpen
-  action applyScheme
-    setScheme(prefs.theme)
-  action doEditSpace(v: string)
-    spaceDraft = v
-    spaceEditing = true
-  action doSaveSpace
-    if storage.spaceLock == "" and not pending(spaceSaved)
-      send spaceSaved = saveSpace(spaceDraft.trim())
-  action afterSpaceSave
-    match spaceSaved
-      case some(r)
-        if r.ok
-          spaceEditing = false
-          if not pending(anytypeChecked)
-            anytypeProbed = true
-            send anytypeChecked = checkAnytype()
-      case none
-        spaceEditing = spaceEditing
-  action doPickBackend(backend: string)
-    if storage.backendLock == "" and not pending(storageSaved) and backend != shownBackend and (backend == "filesystem" or (backend == "anytype" and anytypeOn))
-      storageHint = ""
-      send storageSaved = saveStorage(storagePath, backend, "0")
-  action doPairStart
-    if not pending(pairStarted)
-      pairCode = ""
-      pairStep = ""
-      send pairStarted = startPairing()
-  action afterPairStart
-    match pairStarted
-      case some(r)
-        if r.ok
-          pairStep = "code"
-      case none
-        pairStep = pairStep
-  action doEditPairCode(v: string)
-    pairCode = v.trim()
-  action doPairConfirm
-    if pairChallenge != "" and pairCode.length == 4 and not pending(pairConfirmed)
-      send pairConfirmed = confirmPairing(pairChallenge, pairCode)
-  action afterPairConfirm
-    match pairConfirmed
-      case some(r)
-        if r.ok
-          pairStep = "checked"
-          pairCode = ""
-          anytypeProbed = true
-          send anytypeChecked = checkAnytype()
-      case none
-        pairStep = pairStep
-  action doAnytypeCheck
-    if not pending(anytypeChecked)
-      pairStep = "checked"
-      anytypeProbed = true
-      send anytypeChecked = checkAnytype()
-
+  members "./shell/held.contract"
   members "./computer/model.contract"
   members "./vault/model.contract"
   members "./settings/model.contract"
@@ -193,65 +38,15 @@ component Bots
   members "./group/model.contract"
   members "./shell/model.contract"
   members "./usage/model.contract"
-  derive vaultFailed = failed(vault)
-  derive vaultPending = pending(vault)
-  derive botsFailed = failed(bots)
-  derive chatFailed = failed(chat)
-  derive chatPending = pending(chat)
-  derive answeredPending = pending(answered)
-  derive attachedPending = pending(attached)
-  derive voiceSentPending = pending(voiceSent)
-  derive sentPending = pending(sent)
-  derive modelsFailed = failed(models)
-  derive routinesFailed = failed(routines)
-  derive lineageFailed = failed(lineage)
-  derive reportFailed = failed(report)
-  derive shelfFailed = failed(shelf)
-  derive computerFailed = failed(computer)
-  derive subCreatedPending = pending(subCreated)
-  derive createdPending = pending(created)
-  derive subSavedPending = pending(subSaved)
-  derive childModelsFailed = failed(childModels)
-  derive signedInPending = pending(signedIn)
-  derive roomSentPending = pending(roomSent)
-  derive roomFailed = failed(room)
-  derive groupMadePending = pending(groupMade)
-  derive anytypeCheckedPending = pending(anytypeChecked)
-  derive anytypePreparedPending = pending(anytypePrepared)
-  derive networkRestartedPending = pending(networkRestarted)
-  derive networkSetPending = pending(networkSet)
-  derive noticeAskedPending = pending(noticeAsked)
-  derive pairConfirmedPending = pending(pairConfirmed)
-  derive pairStartedPending = pending(pairStarted)
-  derive passwordSetPending = pending(passwordSet)
-  derive spaceSavedPending = pending(spaceSaved)
-  derive storageCopiedPending = pending(storageCopied)
-  derive storageRestartedPending = pending(storageRestarted)
-  derive storageSavedPending = pending(storageSaved)
-  derive storageTestedPending = pending(storageTested)
-  derive systemPending = pending(system)
-  derive updateStartedPending = pending(updateStarted)
+  members "./shell/flags.contract"
+  members "./shell/bag-chat.contract"
+  members "./shell/bag-settings.contract"
+  members "./shell/bag-rest.contract"
   provide
     open
-    vaultQuery
-    vault
-    vquery
-    shownVault
     editVaultQuery
     login
-    query
-    vaultFailed
-    vaultPending
-    prefs
     openSettings
-    botQuery
-    searching
-    hiddenOpen
-    rowMenu
-    firstRun
-    visibleBots
-    tiles
-    hiddenBots
     openHidden
     editBotQuery
     openSearch
@@ -264,16 +59,7 @@ component Bots
     retry
     openNewGroup
     doMuteGroup
-    newColor
-    newShape
-    newName
-    newFirst
-    newPrompt
-    createStep
-    suggestions
-    createError
     created
-    createdPending
     createBack
     createNext
     create
@@ -283,46 +69,16 @@ component Bots
     pickShape
     useStart
     goCreateStep
-    wide
     openNew
     doHide
     doMute
     doMain
     doPin
-    plusOpen
-    bots
-    convos
-    chat
-    slug
-    roomId
-    convoName
     pull
     togglePlus
-    botsFailed
-    system
-    models
-    modelError
     doPickModel
-    shownRows
-    searchNote
-    away
     toEnd
     moved
-    answerText
-    chatSearching
-    messageQuery
-    reactFor
-    messageMenu
-    copiedMenu
-    replyTo
-    replyQuote
-    childThread
-    sent
-    answered
-    attached
-    pendingText
-    attachError
-    answerError
     editChatQuery
     toggleChatSearch
     edit
@@ -344,49 +100,17 @@ component Bots
     answer
     stop
     pasted
-    paintedWorkers
     openPage
     pickPeriod
     pickView
     back
     closeChild
     openChild
-    draft
-    mentionIdx
-    mentionHits
     mention
     completeMention
-    usagePeriod
-    usageView
-    report
-    childModels
-    routines
-    lineage
-    shelf
-    voiceRecorder
-    voiceError
-    voiceSent
-    voiceHold
-    voiceId
-    voicePreview
     holdVoice
     sendHeldVoice
     discardVoice
-    panelOpen
-    panelTab
-    panelPage
-    subSlug
-    subName
-    subShape
-    subColor
-    subPrompt
-    subInherit
-    subCreated
-    subSaved
-    botError
-    subError
-    subSaveError
-    childRemoveError
     togglePanel
     retryDetails
     pickPanelTab
@@ -406,16 +130,6 @@ component Bots
     doSaveSub
     doDropChild
     doReshape
-    heldTab
-    computerTab
-    computer
-    controlError
-    openError
-    openingBrowser
-    closeError
-    closingBrowser
-    driveError
-    holding
     doTake
     doRelease
     pickComputerTab
@@ -423,90 +137,33 @@ component Bots
     doOpenBrowser
     doCloseBrowser
     showComputerLarge
-    pointerFacts
-    page
-    pendingAttaches
-    canSend
-    chatFailed
-    chatPending
-    answeredPending
-    attachedPending
-    voiceSentPending
-    sentPending
-    modelsFailed
-    routinesFailed
-    lineageFailed
-    reportFailed
-    shelfFailed
-    computerFailed
-    subCreatedPending
-    subSavedPending
-    childModelsFailed
     editPassword
-    password
-    signedIn
-    signInError
-    locked
-    signedInPending
-    computerEnlarged
-    onComputer
     largePageKey
     largePoint
     largeWheel
     largePaste
     hideComputerLarge
-    toast
     addGroupMember
     closeGroupAdd
     dropGroup
     editRoomText
     groupBack
-    groupPage
-    groupPanel
-    groupSaveError
     openGroupAdd
     openGroupEdit
     patchGroup
     postRoom
     removeGroupMember
-    room
-    roomError
     roomKey
-    roomPending
-    roomRows
-    roomSent
-    roomText
     toggleGroupPanel
-    roomSentPending
-    roomFailed
-    canMakeGroup
     editGroupAbout
     editGroupName
     goGroupStep
-    groupAbout
-    groupError
-    groupMade
-    groupMembers
-    groupName
-    groupPolicy
-    groupStep
     groupStepBack
     groupStepNext
     makeGroup
     pickGroupPolicy
-    pickableBots
     toggleGroupMember
-    groupMadePending
-    groupChief
     pickGroupChief
-    about
-    anytypeChecked
-    anytypeError
-    anytypeFound
-    anytypeOn
-    anytypeShared
-    anytypeSpace
-    canUpdate
     doAllowNotices
     doAnytypeCheck
     doCopyStorage
@@ -532,70 +189,20 @@ component Bots
     doTestStorage
     editNewPassword
     logout
-    nameDraft
-    nameEditing
-    network
-    networkError
-    networkRestartError
-    networkRestarted
-    networkSet
-    newPassword
-    notice
-    noticeAsked
-    pairCode
-    pairConfirmError
-    pairConfirmed
-    pairError
-    pairStarted
-    pairStep
-    passwordError
-    passwordSet
     pickSettingsDomain
-    prefsError
-    providers
     saveNoticePart
     saveNotifications
-    session
-    settingsDomain
-    shownBackend
-    spaceEditing
-    spaceName
-    spaceSaveError
-    spaceSaved
-    storage
-    storageCopied
-    storageCopyError
-    storageHint
-    storagePath
-    storageRestartError
-    storageRestarted
-    storageSaveError
-    storageSaved
-    storageTestError
-    storageTested
-    updateError
-    updateFrom
-    updateNeedsService
-    updateStarted
-    updateStuck
-    updateTo
-    anytypeCheckedPending
-    anytypePrepareError
-    anytypePreparedPending
     doPrepareAnytype
-    networkRestartedPending
-    networkSetPending
-    noticeAskedPending
-    pairConfirmedPending
-    pairStartedPending
-    passwordSetPending
-    spaceSavedPending
-    storageCopiedPending
-    storageRestartedPending
-    storageSavedPending
-    storageTestedPending
-    systemPending
-    updateStartedPending
+    inboxBag
+    chatBag
+    groupBag
+    settingsBag
+    vaultBag
+    newGroupBag
+    createBotBag
+    computerBag
+    lockBag
+    toastBag
   view
     main id="app-shell" class=Screen navigationKey=`${top(nav).id}` navigationBack="back" navigate=open beforeunload=writeDrafts interactive-widget="resizes-content" position="relative" width="100%" height="100%" testId="app"
       if locked

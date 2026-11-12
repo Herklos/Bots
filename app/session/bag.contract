@@ -1,0 +1,9 @@
+use Reply, SystemStatus from "../ui/root-types.contract"
+
+shape LockBag
+  system: SystemStatus
+  password: string
+  signedIn: option<Reply>
+  signInError: string
+  locked: bool
+  signedInPending: bool

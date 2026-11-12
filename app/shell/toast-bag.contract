@@ -1,0 +1,2 @@
+shape ToastBag
+  toast: string
