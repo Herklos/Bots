@@ -1,0 +1,51 @@
+{
+  "_note": "Redacted html_render and t3McpApp results as a completed dynamic_tool output can carry them. The page bytes are not in the transcript.",
+  "direct": {
+    "htmlRender": {
+      "attachmentId": "att-spend-html",
+      "title": " Spend by month ",
+      "height": 420,
+      "heights": [[900, 400], [320, 380]]
+    },
+    "message": "Shown above the reply."
+  },
+  "jsonText": "{\"htmlRender\":{\"attachmentId\":\"att-spend-html\",\"title\":\"Spend by month\",\"height\":420},\"message\":\"Shown above the reply.\"}",
+  "structured": {
+    "structuredContent": {
+      "htmlRender": {
+        "attachmentId": "att-spend-html",
+        "title": "Spend by month",
+        "height": 420
+      },
+      "message": "Shown above the reply."
+    },
+    "content": []
+  },
+  "blocks": [
+    {
+      "type": "text",
+      "text": "{\"htmlRender\":{\"attachmentId\":\"att-spend-html\",\"title\":\"Spend by month\",\"height\":420},\"message\":\"Shown above the reply.\"}"
+    }
+  ],
+  "dottedName": "t3-code.html_render",
+  "scopedName": "t3-code-thread_1_html_render",
+  "mcp": {
+    "t3McpApp": {
+      "attachmentId": "app-forecast-html",
+      "server": "weather",
+      "tool": "forecast",
+      "resourceUri": "ui://weather/forecast",
+      "csp": { "connectDomains": ["https://cdn.example.test"] },
+      "permissions": { "clipboardWrite": {}, "camera": "no" },
+      "prefersBorder": true
+    }
+  },
+  "failed": {
+    "isError": true,
+    "htmlRender": {
+      "attachmentId": "att-spend-html",
+      "title": "Spend by month",
+      "height": 420
+    }
+  }
+}

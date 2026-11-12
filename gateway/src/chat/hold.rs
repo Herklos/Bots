@@ -9,7 +9,7 @@ pub(crate) const LOOK_EVERY: Duration = Duration::from_millis(500);
 /// Fields that should repaint an open chat. `now` is left out: it changes on every read
 /// and is only there so the client can label days.
 pub(crate) fn paint_slice(view: &Value) -> Value {
-    json!({
+    let mut slice = json!({
         "messages": view.get("messages").cloned().unwrap_or(json!([])),
         "events": view.get("events").cloned().unwrap_or(json!([])),
         "requests": view.get("requests").cloned().unwrap_or(json!([])),
@@ -17,7 +17,13 @@ pub(crate) fn paint_slice(view: &Value) -> Value {
         "pins": view.get("pins").cloned().unwrap_or(json!([])),
         "readOnly": view.get("readOnly").and_then(Value::as_bool).unwrap_or(false),
         "threadId": view.get("threadId").and_then(Value::as_str).unwrap_or(""),
-    })
+    });
+    // A page is not a message. The key is added only when the transcript has one,
+    // so a chat with no page keeps its tag and a new page still wakes the hold.
+    if let Some(renders) = view.get("renders") {
+        slice["renders"] = renders.clone();
+    }
+    slice
 }
 
 /// A stable tag for one transcript. A child thread, when the body carries one, uses the same fields.
