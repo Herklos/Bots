@@ -45,10 +45,10 @@ export const librarySources = {
       effortLabel: mod?.efforts.find((e: any) => e.id === effort)?.label ?? '', efforts: mod?.efforts ?? [], providers,
     };
   },
-  setModel: async ([slug, instanceId, model, effort, mode], store) => {
+  setModel: async ([slug, instanceId, model, effort, mode, confirm], store) => {
     if (slug === 'fixture') return rememberFixtureModel(instanceId, model, effort, mode);
     return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/model`, {
-      method: 'PUT', body: JSON.stringify({ instanceId, model, ...(effort !== '' ? { effort } : {}), ...(mode !== '' ? { runtimeMode: mode } : {}) }),
+      method: 'PUT', body: JSON.stringify({ instanceId, model, ...(effort !== '' ? { effort } : {}), ...(mode !== '' ? { runtimeMode: mode } : {}), ...(confirm === '1' ? { confirmSwitch: true } : {}) }),
     }));
   },
   loadRoutines: async ([slug, gate, locale], store): Promise<Result<'loadRoutines'>> => {

@@ -1,6 +1,7 @@
 use Reply, Session, Network, Storage, Pairing, AnytypeCheck, About, SystemStatus, UpdateStart, Prefs, NoticeState from "../ui/root-types.contract"
 use MachineList from "./machines.contract"
 use Bot, Convo, Provider, UsageReport from "../ui/shapes.contract"
+use LimitList from "./limits.contract"
 
 use NotificationStatus from "@exact/notifications"
 
@@ -44,6 +45,9 @@ shape SettingsBag
   prefs: Prefs
   prefsError: string
   providers: Provider[]
+  limits: LimitList
+  limitCooling: bool
+  limitError: string
   report: UsageReport
   reportFailed: bool
   session: Session

@@ -270,7 +270,7 @@ members Bots
   // Projects: a board of items by kind, edited in a sheet.
   action doPickModel(bslug: string, instanceId: string, model: string, effort: string, mode: string)
     if not pending(modelSaved)
-      send modelSaved = setModel(bslug, instanceId, model, effort, mode)
+      send modelSaved = setModel(bslug, instanceId, model, effort, mode, "")
 
   action afterModel
     if modelError == ""

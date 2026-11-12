@@ -90,4 +90,6 @@ members Bots
     childModelsFailed=childModelsFailed,
     linkDraft=linkDraft,
     linkLocal=pageOrigin.local,
+    limits=providerLimits.providers,
+    limitFocus=limitFocus,
   )

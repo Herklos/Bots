@@ -4,6 +4,7 @@ import { noteLocale, call, read, fresh, reply, sentFrom, localize } from '../hos
 import { NOT_IN_VIEW } from '../host/markdown.ts';
 import { FIXTURE_SLUG, shutNotice } from '../host/notices.ts';
 import { threads, chatKept, forgetChat, forgetMeta, lastMessageId, threadMeta, chatRows, storeUpload, draftMap, draftRows } from '../host/session.ts';
+import { paintLimitEvents } from '../host/limits.ts';
 
 export const chatSources = {
   reactTo: async ([slug, item, emoji, thread], store) => {
@@ -56,6 +57,7 @@ export const chatSources = {
     const body = res.body;
     const threadId = String(body.threadId ?? '');
     const now = Number(body.now);
+    paintLimitEvents(body, now);
     const meta = threadId === '' ? {} : await threadMeta(store, threadId, lastMessageId(body), now);
     if (lane === '') threads[slug] = threadId;
     const rows = chatRows(slug, body, now, meta.reactions ?? {}, meta.replyTo ?? {});

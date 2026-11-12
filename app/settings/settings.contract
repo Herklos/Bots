@@ -4,6 +4,7 @@ use Glyph from "../glyph.contract"
 use keptEffort, modelEfforts, faceColor from "../ui/fns.contract"
 use ChoiceRow from "../ui/panel.contract"
 use Bot, Login, Provider, ModelList, UsageReport from "../ui/shapes.contract"
+use limitHint, ProviderLimit from "./limits.contract"
 use Screen, PageHeader, SectionLabel, Segment, Field, FormList from "../ui/controls.contract"
 
 component LoginSheet
@@ -102,10 +103,12 @@ component ModelPicker
     effort: string
     prefix: string
     pick: action
+    limits: ProviderLimit[]
+    focus: string
   state viewing = ""
   action showProvider(id: string)
     viewing = id
-  derive shownProvider = viewing != "" ? viewing : instanceId
+  derive shownProvider = viewing != "" ? viewing : (focus != "" ? focus : instanceId)
   view
     column gap="space.md" testId=`${prefix}-picker`
       if providers.length > 1
@@ -115,11 +118,15 @@ component ModelPicker
               text p.name
       for p in providers.filter(x => x.instanceId == shownProvider and x.account != "") key=p.instanceId
         text p.account color="ink.muted" font="-exact-footnote" padding="0 space.xs"
+      for hit in limits.filter(x => x.instanceId == shownProvider and x.hint != "") key=hit.instanceId
+        text hit.hint color="ink.muted" font="-exact-footnote" padding="0 space.xs" testId=`${prefix}-limit-hint`
       column gap="2px" role="radiogroup" aria-label=t("panel.model")
         for p in providers.filter(x => x.instanceId == shownProvider) key=p.instanceId
           for m in p.models key=m.slug
-            button class=ChoiceRow appearance="none" role="radio" aria-checked=(instanceId == p.instanceId and model == m.slug) press=pick(p.instanceId, m.slug, keptEffort(m.efforts, effort)) testId=`${prefix}-${m.slug}` background-color=(instanceId == p.instanceId and model == m.slug ? "surface.raised" : "transparent")
+            button class=ChoiceRow appearance="none" role="radio" aria-checked=(instanceId == p.instanceId and model == m.slug) press=pick(p.instanceId, m.slug, keptEffort(m.efforts, effort)) testId=`${prefix}-${m.slug}` aria-label=(limitHint(limits, p.instanceId) != "" ? t("limits.row", name=m.name, hint=limitHint(limits, p.instanceId)) : m.name) background-color=(instanceId == p.instanceId and model == m.slug ? "surface.raised" : "transparent")
               text m.name font-weight=500 flex=1 min-width=0
+              if limitHint(limits, p.instanceId) != ""
+                text limitHint(limits, p.instanceId) color="ink.muted" font="-exact-footnote" flex=1 min-width=0
               if m.recommended
                 text t("model.recommended") color="ink.faint" font="-exact-footnote"
               if instanceId == p.instanceId and model == m.slug
@@ -138,6 +145,8 @@ component ModelPage
     bot: Bot
     pick: action
     error: string
+    limits: ProviderLimit[]
+    limitFocus: string
   action choose(i: string, m: string, e: string)
     pick(bot.slug, i, m, e, "")
   action chooseMode(mode: string)
@@ -150,7 +159,7 @@ component ModelPage
         text t("model.noProviderLong") color="ink.muted" testId="provider-none"
       else
         column gap="space.xs"
-          ModelPicker(providers=models.providers, instanceId=models.instanceId, model=models.current, effort=models.effort, prefix="model", pick=choose)
+          ModelPicker(providers=models.providers, instanceId=models.instanceId, model=models.current, effort=models.effort, prefix="model", pick=choose, limits=limits, focus=limitFocus)
           text t("model.applies", name=bot.name) color="ink.muted" font="-exact-footnote" padding="0 space.xs"
         column gap="space.xs"
           row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("model.access")

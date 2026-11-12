@@ -1,0 +1,41 @@
+locale "en-US"
+
+test "Settings shows provider limit bars"
+  tap "Settings"
+  clock data
+  tap "settings-domain-models"
+  clock data
+  expect tree has "limit-card-claudeAgent"
+  expect text "limit-used-5h" == "5 hour 96% used"
+  expect text "limit-level-5h" == "Almost at the limit"
+  expect text "limit-used-week" == "Weekly 62% used"
+  expect tree missing "limit-level-week"
+  expect text "limit-used-month" == "Monthly 88% used"
+  expect text "limit-level-month" == "Near the limit"
+  expect text "limit-quiet-quiet" == "Usage isn't reported"
+  expect text "limit-state-away" == "Signed out"
+  expect text "limits-refresh" == "Refresh"
+  expect text "limits-sample" == "hbots could not reach the gateway, so these bars are a sample."
+
+test "the model page hints at the provider limit"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  clock data
+  tap "model-row"
+  clock data
+  expect tree has "model-limit-hint"
+  expect text "model-limit-hint" == "Claude 96% used, resets 5:00 PM"
+  expect tree missing "limits-sample"
+
+test "Switch model opens the model page on the alternative"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  expect text "event-verb-e-limit" == "Claude is at 95% until 5:00 PM"
+  expect tree has "limit-switch"
+  tap "limit-switch"
+  clock data
+  expect tree has "model-page"
+  expect state models.current == "sonnet"

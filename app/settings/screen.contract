@@ -33,6 +33,7 @@ component SettingsScreen
     doEditSpace: action
     doGroupAnswer: action
     doMakeDefault: action
+    doRefreshLimits: action
     doMute: action
     doMuteGroup: action
     doPairConfirm: action
@@ -90,6 +91,10 @@ component SettingsScreen
     doEditSpace
     doGroupAnswer
     doMakeDefault
+    doRefreshLimits
+    limits = settingsBag.limits
+    limitCooling = settingsBag.limitCooling
+    limitError = settingsBag.limitError
     doMute
     doMuteGroup
     doPairConfirm

@@ -1,5 +1,6 @@
 use Reply, Session, Pairing, AnytypeCheck, Suggestion, PageState, HostTime, PointerFacts, withWorking, withRoomPending, roomLine, botCount from "../ui/root-types.contract"
 use Bot, Chat, Room, Convo, Provider from "../ui/shapes.contract"
+use LimitList, LimitReply from "../settings/limits.contract"
 
 members Bots
   // Kept while this send's turn is open, so a poll that says working is false does not drop the row.
@@ -25,6 +26,9 @@ members Bots
   resource room = loadRoom(roomId) as shape Room else empty()
   resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
   resource providers = loadProviders() as shape Provider[] else empty()
+  state limitFocus = ""
+  resource providerLimits = loadLimits(limitGate, hostTime.locale) as shape LimitList else empty()
+  mutation limitsRefreshed as shape LimitReply refreshes providerLimits
   mutation noted as shape Reply
   mutation spaceSaved as shape Reply refreshes storage then afterSpaceSave
   mutation pairStarted as shape Pairing then afterPairStart
@@ -54,6 +58,9 @@ members Bots
   derive pendingAttaches = draftFiles.filter(f => f.startsWith(`${dkey}\u001f`)).map(f => f.slice(dkey.length + 1))
   derive canSend = draft.trim() != "" or pendingAttaches.length > 0
   derive onBot = top(nav).name == "chat"
+  derive limitGate = slug == "fixture" and onBot and panelOpen and panelPage == "model" ? "fixture" : ((top(nav).name == "settings" and settingsDomain == "models") or (onBot and panelOpen and panelPage == "model")) ? "1" : "0"
+  derive limitCooling = match limitsRefreshed { case some(r) => r.cooling, case none => false }
+  derive limitError = match limitsRefreshed { case some(r) => r.error, case none => "" }
   derive onGroup = top(nav).name == "group"
   derive workingHere = onGroup ? (paintedWorkers.length > 0 ? "working" : "") : (onBot and chat.working ? "working" : "")
   derive onLibrary = top(nav).name == "chat" and panelOpen and panelTab == "library"
@@ -76,6 +83,8 @@ members Bots
     if top(nav).name == "settings"
       refresh usage
       refresh report
+      if settingsDomain == "models"
+        refresh providerLimits
       if settingsDomain == "updates"
         refresh system
       if settingsDomain == "computers"
@@ -87,6 +96,8 @@ members Bots
     if onComputer
       refresh computer
       refresh places
+    if onBot and panelOpen and panelPage == "model"
+      refresh providerLimits
     if onBot and panelOpen and panelTab == "details"
       refresh models
       refresh routines
@@ -152,3 +163,12 @@ members Bots
       pairStep = "checked"
       anytypeProbed = true
       send anytypeChecked = checkAnytype()
+  action doRefreshLimits
+    if not pending(limitsRefreshed)
+      send limitsRefreshed = refreshLimits()
+  action doSwitchLimit(bslug: string, instanceId: string, model: string)
+    if instanceId != "" and model != "" and not pending(modelSaved)
+      panelOpen = true
+      panelPage = "model"
+      limitFocus = instanceId
+      send modelSaved = setModel(bslug, instanceId, model, "", "", "1")

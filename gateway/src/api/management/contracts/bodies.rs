@@ -294,7 +294,8 @@ impl Operation {
             | "hbots_access_network_restart"
             | "hbots_restart_storage"
             | "hbots_anytype_check"
-            | "hbots_start_update" => object(&[], &[]),
+            | "hbots_start_update"
+            | "hbots_providers_refresh" => object(&[], &[]),
             "hbots_delete_bot"
             | "hbots_remove"
             | "hbots_library_delete"

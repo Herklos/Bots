@@ -113,6 +113,22 @@ pub(crate) async fn providers_limits(State(s): S) -> ApiResult<Json<Value>> {
     Ok(Json(body))
 }
 
+/// Ask T3 to refresh provider usage, then return the bars. A second call within a minute
+/// returns the cached bars with `cooling: true` and does not ask again.
+pub(crate) async fn providers_refresh(State(s): S) -> ApiResult<Json<Value>> {
+    let body = s
+        .providers
+        .refresh(s.harness.as_ref())
+        .await
+        .map_err(|e| ApiError::new(502, format!("T3 didn't refresh provider limits: {e}")))?;
+    if body["cooling"] != true {
+        if let Err(err) = crate::harness::providers::notices::tick(&s).await {
+            tracing::warn!("provider limits: {err}");
+        }
+    }
+    Ok(Json(body))
+}
+
 /// A model choice from a request body, checked against T3's providers. When T3 can't be read
 /// the old character check stands, so a choice is never lost to a hiccup.
 pub(crate) async fn checked_selection(

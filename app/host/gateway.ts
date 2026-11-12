@@ -19,6 +19,7 @@ export const LOAD_KEY: Record<string, string> = {
   usage: 'error.loadUsage',
   models: 'error.loadModels',
   providers: 'error.loadProviders',
+  limits: 'limits.error',
   routines: 'error.routines',
   'what this Bot is doing': 'error.lineage',
 };

@@ -46,6 +46,7 @@ pub(crate) struct MockHarness {
     /// Stand-in for the harness provider config. `None` is the usual "not wired" error.
     provider_config: Mutex<Option<Value>>,
     provider_config_reads: AtomicUsize,
+    provider_refresh_calls: AtomicUsize,
     forks: Mutex<ForkBook>,
     scheduled: Mutex<std::collections::BTreeMap<String, Value>>,
     messages: Mutex<Vec<UserMessage>>,
@@ -76,6 +77,7 @@ impl MockHarness {
             }),
             provider_config: Mutex::new(None),
             provider_config_reads: AtomicUsize::new(0),
+            provider_refresh_calls: AtomicUsize::new(0),
             forks: Mutex::new(ForkBook {
                 armed: false,
                 chats: HashMap::new(),
@@ -121,6 +123,10 @@ impl MockHarness {
 
     pub(crate) fn provider_config_reads(&self) -> usize {
         self.provider_config_reads.load(Ordering::SeqCst)
+    }
+
+    pub(crate) fn provider_refresh_calls(&self) -> usize {
+        self.provider_refresh_calls.load(Ordering::SeqCst)
     }
 
     fn book(&self) -> std::sync::MutexGuard<'_, ForkBook> {
@@ -292,6 +298,11 @@ impl Provisioning for MockHarness {
             .unwrap_or_else(|err| err.into_inner())
             .clone()
             .ok_or_else(|| missing("providers"))
+    }
+
+    async fn refresh_providers(&self) -> Result<(), HarnessError> {
+        self.provider_refresh_calls.fetch_add(1, Ordering::SeqCst);
+        Ok(())
     }
 
     async fn computers(&self) -> Result<ComputerCatalog, HarnessError> {

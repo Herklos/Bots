@@ -2271,6 +2271,63 @@
         ]
       }
     },
+    "/api/providers/refresh": {
+      "post": {
+        "operationId": "hbots_providers_refresh",
+        "summary": "POST /api/providers/refresh",
+        "parameters": [],
+        "x-hbots-permission": "write",
+        "responses": {
+          "200": {
+            "description": "Original gateway operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                  "x-hbots-dynamic": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Gateway error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "applicationSession": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/suggestions": {
       "get": {
         "operationId": "hbots_suggestions_get",
