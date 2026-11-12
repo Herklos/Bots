@@ -22,6 +22,8 @@ mod mutate_tests;
 mod search;
 mod skills;
 mod state;
+#[cfg(test)]
+mod tests;
 #[cfg_attr(
     not(test),
     allow(
@@ -33,8 +35,6 @@ mod user;
 #[cfg(test)]
 #[path = "user_tests.rs"]
 mod user_tests;
-#[cfg(test)]
-mod tests;
 
 #[cfg(test)]
 pub(crate) use skills::skill_file_name;
