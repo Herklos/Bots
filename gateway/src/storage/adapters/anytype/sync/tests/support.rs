@@ -76,6 +76,11 @@ impl Rig {
         self.engine = Engine::open(self.config.clone()).unwrap();
     }
 
+    pub(super) fn set_backoff_floor(&mut self, floor: Duration) {
+        self.config.backoff_floor = floor;
+        self.reopen();
+    }
+
     pub(super) async fn until_quiet(&mut self) {
         for _ in 0..24 {
             let cycle = self.engine.run_once().await.unwrap();

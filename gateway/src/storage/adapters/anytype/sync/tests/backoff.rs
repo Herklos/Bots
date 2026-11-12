@@ -21,6 +21,9 @@ impl Hook for Limit {
 #[tokio::test]
 async fn a_429_pauses_then_the_next_cycle_pushes() {
     let mut world = World::start("dev-429").await;
+    world
+        .rig
+        .set_backoff_floor(std::time::Duration::from_secs(1));
     world.live().await;
     let path = "ada/memory/note.md";
     world.write(path, b"v1\n");
