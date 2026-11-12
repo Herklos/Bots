@@ -76,6 +76,8 @@ members Bots
         refresh system
     if onLibrary
       refresh shelf
+    if onMemory
+      refresh memory
     if onComputer
       refresh computer
       refresh places

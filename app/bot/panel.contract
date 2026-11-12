@@ -6,6 +6,7 @@ use ModelPage, UsageView from "../settings/settings.contract"
 use shapeNames, Avatar from "../face.contract"
 use Glyph from "../glyph.contract"
 use EditBotPage from "./edit.contract"
+use MemoryTab from "./memory.contract"
 use BotShelf, ScreenCard from "../computer/computer.contract"
 use ComputerPlace from "../computer/place.contract"
 component BotPanel
@@ -95,7 +96,7 @@ component BotPanel
   action tabKey(k: string, event: KeyboardEvent)
     if not event.isComposing and (k == "ArrowRight" or k == "ArrowLeft" or k == "Home" or k == "End")
       preventDefault()
-      let next = k == "Home" ? "details" : k == "End" ? "computer" : k == "ArrowRight" ? (tab == "details" ? "library" : tab == "library" ? "computer" : "details") : (tab == "details" ? "computer" : tab == "computer" ? "library" : "details")
+      let next = k == "Home" ? "details" : k == "End" ? "computer" : k == "ArrowRight" ? (tab == "details" ? "memory" : tab == "memory" ? "library" : tab == "library" ? "computer" : "details") : (tab == "details" ? "computer" : tab == "computer" ? "library" : tab == "library" ? "memory" : "details")
       pickTab(next)
       focus(`panel-tab-${next}`)
   action goRoot
@@ -198,9 +199,9 @@ component BotPanel
             text bot.name font="-exact-title3" font-weight=700 letter-spacing="-0.3px" testId="details-name" text-align="center" overflow-wrap="anywhere"
             text (bot.hidden ? t("panel.hiddenInbox") : working ? t("status.working") : bot.ready ? t("status.ready") : t("status.settingUp")) color="ink.muted" font="-exact-footnote" testId="details-status"
         row role="tablist" appearance="none" background-color="surface.canvas" aria-label=t("panel.sidebar") justify-content="center" padding="space.xs space.md space.md" gap="space.xs"
-          for t in ["details", "library", "computer"] key=t
+          for t in ["details", "memory", "library", "computer"] key=t
             button id=`panel-tab-${t}` key=tabKey tabindex=(tab == t ? 0 : -1) class=Segment appearance="none" role="tab" aria-selected=(tab == t) aria-controls=`bot-tab-${t}` press=pickTab(t) min-height=36 padding="space.xs space.md" testId=`panel-tab-${t}` background-color=(tab == t ? "surface.raised" : "transparent") color=(tab == t ? "-exact-label" : "ink.muted")
-              text (t == "details" ? t("panel.details") : t == "library" ? t("panel.library") : t("panel.computer")) font="-exact-subheadline"
+              text (t == "details" ? t("panel.details") : t == "memory" ? t("panel.memory") : t == "library" ? t("panel.library") : t("panel.computer")) font="-exact-subheadline"
         column id="bot-tab-details" role="tabpanel" aria-label=t("panel.details") display=(tab == "details" ? "flex" : "none") flex=1 min-height=0
           scroll id=`panel-${bot.slug}` flex=1 min-height=0
             column width="100%" box-sizing="border-box" padding="0 space.lg space.xl" gap="space.sm"
@@ -279,6 +280,8 @@ component BotPanel
                           text t("common.open")
                       row class=Chip
                         text line.status
+        column id="bot-tab-memory" role="tabpanel" aria-label=t("panel.memory") display=(tab == "memory" ? "flex" : "none") flex=1 min-height=0
+          MemoryTab(name=bot.name)
         column id="bot-tab-library" role="tabpanel" aria-label=t("panel.library") display=(tab == "library" ? "flex" : "none") flex=1 min-height=0
           scroll id="panel-library-scroll" flex=1 min-height=0
             BotShelf(shelf=shelf, down=shelfDown, name=bot.name)
