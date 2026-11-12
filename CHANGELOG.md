@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.3.1
+
+This release improves group setup, Bot instruction updates and browser control, and adds an Anytype connection flow.
+
+### New features
+
+- Pair with Anytype and check a named space from Settings before saving it as a storage choice. Bot storage still uses the file system; the Anytype storage adapter is not yet wired into the running gateway.
+- Choose a group chief during creation and see answer-policy hints while configuring a group.
+
+### Improvements
+
+- Refresh managed instructions in open Claude threads when a Bot's `AGENTS.md` changes.
+- Keep a browser preview connection open while controlling a Bot's computer, with a fallback if the connection drops.
+- Clarify the Bot and group creation flows, and show file-system folder test and copy results in Settings.
+- Organize gateway and client code into smaller domain modules, with size checks in CI.
+
+### Bug fixes
+
+- Restore the end-to-end harness for the current client and gateway.
+
 ## 0.3.0
 
 This release makes creating and managing Bots and groups easier, adds storage controls, and improves conversation responsiveness.

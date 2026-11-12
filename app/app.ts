@@ -376,7 +376,7 @@ const sources: Sources = {
       if (policy !== 'last' && policy !== 'everyone' && policy !== 'chief' && policy !== 'default') {
         return { ok: false, id: '', error: 'Create was missing the answer policy.' };
       }
-      if (policy === 'chief' && !slugs.includes(chief.trim())) return { ok: false, id: '', error: 'Create was missing the chief.' };
+      if (policy === 'chief' && !slugs.some((slug) => slug === chief.trim())) return { ok: false, id: '', error: 'Create was missing the chief.' };
       setFixtureMade({ title, description, color, shape, slugs, answerPolicy: policy, chief: policy === 'chief' ? chief.trim() : '' });
       return { ok: true, id: 'fixture', error: '' };
     }
