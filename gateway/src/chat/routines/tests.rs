@@ -195,6 +195,12 @@ fn a_routine_write_cannot_exceed_the_cap() {
     let mut unknown = json!({ "runtimeMode": "ask" });
     clamp_task_mode(&mut unknown, RuntimeMode::Auto);
     assert_eq!(unknown["runtimeMode"], "ask");
+    let mut independent = json!({ "runtimeMode": "independent" });
+    clamp_task_mode(&mut independent, RuntimeMode::FullAccess);
+    assert_eq!(independent["runtimeMode"], "full-access");
+    let mut capped = json!({ "runtimeMode": "independent" });
+    clamp_task_mode(&mut capped, RuntimeMode::Auto);
+    assert_eq!(capped["runtimeMode"], "auto");
     let mut missing = json!({ "title": "Digest" });
     clamp_task_mode(&mut missing, RuntimeMode::ApprovalRequired);
     assert!(missing.get("runtimeMode").is_none());

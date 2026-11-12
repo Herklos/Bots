@@ -5,7 +5,7 @@
 //! already carry `lastRunAt`, `lastRunStatus`, `lastRunError` and `runCount`. The
 //! gateway keeps a short local history of the changes it made. Labels and clocks stay here.
 
-use crate::bots::runtime_mode::{clamp_label, RuntimeMode};
+use crate::bots::runtime_mode::{clamp_label, t3_runtime_mode, RuntimeMode};
 use crate::harness::{HarnessError, Routines};
 use crate::platform::error::{ApiError, ApiResult};
 use serde_json::{json, Value};
@@ -222,10 +222,12 @@ pub(crate) fn new_routine(
 
 /// A known `runtimeMode` on a routine write is stored at or below the cap.
 /// An unknown mode is left for the harness to reject.
+/// `independent` is sent as `full-access`, because a routine task is a harness payload.
 pub(crate) fn clamp_task_mode(task: &mut Value, cap: RuntimeMode) {
     let Some(mode) = task.get("runtimeMode").and_then(Value::as_str) else {
         return;
     };
+    let mode = t3_runtime_mode(mode);
     let Some(clamped) = clamp_label(mode, cap) else {
         return;
     };

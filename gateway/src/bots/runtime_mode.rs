@@ -1,6 +1,7 @@
 //! Approval modes, least access first: `approval-required`, then `auto`, then `full-access`.
 //!
-//! `clamp_mode` returns the lower of a requested mode and a cap.
+//! `independent` is stored on a Bot or as `defaultRuntimeMode` and sent to the harness as
+//! `full-access`. `clamp_mode` returns the lower of a requested mode and a cap.
 
 use serde_json::{json, Value};
 
@@ -59,20 +60,56 @@ impl Ord for RuntimeMode {
     }
 }
 
+/// Stored on a Bot or in settings. The harness still has only the three modes above.
+pub(crate) fn is_stored_runtime_mode(mode: &str) -> bool {
+    matches!(
+        mode,
+        "approval-required" | "auto" | "full-access" | "independent"
+    )
+}
+
+pub(crate) fn is_independent(stored: &str) -> bool {
+    stored == "independent"
+}
+
+/// The mode the harness accepts. `independent` is stored here and sent as `full-access`.
+pub(crate) fn t3_runtime_mode(stored: &str) -> &str {
+    if is_independent(stored) {
+        "full-access"
+    } else {
+        stored
+    }
+}
+
+pub(crate) fn runtime_mode_rejected(key: &str) -> String {
+    format!("{key} must be approval-required, auto, full-access, or independent")
+}
+
 /// `requested` when it is within `max`, otherwise `max`.
 pub(crate) fn clamp_mode(requested: RuntimeMode, max: RuntimeMode) -> RuntimeMode {
     requested.min(max)
 }
 
 /// A known mode, lowered to `cap`. An unknown mode stays for the caller to reject.
+///
+/// `independent` ranks with `full-access` for the cap and keeps its stored label when the
+/// cap allows full access. A lower cap stores that cap.
 pub(crate) fn clamp_label(mode: &str, cap: RuntimeMode) -> Option<&'static str> {
+    if is_independent(mode) {
+        return Some(if cap >= RuntimeMode::FullAccess {
+            "independent"
+        } else {
+            cap.as_str()
+        });
+    }
     RuntimeMode::parse(Some(mode)).map(|mode| clamp_mode(mode, cap).as_str())
 }
 
 /// The mode to set on an existing thread before the next turn.
 /// `None` when the stored mode is missing, unknown, or already within the cap.
+/// The value is always a harness mode: `independent` is full access.
 pub(crate) fn turn_mode(stored: Option<&str>, cap: RuntimeMode) -> Option<&'static str> {
-    let mode = RuntimeMode::parse(stored)?;
+    let mode = RuntimeMode::parse(Some(t3_runtime_mode(stored?)))?;
     (mode > cap).then_some(clamp_mode(mode, cap).as_str())
 }
 
@@ -87,10 +124,10 @@ pub(crate) fn apply_default_cap(settings: &mut Value) {
     let Some(raw) = settings.get("defaultRuntimeMode").and_then(Value::as_str) else {
         return;
     };
-    let Some(mode) = RuntimeMode::parse(Some(raw)) else {
+    let Some(clamped) = clamp_label(raw, cap) else {
         return;
     };
-    settings["defaultRuntimeMode"] = json!(clamp_mode(mode, cap).as_str());
+    settings["defaultRuntimeMode"] = json!(clamped);
 }
 
 /// Response-only flag. This does not write the Bot.
@@ -198,5 +235,52 @@ mod tests {
         assert_eq!(bots[1]["aboveLimit"], false);
         assert_eq!(bots[2]["aboveLimit"], false);
         assert_eq!(bots[0]["runtimeMode"], "full-access");
+    }
+
+    #[test]
+    fn stored_independent_is_full_access_on_the_harness_and_garbage_is_rejected() {
+        assert!(is_independent("independent"));
+        assert!(!is_independent("full-access"));
+        assert!(is_stored_runtime_mode("independent"));
+        assert!(is_stored_runtime_mode("approval-required"));
+        assert!(!is_stored_runtime_mode("ask"));
+        assert!(!is_stored_runtime_mode("Independent"));
+        assert!(!is_stored_runtime_mode(""));
+        assert_eq!(RuntimeMode::parse(Some("independent")), None);
+        assert_eq!(t3_runtime_mode("independent"), "full-access");
+        assert_eq!(t3_runtime_mode("full-access"), "full-access");
+        assert_eq!(t3_runtime_mode("auto"), "auto");
+        assert_eq!(t3_runtime_mode("approval-required"), "approval-required");
+        assert_eq!(t3_runtime_mode("ask"), "ask");
+        assert_eq!(
+            clamp_label("independent", RuntimeMode::FullAccess),
+            Some("independent")
+        );
+        assert_eq!(clamp_label("independent", RuntimeMode::Auto), Some("auto"));
+        assert_eq!(
+            turn_mode(Some("independent"), RuntimeMode::FullAccess),
+            None
+        );
+        assert_eq!(
+            turn_mode(Some("independent"), RuntimeMode::Auto),
+            Some("auto")
+        );
+        assert_eq!(turn_mode(Some("ask"), RuntimeMode::Auto), None);
+
+        let mut missing = json!({ "maxRuntimeMode": "full-access" });
+        apply_default_cap(&mut missing);
+        assert!(missing.get("defaultRuntimeMode").is_none());
+        let mut kept = json!({
+            "defaultRuntimeMode": "independent",
+            "maxRuntimeMode": "full-access",
+        });
+        apply_default_cap(&mut kept);
+        assert_eq!(kept["defaultRuntimeMode"], "independent");
+        let mut lowered = json!({
+            "defaultRuntimeMode": "independent",
+            "maxRuntimeMode": "approval-required",
+        });
+        apply_default_cap(&mut lowered);
+        assert_eq!(lowered["defaultRuntimeMode"], "approval-required");
     }
 }

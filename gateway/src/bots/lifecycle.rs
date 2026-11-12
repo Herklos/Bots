@@ -1,4 +1,5 @@
 use super::*;
+use crate::bots::runtime_mode::{is_stored_runtime_mode, runtime_mode_rejected};
 
 impl Bots {
     pub async fn save(&self, slug: &str, patch: &Value, create: bool) -> ApiResult<Value> {
@@ -28,13 +29,8 @@ impl Bots {
                 crate::bots::agent_context::ensure_prompt_limit(text)?;
             }
             if let Some(mode) = patch.get("runtimeMode") {
-                if !matches!(
-                    mode.as_str(),
-                    Some("approval-required" | "auto" | "full-access")
-                ) {
-                    return Err(ApiError::bad_request(
-                        "runtimeMode must be approval-required, auto, or full-access",
-                    ));
+                if !mode.as_str().is_some_and(is_stored_runtime_mode) {
+                    return Err(ApiError::bad_request(runtime_mode_rejected("runtimeMode")));
                 }
             }
             if let Some(mode) = patch.get("code") {
@@ -215,15 +211,9 @@ impl Bots {
         crate::bots::agent_context::ensure_prompt_limit(&prompt)?;
         let runtime_mode = match input.get("runtimeMode") {
             None | Some(Value::Null) => None,
-            Some(Value::String(mode))
-                if matches!(mode.as_str(), "approval-required" | "auto" | "full-access") =>
-            {
-                Some(mode.clone())
-            }
+            Some(Value::String(mode)) if is_stored_runtime_mode(mode) => Some(mode.clone()),
             Some(_) => {
-                return Err(ApiError::bad_request(
-                    "runtimeMode must be approval-required, auto, or full-access",
-                ))
+                return Err(ApiError::bad_request(runtime_mode_rejected("runtimeMode")));
             }
         };
         let code_mode = match input.get("code") {

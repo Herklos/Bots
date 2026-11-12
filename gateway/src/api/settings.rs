@@ -26,7 +26,7 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
         }
     }
     if let Some(mode) = patch.get("defaultRuntimeMode") {
-        require_runtime_mode("defaultRuntimeMode", mode)?;
+        require_stored_runtime_mode("defaultRuntimeMode", mode)?;
     }
     if let Some(mode) = patch.get("maxRuntimeMode") {
         require_runtime_mode("maxRuntimeMode", mode)?;
@@ -94,6 +94,18 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
 
 fn known_beta(key: &str) -> bool {
     matches!(key, "projects" | "code")
+}
+
+fn require_stored_runtime_mode(key: &str, value: &Value) -> Result<(), ApiError> {
+    if value
+        .as_str()
+        .is_some_and(crate::bots::runtime_mode::is_stored_runtime_mode)
+    {
+        return Ok(());
+    }
+    Err(ApiError::bad_request(
+        crate::bots::runtime_mode::runtime_mode_rejected(key),
+    ))
 }
 
 fn require_runtime_mode(key: &str, value: &Value) -> Result<(), ApiError> {

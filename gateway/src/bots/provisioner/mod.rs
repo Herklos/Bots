@@ -1,7 +1,9 @@
 //! With no client open, gives a new Bot a project and a main thread on the harness, then
 //! sends its brief. T3 Code is the harness wired today; other backends may be added.
 
-use crate::bots::runtime_mode::{clamp_mode, turn_mode, RuntimeMode};
+use crate::bots::runtime_mode::{
+    clamp_mode, is_stored_runtime_mode, t3_runtime_mode, turn_mode, RuntimeMode,
+};
 use crate::harness::HarnessError;
 use crate::AppState;
 use serde_json::{json, Value};
@@ -13,17 +15,20 @@ mod tests;
 /// The mode a launch already accepts, lowered to `maxRuntimeMode`.
 /// A missing or unknown field keeps today's launch: `autoReview == false` is full access,
 /// otherwise auto. A stored choice wins, then the cap.
+/// `independent` is stored on the Bot and sent as `full-access`.
 pub(crate) fn launch_runtime_mode(bot: &Value, settings: &Value) -> &'static str {
     let resolved = match bot
         .get("runtimeMode")
         .and_then(Value::as_str)
-        .filter(|mode| matches!(*mode, "approval-required" | "auto" | "full-access"))
-        .or_else(|| settings.get("defaultRuntimeMode").and_then(Value::as_str))
-    {
-        Some("approval-required") => "approval-required",
-        Some("auto") => "auto",
-        Some("full-access") => "full-access",
-        _ => {
+        .filter(|mode| is_stored_runtime_mode(mode))
+        .or_else(|| {
+            settings
+                .get("defaultRuntimeMode")
+                .and_then(Value::as_str)
+                .filter(|mode| is_stored_runtime_mode(mode))
+        }) {
+        Some(mode) => t3_runtime_mode(mode),
+        None => {
             if settings["autoReview"] == false {
                 "full-access"
             } else {

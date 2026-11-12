@@ -159,7 +159,7 @@ pub(crate) async fn model_put(
             crate::bots::runtime_mode::RuntimeMode::cap(settings["maxRuntimeMode"].as_str()),
         ) else {
             return Err(ApiError::bad_request(
-                "runtimeMode must be approval-required, auto, or full-access",
+                crate::bots::runtime_mode::runtime_mode_rejected("runtimeMode"),
             ));
         };
         patch["runtimeMode"] = json!(clamped);
