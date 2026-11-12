@@ -18,9 +18,12 @@ pub(crate) async fn routines_upsert(
     body: Bytes,
 ) -> ApiResult<Json<Value>> {
     require_json(&h)?;
+    let mut task = parse(&body)?;
+    let cap =
+        crate::bots::runtime_mode::RuntimeMode::cap(s.settings().await["maxRuntimeMode"].as_str());
+    crate::chat::routines::clamp_task_mode(&mut task, cap);
     Ok(Json(
-        crate::chat::routines::change(routines(&s)?, &s.routine_history, "upsert", parse(&body)?)
-            .await?,
+        crate::chat::routines::change(routines(&s)?, &s.routine_history, "upsert", task).await?,
     ))
 }
 
@@ -84,11 +87,14 @@ pub(crate) async fn bot_routine_save(
     require_json(&h)?;
     let bot = require_bot(&s, &slug).await?;
     let body = parse(&body)?;
+    let cap =
+        crate::bots::runtime_mode::RuntimeMode::cap(s.settings().await["maxRuntimeMode"].as_str());
     let task = crate::chat::routines::new_routine(
         &bot,
         body["title"].as_str().unwrap_or(""),
         body["kind"].as_str().unwrap_or("hour"),
         unix_now(),
+        cap,
     )
     .map_err(ApiError::bad_request)?;
     Ok(Json(

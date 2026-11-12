@@ -72,6 +72,10 @@ impl Turns for MockHarness {
     async fn steer(&self, _thread_id: &str, _text: &str) -> Result<String, HarnessError> {
         Ok("mock-message".into())
     }
+
+    async fn set_runtime_mode(&self, _thread_id: &str, _mode: &str) -> Result<(), HarnessError> {
+        Ok(())
+    }
 }
 
 #[async_trait]

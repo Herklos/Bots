@@ -1,4 +1,9 @@
 use super::*;
+use crate::bots::runtime_mode::RuntimeMode;
+
+fn routine(bot: &Value, title: &str, kind: &str, now: u64) -> Result<Value, &'static str> {
+    new_routine(bot, title, kind, now, RuntimeMode::FullAccess)
+}
 
 #[tokio::test]
 async fn history_keeps_the_newest_fifty() {
@@ -119,6 +124,7 @@ fn a_pending_routine_is_a_preset_or_a_time_and_weekday() {
         "t1",
         &Value::Null,
         &json!({ "preset": "weekdays", "prompt": "Send the note." }),
+        RuntimeMode::FullAccess,
     )
     .unwrap();
     assert_eq!(task["threadId"], "t1");
@@ -135,21 +141,21 @@ fn a_new_routine_is_off_and_bound_to_the_bot() {
         "mainThreadId": "t1",
         "model": { "instanceId": "claudeAgent", "model": "claude-haiku-5-5" }
     });
-    let task = new_routine(&bot, "Digest", "day", 1_700_000_000).unwrap();
+    let task = routine(&bot, "Digest", "day", 1_700_000_000).unwrap();
     assert_eq!(task["enabled"], false);
     assert_eq!(task["threadId"], "t1");
     assert_eq!(task["projectId"], "p1");
     assert_eq!(task["threadMode"], "continue");
     assert_eq!(task["runtimeMode"], "approval-required");
     assert_eq!(task["schedule"]["timeOfDay"], "09:00");
-    let once = new_routine(&bot, "Later", "once", 0).unwrap();
+    let once = routine(&bot, "Later", "once", 0).unwrap();
     assert_eq!(once["schedule"]["type"], "once");
     assert!(once["schedule"]["runAt"].as_str().unwrap().ends_with('Z'));
-    assert!(new_routine(&json!({}), "Digest", "hour", 0).is_err());
-    assert!(new_routine(&bot, "  ", "hour", 0).is_err());
+    assert!(routine(&json!({}), "Digest", "hour", 0).is_err());
+    assert!(routine(&bot, "  ", "hour", 0).is_err());
     let mut fast = bot.clone();
     fast["everyMs"] = json!(1000);
-    assert!(new_routine(&fast, "Digest", "interval", 0).is_err());
+    assert!(routine(&fast, "Digest", "interval", 0).is_err());
 }
 
 #[test]
@@ -161,21 +167,38 @@ fn a_known_unix_second_formats() {
 #[test]
 fn hourly_interval_and_a_missing_model_stay_inside_the_rules() {
     let bot = json!({ "projectId": "p1", "mainThreadId": "t1" });
-    let hour = new_routine(&bot, "Digest", "hour", 0).unwrap();
+    let hour = routine(&bot, "Digest", "hour", 0).unwrap();
     assert_eq!(hour["schedule"]["everyMs"], 3_600_000u64);
     assert_eq!(hour["modelSelection"]["model"], "claude-haiku-5-5");
     assert_eq!(hour["enabled"], false);
     assert_eq!(hour["workspaceStrategy"]["type"], "root");
     let mut slow = bot.clone();
     slow["everyMs"] = json!(60_000);
-    let interval = new_routine(&slow, "Pulse", "interval", 0).unwrap();
+    let interval = routine(&slow, "Pulse", "interval", 0).unwrap();
     assert_eq!(interval["schedule"]["everyMs"], 60_000u64);
     assert_eq!(
-        new_routine(&bot, "Nope", "weekly", 0).unwrap_err(),
+        routine(&bot, "Nope", "weekly", 0).unwrap_err(),
         "Pick hourly, daily, or once."
     );
     assert_eq!(
-        new_routine(&json!({ "projectId": "p1" }), "Digest", "hour", 0).unwrap_err(),
+        routine(&json!({ "projectId": "p1" }), "Digest", "hour", 0).unwrap_err(),
         "This Bot is still getting set up."
     );
+}
+
+#[test]
+fn a_routine_write_cannot_exceed_the_cap() {
+    let mut task = json!({ "runtimeMode": "full-access", "title": "Digest" });
+    clamp_task_mode(&mut task, RuntimeMode::Auto);
+    assert_eq!(task["runtimeMode"], "auto");
+    assert_eq!(task["title"], "Digest");
+    let mut unknown = json!({ "runtimeMode": "ask" });
+    clamp_task_mode(&mut unknown, RuntimeMode::Auto);
+    assert_eq!(unknown["runtimeMode"], "ask");
+    let mut missing = json!({ "title": "Digest" });
+    clamp_task_mode(&mut missing, RuntimeMode::ApprovalRequired);
+    assert!(missing.get("runtimeMode").is_none());
+    let bot = json!({ "projectId": "p1", "mainThreadId": "t1" });
+    let made = new_routine(&bot, "Digest", "hour", 0, RuntimeMode::ApprovalRequired).unwrap();
+    assert_eq!(made["runtimeMode"], "approval-required");
 }

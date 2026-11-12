@@ -87,7 +87,7 @@
 //   updateGroup: (args: [string, string, string]) => Reply
 //   uploadAttachment: (args: [string, string, string, string, string]) => Attached
 // The shapes. None is exported: name one by its source, `type AnytypeCheck = Result<'checkAnytype'>`.
-//   Bot = { slug: string; name: string; label: string; line: string; time: string; initials: string; color: string; shape: string; main: boolean; pinned: boolean; hidden: boolean; ready: boolean; working: boolean; unread: boolean; parentSlug: string; hideFromSidebar: boolean; subagent: boolean; prompt: string; inheritParentPrompt: boolean; notifications: boolean }
+//   Bot = { slug: string; name: string; label: string; line: string; time: string; initials: string; color: string; shape: string; main: boolean; pinned: boolean; hidden: boolean; ready: boolean; working: boolean; unread: boolean; parentSlug: string; hideFromSidebar: boolean; subagent: boolean; prompt: string; inheritParentPrompt: boolean; notifications: boolean; aboveLimit: boolean }
 //   FileRef = { id: string; name: string; kind: string; size: string; url: string }
 //   Choice = { label: string; value: string; key: string; warn: string }
 //   Part = { kind: string; text: string; head: string[]; rows: string[][]; align: string[] }
@@ -375,7 +375,7 @@ type T8 = T7 | null;
 type T9 = boolean;
 type T10 = "granted" | "prompt" | "denied" | "unknown";
 type T11 = { "apple": T8; "available": T9; "badge": T9; "state": T10; };
-type T12 = { "slug": T0; "name": T0; "label": T0; "line": T0; "time": T0; "initials": T0; "color": T0; "shape": T0; "main": T9; "pinned": T9; "hidden": T9; "ready": T9; "working": T9; "unread": T9; "parentSlug": T0; "hideFromSidebar": T9; "subagent": T9; "prompt": T0; "inheritParentPrompt": T9; "notifications": T9; };
+type T12 = { "slug": T0; "name": T0; "label": T0; "line": T0; "time": T0; "initials": T0; "color": T0; "shape": T0; "main": T9; "pinned": T9; "hidden": T9; "ready": T9; "working": T9; "unread": T9; "parentSlug": T0; "hideFromSidebar": T9; "subagent": T9; "prompt": T0; "inheritParentPrompt": T9; "notifications": T9; "aboveLimit": T9; };
 type T13 = { "id": T0; "name": T0; "kind": T0; "size": T0; "url": T0; };
 type T14 = { "label": T0; "value": T0; "key": T0; "warn": T0; };
 type T15 = T0[];

@@ -15,6 +15,8 @@ pub(crate) struct Deps<'a> {
     /// The Bots, as `bots.list()` gives them (each has `mainThreadId`).
     pub roster: &'a [Value],
     pub provision_now: &'a Notify,
+    /// Saved settings. An empty object is no cap.
+    pub settings: Value,
 }
 
 pub(crate) fn tool_defs() -> Vec<Value> {
@@ -62,6 +64,7 @@ pub(crate) async fn call(state: &AppState, name: &str, args: &Value) -> Result<V
             bots: &state.bots,
             roster: &roster,
             provision_now: &state.provision_now,
+            settings: state.settings().await,
         },
         name,
         args,
@@ -166,6 +169,10 @@ async fn create(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
     {
         input["createdBy"] = json!(created_by);
     }
+    input["runtimeMode"] = json!(crate::bots::provisioner::launch_runtime_mode(
+        parent,
+        &d.settings
+    ));
     let bot = d.bots.create(&input).await.map_err(|e| e.message)?;
     d.provision_now.notify_one();
     Ok(json!({
@@ -209,6 +216,7 @@ mod tests {
             bots,
             roster,
             provision_now: notify,
+            settings: json!({}),
         }
     }
 
@@ -241,6 +249,7 @@ mod tests {
         );
         let child = bots.get("ada-junior-1").await.unwrap().unwrap();
         assert_eq!(child["parentSlug"], "ada");
+        assert_eq!(child["runtimeMode"], "auto");
         assert_eq!(child["subagent"]["prompt"], "Look things up.");
         assert_eq!(child["subagent"]["inheritParentPrompt"], false);
         assert!(child["subagent"].get("toolAllow").is_none());
@@ -400,5 +409,27 @@ mod tests {
         let agents = std::fs::read_to_string(dir.path().join("ada-junior-1/AGENTS.md")).unwrap();
         assert!(agents.contains("File the notes."));
         assert!(!agents.contains("Sort today's mail."));
+    }
+
+    #[tokio::test]
+    async fn a_subagent_is_stored_within_the_cap_and_the_parent_is_left_alone() {
+        let (_dir, bots, notify) = world().await;
+        bots.save("ada", &json!({ "runtimeMode": "full-access" }), false)
+            .await
+            .unwrap();
+        let roster = bots.list().await.unwrap();
+        let mut d = deps(&bots, &roster, &notify);
+        d.settings = json!({ "maxRuntimeMode": "auto" });
+        dispatch(
+            &d,
+            "subagent_create",
+            &json!({ "threadId": "thread-ada", "prompt": "Look things up." }),
+        )
+        .await
+        .unwrap();
+        let child = bots.get("ada-junior-1").await.unwrap().unwrap();
+        assert_eq!(child["runtimeMode"], "auto");
+        let parent = bots.get("ada").await.unwrap().unwrap();
+        assert_eq!(parent["runtimeMode"], "full-access");
     }
 }

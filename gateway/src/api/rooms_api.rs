@@ -231,6 +231,12 @@ pub(crate) async fn dispatch_room(
     };
     let commands = crate::chat::rooms::dispatch_commands(dispatches);
     for (item, command) in dispatches.iter().zip(commands) {
+        if let Some(bot) = s.bots.get(&item.slug).await? {
+            let thread = command["threadId"].as_str().unwrap_or(&item.thread_id);
+            crate::bots::provisioner::limit_existing_thread(s, &bot, thread)
+                .await
+                .map_err(|err| err.api())?;
+        }
         turns
             .send_user(&crate::harness::UserMessage::new(
                 command["threadId"].as_str().unwrap_or(&item.thread_id),

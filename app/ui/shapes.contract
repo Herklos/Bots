@@ -20,6 +20,7 @@ shape Bot
   prompt: string
   inheritParentPrompt: bool
   notifications: bool
+  aboveLimit: bool
 
 // A file on a message: an image shows in place, audio plays, any other file is a card.
 shape FileRef

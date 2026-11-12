@@ -63,7 +63,7 @@ pub(crate) async fn computer_open(State(s): S, Path(slug): Path<String>) -> ApiR
         .as_str()
         .unwrap_or(crate::bots::computer::OPEN_PROMPT)
         .to_string();
-    steer_text(&s, &thread, &text).await
+    steer_text(&s, &slug, &thread, &text).await
 }
 
 /// Steers the Bot to close its server browser tabs. Does not wait for them to go.
@@ -76,10 +76,14 @@ pub(crate) async fn computer_close(
         .as_str()
         .unwrap_or(crate::bots::computer::CLOSE_PROMPT)
         .to_string();
-    steer_text(&s, &thread, &text).await
+    steer_text(&s, &slug, &thread, &text).await
 }
 
-async fn steer_text(s: &AppState, thread: &str, text: &str) -> ApiResult<Json<Value>> {
+async fn steer_text(s: &AppState, slug: &str, thread: &str, text: &str) -> ApiResult<Json<Value>> {
+    let bot = require_bot(s, slug).await?;
+    crate::bots::provisioner::limit_existing_thread(s, &bot, thread)
+        .await
+        .map_err(|err| err.api())?;
     let message_id = s
         .harness
         .turns()
