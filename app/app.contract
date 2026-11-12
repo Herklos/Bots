@@ -1,3 +1,6 @@
+use SettingsScreen from "./settings/screen.contract"
+use NewGroupScreen from "./group/new.contract"
+use GroupScreen from "./group/screen.contract"
 use ToastLine from "./shell/toast.contract"
 use ComputerOverlay from "./computer/overlay.contract"
 use LockScreen from "./session/lock.contract"
@@ -215,6 +218,23 @@ component Bots
   derive subSavedPending = pending(subSaved)
   derive childModelsFailed = failed(childModels)
   derive signedInPending = pending(signedIn)
+  derive roomSentPending = pending(roomSent)
+  derive roomFailed = failed(room)
+  derive groupMadePending = pending(groupMade)
+  derive anytypeCheckedPending = pending(anytypeChecked)
+  derive networkRestartedPending = pending(networkRestarted)
+  derive networkSetPending = pending(networkSet)
+  derive noticeAskedPending = pending(noticeAsked)
+  derive pairConfirmedPending = pending(pairConfirmed)
+  derive pairStartedPending = pending(pairStarted)
+  derive passwordSetPending = pending(passwordSet)
+  derive spaceSavedPending = pending(spaceSaved)
+  derive storageCopiedPending = pending(storageCopied)
+  derive storageRestartedPending = pending(storageRestarted)
+  derive storageSavedPending = pending(storageSaved)
+  derive storageTestedPending = pending(storageTested)
+  derive systemPending = pending(system)
+  derive updateStartedPending = pending(updateStarted)
   provide
     open
     vaultQuery
@@ -422,6 +442,143 @@ component Bots
     largePaste
     hideComputerLarge
     toast
+    addGroupMember
+    closeGroupAdd
+    dropGroup
+    editRoomText
+    groupBack
+    groupPage
+    groupPanel
+    groupSaveError
+    openGroupAdd
+    openGroupEdit
+    patchGroup
+    postRoom
+    removeGroupMember
+    room
+    roomError
+    roomKey
+    roomPending
+    roomRows
+    roomSent
+    roomText
+    toggleGroupPanel
+    roomSentPending
+    roomFailed
+    canMakeGroup
+    editGroupAbout
+    editGroupName
+    goGroupStep
+    groupAbout
+    groupError
+    groupMade
+    groupMembers
+    groupName
+    groupPolicy
+    groupStep
+    groupStepBack
+    groupStepNext
+    makeGroup
+    pickGroupPolicy
+    pickableBots
+    toggleGroupMember
+    groupMadePending
+    groupChief
+    pickGroupChief
+    about
+    anytypeChecked
+    anytypeError
+    anytypeFound
+    anytypeOn
+    anytypeShared
+    anytypeSpace
+    canUpdate
+    doAllowNotices
+    doAnytypeCheck
+    doCopyStorage
+    doDefaultMode
+    doEditFolder
+    doEditName
+    doEditPairCode
+    doEditSpace
+    doGroupAnswer
+    doMakeDefault
+    doPairConfirm
+    doPairStart
+    doPickBackend
+    doPickTheme
+    doRestartNetwork
+    doRestartStorage
+    doSaveName
+    doSavePassword
+    doSaveSpace
+    doSaveStorage
+    doSetNetwork
+    doStartUpdate
+    doTestStorage
+    editNewPassword
+    logout
+    nameDraft
+    nameEditing
+    network
+    networkError
+    networkRestartError
+    networkRestarted
+    networkSet
+    newPassword
+    notice
+    noticeAsked
+    pairCode
+    pairConfirmError
+    pairConfirmed
+    pairError
+    pairStarted
+    pairStep
+    passwordError
+    passwordSet
+    pickSettingsDomain
+    prefsError
+    providers
+    saveNoticePart
+    saveNotifications
+    session
+    settingsDomain
+    shownBackend
+    spaceEditing
+    spaceName
+    spaceSaveError
+    spaceSaved
+    storage
+    storageCopied
+    storageCopyError
+    storageHint
+    storagePath
+    storageRestartError
+    storageRestarted
+    storageSaveError
+    storageSaved
+    storageTestError
+    storageTested
+    updateError
+    updateFrom
+    updateNeedsService
+    updateStarted
+    updateStuck
+    updateTo
+    anytypeCheckedPending
+    networkRestartedPending
+    networkSetPending
+    noticeAskedPending
+    pairConfirmedPending
+    pairStartedPending
+    passwordSetPending
+    spaceSavedPending
+    storageCopiedPending
+    storageRestartedPending
+    storageSavedPending
+    storageTestedPending
+    systemPending
+    updateStartedPending
   view
     main id="app-shell" class=Screen navigationKey=`${top(nav).id}` navigationBack="back" navigate=open beforeunload=writeDrafts interactive-widget="resizes-content" position="relative" width="100%" height="100%" testId="app"
       if locked
@@ -433,362 +590,9 @@ component Bots
           else if e.name == "chat"
             ChatScreen(route=e.id)
           else if e.name == "group"
-            column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
-              if messageMenu != ""
-                button appearance="none" position="absolute" inset=0 z-index=20 background-color="transparent" border="none" press=closeMessageMenu aria-label=t("common.cancel") testId="message-menu-scrim"
-              header appearance="none" class=PageHeader position="relative" testId="room-header"
-                button id="back" class=IconControl appearance="none" press=back aria-label=t("common.back") title=t("common.back") display=(wide ? "none" : "flex")
-                  column rotate="180deg"
-                    Glyph(name="chevron", size=20)
-                button class=HeaderToggle appearance="none" press=toggleGroupPanel aria-label=(groupPanel ? t("group.hideDetails") : t("group.showDetails")) aria-expanded=groupPanel aria-controls="group-panel" title=t("group.detailsTitle") testId="group-toggle" position="absolute" left="50%" translate="-50% 0" gap="space.sm" padding="0 space.md" max-width="75%"
-                  if room.members.length > 0
-                    Faces(faces=memberFaces(bots, room.members), size=28, tuck=-12)
-                  text (room.title != "" ? room.title : t("group.fallback")) role="heading" aria-level=1 class=PageTitle overflow="hidden" text-overflow="ellipsis" white-space="nowrap" min-width=0 testId="room-title"
-                column flex=1
-              if failed(room)
-                EmptyState(symbol="symbol:alert", title=t("error.groupTitle"), message=t("error.hbots"))
-                  button press=pull testId="room-retry"
-                    text t("common.tryAgain")
-              else
-                row gap="space.sm" padding="space.sm space.lg" overflow-x="auto" flex-shrink=0 testId="room-members"
-                  for m in room.members key=m.slug
-                    row gap="space.sm" align-items="center" padding="4px space.md 4px 4px" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" flex-shrink=0
-                      Avatar(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state=m.state, size=28, still=(m.state != "working"), presence="")
-                      column
-                        text m.name font="-exact-footnote" font-weight=600 testId=`member-${m.slug}-name`
-                        text m.line color="ink.muted" font="-exact-caption2" testId=`member-${m.slug}-state`
-                if room.messages.length == 0 and paintedWorkers.length == 0 and roomPending == ""
-                  column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="room-empty"
-                    Faces(faces=memberFaces(bots, room.members), size=72, tuck=-28)
-                    text t("group.emptyTitle") class=HeroTitle text-align="center"
-                    text t("group.emptyBody") color="ink.muted" text-align="center" max-width="24rem"
-                else
-                  column flex=1 min-height=0 justify-content="flex-end" position="relative" z-index=(messageMenu != "" ? 21 : 0) pointer-events=(messageMenu != "" ? "none" : "auto")
-                    if away
-                      button class=IconControl appearance="none" press=toEnd aria-label=t("chat.jump") title=t("chat.jumpShort") testId="to-end" position="absolute" left="50%" translate="-50% 0" bottom=8 z-index=1 width=32 height=32 border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line"
-                        Glyph(name="arrow-down", size=16)
-                    ChatLog(rows=roomRows, inRoom=true, logId="room-log", logTestId="room-log", bots=bots, slug="", pins=chat.pins, workers=paintedWorkers, hover=(pointerFacts.hover == "hover"), reactFor=reactFor, messageMenu=messageMenu, copiedMenu=copiedMenu, answerText=answerText, answerError=answerError, answering=pending(answered), react=doReact, openPicker=openReact, reply=startReply, pin=doPinMessage, openMenu=openMessageMenu, closeMenu=closeMessageMenu, noteCopied=noteCopied, answer=answer, editAnswer=editAnswer, retry=retry, scrolled=moved)
-                column width="calc(100% - 32px)" max-width="44rem" min-width=0 align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.sm" flex-shrink=0 position="relative"
-                  if roomError != "" and not pending(roomSent)
-                    text roomError color="-exact-system-red" font="-exact-footnote" testId="room-send-error"
-                  row gap="space.xs" flex-wrap="wrap" width="100%" min-width=0 box-sizing="border-box" testId="mention-chips"
-                    button appearance="none" press=mention("everyone") aria-label=t("group.mention", name=t("group.everyone")) title=t("group.hintEveryone") testId="mention-everyone" min-height=32 padding="0 space.md" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes("@everyone") ? "surface.soft" : "surface.card") color="-exact-label"
-                      text `@everyone` font="-exact-footnote" font-weight=500
-                    for m in room.members key=m.slug
-                      button appearance="none" press=mention(m.slug) aria-label=t("group.mention", name=m.name) title=t("group.mention", name=m.name) testId=`mention-${m.slug}` min-height=32 padding="0 space.md 0 4px" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes(`@${m.slug}`) ? "surface.soft" : "surface.card") color="-exact-label"
-                        row gap="space.xs" align-items="center"
-                          Avatar(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state="idle", size=22, still=true, presence="")
-                          text `@${m.slug}` font="-exact-footnote" font-weight=500
-                  MentionMenu(hits=mentionHits, picked=mentionIdx, choose=completeMention)
-                  row align-items="flex-end" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
-                    textarea id="room-composer" value=roomText input=editRoomText key=roomKey outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(room.title != "" ? t("chat.messageTo", name=room.title) : t("chat.write")) aria-label=t("group.message") aria-expanded=(mentionHits.length > 0) aria-controls="mention-menu" testId="room-composer" flex=1 min-width=0 padding="space.sm space.sm" border="none" background-color="transparent" color="-exact-label"
-                    button class=SendControl appearance="none" press=postRoom disabled=(roomText.trim() == "" or pending(roomSent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="room-send"
-                      Glyph(name="send", size=18)
-                  text (roomText.includes("@everyone") ? t("group.hintEveryone") : roomText.includes("@") ? t("group.hintMention") : quietPolicyHint(room.answerPolicyEffective, t("group.hintNoneLast"), t("group.hintNoneEveryone"), t("group.hintNoneChief", chief=memberCalled(room.members, room.chief)))) color="ink.muted" font="-exact-footnote" testId="room-hint" width="100%" min-width=0 overflow-wrap="anywhere"
-              GroupPanel(shown=groupPanel, wide=wide, page=groupPage, room=room, bots=bots, defaultPolicy=prefs.groupAnswerPolicy, closePanel=toggleGroupPanel, openEdit=openGroupEdit, goRoot=groupBack, openAdd=openGroupAdd, closeAdd=closeGroupAdd, patch=patchGroup, removeMember=removeGroupMember, addMember=addGroupMember, drop=dropGroup, error=groupSaveError)
+            GroupScreen(route=e.id)
           else if e.name == "settings"
-            column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
-              header class=PageHeader
-                text t("settings.title") role="heading" aria-level=1 class=PageTitle flex=1
-              column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" padding="space.md space.lg space.sm"
-                row class=SettingsTrack role="tablist" aria-label=t("settings.domains")
-                  for d in ["user", "notifications", "models", "access", "updates"] key=d
-                    button class=SettingsTab appearance="none" role="tab" aria-selected=(settingsDomain == d) press=pickSettingsDomain(d) testId=`settings-domain-${d}` background-color=(settingsDomain == d ? "surface.card" : "transparent") color=(settingsDomain == d ? "-exact-label" : "ink.muted")
-                      text settingsDomainLabel(d, t("settings.domainUser"), t("settings.domainNotifications"), t("settings.domainModels"), t("settings.domainAccess"), t("settings.about"))
-              scroll id="settings-form" flex=1 min-height=0
-                column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" margin="0 auto" padding="space.lg space.lg space.xl" gap="space.xl"
-                  if settingsDomain == "user"
-                    column
-                      text t("settings.you") class=SectionLabel
-                      row class=GroupCard gap="space.lg" align-items="center" padding="space.lg" min-height=44
-                        column width=56 height=56 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
-                          if initialsOf(prefs.userName) != ""
-                            text initialsOf(prefs.userName) font="-exact-title3" font-weight=600
-                          else
-                            Glyph(name="person", size=24)
-                        column flex=1 gap="2px" min-width=0
-                          input appearance="none" class=Field value=(nameEditing ? nameDraft : prefs.userName) input=doEditName change=doSaveName placeholder=t("settings.yourName") aria-label=t("settings.yourName") font="-exact-headline" testId="user-name"
-                          text botCountLabel(bots.length, t("bots.one"), t("bots.many", n=bots.length)) color="ink.muted" font="-exact-footnote"
-                    column
-                      text t("settings.appearance") class=SectionLabel
-                      column class=GroupCard padding="space.md"
-                        row gap="space.sm" role="radiogroup" aria-label=t("settings.theme")
-                          for t in ["system", "light", "dark"] key=t
-                            button press=doPickTheme(t) role="radio" aria-checked=(prefs.theme == t) appearance="none" flex=1 padding="space.sm" border-radius="radius.md" testId=`theme-${t}` border=(prefs.theme == t ? "2px solid AccentColor" : "2px solid transparent") background-color="surface.canvas"
-                              column gap="space.xs" align-items="center"
-                                row width="100%" height=44 border-radius="radius.sm" overflow="hidden" border="1px solid surface.line"
-                                  column flex=1 background-color=(t == "dark" ? "#17171b" : "#fcfcfd")
-                                  column flex=1 background-color=(t == "light" ? "#fcfcfd" : t == "dark" ? "#17171b" : "#17171b")
-                                text themeLabel(t, t("theme.system"), t("theme.dark"), t("theme.light")) font="-exact-footnote" font-weight=500
-                    column
-                      text t("panel.usage") class=SectionLabel
-                      column class=GroupCard padding="0"
-                        UsageView(report=report, down=failed(report), period=usagePeriod, view=usageView, pickPeriod=pickPeriod, pickView=pickView, showBots=true)
-                      text t("settings.usageNote") class=SettingsFoot
-                  else if settingsDomain == "notifications"
-                    column
-                      text t("settings.notifications") class=SectionLabel
-                      column class=GroupCard padding="0"
-                        row align-items="center" gap="space.md" min-height=44 padding="0 space.md" box-sizing="border-box"
-                          text noticeStatusLabel(notice.available, notice.state, t("settings.noticeAllowed"), t("settings.noticeDenied"), t("settings.noticeUnavailable"), t("settings.noticeAllow")) flex=1 font="-exact-subheadline" testId="notice-status"
-                          if notice.available and notice.state != "granted"
-                            button appearance="none" press=doAllowNotices disabled=pending(noticeAsked) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="notice-allow"
-                              text t("settings.noticeAllow")
-                        row align-items="center" gap="space.md" min-height=44 padding="0 space.md" box-sizing="border-box" border-top="1px solid surface.line"
-                          text t("settings.noticeNew") flex=1 font="-exact-subheadline"
-                          button class=ToggleControl appearance="none" role="switch" aria-checked=noticeOn(prefs.noticeEnabledMissing, prefs.noticeEnabled, notice.state) press=saveNotifications(not noticeOn(prefs.noticeEnabledMissing, prefs.noticeEnabled, notice.state), prefs.noticeSound, prefs.noticePreview, prefs.noticeWhen) aria-label=t("settings.noticeNew") testId="notice-enabled"
-                            row width=44 height=26 border-radius="radius.full" background-color=(noticeOn(prefs.noticeEnabledMissing, prefs.noticeEnabled, notice.state) ? "AccentColor" : "surface.line") align-items="center" justify-content=(noticeOn(prefs.noticeEnabledMissing, prefs.noticeEnabled, notice.state) ? "flex-end" : "flex-start")
-                              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
-                        row align-items="center" gap="space.md" min-height=44 padding="0 space.md" box-sizing="border-box" border-top="1px solid surface.line"
-                          text t("settings.noticeSound") flex=1 font="-exact-subheadline"
-                          button class=ToggleControl appearance="none" role="switch" aria-checked=prefs.noticeSound press=saveNoticePart(not prefs.noticeSound, prefs.noticePreview, prefs.noticeWhen) aria-label=t("settings.noticeSound") testId="notice-sound"
-                            row width=44 height=26 border-radius="radius.full" background-color=(prefs.noticeSound ? "AccentColor" : "surface.line") align-items="center" justify-content=(prefs.noticeSound ? "flex-end" : "flex-start")
-                              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
-                        row align-items="center" gap="space.md" min-height=44 padding="0 space.md" box-sizing="border-box" border-top="1px solid surface.line"
-                          text t("settings.noticePreview") flex=1 font="-exact-subheadline"
-                          button class=ToggleControl appearance="none" role="switch" aria-checked=(prefs.noticePreview == "full") press=saveNoticePart(prefs.noticeSound, prefs.noticePreview == "full" ? "hidden" : "full", prefs.noticeWhen) aria-label=t("settings.noticePreview") testId="notice-preview"
-                            row width=44 height=26 border-radius="radius.full" background-color=(prefs.noticePreview == "full" ? "AccentColor" : "surface.line") align-items="center" justify-content=(prefs.noticePreview == "full" ? "flex-end" : "flex-start")
-                              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
-                      text t("settings.notificationsNote") class=SettingsFoot
-                    column
-                      text t("settings.noticeAlso") class=SectionLabel
-                      column class=GroupCard padding="space.sm"
-                        row class=SettingsTrack role="radiogroup" aria-label=t("settings.noticeAlso")
-                          button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.noticeWhen == "any") press=saveNoticePart(prefs.noticeSound, prefs.noticePreview, "any") testId="notice-when-any" background-color=(prefs.noticeWhen == "any" ? "surface.card" : "transparent") color=(prefs.noticeWhen == "any" ? "-exact-label" : "ink.muted")
-                            text t("settings.noticeWhen")
-                          button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.noticeWhen == "background") press=saveNoticePart(prefs.noticeSound, prefs.noticePreview, "background") testId="notice-when-background" background-color=(prefs.noticeWhen == "background" ? "surface.card" : "transparent") color=(prefs.noticeWhen == "background" ? "-exact-label" : "ink.muted")
-                            text t("settings.noticeAway")
-                    column
-                      text t("settings.muted") class=SectionLabel
-                      column class=GroupCard padding="0"
-                        for b in mutedBots(bots) key=b.slug
-                          row align-items="center" gap="space.md" min-height=44 padding="0 space.md" box-sizing="border-box" border-top=(b.slug == firstMutedBot(bots) ? "none" : "1px solid surface.line")
-                            text b.name flex=1 font="-exact-subheadline"
-                            button appearance="none" press=doMute(b.slug, true) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId=`unmute-bot-${b.slug}`
-                              text t("settings.unmute")
-                        for c in mutedGroups(convos) key=c.key
-                          row align-items="center" gap="space.md" min-height=44 padding="0 space.md" box-sizing="border-box" border-top=(firstMutedBot(bots) != "" or c.id != firstMutedGroup(convos) ? "1px solid surface.line" : "none")
-                            text c.name flex=1 font="-exact-subheadline"
-                            button appearance="none" press=doMuteGroup(c.id, true) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId=`unmute-group-${c.id}`
-                              text t("settings.unmute")
-                  else if settingsDomain == "models"
-                    column
-                      text t("settings.defaultModel") class=SectionLabel
-                      column class=GroupCard padding="space.sm"
-                        if providers.length == 0
-                          text t("settings.noProvider") color="ink.muted" font="-exact-subheadline" padding="space.sm" min-height=44
-                        else
-                          ModelPicker(providers=providers, instanceId=prefs.defaultInstance, model=prefs.defaultModel, effort=prefs.defaultEffort, prefix="default", pick=doMakeDefault)
-                    column
-                      text t("settings.defaultAccess") class=SectionLabel
-                      column class=GroupCard padding="space.sm"
-                        row class=SettingsTrack role="radiogroup" aria-label=t("settings.defaultAccess")
-                          for mode in ["approval-required", "auto", "full-access"] key=mode
-                            button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.defaultRuntimeMode == mode) press=doDefaultMode(mode) testId=`default-access-${mode}` background-color=(prefs.defaultRuntimeMode == mode ? "surface.card" : "transparent") color=(prefs.defaultRuntimeMode == mode ? "-exact-label" : "ink.muted")
-                              text (mode == "approval-required" ? t("model.ask") : mode == "auto" ? t("model.auto") : t("model.fullAccess"))
-                      text t("settings.defaultAccessNote") class=SettingsFoot
-                    column
-                      text t("settings.groupAnswer") class=SectionLabel
-                      column class=GroupCard padding="space.sm"
-                        row class=SettingsTrack role="radiogroup" aria-label=t("settings.groupAnswer")
-                          for policy in ["last", "everyone", "chief"] key=policy
-                            button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.groupAnswerPolicy == policy) press=doGroupAnswer(policy) testId=`group-answer-${policy}` background-color=(prefs.groupAnswerPolicy == policy ? "surface.card" : "transparent") color=(prefs.groupAnswerPolicy == policy ? "-exact-label" : "ink.muted")
-                              text (policy == "last" ? t("group.policyLast") : policy == "everyone" ? t("group.policyEveryone") : t("group.policyChief"))
-                      text t("settings.groupAnswerNote") class=SettingsFoot
-                      if prefsError != ""
-                        text prefsError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0"
-                  else if settingsDomain == "access"
-                    column
-                      text t("settings.private") class=SectionLabel
-                      column class=GroupCard padding="0"
-                        button class=SettingsRow appearance="none" press=open("/vault") testId="open-vault"
-                          column class=IconTile color="AccentColor"
-                            Glyph(name="lock", size=18)
-                          column flex=1 gap="2px" min-width=0
-                            text t("vault.title") font-weight=600
-                            text t("settings.vaultNote") color="ink.muted" font="-exact-footnote"
-                          column color="ink.muted"
-                            Glyph(name="chevron", size=18)
-                    column
-                      text t("settings.remote") class=SectionLabel
-                      column class=GroupCard padding="0"
-                        row class=SettingsRow min-height=44
-                          input appearance="none" class=Field type="password" value=newPassword input=editNewPassword submit=doSavePassword placeholder=(session.passwordRequired ? t("settings.newPassword") : t("settings.setPassword")) aria-label=t("common.password") autocomplete="new-password" flex=1 min-width=0 testId="new-password"
-                          button appearance="none" press=doSavePassword disabled=(newPassword == "" or pending(passwordSet)) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color=(newPassword == "" ? "ink.muted" : "AccentColor") font="-exact-subheadline" font-weight=500 testId="save-password"
-                            text (session.passwordRequired ? t("settings.change") : t("settings.set"))
-                      text (session.passwordRequired ? t("settings.passwordOn") : t("settings.passwordOff")) class=SettingsFoot
-                      if passwordError != "" and not pending(passwordSet)
-                        text passwordError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="password-error"
-                    column
-                      text t("settings.network") class=SectionLabel
-                      column class=GroupCard padding="space.sm"
-                        row class=SettingsTrack role="radiogroup" aria-label=t("settings.network")
-                          for mode in ["local", "lan", "tailscale"] key=mode
-                            button class=SettingsTab appearance="none" role="radio" aria-checked=(network.mode == mode) press=doSetNetwork(mode) disabled=network.locked opacity=(network.locked and network.mode != mode ? 0.4 : 1) testId=`network-${mode}` background-color=(network.mode == mode ? "surface.card" : "transparent") color=(network.mode == mode ? "-exact-label" : "ink.muted")
-                              text networkModeLabel(mode, t("settings.networkLocal"), t("settings.networkLan"), t("settings.networkTailscale"))
-                      text (network.mode == "lan" ? t("settings.networkLanNote") : network.mode == "tailscale" ? t("settings.networkTailscaleNote") : t("settings.networkLocalNote")) class=SettingsFoot
-                      if network.locked
-                        text t("settings.networkManaged") class=SettingsFoot testId="network-managed"
-                      if network.listening != ""
-                        text t("settings.networkListening", address=network.listening) class=SettingsFoot testId="network-listening"
-                      if network.urls != ""
-                        text network.urls class=SettingsFoot testId="network-urls"
-                      if network.http
-                        text t("settings.networkHttp") class=SettingsFoot
-                      if network.error != ""
-                        text network.error color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="network-error"
-                      if networkError != "" and not pending(networkSet)
-                        text networkError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="network-save-error"
-                      if pending(networkRestarted)
-                        text t("settings.networkRestarting") class=SettingsFoot
-                      else if network.restartRequired
-                        row class=SettingsRow padding="space.xs space.md 0" min-height=44
-                          text t("settings.networkRestart") color="ink.muted" font="-exact-footnote" flex=1 testId="network-restart-note"
-                          if network.canRestart
-                            button appearance="none" press=doRestartNetwork min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="network-restart"
-                              text t("settings.networkRestartButton")
-                      if networkRestartError != "" and not pending(networkRestarted)
-                        text networkRestartError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0"
-                    column
-                      text t("settings.storage") class=SectionLabel
-                      column class=GroupCard padding="space.md" gap="space.sm"
-                        text t("settings.storage.where") font="-exact-subheadline" font-weight=600
-                        row class=SettingsTrack role="radiogroup" aria-label=t("settings.storage.where")
-                          button class=SettingsTab appearance="none" role="radio" aria-checked=(shownBackend != "anytype") press=doPickBackend("filesystem") disabled=(storage.backendLock != "") testId="storage-filesystem" background-color=(shownBackend != "anytype" ? "surface.card" : "transparent") color=(shownBackend != "anytype" ? "-exact-label" : "ink.muted")
-                            text t("settings.storage.filesystem")
-                          button class=SettingsTab appearance="none" role="radio" aria-checked=(shownBackend == "anytype") press=doPickBackend("anytype") disabled=(storage.backendLock != "" or not anytypeOn) testId="storage-anytype" background-color=(shownBackend == "anytype" ? "surface.card" : "transparent") color=(shownBackend == "anytype" ? "-exact-label" : "ink.muted")
-                            text t("settings.storage.anytype")
-                        text (shownBackend == "anytype" ? t("settings.storage.activeAnytype") : t("settings.storage.activeFile")) color="-exact-label" font="-exact-footnote" testId="storage-active"
-                        if not anytypeOn
-                          text t("settings.storage.anytypeConnect") color="ink.muted" font="-exact-footnote" testId="storage-anytype-note"
-                        if storage.backendLock != ""
-                          text t("settings.storage.locked", variable=storage.backendLock) color="ink.muted" font="-exact-footnote" testId="storage-locked-backend"
-                      if shownBackend == "anytype" or not anytypeOn
-                        text t("settings.anytype.title") class=SectionLabel
-                        column class=GroupCard padding="space.md" gap="space.md" testId="anytype-connect"
-                          text t("settings.anytype.intro") color="ink.muted" font="-exact-footnote"
-                          row gap="space.sm" align-items="center"
-                            button appearance="none" class=ActionMain press=doPairStart disabled=pending(pairStarted) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="anytype-connect-start"
-                              text (pairStep == "" ? t("settings.anytype.connect") : t("settings.anytype.again"))
-                            button appearance="none" class=ActionQuiet press=doAnytypeCheck disabled=pending(anytypeChecked) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="anytype-check"
-                              text t("settings.anytype.check")
-                          if pairStep == "code"
-                            column gap="space.xs"
-                              text t("settings.anytype.approve") color="ink.muted" font="-exact-footnote" testId="anytype-approve"
-                              row gap="space.sm" align-items="center"
-                                input appearance="none" class=FieldBox value=pairCode input=doEditPairCode maxlength=4 inputmode="numeric" placeholder="0000" aria-label=t("settings.anytype.code") flex=1 min-width=0 testId="anytype-code"
-                                button appearance="none" class=ActionMain press=doPairConfirm disabled=(pairCode.length != 4 or pending(pairConfirmed)) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="anytype-confirm"
-                                  text t("settings.anytype.confirm")
-                          if pairError != "" and not pending(pairStarted)
-                            text pairError color="-exact-system-red" font="-exact-footnote" testId="anytype-pair-error"
-                          if pairConfirmError != "" and not pending(pairConfirmed)
-                            text pairConfirmError color="-exact-system-red" font="-exact-footnote" testId="anytype-confirm-error"
-                          if anytypeError != "" and not pending(anytypeChecked)
-                            text anytypeError color="-exact-system-red" font="-exact-footnote" testId="anytype-check-error"
-                          if pairStep == "checked" and anytypeError == "" and not pending(anytypeChecked) and pairConfirmError == ""
-                            text t("settings.anytype.reachable") color="-exact-label" font="-exact-footnote" font-weight=600 testId="anytype-reachable"
-                          column gap="space.xs"
-                            text t("settings.anytype.spaceLabel") class=FieldLabel
-                            row gap="space.sm" align-items="center"
-                              input appearance="none" class=FieldBox value=spaceName placeholder=t("settings.anytype.spaceDefault") input=doEditSpace aria-label=t("settings.anytype.spaceName") flex=1 min-width=0 disabled=(storage.spaceLock != "") testId="anytype-space-name"
-                              button appearance="none" class=ActionMain press=doSaveSpace disabled=(storage.spaceLock != "" or not spaceEditing or pending(spaceSaved)) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="anytype-space-save"
-                                text t("settings.storage.save")
-                            text t("settings.anytype.spaceHelp") color="ink.muted" font="-exact-footnote"
-                            if storage.spaceLock != ""
-                              text t("settings.storage.locked", variable=storage.spaceLock) color="ink.muted" font="-exact-footnote" testId="anytype-space-locked"
-                            if spaceSaveError != "" and not pending(spaceSaved)
-                              text spaceSaveError color="-exact-system-red" font="-exact-footnote" testId="anytype-space-error"
-                            if pairStep == "checked" and anytypeError == "" and not pending(anytypeChecked) and pairConfirmError == ""
-                              if anytypeFound
-                                text t("settings.anytype.space", name=anytypeSpace) color="-exact-label" font="-exact-footnote" testId="anytype-space"
-                                text (anytypeShared ? t("settings.anytype.shared") : t("settings.anytype.private")) color="ink.muted" font="-exact-footnote" testId="anytype-shared"
-                              else
-                                text t("settings.anytype.missing", name=anytypeSpace) color="-exact-system-red" font="-exact-footnote" testId="anytype-missing"
-                      text t("settings.storage.folder") class=SectionLabel
-                      column class=GroupCard padding="space.md" gap="space.sm"
-                        text t("settings.storage.folderLabel") class=FieldLabel
-                        row gap="space.sm" align-items="center"
-                          input appearance="none" class=FieldBox value=storagePath placeholder=t("settings.storage.defaultFolder") input=doEditFolder aria-label=t("settings.storage.folder") flex=1 min-width=0 disabled=(storage.rootLock != "") testId="storage-folder"
-                          button appearance="none" class=ActionMain press=doSaveStorage disabled=(storagePath == "" or (storage.rootLock != "" and storage.backendLock != "") or pending(storageSaved)) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="storage-save"
-                            text t("settings.storage.save")
-                        text t("settings.storage.folderNote") color="ink.muted" font="-exact-footnote"
-                        if storage.rootLock != ""
-                          text t("settings.storage.locked", variable=storage.rootLock) color="ink.muted" font="-exact-footnote" testId="storage-locked-folder"
-                        row gap="space.sm" align-items="center"
-                          button appearance="none" class=ActionQuiet press=doTestStorage disabled=(storagePath == "" or pending(storageTested)) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="storage-test"
-                            text t("settings.storage.test")
-                          button appearance="none" class=ActionQuiet press=doCopyStorage disabled=(storagePath == "" or pending(storageCopied)) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="storage-copy"
-                            text t("settings.storage.copy")
-                        text t("settings.storage.copyNote") color="ink.muted" font="-exact-footnote"
-                        if storageHint == "test" and storageTestError == "" and not pending(storageTested)
-                          text t("settings.storage.testOk") color="-exact-label" font="-exact-footnote" font-weight=600 testId="storage-test-ok"
-                        if storageHint == "copy" and storageCopyError == "" and not pending(storageCopied)
-                          text t("settings.storage.copyOk") color="-exact-label" font="-exact-footnote" font-weight=600 testId="storage-copy-ok"
-                        if storage.error != ""
-                          text storage.error color="-exact-system-red" font="-exact-footnote" testId="storage-error"
-                        if storageSaveError != "" and not pending(storageSaved)
-                          text storageSaveError color="-exact-system-red" font="-exact-footnote" testId="storage-save-error"
-                        if storageTestError != "" and not pending(storageTested)
-                          text storageTestError color="-exact-system-red" font="-exact-footnote" testId="storage-test-error"
-                        if storageCopyError != "" and not pending(storageCopied)
-                          text storageCopyError color="-exact-system-red" font="-exact-footnote" testId="storage-copy-error"
-                      if pending(storageRestarted)
-                        text t("settings.storage.restarting") class=SettingsFoot
-                      else if storage.restartRequired
-                        row class=SettingsRow padding="space.xs space.md 0" min-height=44
-                          text t("settings.storage.restart") color="ink.muted" font="-exact-footnote" flex=1 testId="storage-restart-note"
-                          if storage.canRestart
-                            button appearance="none" press=doRestartStorage min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="storage-restart"
-                              text t("settings.storage.restartNow")
-                      if storageRestartError != "" and not pending(storageRestarted)
-                        text storageRestartError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-restart-error"
-                  else if settingsDomain == "updates"
-                    column gap="space.xl"
-                      column
-                        text t("settings.domainUpdates") class=SectionLabel
-                        column class=GroupCard padding="0"
-                          row align-items="center" min-height=44 padding="0 space.md" box-sizing="border-box"
-                            if updateTo != "" and not updateStuck
-                              text t("settings.updating", version=updateTo) font="-exact-subheadline" testId="update-status"
-                            else if updateStuck
-                              text t("settings.updateStuck", version=(updateFrom != "" ? updateFrom : system.version)) font="-exact-subheadline" color="-exact-system-red" testId="update-status"
-                            else if pending(system) and not system.ok
-                              text t("settings.updateChecking") font="-exact-subheadline" color="ink.muted" testId="update-status"
-                            else if system.error != ""
-                              text system.error font="-exact-subheadline" color="ink.muted" testId="update-status"
-                            else if not system.ok
-                              text t("settings.updateFailed") font="-exact-subheadline" color="ink.muted" testId="update-status"
-                            else if not system.installed
-                              text t("settings.updateSource") font="-exact-subheadline" testId="update-status"
-                            else if system.updateAvailable
-                              text t("settings.updateAvailable", version=system.latest) font="-exact-subheadline" testId="update-status"
-                            else
-                              text t("settings.updateCurrent", version=system.version) font="-exact-subheadline" testId="update-status"
-                          if canUpdate
-                            row align-items="center" min-height=44 padding="space.sm space.md" box-sizing="border-box" border-top="1px solid surface.line"
-                              button appearance="none" press=doStartUpdate disabled=pending(updateStarted) testId="start-update" min-height=36 padding="0 space.lg" border="none" border-radius="radius.full" background-color="brand.default" color="ink.dark" font="-exact-subheadline" font-weight=600
-                                text t("settings.updateRestart")
-                        if updateNeedsService
-                          text t("settings.updateNotService") class=SettingsFoot
-                        if updateError != "" and updateTo == ""
-                          text updateError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="update-error"
-                      column
-                        text t("settings.about") class=SectionLabel
-                        column class=GroupCard padding="0"
-                          row justify-content="space-between" align-items="center" min-height=44 padding="0 space.md" box-sizing="border-box" font="-exact-subheadline"
-                            text "hbots" color="ink.muted"
-                            text (about.ok ? about.version : t("settings.unknown")) testId="about-version"
-                          row justify-content="space-between" align-items="center" min-height=44 padding="0 space.md" box-sizing="border-box" border-top="1px solid surface.line" font="-exact-subheadline"
-                            text about.harness color="ink.muted"
-                            text (about.connected ? t("settings.connected") : t("settings.disconnected")) color=(about.connected ? "-exact-label" : "-exact-system-red") testId="about-harness"
-                          link class=SettingsRow href="https://github.com/Herklos/HBots/blob/main/CHANGELOG.md" target="_blank" border-top="1px solid surface.line" testId="about-changelog"
-                            text t("settings.changelog") font-weight=500 flex=1
-                            column color="ink.muted"
-                              Glyph(name="chevron", size=18)
-                      if session.passwordRequired
-                        column class=GroupCard padding="0"
-                          button class=SettingsRow appearance="none" press=logout justify-content="flex-start" color="-exact-system-red" testId="sign-out"
-                            text t("settings.signOut") font-weight=500
+            SettingsScreen(route=e.id)
           else if e.name == "vault"
             VaultScreen(route=e.id)
           else if e.name == "vaultAdd"
@@ -797,92 +601,7 @@ component Bots
             for l in vault.filter(x => x.id == e.params.id) key=l.id
               LoginSheet(route=e.id, item=l, revealedFor=revealedFor, revealedText=revealedText, error=loginError, save=doCommitLogin, reveal=doReveal, hide=doHideReveal, drop=doDropLogin, cancel=doCloseLogin)
           else if e.name == "newGroup"
-            column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="group-form" position="absolute" inset=0
-              header class=PageHeader
-                if groupStep != "name"
-                  button id="back" class=TextControl appearance="none" press=groupStepBack testId="group-back"
-                    text t("common.back")
-                text t("group.new") role="heading" aria-level=1 class=PageTitle flex=1
-                button class=IconControl appearance="none" press=back aria-label=t("common.close") title=t("common.close") testId="group-close"
-                  Glyph(name="close", size=20)
-              scroll id="group-form" flex=1 min-height=0
-                column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.lg" gap="space.lg"
-                  if groupStep == "face" or groupStep == "review"
-                    column align-items="center" gap="space.md" testId="group-face-preview"
-                      Faces(faces=pickedFaces(bots, groupMembers), size=72, tuck=-28)
-                      text (groupMembers.length == 0 ? t("group.pickFaces") : t("group.face")) color="ink.muted" font="-exact-footnote" text-align="center"
-                  if groupStep == "name"
-                    column gap="space.sm"
-                      text t("group.askName") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-group-name"
-                      input appearance="none" class=Field value=groupName input=editGroupName submit=groupStepNext placeholder=t("group.namePlaceholder") aria-label=t("group.name") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-name"
-                  else if groupStep == "face"
-                    column gap="space.sm"
-                      text t("group.askFace") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-group-face"
-                      row align-items="baseline" gap="space.sm"
-                        text t("common.bots") font="-exact-subheadline" font-weight=600 flex=1
-                        text (groupMembers.length < 2 ? t("group.pickMore", n=groupMembers.length) : t("group.picked", n=groupMembers.length)) color="ink.muted" font="-exact-footnote" testId="group-count"
-                      column gap="space.xs"
-                        for b in pickableBots key=b.slug
-                          button appearance="none" press=toggleGroupMember(b.slug) role="checkbox" aria-checked=groupMembers.includes(b.slug) aria-label=b.name testId=`pick-bot-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border=(groupMembers.includes(b.slug) ? "2px solid AccentColor" : "2px solid surface.line") border-radius="radius.md" background-color="surface.card" color="-exact-label"
-                            row gap="space.md" align-items="center" width="100%"
-                              Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=36, still=true, presence="")
-                              text b.name font-weight=500 flex=1 min-width=0 text-align="left"
-                              column width=24 height=24 align-items="center" justify-content="center" border-radius="radius.full" background-color=(groupMembers.includes(b.slug) ? "AccentColor" : "transparent") border=(groupMembers.includes(b.slug) ? "none" : "2px solid surface.line") color="ink.dark"
-                                if groupMembers.includes(b.slug)
-                                  Glyph(name="check", size=14)
-                  else if groupStep == "policy"
-                    column gap="space.sm" width="100%"
-                      text t("group.askPolicy") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-group-policy"
-                      button class=ChoiceRow appearance="none" press=pickGroupPolicy("last") role="radio" aria-checked=(groupPolicy == "last") testId="policy-last"
-                        column flex=1 gap="2px" min-width=0 align-items="flex-start"
-                          text t("group.policyLast") font-weight=600
-                          text t("group.policyLastAbout") color="ink.muted" font="-exact-footnote"
-                      button class=ChoiceRow appearance="none" press=pickGroupPolicy("everyone") role="radio" aria-checked=(groupPolicy == "everyone") testId="policy-everyone"
-                        column flex=1 gap="2px" min-width=0 align-items="flex-start"
-                          text t("group.policyEveryone") font-weight=600
-                          text t("group.policyEveryoneAbout") color="ink.muted" font="-exact-footnote"
-                      button class=ChoiceRow appearance="none" press=pickGroupPolicy("chief") role="radio" aria-checked=(groupPolicy == "chief") testId="policy-chief"
-                        column flex=1 gap="2px" min-width=0 align-items="flex-start"
-                          text t("group.policyChief") font-weight=600
-                          text t("group.policyChiefAbout") color="ink.muted" font="-exact-footnote"
-                      if groupPolicy == "chief"
-                        ChiefList(bots=pickableBots, slugs=groupMembers, selected=groupChief, pick=pickGroupChief)
-                  else if groupStep == "kickoff"
-                    column gap="space.sm"
-                      text t("group.askKickoff") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-group-kickoff"
-                      textarea appearance="none" class=Field value=groupAbout input=editGroupAbout placeholder=t("group.kickoffPlaceholder") aria-label=t("group.stepKickoff") rows=4 maxlength=2000 padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-about"
-                  else
-                    column gap="space.sm" testId="step-group-review"
-                      text t("create.review") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2
-                      column class=GroupCard padding="0"
-                        button class=SettingsRow appearance="none" press=goGroupStep("name") min-height=56 padding="space.sm space.md" testId="review-edit-name"
-                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
-                            text t("common.name") color="ink.muted" font="-exact-footnote"
-                            text groupName font-weight=600 testId="review-group-name"
-                          Glyph(name="chevron", size=18)
-                        button class=SettingsRow appearance="none" press=goGroupStep("policy") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-policy"
-                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
-                            text t("group.stepPolicy") color="ink.muted" font="-exact-footnote"
-                            row gap="space.sm" align-items="baseline" flex-wrap="wrap" min-width=0
-                              text (groupPolicy == "everyone" ? t("group.policyEveryone") : groupPolicy == "chief" ? t("group.policyChief") : t("group.policyLast")) font-weight=600 testId="review-policy" overflow-wrap="anywhere"
-                              if groupPolicy == "chief"
-                                text nameOf(bots, groupChief) testId="review-chief" overflow-wrap="anywhere"
-                          Glyph(name="chevron", size=18)
-                        button class=SettingsRow appearance="none" press=goGroupStep("kickoff") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-kickoff"
-                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
-                            text t("group.stepKickoff") color="ink.muted" font="-exact-footnote"
-                            text (groupAbout.trim() == "" ? t("group.noKickoff") : groupAbout) font-weight=600 testId="review-kickoff"
-                          Glyph(name="chevron", size=18)
-                  if groupError != "" and not pending(groupMade)
-                    text groupError color="-exact-system-red" testId="group-error"
-              row justify-content="center" padding="space.md space.lg" border-top="1px solid surface.line" box-sizing="border-box"
-                column width="100%" max-width="34rem"
-                  if groupStep == "review"
-                    button class=PrimaryButton buttonStyle="filled" press=makeGroup disabled=(not canMakeGroup) width="100%" testId="group-create"
-                      text (pending(groupMade) ? t("common.creating") : t("group.create"))
-                  else
-                    button class=PrimaryButton buttonStyle="filled" press=groupStepNext disabled=((groupStep == "name" and groupName.trim() == "") or (groupStep == "face" and groupMembers.length < 2)) width="100%" testId="group-next"
-                      text t("create.next")
+            NewGroupScreen(route=e.id)
           else
             column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="new-form" position="absolute" inset=0
               header class=PageHeader

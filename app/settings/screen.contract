@@ -1,0 +1,238 @@
+use NotificationStatus from "@exact/notifications"
+use Glyph from "../glyph.contract"
+use ModelPicker, UsageView from "./settings.contract"
+use Screen, PageTitle, PageHeader, ToggleControl, SectionLabel, IconTile, Field from "../ui/controls.contract"
+use Reply, Session, Network, Storage, Pairing, AnytypeCheck, About, SystemStatus, UpdateStart, Prefs, NoticeState, initialsOf, botCountLabel, settingsDomainLabel, noticeOn, mutedBots, mutedGroups, firstMutedBot, firstMutedGroup, noticeStatusLabel, networkModeLabel, themeLabel from "../ui/root-types.contract"
+use Bot, Convo, Provider, UsageReport from "../ui/shapes.contract"
+use GroupCard, SettingsTrack, SettingsTab, SettingsRow, SettingsFoot, FieldLabel, FieldBox, ActionMain, ActionQuiet from "../ui/sidebar.contract"
+use AccessSettings from "./access.contract"
+use ModelSettings from "./models.contract"
+use NoticeSettings from "./notice.contract"
+use UpdateSettings from "./updates.contract"
+use UserSettings from "./user.contract"
+// SettingsScreen: one route of the root view, moved out with its values and actions injected.
+component SettingsScreen
+  props
+    route: number
+  inject
+    about: About
+    anytypeChecked: option<AnytypeCheck>
+    anytypeError: string
+    anytypeFound: bool
+    anytypeOn: bool
+    anytypeShared: bool
+    anytypeSpace: string
+    bots: Bot[]
+    canUpdate: bool
+    convos: Convo[]
+    doAllowNotices: action
+    doAnytypeCheck: action
+    doCopyStorage: action
+    doDefaultMode: action
+    doEditFolder: action
+    doEditName: action
+    doEditPairCode: action
+    doEditSpace: action
+    doGroupAnswer: action
+    doMakeDefault: action
+    doMute: action
+    doMuteGroup: action
+    doPairConfirm: action
+    doPairStart: action
+    doPickBackend: action
+    doPickTheme: action
+    doRestartNetwork: action
+    doRestartStorage: action
+    doSaveName: action
+    doSavePassword: action
+    doSaveSpace: action
+    doSaveStorage: action
+    doSetNetwork: action
+    doStartUpdate: action
+    doTestStorage: action
+    editNewPassword: action
+    logout: action
+    nameDraft: string
+    nameEditing: bool
+    network: Network
+    networkError: string
+    networkRestartError: string
+    networkRestarted: option<Reply>
+    networkSet: option<Reply>
+    newPassword: string
+    notice: NoticeState
+    noticeAsked: option<NotificationStatus>
+    open: action
+    pairCode: string
+    pairConfirmError: string
+    pairConfirmed: option<Reply>
+    pairError: string
+    pairStarted: option<Pairing>
+    pairStep: string
+    passwordError: string
+    passwordSet: option<Reply>
+    pickPeriod: action
+    pickSettingsDomain: action
+    pickView: action
+    prefs: Prefs
+    prefsError: string
+    providers: Provider[]
+    report: UsageReport
+    reportFailed: bool
+    saveNoticePart: action
+    saveNotifications: action
+    session: Session
+    settingsDomain: string
+    shownBackend: string
+    spaceEditing: bool
+    spaceName: string
+    spaceSaveError: string
+    spaceSaved: option<Reply>
+    storage: Storage
+    storageCopied: option<Reply>
+    storageCopyError: string
+    storageHint: string
+    storagePath: string
+    storageRestartError: string
+    storageRestarted: option<Reply>
+    storageSaveError: string
+    storageSaved: option<Reply>
+    storageTestError: string
+    storageTested: option<Reply>
+    system: SystemStatus
+    updateError: string
+    updateFrom: string
+    updateNeedsService: bool
+    updateStarted: option<UpdateStart>
+    updateStuck: bool
+    updateTo: string
+    usagePeriod: string
+    usageView: string
+    anytypeCheckedPending: bool
+    networkRestartedPending: bool
+    networkSetPending: bool
+    noticeAskedPending: bool
+    pairConfirmedPending: bool
+    pairStartedPending: bool
+    passwordSetPending: bool
+    spaceSavedPending: bool
+    storageCopiedPending: bool
+    storageRestartedPending: bool
+    storageSavedPending: bool
+    storageTestedPending: bool
+    systemPending: bool
+    updateStartedPending: bool
+  provide
+    about
+    anytypeCheckedPending
+    anytypeError
+    anytypeFound
+    anytypeOn
+    anytypeShared
+    anytypeSpace
+    bots
+    canUpdate
+    convos
+    doAllowNotices
+    doAnytypeCheck
+    doCopyStorage
+    doDefaultMode
+    doEditFolder
+    doEditName
+    doEditPairCode
+    doEditSpace
+    doGroupAnswer
+    doMakeDefault
+    doMute
+    doMuteGroup
+    doPairConfirm
+    doPairStart
+    doPickBackend
+    doPickTheme
+    doRestartNetwork
+    doRestartStorage
+    doSaveName
+    doSavePassword
+    doSaveSpace
+    doSaveStorage
+    doSetNetwork
+    doStartUpdate
+    doTestStorage
+    editNewPassword
+    logout
+    nameDraft
+    nameEditing
+    network
+    networkError
+    networkRestartError
+    networkRestartedPending
+    networkSetPending
+    newPassword
+    notice
+    noticeAskedPending
+    open
+    pairCode
+    pairConfirmError
+    pairConfirmedPending
+    pairError
+    pairStartedPending
+    pairStep
+    passwordError
+    passwordSetPending
+    pickPeriod
+    pickView
+    prefs
+    prefsError
+    providers
+    report
+    reportFailed
+    saveNoticePart
+    saveNotifications
+    session
+    shownBackend
+    spaceEditing
+    spaceName
+    spaceSaveError
+    spaceSavedPending
+    storage
+    storageCopiedPending
+    storageCopyError
+    storageHint
+    storagePath
+    storageRestartError
+    storageRestartedPending
+    storageSaveError
+    storageSavedPending
+    storageTestError
+    storageTestedPending
+    system
+    systemPending
+    updateError
+    updateFrom
+    updateNeedsService
+    updateStartedPending
+    updateStuck
+    updateTo
+    usagePeriod
+    usageView
+  view
+    column class=Screen navigationKey=`${route}` navigationScroll="settings-form" position="absolute" inset=0
+      header class=PageHeader
+        text t("settings.title") role="heading" aria-level=1 class=PageTitle flex=1
+      column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" padding="space.md space.lg space.sm"
+        row class=SettingsTrack role="tablist" aria-label=t("settings.domains")
+          for d in ["user", "notifications", "models", "access", "updates"] key=d
+            button class=SettingsTab appearance="none" role="tab" aria-selected=(settingsDomain == d) press=pickSettingsDomain(d) testId=`settings-domain-${d}` background-color=(settingsDomain == d ? "surface.card" : "transparent") color=(settingsDomain == d ? "-exact-label" : "ink.muted")
+              text settingsDomainLabel(d, t("settings.domainUser"), t("settings.domainNotifications"), t("settings.domainModels"), t("settings.domainAccess"), t("settings.about"))
+      scroll id="settings-form" flex=1 min-height=0
+        column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" margin="0 auto" padding="space.lg space.lg space.xl" gap="space.xl"
+          if settingsDomain == "user"
+            UserSettings()
+          else if settingsDomain == "notifications"
+            NoticeSettings()
+          else if settingsDomain == "models"
+            ModelSettings()
+          else if settingsDomain == "access"
+            AccessSettings()
+          else if settingsDomain == "updates"
+            UpdateSettings()
