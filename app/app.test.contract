@@ -1102,3 +1102,15 @@ test "a mention names a Bot and leaves the group selected"
   back
   expect tree missing "chat-title"
   expect tree missing "room-title"
+
+test "the Bot chat and a group both use ChatLog"
+  at "/bot/fixture"
+  clock data
+  expect tree has "chat-log"
+  expect tree has "transcript"
+  expect tree has "message-m2"
+  at "/group/fixture"
+  clock data
+  expect tree has "chat-log"
+  expect tree has "room-log"
+  expect tree has "room-text-r2"
