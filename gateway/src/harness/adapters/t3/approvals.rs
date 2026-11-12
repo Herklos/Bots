@@ -1,3 +1,7 @@
+//! Secrets use `secrets.answerRequest`: `{ threadId, turnItemId, answer }` where
+//! `answer` is `{ type: "save", secret }` or `{ type: "decline" }`.
+//! Approvals and questions dispatch `runtime-request.respond` with `threadId`,
+//! `requestId`, and whichever of `decision`, `answers`, and `feedback` were set.
 use super::T3;
 use crate::harness::{Approval, Approvals, HarnessError};
 use async_trait::async_trait;

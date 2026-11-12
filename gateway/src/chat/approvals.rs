@@ -1,12 +1,8 @@
 //! Answering a pending request on a Bot's thread.
 //!
-//! Secrets use `secrets.answerRequest` (`packages/contracts/src/rpc.ts`, payload
-//! `SecretRequestAnswerInput` in `packages/contracts/src/secretRequest.ts`):
-//! `{ threadId, turnItemId, answer: { type: "save", secret } | { type: "decline" } }`.
-//! Approvals and questions use the orchestration command `runtime-request.respond`
-//! (sent through `orchestration.dispatchCommand`; the fields are `threadId`, `requestId`,
-//! and optional `decision`, `answers` and `feedback`, as in
-//! `apps/server/src/orchestration-v2/testkit/OrchestratorScenario.ts`).
+//! This matches the request the client named to a secret or a runtime request.
+//! The harness sends it. A secret is saved or declined. An approval or a question
+//! carries a decision, answers, or feedback, and needs at least one of the first two.
 use crate::harness::{Approval, Approvals};
 use crate::platform::error::{ApiError, ApiResult};
 use serde_json::Value;
