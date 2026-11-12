@@ -13,9 +13,9 @@ use getUserMedia, stopTrack, MediaStream, MediaStreamTrack from "@exact/media-ca
 use startMediaRecorder, stopMediaRecorder, isTypeSupported, MediaRecorderInfo, RecordedMedia, TypeSupport from "@exact/recording"
 use requestNotificationPermission, NotificationStatus from "@exact/notifications"
 use InboxRow from "./inbox/inbox.contract"
-use Faces, GroupPanel from "./group/group.contract"
+use Faces, GroupPanel, ChiefList from "./group/group.contract"
 use LoginSheet, ModelPicker, UsageView from "./settings/settings.contract"
-use pickerColours, shapeOf, colorOf, faceColor, showUnread, memberFaces from "./ui/fns.contract"
+use pickerColours, shapeOf, colorOf, faceColor, showUnread, memberFaces, memberCalled, quietPolicyHint from "./ui/fns.contract"
 use PanelRow, ChoiceRow from "./ui/panel.contract"
 use Bot, Chat, Room, Convo, Login, Provider, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer from "./ui/shapes.contract"
 use Reply, Sent, DriveReply, Session, Network, Storage, Pairing, AnytypeCheck, Suggestion, About, SystemStatus, UpdateStart, Health, Made, Prefs, PageState, NoticeState, Attached, VoiceHeld, Revealed, Usage, pageKeyKind, pageKeyCode, pageModifiers, pageChord, DraftPack, HostTime, PointerFacts, nameOf, initialsOf, botCountLabel, settingsDomainLabel, noticeOn, mutedBots, mutedGroups, firstMutedBot, firstMutedGroup, noticeStatusLabel, networkModeLabel, attachmentName, convoKey, dropKey, putText, putVoice, fieldAt, voiceNumber, entryId, hasFileId, hasVoiceId, themeLabel, pickedFaces, withWorking, withRoomPending, roomLine, transcriptId, knownSent, botCount, holdWorking, withPending, wordChar, mentionReplace, botMentions, roomMentions, filterMentions from "./ui/root-types.contract"
@@ -25,7 +25,6 @@ use ChatLog from "./chat/log.contract"
 use MentionMenu from "./chat/mention.contract"
 use BotPanel from "./bot/panel.contract"
 use FirstBot from "./bot/first.contract"
-
 routes nav
   inbox "/"
     chat "/bot/:slug"
@@ -36,7 +35,6 @@ routes nav
       vault "/vault"
         vaultAdd "/vault/new"
         vaultEdit "/vault/:id"
-
 component Bots
   // Kept while this send's turn is open, so a poll that says working is false does not drop the row.
   state holdWork = false
@@ -91,13 +89,11 @@ component Bots
   derive onGroup = top(nav).name == "group"
   derive workingHere = onGroup ? (paintedWorkers.length > 0 ? "working" : "") : (onBot and chat.working ? "working" : "")
   derive onLibrary = top(nav).name == "chat" and panelOpen and panelTab == "library"
-
   // The inbox list refreshes on the inbox, and a chat refreshes on that chat.
   // A wide window keeps the list beside the open conversation, so the list still refreshes.
   // A hidden page waits about ten seconds. Sending, answering, or stopping skips the poll.
   task probeAnytype when networkGate == "1" and storage.keySet and not anytypeProbed and not pending(anytypeChecked)
     after(1, doAnytypeCheck)
-
   action pull
     refresh bots
     if top(nav).name == "inbox" or wide
@@ -130,7 +126,6 @@ component Bots
     groupStep = s
   action togglePlus
     plusOpen = not plusOpen
-
   action applyScheme
     setScheme(prefs.theme)
   action doEditSpace(v: string)
@@ -489,7 +484,7 @@ component Bots
                     textarea id="room-composer" value=roomText input=editRoomText key=roomKey outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(room.title != "" ? t("chat.messageTo", name=room.title) : t("chat.write")) aria-label=t("group.message") aria-expanded=(mentionHits.length > 0) aria-controls="mention-menu" testId="room-composer" flex=1 min-width=0 padding="space.sm space.sm" border="none" background-color="transparent" color="-exact-label"
                     button class=SendControl appearance="none" press=postRoom disabled=(roomText.trim() == "" or pending(roomSent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="room-send"
                       Glyph(name="send", size=18)
-                  text (roomText.includes("@everyone") ? t("group.hintEveryone") : (roomText.includes("@") ? t("group.hintMention") : t("group.hintNone"))) color="ink.muted" font="-exact-footnote" testId="room-hint"
+                  text (roomText.includes("@everyone") ? t("group.hintEveryone") : roomText.includes("@") ? t("group.hintMention") : quietPolicyHint(room.answerPolicyEffective, t("group.hintNoneLast"), t("group.hintNoneEveryone"), t("group.hintNoneChief", chief=memberCalled(room.members, room.chief)))) color="ink.muted" font="-exact-footnote" testId="room-hint" width="100%" min-width=0 overflow-wrap="anywhere"
               GroupPanel(shown=groupPanel, wide=wide, page=groupPage, room=room, bots=bots, closePanel=toggleGroupPanel, openEdit=openGroupEdit, goRoot=groupBack, openAdd=openGroupAdd, closeAdd=closeGroupAdd, patch=patchGroup, removeMember=removeGroupMember, addMember=addGroupMember, drop=dropGroup, error=groupSaveError)
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
@@ -850,6 +845,8 @@ component Bots
                         column flex=1 gap="2px" min-width=0 align-items="flex-start"
                           text t("group.policyChief") font-weight=600
                           text t("group.policyChiefAbout") color="ink.muted" font="-exact-footnote"
+                      if groupPolicy == "chief"
+                        ChiefList(bots=pickableBots, slugs=groupMembers, selected=groupChief, pick=pickGroupChief)
                   else if groupStep == "kickoff"
                     column gap="space.sm"
                       text t("group.askKickoff") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-group-kickoff"
@@ -866,7 +863,10 @@ component Bots
                         button class=SettingsRow appearance="none" press=goGroupStep("policy") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-policy"
                           column flex=1 min-width=0 gap="2px" align-items="flex-start"
                             text t("group.stepPolicy") color="ink.muted" font="-exact-footnote"
-                            text (groupPolicy == "everyone" ? t("group.policyEveryone") : groupPolicy == "chief" ? t("group.policyChief") : t("group.policyLast")) font-weight=600 testId="review-policy"
+                            row gap="space.sm" align-items="baseline" flex-wrap="wrap" min-width=0
+                              text (groupPolicy == "everyone" ? t("group.policyEveryone") : groupPolicy == "chief" ? t("group.policyChief") : t("group.policyLast")) font-weight=600 testId="review-policy" overflow-wrap="anywhere"
+                              if groupPolicy == "chief"
+                                text nameOf(bots, groupChief) testId="review-chief" overflow-wrap="anywhere"
                           Glyph(name="chevron", size=18)
                         button class=SettingsRow appearance="none" press=goGroupStep("kickoff") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-kickoff"
                           column flex=1 min-width=0 gap="2px" align-items="flex-start"

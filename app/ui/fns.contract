@@ -44,6 +44,8 @@ fn bitColor(faces: FaceBit[], n: number): string = match faces.at(n) { case some
 fn bitState(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.state, case none => "idle" }
 
 fn memberFaces(bots: Bot[], members: RoomMember[]): FaceBit[] = members.slice(0, 3).map(m => FaceBit(shape=shapeOf(bots, m.slug), color=colorOf(bots, m.slug), state=m.state))
+fn memberCalled(members: RoomMember[], slug: string): string = match first(members.filter(m => m.slug == slug)) { case some(m) => m.name, case none => match first(members) { case some(m) => m.name, case none => "" } }
+fn quietPolicyHint(policy: string, last: string, everyone: string, chief: string): string = policy == "everyone" ? everyone : policy == "chief" ? chief : last
 
 fn alignAt(align: string[], i: number): string = match align.at(i) { case some(a) => a == "center" or a == "right" ? a : "left", case none => "left" }
 // The transcript id for a command id. A row already in that form is kept.
