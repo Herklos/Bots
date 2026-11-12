@@ -253,6 +253,7 @@ pub(crate) mod image_tools; // image_show: copy a picture into this Bot's librar
 pub(crate) mod library; // Files and records through the workspace adapter.
 pub(crate) mod lineage; // Subagents and delegated threads of one Bot.
 pub(crate) mod memory; // Bot memory files through the workspace.
+pub(crate) mod memory_files; // Markdown read and revision-safe save for the person.
 pub(crate) mod memory_tools;
 pub(crate) mod provider_switch; // A mid-chat provider change waits for confirmation.
 pub(crate) mod provisioner;

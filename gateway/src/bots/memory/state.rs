@@ -54,7 +54,7 @@ impl MemoryState {
     }
 }
 
-pub(super) fn revision_of(content: &str) -> String {
+pub(crate) fn revision_of(content: &str) -> String {
     sha256_hex(&super::evidence::normalize_newlines(content))
 }
 
