@@ -270,6 +270,12 @@ impl Operation {
                 &["challengeId", "code"],
             ),
             "hbots_anytype_setup" => object(&[("dryRun", boolean())], &[]),
+            "hbots_post_sync_run" => string_object(&[]),
+            "hbots_post_sync_import" => object(&[("dryRun", boolean())], &[]),
+            "hbots_post_sync_conflict_resolve" => object(
+                &[("keep", enumeration(&["local", "remote", "both"]))],
+                &["keep"],
+            ),
             "hbots_thread_previews" => object(
                 &[("stamps", dynamic("Thread-ID to preview-stamp mapping."))],
                 &[],

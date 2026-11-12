@@ -5722,6 +5722,290 @@
         }
       }
     },
+    "/api/sync/status": {
+      "get": {
+        "operationId": "hbots_get_sync_status",
+        "summary": "GET /api/sync/status",
+        "parameters": [],
+        "x-hbots-permission": "read",
+        "responses": {
+          "200": {
+            "description": "Original gateway operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                  "x-hbots-dynamic": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Gateway error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "applicationSession": []
+          }
+        ]
+      }
+    },
+    "/api/sync/run": {
+      "post": {
+        "operationId": "hbots_post_sync_run",
+        "summary": "POST /api/sync/run",
+        "parameters": [],
+        "x-hbots-permission": "write",
+        "responses": {
+          "200": {
+            "description": "Original gateway operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                  "x-hbots-dynamic": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Gateway error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "applicationSession": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sync/import": {
+      "post": {
+        "operationId": "hbots_post_sync_import",
+        "summary": "POST /api/sync/import",
+        "parameters": [],
+        "x-hbots-permission": "write",
+        "responses": {
+          "200": {
+            "description": "Original gateway operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                  "x-hbots-dynamic": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Gateway error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "applicationSession": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dryRun": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [],
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/sync/conflicts": {
+      "get": {
+        "operationId": "hbots_get_sync_conflicts",
+        "summary": "GET /api/sync/conflicts",
+        "parameters": [],
+        "x-hbots-permission": "read",
+        "responses": {
+          "200": {
+            "description": "Original gateway operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                  "x-hbots-dynamic": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Gateway error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "applicationSession": []
+          }
+        ]
+      }
+    },
+    "/api/sync/conflicts/{id}/resolve": {
+      "post": {
+        "operationId": "hbots_post_sync_conflict_resolve",
+        "summary": "POST /api/sync/conflicts/{id}/resolve",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "x-hbots-permission": "write",
+        "responses": {
+          "200": {
+            "description": "Original gateway operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                  "x-hbots-dynamic": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Gateway error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "applicationSession": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "keep": {
+                    "type": "string",
+                    "enum": [
+                      "local",
+                      "remote",
+                      "both"
+                    ]
+                  }
+                },
+                "required": [
+                  "keep"
+                ],
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/access/tailscale": {
       "post": {
         "operationId": "hbots_access_tailscale",

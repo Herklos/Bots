@@ -56,10 +56,6 @@ pub(crate) fn key_is_set(data_root: &Path, env: &ProcessEnv) -> bool {
     file_nonempty(&key_path(data_root))
 }
 
-pub(crate) fn anytype_status() -> Value {
-    json!({ "available": false, "status": "unavailable" })
-}
-
 pub(crate) async fn write_key(data_root: &Path, env: &ProcessEnv, key: &str) -> ApiResult<Value> {
     if env.key_locked {
         return Err(ApiError::new(

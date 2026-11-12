@@ -1,0 +1,36 @@
+// Anytype sync types, shown while the engine runs the storage backend. `state` is
+// the engine's word (live, importing, needs_import, offline, not_granted,
+// api_changed, not_found); `syncStateLabel` turns it into what a person reads.
+// `lastSync` and each device's `lastSeen` arrive preformatted for the host locale.
+shape SyncDevice
+  name: string
+  lastSeen: string
+
+shape SyncConflict
+  id: string
+  path: string
+
+shape SyncStatus
+  ok: bool
+  state: string
+  lastSync: string
+  pending: number
+  devices: SyncDevice[]
+  conflicts: SyncConflict[]
+  needsImport: bool
+  error: string
+
+// The first import: the dry run answers the counts, the confirm answers `started`.
+// `minutes` is the estimated import time, rounded up.
+shape SyncImport
+  ok: bool
+  started: bool
+  push: number
+  pull: number
+  conflict: number
+  minutes: number
+  error: string
+
+// The Sync card's state word. Syncing beats everything, a conflict beats quiet
+// states, and the engine's failure words all read as Not connected.
+fn syncStateLabel(state: string, conflicts: bool, syncing: string, upToDate: string, offlineNote: string, attention: string, notConnected: string): string = state == "importing" ? syncing : (conflicts ? attention : state == "live" ? upToDate : state == "offline" ? offlineNote : notConnected)

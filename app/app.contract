@@ -22,6 +22,7 @@ component Bots
   members "./computer/preview.contract"
   members "./vault/model.contract"
   members "./settings/model.contract"
+  members "./settings/sync.contract"
   members "./settings/extras.contract"
   members "./settings/mcp-model.contract"
   members "./bot/model.contract"
@@ -250,6 +251,9 @@ component Bots
     doSetNetwork
     doStartUpdate
     doTestStorage
+    doResolveConflict
+    doSyncImport
+    doSyncNow
     editNewPassword
     logout
     pickSettingsDomain

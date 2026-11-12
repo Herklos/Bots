@@ -77,4 +77,9 @@ impl AnytypeClient {
     pub(crate) fn rate(&self) -> f64 {
         self.limiter.rate()
     }
+
+    /// The space every call reads and writes. Views may show it; the key never.
+    pub(crate) fn space_id(&self) -> &str {
+        &self.space_id
+    }
 }

@@ -40,7 +40,7 @@ async function call(name, args = {}) {
 }
 try {
   const catalog = await client.listTools();
-  assert.equal(catalog.tools.length, 107);
+  assert.equal(catalog.tools.length, 112);
   assert(catalog.tools.find(t => t.name === 'hbots_create_bot').inputSchema.properties.body.properties.name);
   await client.ping();
   const ada = await call('hbots_create_bot', { body: { name: 'SDK Ada' } });
@@ -84,7 +84,7 @@ try {
   await call('hbots_put_settings', { body: { managementMcp: { enabled: false } } });
   await assert.rejects(() => client.listTools());
   await api('/api/settings', 'PUT', { managementMcp: { enabled: true } });
-  assert.equal((await client.listTools()).tools.length, 107);
+  assert.equal((await client.listTools()).tools.length, 112);
   console.log('PASS: official MCP SDK initialization, discovery, Bot/group CRUD, binary files, Vault/CSV, memory, permissions, cross-process revocation and disablement');
 } finally {
   await reader?.client.close();

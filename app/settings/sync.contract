@@ -1,0 +1,45 @@
+use SyncStatus, SyncImport from "../ui/sync-types.contract"
+use Reply from "../ui/root-types.contract"
+
+// Anytype sync on the Settings screen: the card's resource, its mutations, and the
+// first-import review. Everything on it only works while the engine runs.
+members Bots
+  resource sync = loadSync(networkGate, hostTime.locale) as shape SyncStatus else empty()
+
+  mutation syncNow as shape Reply refreshes sync
+
+  mutation syncImport as shape SyncImport then afterSyncImport
+
+  mutation syncResolved as shape Reply refreshes sync
+
+  derive syncImportError = match syncImport { case some(r) => r.error, case none => "" }
+
+  derive syncPreviewed = match syncImport { case some(r) => r.ok and not r.started, case none => false }
+
+  derive syncPreviewPush = match syncImport { case some(r) => r.push, case none => 0 }
+
+  derive syncPreviewPull = match syncImport { case some(r) => r.pull, case none => 0 }
+
+  derive syncPreviewConflict = match syncImport { case some(r) => r.conflict, case none => 0 }
+
+  derive syncPreviewMinutes = match syncImport { case some(r) => r.minutes, case none => 0 }
+
+  // One cycle now, or the first import: reviewed with a dry run, then confirmed.
+  action doSyncNow
+    if sync.ok and not pending(syncNow)
+      send syncNow = runSyncNow()
+
+  action doSyncImport(dry: bool)
+    if sync.ok and not pending(syncImport)
+      send syncImport = importSync(dry)
+
+  action afterSyncImport
+    match syncImport
+      case some(r)
+        if r.started
+          refresh sync
+      case none
+
+  action doResolveConflict(id: string, keep: string)
+    if sync.ok and not pending(syncResolved)
+      send syncResolved = resolveConflict(id, keep)

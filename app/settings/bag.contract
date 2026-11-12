@@ -1,4 +1,5 @@
 use Reply, Session, Network, Storage, Pairing, AnytypeCheck, About, SystemStatus, UpdateStart, Prefs, NoticeState, Diagnostics from "../ui/root-types.contract"
+use SyncStatus from "../ui/sync-types.contract"
 use MachineList from "./machines.contract"
 use Bot, Convo, Provider, UsageReport from "../ui/shapes.contract"
 use LimitList from "./limits.contract"
@@ -58,6 +59,13 @@ shape SettingsBag
   spaceSaveError: string
   spaceSaved: option<Reply>
   storage: Storage
+  sync: SyncStatus
+  syncImportError: string
+  syncPreviewed: bool
+  syncPreviewPush: number
+  syncPreviewPull: number
+  syncPreviewConflict: number
+  syncPreviewMinutes: number
   storageCopied: option<Reply>
   storageCopyError: string
   storageHint: string
@@ -89,6 +97,9 @@ shape SettingsBag
   storageRestartedPending: bool
   storageSavedPending: bool
   storageTestedPending: bool
+  syncNowPending: bool
+  syncImportPending: bool
+  syncResolvedPending: bool
   systemPending: bool
   updateStartedPending: bool
   machines: MachineList

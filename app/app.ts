@@ -5,6 +5,7 @@ import { botSources } from './sources/bots.ts';
 import { groupSources } from './sources/groups.ts';
 import { chatSources } from './sources/chat.ts';
 import { settingsSources } from './sources/settings.ts';
+import { syncSources } from './sources/sync.ts';
 import { librarySources } from './sources/library.ts';
 import { computerSources } from './sources/computer.ts';
 import { memorySources } from './sources/memory.ts';
@@ -24,6 +25,7 @@ const sources: Sources = {
   ...groupSources,
   ...chatSources,
   ...settingsSources,
+  ...syncSources,
   ...librarySources,
   ...computerSources,
   ...memorySources,

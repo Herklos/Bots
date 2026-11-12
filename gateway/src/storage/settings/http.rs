@@ -72,6 +72,7 @@ pub(crate) async fn get_storage(State(state): State<Arc<AppState>>) -> Json<Valu
         &state.cfg.bots_root,
         &state.cfg.storage,
         can_restart(&state.cfg.data_root),
+        state.sync.get().as_deref(),
     ))
 }
 
@@ -89,6 +90,7 @@ pub(crate) async fn put_storage(
         &state.cfg.bots_root,
         &state.cfg.storage,
         can_restart(&state.cfg.data_root),
+        state.sync.get().as_deref(),
         &body,
     )
     .await?;
@@ -104,7 +106,11 @@ pub(crate) async fn test_storage(
 ) -> ApiResult<Json<Value>> {
     ensure_local(peer, &headers, surface_of(surface).as_ref())?;
     let body = parse_json(&headers, &body)?;
-    Ok(Json(test_choice(&state.cfg.data_root, &body)?))
+    Ok(Json(test_choice(
+        &state.cfg.data_root,
+        state.sync.get().as_deref(),
+        &body,
+    )?))
 }
 
 pub(crate) async fn copy_storage(
@@ -122,6 +128,7 @@ pub(crate) async fn copy_storage(
         &state.cfg.bots_root,
         &state.cfg.data_root,
         &root,
+        state.sync.get().as_deref(),
     )?))
 }
 

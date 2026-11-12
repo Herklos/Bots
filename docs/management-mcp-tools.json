@@ -9565,6 +9565,538 @@
       }
     },
     {
+      "name": "hbots_get_sync_status",
+      "description": "GET /api/sync/status. Required permission: read. Supply API parameters in path/query and the JSON request in body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "query": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 299
+              },
+              "body": {
+                "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                "x-hbots-dynamic": true
+              }
+            },
+            "required": [
+              "status",
+              "body"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "details": {
+                    "description": "Original structured gateway error details when available.",
+                    "x-hbots-dynamic": true
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hbots_post_sync_run",
+      "description": "POST /api/sync/run. Required permission: write. Supply API parameters in path/query and the JSON request in body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "query": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": true
+          },
+          "bodyBase64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "description": "Raw bytes instead of JSON body. JSON content is validated against the body schema after decoding."
+          },
+          "contentType": {
+            "type": "string",
+            "default": "application/json"
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "not": {
+          "required": [
+            "body",
+            "bodyBase64"
+          ]
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 299
+              },
+              "body": {
+                "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                "x-hbots-dynamic": true
+              }
+            },
+            "required": [
+              "status",
+              "body"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "details": {
+                    "description": "Original structured gateway error details when available.",
+                    "x-hbots-dynamic": true
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hbots_post_sync_import",
+      "description": "POST /api/sync/import. Required permission: write. Supply API parameters in path/query and the JSON request in body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "query": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "dryRun": {
+                "type": "boolean"
+              }
+            },
+            "required": [],
+            "additionalProperties": true
+          },
+          "bodyBase64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "description": "Raw bytes instead of JSON body. JSON content is validated against the body schema after decoding."
+          },
+          "contentType": {
+            "type": "string",
+            "default": "application/json"
+          }
+        },
+        "required": [],
+        "additionalProperties": false,
+        "not": {
+          "required": [
+            "body",
+            "bodyBase64"
+          ]
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 299
+              },
+              "body": {
+                "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                "x-hbots-dynamic": true
+              }
+            },
+            "required": [
+              "status",
+              "body"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "details": {
+                    "description": "Original structured gateway error details when available.",
+                    "x-hbots-dynamic": true
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hbots_get_sync_conflicts",
+      "description": "GET /api/sync/conflicts. Required permission: read. Supply API parameters in path/query and the JSON request in body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": false
+          },
+          "query": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 299
+              },
+              "body": {
+                "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                "x-hbots-dynamic": true
+              }
+            },
+            "required": [
+              "status",
+              "body"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "details": {
+                    "description": "Original structured gateway error details when available.",
+                    "x-hbots-dynamic": true
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hbots_post_sync_conflict_resolve",
+      "description": "POST /api/sync/conflicts/{id}/resolve. Required permission: write. Supply API parameters in path/query and the JSON request in body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "query": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "keep": {
+                "type": "string",
+                "enum": [
+                  "local",
+                  "remote",
+                  "both"
+                ]
+              }
+            },
+            "required": [
+              "keep"
+            ],
+            "additionalProperties": true
+          },
+          "bodyBase64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "description": "Raw bytes instead of JSON body. JSON content is validated against the body schema after decoding."
+          },
+          "contentType": {
+            "type": "string",
+            "default": "application/json"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false,
+        "not": {
+          "required": [
+            "body",
+            "bodyBase64"
+          ]
+        }
+      },
+      "outputSchema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 299
+              },
+              "body": {
+                "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                "x-hbots-dynamic": true
+              }
+            },
+            "required": [
+              "status",
+              "body"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "details": {
+                    "description": "Original structured gateway error details when available.",
+                    "x-hbots-dynamic": true
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
       "name": "hbots_access_tailscale",
       "description": "POST /api/access/tailscale. Required permission: admin. Supply API parameters in path/query and the JSON request in body.",
       "inputSchema": {

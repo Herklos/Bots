@@ -36,6 +36,9 @@ pub struct AppState {
     pub(crate) code_reads: crate::chat::code::ReadCache,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
+    /// The Anytype sync engine handle, set once after `AppState` is built.
+    /// `None` when the saved backend is the file system.
+    pub(crate) sync: crate::storage::sync::SyncSlot,
     /// One held chat or group read at a time. Shutdown wakes it.
     pub(crate) holds: chat::HeldReads,
 }

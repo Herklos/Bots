@@ -24,6 +24,7 @@ dotenvy = "0.15"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 hex = "0.4"
 hmac = "0.12"
+hostname = "0.4" # The hb_device heartbeat names this machine.
 jsonschema = { version = "=0.61.1", default-features = false }
 rand = "0.8"
 regex = "1" # Preview cleaning and the emoji check use Unicode-property regexes.

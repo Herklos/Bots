@@ -11,7 +11,7 @@ use super::outbox::Outbox;
 use super::plan::{self, Planned};
 use super::remote;
 use super::scan::{self, Scan, Shortcut};
-use super::status::{self, Phase, Preview, SyncState, SyncStatus};
+use super::status::{Phase, Preview, SyncState, SyncStatus};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -184,12 +184,19 @@ impl Engine {
         Ok(preview)
     }
 
-    pub(super) async fn confirm_import(&mut self) -> Result<Cycle, SyncError> {
+    /// Flip the first-sync phase to `importing` once, so plain cycles know to write.
+    /// The runtime calls this before running the confirmed import's passes.
+    pub(super) async fn begin_import(&mut self) -> Result<(), SyncError> {
         if self.phase == Phase::NeedsImport {
             self.phase = Phase::Importing;
             self.store_phase();
             manifest::save(&manifest_path(&self.config.sync_dir), &self.manifest).await?;
         }
+        Ok(())
+    }
+
+    pub(super) async fn confirm_import(&mut self) -> Result<Cycle, SyncError> {
+        self.begin_import().await?;
         let mut last = self.run_once().await?;
         for _ in 1..self.config.max_passes.max(1) {
             let blocked = matches!(
@@ -490,8 +497,4 @@ pub(super) fn outbox_path(dir: &Path) -> PathBuf {
 
 fn device_path(dir: &Path) -> PathBuf {
     dir.join("device-id")
-}
-
-pub(super) fn next_wait(offline: bool, backoff: Duration, nudged: bool) -> Duration {
-    status::next_wait(offline, backoff, nudged)
 }

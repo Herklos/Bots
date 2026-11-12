@@ -41,6 +41,9 @@ component SettingsScreen
     doPairConfirm: action
     doPairStart: action
     doPrepareAnytype: action
+    doResolveConflict: action
+    doSyncImport: action
+    doSyncNow: action
     doPickBackend: action
     doPickModel: action
     doPickTheme: action
@@ -105,6 +108,9 @@ component SettingsScreen
     doPairConfirm
     doPairStart
     doPrepareAnytype
+    doResolveConflict
+    doSyncImport
+    doSyncNow
     doPickBackend
     doPickTheme
     doRestartNetwork
@@ -163,6 +169,16 @@ component SettingsScreen
     storageSavedPending = settingsBag.storageSavedPending
     storageTestError = settingsBag.storageTestError
     storageTestedPending = settingsBag.storageTestedPending
+    sync = settingsBag.sync
+    syncImportError = settingsBag.syncImportError
+    syncPreviewed = settingsBag.syncPreviewed
+    syncPreviewPush = settingsBag.syncPreviewPush
+    syncPreviewPull = settingsBag.syncPreviewPull
+    syncPreviewConflict = settingsBag.syncPreviewConflict
+    syncPreviewMinutes = settingsBag.syncPreviewMinutes
+    syncNowPending = settingsBag.syncNowPending
+    syncImportPending = settingsBag.syncImportPending
+    syncResolvedPending = settingsBag.syncResolvedPending
     system = settingsBag.system
     systemPending = settingsBag.systemPending
     updateError = settingsBag.updateError

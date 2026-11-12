@@ -29,6 +29,49 @@ impl AnytypeClient {
         self.create_schema("types", body, idem_key).await
     }
 
+    /// One type with its `blocks`, so bootstrap can see the attached properties.
+    pub(crate) async fn get_type(&self, key: &str) -> Result<Value, AnytypeError> {
+        let path = format!("/v2/spaces/{}/types/{key}", self.space_id);
+        send_json(
+            self,
+            JsonCall {
+                method: reqwest::Method::GET,
+                path: &path,
+                idem_key: None,
+                etag: None,
+                body: None,
+                limited: false,
+            },
+        )
+        .await
+    }
+
+    /// Replaces the type's property list. Keeps every property that is named.
+    pub(crate) async fn patch_type(
+        &self,
+        key: &str,
+        body: &Value,
+        idem_key: &str,
+    ) -> Result<Value, AnytypeError> {
+        require_idempotency(idem_key)?;
+        let path = format!(
+            "/v2/spaces/{}/types/{key}?create_missing_options=true",
+            self.space_id
+        );
+        send_json(
+            self,
+            JsonCall {
+                method: reqwest::Method::PATCH,
+                path: &path,
+                idem_key: Some(idem_key),
+                etag: None,
+                body: Some(body),
+                limited: true,
+            },
+        )
+        .await
+    }
+
     pub(crate) async fn create_property(
         &self,
         body: &Value,
@@ -44,7 +87,11 @@ impl AnytypeClient {
         idem_key: &str,
     ) -> Result<Value, AnytypeError> {
         require_idempotency(idem_key)?;
-        let path = format!("/v2/spaces/{}/{kind}", self.space_id);
+        // Select options in a type's property_definitions are refused without this.
+        let path = format!(
+            "/v2/spaces/{}/{kind}?create_missing_options=true",
+            self.space_id
+        );
         send_json(
             self,
             JsonCall {

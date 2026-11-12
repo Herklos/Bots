@@ -11,6 +11,7 @@ impl MockState {
         let id = self.alloc("type");
         let etag = self.next_etag();
         let mut created = Vec::new();
+        let mut attached = Vec::new();
         if let Some(defs) = body["property_definitions"].as_array() {
             for def in defs {
                 let name = def["name"].as_str().unwrap_or("");
@@ -21,6 +22,10 @@ impl MockState {
                     "name": row["name"],
                     "format": row["format"],
                 }));
+                attached.push(json!({
+                    "property": row["name"],
+                    "format": row["format"],
+                }));
             }
         }
         self.types.push(json!({
@@ -28,6 +33,7 @@ impl MockState {
             "key": key,
             "name": body["name"].as_str().unwrap_or(""),
             "layout": body["layout"].as_str().unwrap_or("basic"),
+            "blocks": [{ "id": "dataview", "type": "dataview", "properties": attached }],
         }));
         Reply {
             status: 201,
@@ -38,6 +44,48 @@ impl MockState {
                 "created": {"properties": created},
             }),
             etag: Some(etag),
+        }
+    }
+
+    /// The type row, shaped like the app's `blocks` dataview response.
+    pub(super) fn get_type(&self, key: &str) -> Reply {
+        match self.types.iter().find(|row| row["key"] == key) {
+            Some(row) => Reply {
+                status: 200,
+                body: row.clone(),
+                etag: None,
+            },
+            None => Reply {
+                status: 404,
+                body: json!({ "error": "type not found" }),
+                etag: None,
+            },
+        }
+    }
+
+    /// Replaces the type's property list like the app does on PATCH.
+    pub(super) fn patch_type(&mut self, key: &str, body: &Value) -> Reply {
+        let mut attached = Vec::new();
+        if let Some(defs) = body["property_definitions"].as_array() {
+            for def in defs {
+                let name = def["name"].as_str().unwrap_or("");
+                let format = def["format"].as_str().unwrap_or("text");
+                self.insert_property(name, None, format);
+                attached.push(json!({ "property": name, "format": format }));
+            }
+        }
+        let Some(row) = self.types.iter_mut().find(|row| row["key"] == key) else {
+            return Reply {
+                status: 404,
+                body: json!({ "error": "type not found" }),
+                etag: None,
+            };
+        };
+        row["blocks"] = json!([{ "id": "dataview", "type": "dataview", "properties": attached }]);
+        Reply {
+            status: 200,
+            body: json!({ "key": key }),
+            etag: None,
         }
     }
 
