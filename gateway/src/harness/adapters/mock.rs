@@ -1,10 +1,13 @@
 //! In-memory harness for domain tests. Adapter tests that speak the wire still use `tests/mock-t3.ts`.
 use crate::harness::{
-    Approval, Approvals, Browser, BrowserTab, ComputerCatalog, Frame, Harness, HarnessError,
-    LaunchThread, Previews, ProjectInfo, ProvisionedSend, Provisioning, Relay, Repos, Routines,
-    ShellSnapshot, ThreadSnapshot, Transcript, Turns, UserMessage,
+    Approval, Approvals, Browser, BrowserTab, ComputerCatalog, ForkRequest, Forks, Frame, Harness,
+    HarnessError, LaunchThread, MergeRequest, Previews, ProjectInfo, ProvisionedSend, Provisioning,
+    Relay, Repos, Routines, ShellSnapshot, SideChatRef, ThreadSnapshot, Transcript, Turns,
+    UserMessage,
 };
 use async_trait::async_trait;
+
+mod forks;
 use axum::response::IntoResponse;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -20,6 +23,19 @@ pub(crate) struct ModelPush {
 }
 
 #[derive(Debug)]
+struct ForkBook {
+    armed: bool,
+    chats: HashMap<String, Vec<SideChatRef>>,
+    forks: Vec<ForkRequest>,
+    merges: Vec<MergeRequest>,
+    deletes: Vec<String>,
+    sends: Vec<(String, String)>,
+    launches: usize,
+    fail_send: bool,
+    projections: HashMap<String, Value>,
+}
+
+#[derive(Debug)]
 pub(crate) struct MockHarness {
     pub tabs: Vec<BrowserTab>,
     pub busy: Vec<String>,
@@ -29,6 +45,7 @@ pub(crate) struct MockHarness {
     /// Stand-in for the harness provider config. `None` is the usual "not wired" error.
     provider_config: Mutex<Option<Value>>,
     provider_config_reads: AtomicUsize,
+    forks: Mutex<ForkBook>,
 }
 
 #[derive(Debug)]
@@ -52,6 +69,17 @@ impl MockHarness {
             }),
             provider_config: Mutex::new(None),
             provider_config_reads: AtomicUsize::new(0),
+            forks: Mutex::new(ForkBook {
+                armed: false,
+                chats: HashMap::new(),
+                forks: Vec::new(),
+                merges: Vec::new(),
+                deletes: Vec::new(),
+                sends: Vec::new(),
+                launches: 0,
+                fail_send: false,
+                projections: HashMap::new(),
+            }),
         }
     }
 
@@ -80,6 +108,10 @@ impl MockHarness {
 
     pub(crate) fn provider_config_reads(&self) -> usize {
         self.provider_config_reads.load(Ordering::SeqCst)
+    }
+
+    fn book(&self) -> std::sync::MutexGuard<'_, ForkBook> {
+        self.forks.lock().unwrap_or_else(|err| err.into_inner())
     }
 
     pub(crate) fn model_pushes(&self) -> Vec<ModelPush> {
@@ -115,8 +147,14 @@ fn missing(what: &'static str) -> HarnessError {
 
 #[async_trait]
 impl Transcript for MockHarness {
-    async fn read(&self, _thread_id: &str) -> Result<ThreadSnapshot, HarnessError> {
-        Ok(ThreadSnapshot::new(json!({ "turnItems": [] })))
+    async fn read(&self, thread_id: &str) -> Result<ThreadSnapshot, HarnessError> {
+        let body = self
+            .book()
+            .projections
+            .get(thread_id)
+            .cloned()
+            .unwrap_or_else(|| json!({ "turnItems": [] }));
+        Ok(ThreadSnapshot::new(body))
     }
 
     async fn activity(&self) -> Result<ShellSnapshot, HarnessError> {
@@ -134,7 +172,14 @@ impl Transcript for MockHarness {
 
 #[async_trait]
 impl Turns for MockHarness {
-    async fn send_user(&self, _message: &UserMessage) -> Result<(), HarnessError> {
+    async fn send_user(&self, message: &UserMessage) -> Result<(), HarnessError> {
+        let mut book = self.book();
+        if book.fail_send {
+            book.fail_send = false;
+            return Err(HarnessError::failed("the side message did not send"));
+        }
+        book.sends
+            .push((message.thread_id.clone(), message.text.clone()));
         Ok(())
     }
 
@@ -227,6 +272,7 @@ impl Provisioning for MockHarness {
     }
 
     async fn launch(&self, _spec: &LaunchThread) -> Result<(), HarnessError> {
+        self.book().launches += 1;
         Ok(())
     }
 
@@ -399,6 +445,10 @@ impl Harness for MockHarness {
     }
 
     fn turns(&self) -> Result<&dyn Turns, HarnessError> {
+        Ok(self)
+    }
+
+    fn forks(&self) -> Result<&dyn Forks, HarnessError> {
         Ok(self)
     }
 

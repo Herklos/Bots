@@ -21,7 +21,7 @@
 //   hideBot: (args: [string, boolean]) => Reply
 //   loadAbout: (args: []) => About
 //   loadBots: (args: [string]) => Bot[]
-//   loadChat: (args: [string, string]) => Chat
+//   loadChat: (args: [string, string, string]) => Chat
 //   loadComputer: (args: [string, string, string, string, string]) => Computer
 //   loadComputerPlace: (args: [string, string, string]) => ComputerPlace
 //   loadConvos: (args: [string, string, string]) => Convo[]
@@ -37,6 +37,7 @@
 //   loadRoutines: (args: [string, string, string]) => RoutineList
 //   loadSession: (args: [string]) => Session
 //   loadShelf: (args: [string, string]) => Shelf
+//   loadSideChats: (args: [string]) => SideList
 //   loadStorage: (args: [string]) => Storage
 //   loadSuggestions: (args: []) => Suggestion[]
 //   loadSystem: (args: [string]) => SystemStatus
@@ -46,17 +47,19 @@
 //   makeMainBot: (args: [string]) => Reply
 //   markRoomSeen: (args: [string]) => Reply
 //   markSeen: (args: [string]) => Reply
+//   mergeSide: (args: [string, string]) => Reply
 //   noteUnread: (args: [string, boolean, boolean, string, boolean, boolean, boolean, string, string, string, string]) => Reply
 //   openComputer: (args: [string]) => Reply
+//   openSide: (args: [string, string]) => SideOpen
 //   pinBot: (args: [string, boolean]) => Reply
 //   pinMessage: (args: [string, string, string, string]) => Reply
 //   prepareAnytype: (args: []) => Reply
-//   reactTo: (args: [string, string, string]) => Reply
+//   reactTo: (args: [string, string, string, string]) => Reply
 //   readHealth: (args: []) => Health
 //   recolourBot: (args: [string, string]) => Reply
 //   renameBot: (args: [string, string]) => Reply
 //   reshapeBot: (args: [string, string]) => Reply
-//   respondRequest: (args: [string, string, string, string, string, string]) => Reply
+//   respondRequest: (args: [string, string, string, string, string, string, string]) => Reply
 //   restartGateway: (args: []) => Reply
 //   restartStorage: (args: []) => Reply
 //   revealPassword: (args: [string]) => Revealed
@@ -67,9 +70,9 @@
 //   saveSpace: (args: [string]) => Reply
 //   saveStorage: (args: [string, string, string]) => Reply
 //   saveSubagent: (args: [string, string, string, string, string, boolean]) => Reply
-//   sendMessage: (args: [string, string, string, string, string, string, string]) => Sent
+//   sendMessage: (args: [string, string, string, string, string, string, string, string]) => Sent
 //   sendRoom: (args: [string, string, string]) => Sent
-//   sendVoice: (args: [string, number, string, string]) => Reply
+//   sendVoice: (args: [string, number, string, string, string]) => Reply
 //   setBotNotifications: (args: [string, boolean]) => Reply
 //   setComputerPlace: (args: [string, string]) => Reply
 //   setDefaultMode: (args: [string]) => Reply
@@ -86,7 +89,7 @@
 //   stageVoice: (args: [string, string, string, number]) => VoiceHeld
 //   startPairing: (args: []) => Pairing
 //   startUpdate: (args: []) => UpdateStart
-//   stopRun: (args: [string, string]) => Reply
+//   stopRun: (args: [string, string, string]) => Reply
 //   testStorage: (args: [string]) => Reply
 //   updateGroup: (args: [string, string, string]) => Reply
 //   uploadAttachment: (args: [string, string, string, string, string]) => Attached
@@ -141,6 +144,9 @@
 //   Revealed = { ok: boolean; id: string; password: string; error: string }
 //   Usage = { ok: boolean; error: string; messages: number; attachments: number; vaultWrites: number; iconFetches: number }
 //   DraftPack = { stamp: string; texts: string[]; files: string[]; voices: string[] }
+//   SideRef = { id: string; title: string }
+//   SideList = { chats: SideRef[] }
+//   SideOpen = { ok: boolean; error: string; threadId: string; messageId: string }
 //   MemoryFile = { ok: boolean; path: string; text: string; revision: string; truncated: boolean }
 //   MemorySave = { ok: boolean; error: string; conflict: boolean; text: string; revision: string }
 //   ComputerLink = { id: string; label: string; status: string; access: string; selectable: boolean }
@@ -458,176 +464,182 @@ type T83 = { "ok": T9; "error": T0; "messages": T13; "attachments": T13; "vaultW
 type T84 = { "stamp": T0; "texts": T16; "files": T16; "voices": T16; };
 type T85 = { "locale": T0; };
 type T86 = { "hover": T0; };
-type T87 = T70 | null;
-type T88 = T12[];
-type T89 = T35[];
-type T90 = T63 | null;
-type T91 = T11 | null;
-type T92 = T69 | null;
-type T93 = T74 | null;
-type T94 = { "about": T72; "anytypeChecked": T87; "anytypePrepareError": T0; "anytypePreparedPending": T9; "anytypeError": T0; "anytypeFound": T9; "anytypeOn": T9; "anytypeShared": T9; "anytypeSpace": T0; "bots": T88; "canUpdate": T9; "convos": T89; "nameDraft": T0; "nameEditing": T9; "network": T67; "networkError": T0; "networkRestartError": T0; "networkRestarted": T90; "networkSet": T90; "newPassword": T0; "notice": T79; "noticeAsked": T91; "pairCode": T0; "pairConfirmError": T0; "pairConfirmed": T90; "pairError": T0; "pairStarted": T92; "pairStep": T0; "passwordError": T0; "passwordSet": T90; "prefs": T77; "prefsError": T0; "providers": T42; "report": T56; "reportFailed": T9; "session": T66; "settingsDomain": T0; "shownBackend": T0; "spaceEditing": T9; "spaceName": T0; "spaceSaveError": T0; "spaceSaved": T90; "storage": T68; "storageCopied": T90; "storageCopyError": T0; "storageHint": T0; "storagePath": T0; "storageRestartError": T0; "storageRestarted": T90; "storageSaveError": T0; "storageSaved": T90; "storageTestError": T0; "storageTested": T90; "system": T73; "updateError": T0; "updateFrom": T0; "updateNeedsService": T9; "updateStarted": T93; "updateStuck": T9; "updateTo": T0; "usagePeriod": T0; "usageView": T0; "anytypeCheckedPending": T9; "networkRestartedPending": T9; "networkSetPending": T9; "noticeAskedPending": T9; "pairConfirmedPending": T9; "pairStartedPending": T9; "passwordSetPending": T9; "spaceSavedPending": T9; "storageCopiedPending": T9; "storageRestartedPending": T9; "storageSavedPending": T9; "storageTestedPending": T9; "systemPending": T9; "updateStartedPending": T9; };
-type T95 = T76 | null;
-type T96 = { "bots": T88; "canMakeGroup": T9; "groupAbout": T0; "groupChief": T0; "groupError": T0; "groupMade": T95; "groupMembers": T16; "groupName": T0; "groupPolicy": T0; "groupStep": T0; "pickableBots": T88; "groupMadePending": T9; };
-type T97 = T71[];
-type T98 = { "createError": T0; "createStep": T0; "createdPending": T9; "newColor": T0; "newFirst": T0; "newName": T0; "newPrompt": T0; "newShape": T0; "suggestions": T97; };
-type T99 = { "accessibilityTextSize": T9; };
-type T100 = { "prefersContrast": T0; };
-type T101 = T32[];
-type T102 = T64 | null;
-type T103 = { "answerError": T0; "answerText": T0; "answered": T90; "answeredPending": T9; "away": T9; "bots": T88; "chat": T26; "copiedMenu": T0; "groupPage": T0; "groupPanel": T9; "groupSaveError": T0; "mentionHits": T101; "mentionIdx": T13; "messageMenu": T0; "paintedWorkers": T29; "pointerFacts": T86; "prefs": T77; "reactFor": T0; "room": T31; "roomError": T0; "roomPending": T0; "roomRows": T24; "roomSent": T102; "roomText": T0; "wide": T9; "roomSentPending": T9; "roomFailed": T9; };
-type T104 = { "toast": T0; };
-type T105 = { "computerEnlarged": T9; "computer": T62; "onComputer": T9; "holding": T9; "locked": T9; "bots": T88; "slug": T0; };
-type T106 = { "system": T73; "password": T0; "signedIn": T90; "signInError": T0; "locked": T9; "signedInPending": T9; };
-type T107 = { "ok": T9; "path": T0; "text": T0; "revision": T0; "truncated": T9; };
-type T108 = { "ok": T9; "error": T0; "conflict": T9; "text": T0; "revision": T0; };
-type T109 = { "file": T107; "failed": T9; "pending": T9; "editing": T9; "draft": T0; "conflict": T9; "serverText": T0; "serverRevision": T0; "error": T0; "saving": T9; };
-type T110 = { "id": T0; "label": T0; "status": T0; "access": T0; "selectable": T9; };
-type T111 = T110[];
-type T112 = { "ok": T9; "selected": T0; "localLabel": T0; "links": T111; "waiting": T9; "error": T0; };
-type T113 = T80 | null;
-type T114 = { "system": T73; "models": T43; "modelError": T0; "shownRows": T24; "searchNote": T0; "away": T9; "answerText": T0; "chatSearching": T9; "messageQuery": T0; "reactFor": T0; "messageMenu": T0; "copiedMenu": T0; "replyTo": T0; "replyQuote": T0; "childThread": T0; "sent": T102; "answered": T90; "attached": T113; "pendingText": T0; "attachError": T0; "answerError": T0; "paintedWorkers": T29; "draft": T0; "mentionIdx": T13; "mentionHits": T101; "usagePeriod": T0; "usageView": T0; "report": T56; "childModels": T43; "routines": T46; "lineage": T49; "shelf": T59; "voiceRecorder": T0; "voiceError": T0; "voiceSent": T90; "voiceHold": T0; "voiceId": T0; "voicePreview": T0; "wide": T9; "panelOpen": T9; "panelTab": T0; "panelPage": T0; "subSlug": T0; "subName": T0; "subShape": T0; "subColor": T0; "subPrompt": T0; "subInherit": T9; "subCreated": T90; "subSaved": T90; "botError": T0; "subError": T0; "subSaveError": T0; "childRemoveError": T0; "heldTab": T0; "computerTab": T0; "computer": T62; "controlError": T0; "openError": T0; "openingBrowser": T9; "closeError": T0; "closingBrowser": T9; "driveError": T0; "holding": T9; "pointerFacts": T86; "bots": T88; "page": T78; "chat": T26; "slug": T0; "pendingAttaches": T16; "canSend": T9; "chatFailed": T9; "chatPending": T9; "answeredPending": T9; "attachedPending": T9; "voiceSentPending": T9; "sentPending": T9; "modelsFailed": T9; "routinesFailed": T9; "lineageFailed": T9; "reportFailed": T9; "shelfFailed": T9; "computerFailed": T9; "subCreatedPending": T9; "subSavedPending": T9; "childModelsFailed": T9; };
-type T115 = { "prefs": T77; "botQuery": T0; "searching": T9; "hiddenOpen": T9; "rowMenu": T0; "firstRun": T9; "visibleBots": T88; "tiles": T88; "hiddenBots": T88; "newColor": T0; "newShape": T0; "wide": T9; "plusOpen": T9; "bots": T88; "convos": T89; "chat": T26; "slug": T0; "query": T0; "roomId": T0; "convoName": T0; "botsFailed": T9; };
-type T116 = T36[];
-type T117 = { "vaultQuery": T0; "vault": T116; "vquery": T0; "shownVault": T116; "query": T0; "vaultFailed": T9; "vaultPending": T9; };
-type T118 = { "start": T13; "query": T0; };
-type T119 = { "text": T0; "cursor": T13; };
-type T120 = { "permanentlyDenied": T9; "shouldShowRationale": T9; };
-type T121 = T120 | null;
-type T122 = "notDetermined" | "restricted" | "denied" | "authorized";
-type T123 = { "authorizationStatus": T122; };
-type T124 = T123 | null;
-type T125 = "granted" | "prompt" | "denied" | "unknown";
-type T126 = { "android": T121; "apple": T124; "available": T9; "state": T125; };
-type T127 = T13 | null;
-type T128 = { "max": T13; "min": T13; "step": T127; };
-type T129 = { "refused": T1; };
-type T130 = "audioinput" | "videoinput" | "audiooutput";
-type T131 = { "deviceId": T0; "facingMode": T1; "groupId": T0; "kind": T130; "label": T0; };
-type T132 = T131[];
-type T133 = { "devices": T132; };
-type T134 = { "cameraId": T1; "isClientSilenced": T9; "lensFacing": T1; };
-type T135 = T134 | null;
-type T136 = { "deviceType": T1; "portName": T1; "portType": T1; "position": T1; };
-type T137 = T136 | null;
-type T138 = T128 | null;
-type T139 = T16 | null;
-type T140 = T9 | null;
-type T141 = { "aspectRatio": T138; "facingMode": T139; "frameRate": T138; "height": T138; "torch": T140; "width": T138; "zoom": T138; };
+type T87 = { "id": T0; "title": T0; };
+type T88 = T87[];
+type T89 = { "chats": T88; };
+type T90 = { "ok": T9; "error": T0; "threadId": T0; "messageId": T0; };
+type T91 = T70 | null;
+type T92 = T12[];
+type T93 = T35[];
+type T94 = T63 | null;
+type T95 = T11 | null;
+type T96 = T69 | null;
+type T97 = T74 | null;
+type T98 = { "about": T72; "anytypeChecked": T91; "anytypePrepareError": T0; "anytypePreparedPending": T9; "anytypeError": T0; "anytypeFound": T9; "anytypeOn": T9; "anytypeShared": T9; "anytypeSpace": T0; "bots": T92; "canUpdate": T9; "convos": T93; "nameDraft": T0; "nameEditing": T9; "network": T67; "networkError": T0; "networkRestartError": T0; "networkRestarted": T94; "networkSet": T94; "newPassword": T0; "notice": T79; "noticeAsked": T95; "pairCode": T0; "pairConfirmError": T0; "pairConfirmed": T94; "pairError": T0; "pairStarted": T96; "pairStep": T0; "passwordError": T0; "passwordSet": T94; "prefs": T77; "prefsError": T0; "providers": T42; "report": T56; "reportFailed": T9; "session": T66; "settingsDomain": T0; "shownBackend": T0; "spaceEditing": T9; "spaceName": T0; "spaceSaveError": T0; "spaceSaved": T94; "storage": T68; "storageCopied": T94; "storageCopyError": T0; "storageHint": T0; "storagePath": T0; "storageRestartError": T0; "storageRestarted": T94; "storageSaveError": T0; "storageSaved": T94; "storageTestError": T0; "storageTested": T94; "system": T73; "updateError": T0; "updateFrom": T0; "updateNeedsService": T9; "updateStarted": T97; "updateStuck": T9; "updateTo": T0; "usagePeriod": T0; "usageView": T0; "anytypeCheckedPending": T9; "networkRestartedPending": T9; "networkSetPending": T9; "noticeAskedPending": T9; "pairConfirmedPending": T9; "pairStartedPending": T9; "passwordSetPending": T9; "spaceSavedPending": T9; "storageCopiedPending": T9; "storageRestartedPending": T9; "storageSavedPending": T9; "storageTestedPending": T9; "systemPending": T9; "updateStartedPending": T9; };
+type T99 = T76 | null;
+type T100 = { "bots": T92; "canMakeGroup": T9; "groupAbout": T0; "groupChief": T0; "groupError": T0; "groupMade": T99; "groupMembers": T16; "groupName": T0; "groupPolicy": T0; "groupStep": T0; "pickableBots": T92; "groupMadePending": T9; };
+type T101 = T71[];
+type T102 = { "createError": T0; "createStep": T0; "createdPending": T9; "newColor": T0; "newFirst": T0; "newName": T0; "newPrompt": T0; "newShape": T0; "suggestions": T101; };
+type T103 = { "accessibilityTextSize": T9; };
+type T104 = { "prefersContrast": T0; };
+type T105 = T32[];
+type T106 = T64 | null;
+type T107 = { "answerError": T0; "answerText": T0; "answered": T94; "answeredPending": T9; "away": T9; "bots": T92; "chat": T26; "copiedMenu": T0; "groupPage": T0; "groupPanel": T9; "groupSaveError": T0; "mentionHits": T105; "mentionIdx": T13; "messageMenu": T0; "paintedWorkers": T29; "pointerFacts": T86; "prefs": T77; "reactFor": T0; "room": T31; "roomError": T0; "roomPending": T0; "roomRows": T24; "roomSent": T106; "roomText": T0; "wide": T9; "roomSentPending": T9; "roomFailed": T9; };
+type T108 = { "toast": T0; };
+type T109 = { "computerEnlarged": T9; "computer": T62; "onComputer": T9; "holding": T9; "locked": T9; "bots": T92; "slug": T0; };
+type T110 = { "system": T73; "password": T0; "signedIn": T94; "signInError": T0; "locked": T9; "signedInPending": T9; };
+type T111 = { "rows": T24; "working": T9; "draft": T0; "canSend": T9; "pending": T16; "attachError": T0; "attachedPending": T9; "sentPending": T9; "replyTo": T0; "replyQuote": T0; "voicePreview": T0; "voiceError": T0; "voiceHold": T0; "voiceId": T0; "recording": T9; "voiceSentPending": T9; "answerText": T0; "answerError": T0; "answering": T9; "canMerge": T9; "name": T0; "bots": T92; "slug": T0; "pins": T25; "hover": T9; "reactFor": T0; "messageMenu": T0; "copiedMenu": T0; "empty": T9; "failed": T9; "loading": T9; };
+type T112 = { "ok": T9; "path": T0; "text": T0; "revision": T0; "truncated": T9; };
+type T113 = { "ok": T9; "error": T0; "conflict": T9; "text": T0; "revision": T0; };
+type T114 = { "file": T112; "failed": T9; "pending": T9; "editing": T9; "draft": T0; "conflict": T9; "serverText": T0; "serverRevision": T0; "error": T0; "saving": T9; };
+type T115 = { "id": T0; "label": T0; "status": T0; "access": T0; "selectable": T9; };
+type T116 = T115[];
+type T117 = { "ok": T9; "selected": T0; "localLabel": T0; "links": T116; "waiting": T9; "error": T0; };
+type T118 = T80 | null;
+type T119 = { "system": T73; "models": T43; "modelError": T0; "shownRows": T24; "searchNote": T0; "away": T9; "answerText": T0; "chatSearching": T9; "messageQuery": T0; "reactFor": T0; "messageMenu": T0; "copiedMenu": T0; "replyTo": T0; "replyQuote": T0; "childThread": T0; "sent": T106; "answered": T94; "attached": T118; "pendingText": T0; "attachError": T0; "answerError": T0; "paintedWorkers": T29; "draft": T0; "mentionIdx": T13; "mentionHits": T105; "usagePeriod": T0; "usageView": T0; "report": T56; "childModels": T43; "routines": T46; "lineage": T49; "shelf": T59; "voiceRecorder": T0; "voiceError": T0; "voiceSent": T94; "voiceHold": T0; "voiceId": T0; "voicePreview": T0; "wide": T9; "panelOpen": T9; "panelTab": T0; "panelPage": T0; "subSlug": T0; "subName": T0; "subShape": T0; "subColor": T0; "subPrompt": T0; "subInherit": T9; "subCreated": T94; "subSaved": T94; "botError": T0; "subError": T0; "subSaveError": T0; "childRemoveError": T0; "heldTab": T0; "computerTab": T0; "computer": T62; "controlError": T0; "openError": T0; "openingBrowser": T9; "closeError": T0; "closingBrowser": T9; "driveError": T0; "holding": T9; "pointerFacts": T86; "bots": T92; "page": T78; "chat": T26; "slug": T0; "pendingAttaches": T16; "canSend": T9; "chatFailed": T9; "chatPending": T9; "answeredPending": T9; "attachedPending": T9; "voiceSentPending": T9; "sentPending": T9; "modelsFailed": T9; "routinesFailed": T9; "lineageFailed": T9; "reportFailed": T9; "shelfFailed": T9; "computerFailed": T9; "subCreatedPending": T9; "subSavedPending": T9; "childModelsFailed": T9; };
+type T120 = { "prefs": T77; "botQuery": T0; "searching": T9; "hiddenOpen": T9; "rowMenu": T0; "firstRun": T9; "visibleBots": T92; "tiles": T92; "hiddenBots": T92; "newColor": T0; "newShape": T0; "wide": T9; "plusOpen": T9; "bots": T92; "convos": T93; "chat": T26; "slug": T0; "query": T0; "roomId": T0; "convoName": T0; "botsFailed": T9; };
+type T121 = T36[];
+type T122 = { "vaultQuery": T0; "vault": T121; "vquery": T0; "shownVault": T121; "query": T0; "vaultFailed": T9; "vaultPending": T9; };
+type T123 = { "start": T13; "query": T0; };
+type T124 = { "text": T0; "cursor": T13; };
+type T125 = { "permanentlyDenied": T9; "shouldShowRationale": T9; };
+type T126 = T125 | null;
+type T127 = "notDetermined" | "restricted" | "denied" | "authorized";
+type T128 = { "authorizationStatus": T127; };
+type T129 = T128 | null;
+type T130 = "granted" | "prompt" | "denied" | "unknown";
+type T131 = { "android": T126; "apple": T129; "available": T9; "state": T130; };
+type T132 = T13 | null;
+type T133 = { "max": T13; "min": T13; "step": T132; };
+type T134 = { "refused": T1; };
+type T135 = "audioinput" | "videoinput" | "audiooutput";
+type T136 = { "deviceId": T0; "facingMode": T1; "groupId": T0; "kind": T135; "label": T0; };
+type T137 = T136[];
+type T138 = { "devices": T137; };
+type T139 = { "cameraId": T1; "isClientSilenced": T9; "lensFacing": T1; };
+type T140 = T139 | null;
+type T141 = { "deviceType": T1; "portName": T1; "portType": T1; "position": T1; };
 type T142 = T141 | null;
-type T143 = "audio" | "video";
-type T144 = "idle" | "interrupted" | "background" | "silenced" | "in-use" | "multitasking" | "system-pressure";
-type T145 = T144 | null;
-type T146 = "live" | "ended";
-type T147 = { "aspectRatio": T127; "autoGainControl": T140; "channelCount": T127; "deviceId": T1; "echoCancellation": T140; "facingMode": T1; "frameRate": T127; "groupId": T1; "height": T127; "latency": T127; "noiseSuppression": T140; "resizeMode": T1; "sampleRate": T127; "sampleSize": T127; "torch": T140; "width": T127; "zoom": T127; };
-type T148 = { "android": T135; "apple": T137; "capabilities": T142; "enabled": T9; "id": T0; "kind": T143; "label": T0; "muteReason": T145; "muted": T9; "readyState": T146; "settings": T147; };
-type T149 = T148[];
-type T150 = { "active": T9; "id": T0; "tracks": T149; };
-type T151 = { "aspectRatio": T127; "autoGainControl": T140; "channelCount": T127; "deviceId": T1; "echoCancellation": T140; "facingMode": T1; "frameRate": T127; "groupId": T1; "height": T127; "latency": T127; "noiseSuppression": T140; "resizeMode": T1; "sampleRate": T127; "sampleSize": T127; "torch": T140; "width": T127; "zoom": T127; };
-type T152 = { "permanentlyDenied": T9; "shouldShowRationale": T9; };
-type T153 = T152 | null;
-type T154 = "undetermined" | "denied" | "granted" | "notDetermined" | "restricted" | "authorized";
-type T155 = { "recordPermission": T154; };
-type T156 = T155 | null;
-type T157 = "granted" | "prompt" | "denied" | "unknown";
-type T158 = { "android": T153; "apple": T156; "available": T9; "state": T157; };
-type T159 = { "x": T13; "y": T13; };
-type T160 = T13[];
-type T161 = { "audioLevel": T13; "levels": T160; "totalAudioEnergy": T13; "totalSamplesDuration": T13; };
-type T162 = "requested" | "interrupted" | "media-reset" | "background" | "track-ended" | "error" | "session-ended";
-type T163 = T162 | null;
-type T164 = { "duration": T13; "mimeType": T0; "path": T0; "size": T13; };
-type T165 = T164 | null;
-type T166 = "inactive" | "recording" | "paused";
-type T167 = { "audioBitsPerSecond": T127; "duration": T13; "error": T1; "id": T0; "mimeType": T0; "path": T0; "reason": T163; "result": T165; "state": T166; };
-type T168 = { "supported": T9; "type": T0; };
-type T169 = "passive" | "active" | "timeSensitive";
+type T143 = T133 | null;
+type T144 = T16 | null;
+type T145 = T9 | null;
+type T146 = { "aspectRatio": T143; "facingMode": T144; "frameRate": T143; "height": T143; "torch": T145; "width": T143; "zoom": T143; };
+type T147 = T146 | null;
+type T148 = "audio" | "video";
+type T149 = "idle" | "interrupted" | "background" | "silenced" | "in-use" | "multitasking" | "system-pressure";
+type T150 = T149 | null;
+type T151 = "live" | "ended";
+type T152 = { "aspectRatio": T132; "autoGainControl": T145; "channelCount": T132; "deviceId": T1; "echoCancellation": T145; "facingMode": T1; "frameRate": T132; "groupId": T1; "height": T132; "latency": T132; "noiseSuppression": T145; "resizeMode": T1; "sampleRate": T132; "sampleSize": T132; "torch": T145; "width": T132; "zoom": T132; };
+type T153 = { "android": T140; "apple": T142; "capabilities": T147; "enabled": T9; "id": T0; "kind": T148; "label": T0; "muteReason": T150; "muted": T9; "readyState": T151; "settings": T152; };
+type T154 = T153[];
+type T155 = { "active": T9; "id": T0; "tracks": T154; };
+type T156 = { "aspectRatio": T132; "autoGainControl": T145; "channelCount": T132; "deviceId": T1; "echoCancellation": T145; "facingMode": T1; "frameRate": T132; "groupId": T1; "height": T132; "latency": T132; "noiseSuppression": T145; "resizeMode": T1; "sampleRate": T132; "sampleSize": T132; "torch": T145; "width": T132; "zoom": T132; };
+type T157 = { "permanentlyDenied": T9; "shouldShowRationale": T9; };
+type T158 = T157 | null;
+type T159 = "undetermined" | "denied" | "granted" | "notDetermined" | "restricted" | "authorized";
+type T160 = { "recordPermission": T159; };
+type T161 = T160 | null;
+type T162 = "granted" | "prompt" | "denied" | "unknown";
+type T163 = { "android": T158; "apple": T161; "available": T9; "state": T162; };
+type T164 = { "x": T13; "y": T13; };
+type T165 = T13[];
+type T166 = { "audioLevel": T13; "levels": T165; "totalAudioEnergy": T13; "totalSamplesDuration": T13; };
+type T167 = "requested" | "interrupted" | "media-reset" | "background" | "track-ended" | "error" | "session-ended";
+type T168 = T167 | null;
+type T169 = { "duration": T13; "mimeType": T0; "path": T0; "size": T13; };
 type T170 = T169 | null;
-type T171 = { "interruptionLevel": T170; "relevanceScore": T127; "subtitle": T1; "targetContentIdentifier": T1; "threadIdentifier": T1; };
-type T172 = T171 | null;
-type T173 = { "body": T1; "data": T1; "navigate": T1; "showTrigger": T127; "silent": T140; "tag": T1; "title": T0; "apple": T172; };
-type T174 = { "tag": T0; };
-type T175 = { "contents": T127; };
-type T176 = "mic" | "camcorder" | "voiceRecognition" | "voiceCommunication" | "unprocessed" | "voicePerformance";
+type T171 = "inactive" | "recording" | "paused";
+type T172 = { "audioBitsPerSecond": T132; "duration": T13; "error": T1; "id": T0; "mimeType": T0; "path": T0; "reason": T168; "result": T170; "state": T171; };
+type T173 = { "supported": T9; "type": T0; };
+type T174 = "passive" | "active" | "timeSensitive";
+type T175 = T174 | null;
+type T176 = { "interruptionLevel": T175; "relevanceScore": T132; "subtitle": T1; "targetContentIdentifier": T1; "threadIdentifier": T1; };
 type T177 = T176 | null;
-type T178 = { "audioSource": T177; "privacySensitive": T140; };
-type T179 = "mixWithOthers" | "duckOthers" | "allowBluetoothHFP" | "allowBluetoothA2DP" | "defaultToSpeaker" | "bluetoothHighQualityRecording" | "farFieldInput" | "overrideMutedMicrophoneInterruption";
-type T180 = T179[];
-type T181 = T180 | null;
-type T182 = "builtInWideAngleCamera" | "builtInUltraWideCamera" | "builtInTelephotoCamera" | "builtInDualCamera" | "builtInDualWideCamera" | "builtInTripleCamera" | "builtInTrueDepthCamera" | "builtInLiDARDepthCamera" | "continuityCamera" | "deskViewCamera" | "external";
-type T183 = T182 | null;
-type T184 = "default" | "measurement" | "voiceChat" | "videoChat" | "videoRecording";
-type T185 = T184 | null;
-type T186 = "stereo" | "cardioid" | "omnidirectional";
-type T187 = T186 | null;
-type T188 = { "categoryOptions": T181; "deviceType": T183; "inputDataSource": T1; "mode": T185; "polarPattern": T187; "preferredIOBufferDuration": T127; "prefersNoInterruptionsFromSystemAlerts": T140; };
-type T189 = T151 | null;
-type T190 = T178 | null;
-type T191 = T188 | null;
-type T192 = { "audio": T140; "audioConstraints": T189; "video": T140; "videoConstraints": T189; "android": T190; "apple": T191; };
-type T193 = "builtInWideAngleCamera" | "builtInUltraWideCamera" | "builtInTelephotoCamera" | "builtInDualCamera" | "builtInDualWideCamera" | "builtInTripleCamera" | "builtInTrueDepthCamera" | "builtInLiDARDepthCamera" | "continuityCamera" | "deskViewCamera" | "external";
-type T194 = T193 | null;
-type T195 = "locked" | "autoExpose" | "continuousAutoExposure";
-type T196 = T195 | null;
-type T197 = T159 | null;
-type T198 = "locked" | "autoFocus" | "continuousAutoFocus";
+type T178 = { "body": T1; "data": T1; "navigate": T1; "showTrigger": T132; "silent": T145; "tag": T1; "title": T0; "apple": T177; };
+type T179 = { "tag": T0; };
+type T180 = { "contents": T132; };
+type T181 = "mic" | "camcorder" | "voiceRecognition" | "voiceCommunication" | "unprocessed" | "voicePerformance";
+type T182 = T181 | null;
+type T183 = { "audioSource": T182; "privacySensitive": T145; };
+type T184 = "mixWithOthers" | "duckOthers" | "allowBluetoothHFP" | "allowBluetoothA2DP" | "defaultToSpeaker" | "bluetoothHighQualityRecording" | "farFieldInput" | "overrideMutedMicrophoneInterruption";
+type T185 = T184[];
+type T186 = T185 | null;
+type T187 = "builtInWideAngleCamera" | "builtInUltraWideCamera" | "builtInTelephotoCamera" | "builtInDualCamera" | "builtInDualWideCamera" | "builtInTripleCamera" | "builtInTrueDepthCamera" | "builtInLiDARDepthCamera" | "continuityCamera" | "deskViewCamera" | "external";
+type T188 = T187 | null;
+type T189 = "default" | "measurement" | "voiceChat" | "videoChat" | "videoRecording";
+type T190 = T189 | null;
+type T191 = "stereo" | "cardioid" | "omnidirectional";
+type T192 = T191 | null;
+type T193 = { "categoryOptions": T186; "deviceType": T188; "inputDataSource": T1; "mode": T190; "polarPattern": T192; "preferredIOBufferDuration": T132; "prefersNoInterruptionsFromSystemAlerts": T145; };
+type T194 = T156 | null;
+type T195 = T183 | null;
+type T196 = T193 | null;
+type T197 = { "audio": T145; "audioConstraints": T194; "video": T145; "videoConstraints": T194; "android": T195; "apple": T196; };
+type T198 = "builtInWideAngleCamera" | "builtInUltraWideCamera" | "builtInTelephotoCamera" | "builtInDualCamera" | "builtInDualWideCamera" | "builtInTripleCamera" | "builtInTrueDepthCamera" | "builtInLiDARDepthCamera" | "continuityCamera" | "deskViewCamera" | "external";
 type T199 = T198 | null;
-type T200 = { "deviceType": T194; "exposureMode": T196; "exposurePointOfInterest": T197; "focusMode": T199; "focusPointOfInterest": T197; };
+type T200 = "locked" | "autoExpose" | "continuousAutoExposure";
 type T201 = T200 | null;
-type T202 = { "aspectRatio": T127; "facingMode": T1; "frameRate": T127; "height": T127; "resizeMode": T1; "torch": T140; "track": T0; "width": T127; "zoom": T127; "apple": T201; };
-type T203 = { "track": T0; };
-type T204 = { "enabled": T9; "track": T0; };
-type T205 = { "track": T0; };
-type T206 = "aac" | "heAac" | "opus";
-type T207 = T206 | null;
-type T208 = "mpeg4" | "ogg" | "webm";
-type T209 = T208 | null;
-type T210 = { "audioEncoder": T207; "outputFormat": T209; };
-type T211 = "min" | "low" | "medium" | "high" | "max";
+type T202 = T164 | null;
+type T203 = "locked" | "autoFocus" | "continuousAutoFocus";
+type T204 = T203 | null;
+type T205 = { "deviceType": T199; "exposureMode": T201; "exposurePointOfInterest": T202; "focusMode": T204; "focusPointOfInterest": T202; };
+type T206 = T205 | null;
+type T207 = { "aspectRatio": T132; "facingMode": T1; "frameRate": T132; "height": T132; "resizeMode": T1; "torch": T145; "track": T0; "width": T132; "zoom": T132; "apple": T206; };
+type T208 = { "track": T0; };
+type T209 = { "enabled": T9; "track": T0; };
+type T210 = { "track": T0; };
+type T211 = "aac" | "heAac" | "opus";
 type T212 = T211 | null;
-type T213 = "constant" | "longTermAverage" | "variableConstrained" | "variable";
+type T213 = "mpeg4" | "ogg" | "webm";
 type T214 = T213 | null;
-type T215 = "aac" | "alac" | "linearPCM" | "opus";
-type T216 = T215 | null;
-type T217 = { "audioQuality": T212; "bitRateStrategy": T214; "formatID": T216; };
-type T218 = "constant" | "variable";
+type T215 = { "audioEncoder": T212; "outputFormat": T214; };
+type T216 = "min" | "low" | "medium" | "high" | "max";
+type T217 = T216 | null;
+type T218 = "constant" | "longTermAverage" | "variableConstrained" | "variable";
 type T219 = T218 | null;
-type T220 = T210 | null;
-type T221 = T217 | null;
-type T222 = { "audioBitrateMode": T219; "audioBitsPerSecond": T127; "mimeType": T1; "path": T0; "stream": T0; "android": T220; "apple": T221; };
-type T223 = { "recorder": T0; };
-type T224 = { "recorder": T0; };
-type T225 = { "recorder": T0; };
-type T226 = { "interval": T127; "recorder": T0; };
-type T227 = { "type": T0; };
-type T228 = { "history": T127; "interval": T127; "track": T0; };
-type T229 = { "slug": T0; "id": T0; };
-type T230 = { "id": T13; "name": T0; "url": T0; "tab": T0; "params": T229; "fragment": T0; };
-type T231 = T230[];
-type T232 = { "name": T0; "stack": T231; };
-type T233 = T232[];
-type T234 = { "tab": T0; "tabs": T233; "next": T13; };
-type T235 = null;
-type T236 = T65 | null;
-type T237 = T82 | null;
-type T238 = T75 | null;
-type T239 = T108 | null;
-type T240 = T150 | null;
-type T241 = T167 | null;
-type T242 = T148 | null;
-type T243 = T81 | null;
-type T244 = { "key": T0; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; "code": T0; "repeat": T9; "isComposing": T9; };
-type T245 = { "offsetX": T13; "offsetY": T13; "button": T13; "buttons": T13; "pressure": T13; "pointerType": T0; "pointerId": T13; "clientX": T13; "clientY": T13; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
-type T246 = { "offsetX": T13; "offsetY": T13; "deltaX": T13; "deltaY": T13; "deltaMode": T13; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
-type T247 = { "text": T0; "files": T16; };
-type T248 = { "value": T0; "checked": T9; "selectionStart": T13; "selectionEnd": T13; "selectionDirection": T0; "inputType": T0; "data": T1; "cancelable": T9; "isComposing": T9; };
-type T249 = { "path": T0; "name": T0; "type": T0; "size": T13; "width": T127; "height": T127; "duration": T127; };
-type T250 = T249[];
-type T251 = { "offsetX": T13; "offsetY": T13; "files": T16; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
-type T252 = { "scrollLeft": T13; "scrollTop": T13; "scrollWidth": T13; "scrollHeight": T13; "clientWidth": T13; "clientHeight": T13; "firstVisibleKey": T1; "firstVisibleOffset": T13; };
-type T253 = { "target": T0; "relatedTarget": T1; };
+type T220 = "aac" | "alac" | "linearPCM" | "opus";
+type T221 = T220 | null;
+type T222 = { "audioQuality": T217; "bitRateStrategy": T219; "formatID": T221; };
+type T223 = "constant" | "variable";
+type T224 = T223 | null;
+type T225 = T215 | null;
+type T226 = T222 | null;
+type T227 = { "audioBitrateMode": T224; "audioBitsPerSecond": T132; "mimeType": T1; "path": T0; "stream": T0; "android": T225; "apple": T226; };
+type T228 = { "recorder": T0; };
+type T229 = { "recorder": T0; };
+type T230 = { "recorder": T0; };
+type T231 = { "interval": T132; "recorder": T0; };
+type T232 = { "type": T0; };
+type T233 = { "history": T132; "interval": T132; "track": T0; };
+type T234 = { "slug": T0; "id": T0; };
+type T235 = { "id": T13; "name": T0; "url": T0; "tab": T0; "params": T234; "fragment": T0; };
+type T236 = T235[];
+type T237 = { "name": T0; "stack": T236; };
+type T238 = T237[];
+type T239 = { "tab": T0; "tabs": T238; "next": T13; };
+type T240 = null;
+type T241 = T65 | null;
+type T242 = T82 | null;
+type T243 = T75 | null;
+type T244 = T113 | null;
+type T245 = T90 | null;
+type T246 = T155 | null;
+type T247 = T172 | null;
+type T248 = T153 | null;
+type T249 = T81 | null;
+type T250 = { "key": T0; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; "code": T0; "repeat": T9; "isComposing": T9; };
+type T251 = { "offsetX": T13; "offsetY": T13; "button": T13; "buttons": T13; "pressure": T13; "pointerType": T0; "pointerId": T13; "clientX": T13; "clientY": T13; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
+type T252 = { "offsetX": T13; "offsetY": T13; "deltaX": T13; "deltaY": T13; "deltaMode": T13; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
+type T253 = { "text": T0; "files": T16; };
+type T254 = { "value": T0; "checked": T9; "selectionStart": T13; "selectionEnd": T13; "selectionDirection": T0; "inputType": T0; "data": T1; "cancelable": T9; "isComposing": T9; };
+type T255 = { "path": T0; "name": T0; "type": T0; "size": T13; "width": T132; "height": T132; "duration": T132; };
+type T256 = T255[];
+type T257 = { "offsetX": T13; "offsetY": T13; "files": T16; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
+type T258 = { "scrollLeft": T13; "scrollTop": T13; "scrollWidth": T13; "scrollHeight": T13; "clientWidth": T13; "clientHeight": T13; "firstVisibleKey": T1; "firstVisibleOffset": T13; };
+type T259 = { "target": T0; "relatedTarget": T1; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "checkAnytype" | "closeComputer" | "computerControl" | "computerInput" | "confirmPairing" | "copyStorage" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "noteUnread" | "openComputer" | "pinBot" | "pinMessage" | "prepareAnytype" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "saveBotMemory" | "saveBotPrompt" | "saveDrafts" | "saveLogin" | "saveSpace" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setComputerPlace" | "setDefaultMode" | "setDefaultModel" | "setGroupAnswerPolicy" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startPairing" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "checkAnytype" | "closeComputer" | "computerControl" | "computerInput" | "confirmPairing" | "copyStorage" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "mergeSide" | "noteUnread" | "openComputer" | "openSide" | "pinBot" | "pinMessage" | "prepareAnytype" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "saveBotMemory" | "saveBotPrompt" | "saveDrafts" | "saveLogin" | "saveSpace" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setComputerPlace" | "setDefaultMode" | "setDefaultModel" | "setGroupAnswerPolicy" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startPairing" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "checkAnytype": { args: []; result: T70 };
@@ -646,14 +658,14 @@ export interface SourceMap {
   "enableNotifications": { args: []; result: T63 };
   "hideBot": { args: [T0, T9]; result: T63 };
   "loadAbout": { args: []; result: T72 };
-  "loadBots": { args: [T0]; result: T88 };
-  "loadChat": { args: [T0, T0]; result: T26 };
+  "loadBots": { args: [T0]; result: T92 };
+  "loadChat": { args: [T0, T0, T0]; result: T26 };
   "loadComputer": { args: [T0, T0, T0, T0, T0]; result: T62 };
-  "loadComputerPlace": { args: [T0, T0, T0]; result: T112 };
-  "loadConvos": { args: [T0, T0, T0]; result: T89 };
+  "loadComputerPlace": { args: [T0, T0, T0]; result: T117 };
+  "loadConvos": { args: [T0, T0, T0]; result: T93 };
   "loadDrafts": { args: []; result: T84 };
   "loadLineage": { args: [T0, T0, T0]; result: T49 };
-  "loadMemory": { args: [T0, T0]; result: T107 };
+  "loadMemory": { args: [T0, T0]; result: T112 };
   "loadModels": { args: [T0, T0, T0]; result: T43 };
   "loadNetwork": { args: [T0]; result: T67 };
   "loadNotice": { args: []; result: T79 };
@@ -663,39 +675,42 @@ export interface SourceMap {
   "loadRoutines": { args: [T0, T0, T0]; result: T46 };
   "loadSession": { args: [T0]; result: T66 };
   "loadShelf": { args: [T0, T0]; result: T59 };
+  "loadSideChats": { args: [T0]; result: T89 };
   "loadStorage": { args: [T0]; result: T68 };
-  "loadSuggestions": { args: []; result: T97 };
+  "loadSuggestions": { args: []; result: T101 };
   "loadSystem": { args: [T0]; result: T73 };
   "loadUsage": { args: [T0, T0]; result: T83 };
   "loadUsageReport": { args: [T0, T0, T0, T0]; result: T56 };
-  "loadVault": { args: []; result: T116 };
+  "loadVault": { args: []; result: T121 };
   "makeMainBot": { args: [T0]; result: T63 };
   "markRoomSeen": { args: [T0]; result: T63 };
   "markSeen": { args: [T0]; result: T63 };
+  "mergeSide": { args: [T0, T0]; result: T63 };
   "noteUnread": { args: [T0, T9, T9, T0, T9, T9, T9, T0, T0, T0, T0]; result: T63 };
   "openComputer": { args: [T0]; result: T63 };
+  "openSide": { args: [T0, T0]; result: T90 };
   "pinBot": { args: [T0, T9]; result: T63 };
   "pinMessage": { args: [T0, T0, T0, T0]; result: T63 };
   "prepareAnytype": { args: []; result: T63 };
-  "reactTo": { args: [T0, T0, T0]; result: T63 };
+  "reactTo": { args: [T0, T0, T0, T0]; result: T63 };
   "readHealth": { args: []; result: T75 };
   "recolourBot": { args: [T0, T0]; result: T63 };
   "renameBot": { args: [T0, T0]; result: T63 };
   "reshapeBot": { args: [T0, T0]; result: T63 };
-  "respondRequest": { args: [T0, T0, T0, T0, T0, T0]; result: T63 };
+  "respondRequest": { args: [T0, T0, T0, T0, T0, T0, T0]; result: T63 };
   "restartGateway": { args: []; result: T63 };
   "restartStorage": { args: []; result: T63 };
   "revealPassword": { args: [T0]; result: T82 };
-  "saveBotMemory": { args: [T0, T0, T0]; result: T108 };
+  "saveBotMemory": { args: [T0, T0, T0]; result: T113 };
   "saveBotPrompt": { args: [T0, T0]; result: T63 };
   "saveDrafts": { args: [T16, T16, T16]; result: T63 };
   "saveLogin": { args: [T0, T0, T0, T0, T0, T0]; result: T63 };
   "saveSpace": { args: [T0]; result: T63 };
   "saveStorage": { args: [T0, T0, T0]; result: T63 };
   "saveSubagent": { args: [T0, T0, T0, T0, T0, T9]; result: T63 };
-  "sendMessage": { args: [T0, T0, T0, T0, T0, T0, T0]; result: T64 };
+  "sendMessage": { args: [T0, T0, T0, T0, T0, T0, T0, T0]; result: T64 };
   "sendRoom": { args: [T0, T0, T0]; result: T64 };
-  "sendVoice": { args: [T0, T13, T0, T0]; result: T63 };
+  "sendVoice": { args: [T0, T13, T0, T0, T0]; result: T63 };
   "setBotNotifications": { args: [T0, T9]; result: T63 };
   "setComputerPlace": { args: [T0, T0]; result: T63 };
   "setDefaultMode": { args: [T0]; result: T63 };
@@ -712,7 +727,7 @@ export interface SourceMap {
   "stageVoice": { args: [T0, T0, T0, T13]; result: T81 };
   "startPairing": { args: []; result: T69 };
   "startUpdate": { args: []; result: T74 };
-  "stopRun": { args: [T0, T0]; result: T63 };
+  "stopRun": { args: [T0, T0, T0]; result: T63 };
   "testStorage": { args: [T0]; result: T63 };
   "updateGroup": { args: [T0, T0, T0]; result: T63 };
   "uploadAttachment": { args: [T0, T0, T0, T0, T0]; result: T80 };

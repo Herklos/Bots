@@ -1,0 +1,100 @@
+use MentionHit from "../ui/shapes.contract"
+use attachmentName from "../ui/root-types.contract"
+use IconControl, TextControl from "../ui/controls.contract"
+use SendControl, StopControl from "../ui/sidebar.contract"
+use Glyph from "../glyph.contract"
+use MentionMenu from "./mention.contract"
+use SlashMenu from "./slash.contract"
+component Composer
+  props
+    draft: string
+    edit: action
+    post: action
+    onKey: action
+    onCaret: action
+    stop: action
+    working: bool
+    canSend: bool
+    sentPending: bool
+    pending: string[]
+    attachError: string
+    attachedPending: bool
+    dropPending: action
+    pickFiles: action
+    filesPicked: action
+    fileInputId: string
+    placeholder: string
+    composerId: string
+    replyTo: string
+    replyQuote: string
+    cancelReply: action
+    voicePreview: string
+    voiceError: string
+    voiceHold: string
+    voiceId: string
+    recording: bool
+    holdVoice: action
+    sendVoice: action
+    discardVoice: action
+    voiceSentPending: bool
+    mentionHits: MentionHit[]
+    mentionIdx: number
+    completeMention: action
+    slashOpen: bool
+    slashIdx: number
+    acceptSlash: action
+    pasted: action
+    readOnly: bool
+  view
+    column width="100%" max-width="44rem" align-self="center" box-sizing="border-box" padding="0 space.lg space.xl" gap="space.xs" position="relative"
+      if attachError != "" and not attachedPending
+        text attachError color="-exact-system-red" testId="attach-error"
+      if pending.length > 0
+        row gap="space.sm" flex-wrap="wrap" padding="0 0 space.xs" width="100%" box-sizing="border-box" testId="pending-files"
+          for entry in pending key=entry
+            row gap="space.xs" align-items="center" padding="4px 6px 4px space.sm" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" max-width="100%" box-sizing="border-box"
+              column color="ink.muted"
+                Glyph(name="attach", size=14)
+              text attachmentName(entry, t("chat.attachment")) font="-exact-footnote" color="-exact-label" overflow-wrap="anywhere" flex=1 min-width=0
+              button class=IconControl appearance="none" press=dropPending(entry) aria-label=t("chat.removeNamed", name=attachmentName(entry, t("chat.attachment"))) title=t("chat.removeAttachment") testId="pending-file" width=28 height=28
+                Glyph(name="close", size=14)
+      if readOnly
+        text t("chat.readOnly") color="ink.muted" padding="space.md 0 space.xl" testId="child-readonly"
+      else
+        column width="100%" box-sizing="border-box" gap="space.xs" position="relative"
+          if replyTo != ""
+            row gap="space.sm" align-items="center" padding="space.xs space.sm" border-radius="radius.md" background-color="surface.raised" border="1px solid surface.line" testId="reply-bar"
+              text replyQuote font="-exact-footnote" color="ink.muted" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="reply-quote"
+              button class=TextControl appearance="none" press=cancelReply aria-label=t("chat.cancelReply") testId="reply-cancel" min-height=44 padding="0 space.sm"
+                text t("common.cancel")
+          if voicePreview != ""
+            audio voicePreview controls=true testId="voice-preview"
+          if voiceError != ""
+            text voiceError color="-exact-system-red" font="-exact-footnote" testId="voice-error"
+          MentionMenu(hits=mentionHits, picked=mentionIdx, choose=completeMention)
+          SlashMenu(open=slashOpen, picked=slashIdx, accept=acceptSlash)
+          row align-items="flex-end" width="100%" box-sizing="border-box" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
+            button class=IconControl press=pickFiles disabled=(attachedPending or pending.length >= 8) appearance="none" aria-label=t("chat.attach") title=t("chat.attach") testId="attach" width=36 height=36 border-radius="radius.full" background-color="surface.raised"
+              Glyph(name="add", size=18)
+            if voiceHold != ""
+              text voiceHold font="-exact-footnote" color="ink.muted" testId="voice-hold"
+            if voiceId != ""
+              button class=IconControl appearance="none" press=discardVoice aria-label=t("chat.discardClip") title=t("chat.discardClip") testId="voice-discard" width=36 height=36
+                Glyph(name="close", size=16)
+            input type="file" id=fileInputId display="none" change=filesPicked testId=fileInputId
+            textarea id=composerId value=draft input=edit key=onKey selectionchange=onCaret paste=pasted maxlength=8000 outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=placeholder aria-label=t("chat.message") aria-expanded=(mentionHits.length > 0 or slashOpen) aria-controls=(slashOpen ? "slash-menu" : "mention-menu") testId=composerId flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
+            if recording
+              button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label=t("chat.stopRecording") title=t("chat.stopRecording") testId="voice-record" background-color="-exact-system-red" color="ink.dark"
+                Glyph(name="stop", size=16)
+            else if voiceId != ""
+              button class=SendControl appearance="none" press=sendVoice disabled=voiceSentPending margin="2px 0" aria-label=t("chat.sendVoice") title=t("chat.sendVoice") testId="voice-send"
+                Glyph(name="send", size=18)
+            else if working and not canSend
+              button class=StopControl appearance="none" press=stop margin="2px 0" aria-label=t("common.stop") testId="stop"
+                Glyph(name="stop", size=16)
+            else if not canSend
+              button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label=t("chat.record") title=t("chat.record") testId="voice-record" background-color="-exact-label" color="surface.canvas"
+                Glyph(name="mic", size=18)
+            else
+              button class=SendControl appearance="none" press=post disabled=(not canSend or sentPending) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="send"
+                Glyph(name="send", size=18)

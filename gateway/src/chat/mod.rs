@@ -18,6 +18,9 @@ use tokio::sync::Notify;
 
 mod hold;
 mod prompts;
+pub(crate) mod side;
+#[cfg(test)]
+mod side_tests;
 #[cfg(test)]
 mod tests;
 

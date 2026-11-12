@@ -14,6 +14,7 @@ Domain code calls the harness. `gateway/src/harness/adapters/t3/` is the only pl
 |---|---|
 | Transcript | A thread read, inbox activity, and threads a restart would interrupt |
 | Turns | A person's message, an interrupt, and a computer open or close |
+| Forks | A side chat fork, the list on a parent thread, merge back, and delete if unused |
 | Previews | The inbox preview for a thread |
 | Routines | List, save, enable, delete, and run a routine |
 | Approvals | An answer to a secret, approval, or question |
@@ -24,7 +25,7 @@ Domain code calls the harness. `gateway/src/harness/adapters/t3/` is the only pl
 
 `snapshot.rs` holds the neutral values those traits return. `error.rs` is unavailable, failed, or unsupported. `providers.rs` lists models for the computer the gateway is using. `connect` returns `Arc<dyn Harness>`.
 
-`adapters/t3/` is the T3 Code client. `client.rs` is the transport. The other files match the capabilities: `transcript/`, `turns.rs`, `previews.rs`, `routines.rs`, `approvals.rs`, `provision.rs`, and `browser.rs` with `stream.rs`, `hold.rs`, and `fill.rs`. `setup.rs` is `hbots up` finding T3 Code and saving the token. `adapters/mock.rs` is the test double.
+`adapters/t3/` is the T3 Code client. `client.rs` is the transport. The other files match the capabilities: `transcript/`, `turns.rs`, `forks.rs`, `previews.rs`, `routines.rs`, `approvals.rs`, `provision.rs`, and `browser.rs` with `stream.rs`, `hold.rs`, and `fill.rs`. `setup.rs` is `hbots up` finding T3 Code and saving the token. `adapters/mock.rs` is the test double.
 
 ## Other domains
 

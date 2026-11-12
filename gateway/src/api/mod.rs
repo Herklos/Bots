@@ -52,9 +52,12 @@ mod routines_api;
 mod runtime_mode_tests;
 mod server;
 mod settings;
+mod side_api;
 mod state;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+pub(crate) use tests::settings_state_with;
 mod threads;
 mod usage_api;
 mod vault_api;
@@ -85,6 +88,8 @@ pub(crate) use routines_api::*;
 pub(crate) use server::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use settings::*;
+#[allow(unused_imports, reason = "siblings and old paths use these names")]
+pub(crate) use side_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub use state::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]

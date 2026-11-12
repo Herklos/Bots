@@ -38,20 +38,28 @@ members Bots
 
   // A take stops itself at two minutes. Stopping earlier cancels this wait.
   task capClip when voiceRecorder != ""
-    after(120000, holdVoice)
+    after(120000, stopClip)
 
   // The contract runner has no microphone: the fixture hold is the file name, at once.
   // Anywhere else, the first press records and the next press stops.
+  action beginVoice(key: string)
+    if key != ""
+      voiceError = ""
+      if slug == "fixture" or slug == ""
+        draftVoices = putVoice(draftVoices, key, "voice.m4a", "", "", 0)
+        noteDraft()
+      else if voiceRecorder != "" and voiceKey == key
+        send clipSaved = stopMediaRecorder(recorder=voiceRecorder)
+      else if voiceRecorder == "" and not pending(micOpened)
+        voiceKey = key
+        send micOpened = getUserMedia(audio=true)
+
   action holdVoice
-    voiceError = ""
-    if slug == "fixture" or slug == ""
-      draftVoices = putVoice(draftVoices, dkey, "voice.m4a", "", "", 0)
-      noteDraft()
-    else if voiceRecorder != "" and voiceKey == dkey
-      send clipSaved = stopMediaRecorder(recorder=voiceRecorder)
-    else if voiceRecorder == "" and not pending(micOpened)
-      voiceKey = dkey
-      send micOpened = getUserMedia(audio=true)
+    beginVoice(dkey)
+
+  action stopClip
+    if voiceRecorder != ""
+      beginVoice(voiceKey)
 
   action armMic
     match micOpened
@@ -85,11 +93,11 @@ members Bots
         if track != ""
           send trackEnded = stopTrack(track=track)
         if media.size > 8388608
-          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+          draftVoices = putVoice(draftVoices, voiceKey, "", "", "", 0)
           noteDraft()
           voiceError = t("voice.tooLong")
         else if secs <= 0 or media.size == 0
-          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+          draftVoices = putVoice(draftVoices, voiceKey, "", "", "", 0)
           noteDraft()
           voiceError = t("voice.empty")
         else
@@ -102,11 +110,11 @@ members Bots
     match voiced
       case some(r)
         if r.ok and r.id != ""
-          draftVoices = putVoice(draftVoices, dkey, r.name, r.id, r.url, r.seconds)
+          draftVoices = putVoice(draftVoices, voiceKey, r.name, r.id, r.url, r.seconds)
           noteDraft()
           voiceError = ""
         else
-          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+          draftVoices = putVoice(draftVoices, voiceKey, "", "", "", 0)
           noteDraft()
           voiceError = r.error != "" ? r.error : t("voice.unreadable")
       case none
@@ -114,7 +122,7 @@ members Bots
   action sendHeldVoice
     if voiceId != "" and not pending(voiceSent)
       toEnd()
-      send voiceSent = sendVoice(slug, voiceSeconds, voiceId, childThread)
+      send voiceSent = sendVoice(slug, voiceSeconds, voiceId, childThread, (childThread != "" ? "child" : ""))
 
   action afterVoice
     match voiceSent

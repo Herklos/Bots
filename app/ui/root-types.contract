@@ -271,3 +271,16 @@ fn botMentions(bots: Bot[]): MentionHit[] = bots.filter(b => not b.hideFromSideb
 fn roomMentions(bots: Bot[], members: RoomMember[], allName: string): MentionHit[] = [MentionHit(slug="everyone", name=allName, color="brand.default", shape=""), MentionHit(slug="all", name=allName, color="brand.default", shape="")].concat(members.map(m => MentionHit(slug=m.slug, name=m.name, color=colorOf(bots, m.slug), shape=shapeOf(bots, m.slug))))
 
 fn filterMentions(hits: MentionHit[], q: string): MentionHit[] = hits.filter(h => q == "" or h.slug.toLowerCase().startsWith(q) or h.name.toLowerCase().startsWith(q) or h.name.toLowerCase().replaceAll(" ", "").startsWith(q)).slice(0, 8)
+
+shape SideRef
+  id: string
+  title: string
+
+shape SideList
+  chats: SideRef[]
+
+shape SideOpen
+  ok: bool
+  error: string
+  threadId: string
+  messageId: string

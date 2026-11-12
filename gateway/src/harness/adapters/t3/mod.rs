@@ -7,6 +7,7 @@ mod browser;
 mod client;
 mod computers;
 pub(crate) mod fill;
+mod forks;
 pub(crate) mod hold;
 mod previews;
 mod provision;
@@ -17,12 +18,15 @@ pub(crate) mod stream;
 pub(crate) mod transcript;
 mod turns;
 
+#[cfg(test)]
+mod forks_tests;
+
 pub(crate) use client::{ws_base, T3Client, T3};
 pub(crate) use provision::provider_health;
 pub(crate) use proxy::{proxy_http, proxy_ws};
 
 use crate::harness::{
-    Approvals as ApprovalsCap, Browser as BrowserCap, Harness, HarnessError,
+    Approvals as ApprovalsCap, Browser as BrowserCap, Forks as ForksCap, Harness, HarnessError,
     Previews as PreviewsCap, Provisioning as ProvisioningCap, Relay, Repos as ReposCap,
     Routines as RoutinesCap, Transcript as TranscriptCap, Turns as TurnsCap,
 };
@@ -39,6 +43,10 @@ impl Harness for T3 {
     }
 
     fn turns(&self) -> Result<&dyn TurnsCap, HarnessError> {
+        Ok(self)
+    }
+
+    fn forks(&self) -> Result<&dyn ForksCap, HarnessError> {
         Ok(self)
     }
 

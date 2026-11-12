@@ -67,17 +67,22 @@ members Bots
 
   action edit(v: string)
     let next = v.slice(0, 8000)
+    slashDismissed = false
+    slashIdx = 0
     draftTexts = putText(draftTexts, dkey, next)
     noteDraft()
     syncMention(next, next.length)
 
   action editDraft(v: string, event: InputEvent)
     let next = v.slice(0, 8000)
+    slashDismissed = false
+    slashIdx = 0
     draftTexts = putText(draftTexts, dkey, next)
     noteDraft()
     syncMention(next, event.selectionStart)
 
   action pickFiles
+    attachKey = dkey
     showPicker("chat-attach")
 
   action filesPicked(files: Picked[])
@@ -90,8 +95,9 @@ members Bots
   action afterAttach
     match attached
       case some(r)
-        if r.ok and r.id != "" and dkey != "" and pendingAttaches.length < 8
-          draftFiles = draftFiles.concat([`${dkey}\u001f${r.id}\\t${r.name}`])
+        let held = draftFiles.filter(f => f.startsWith(`${attachKey}\u001f`)).length
+        if r.ok and r.id != "" and attachKey != "" and held < 8
+          draftFiles = draftFiles.concat([`${attachKey}\u001f${r.id}\\t${r.name}`])
           noteDraft()
       case none
 
@@ -117,14 +123,16 @@ members Bots
       lastText = draft.trim()
       failedText = ""
       // Pass the local. A state read in this same action still sees the value from before the write.
-      send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"), childThread, replyTo, replyQuote, id)
+      send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"), childThread, replyTo, replyQuote, id, (childThread != "" ? "child" : ""))
       clearMention()
       edit("")
       writeDrafts()
     focus("composer")
 
   action composerKey(k: string, event: KeyboardEvent)
-    if mentionOn and mentionHits.length > 0 and (k == "ArrowDown" or k == "ArrowUp" or k == "Enter" or k == "Tab" or k == "Escape")
+    if childThread == "" and top(nav).name == "chat" and (slashOpen or sideCommand) and (k == "ArrowDown" or k == "ArrowUp" or k == "Enter" or k == "Tab" or k == "Escape")
+      sideKey(k, event)
+    else if mentionOn and mentionHits.length > 0 and (k == "ArrowDown" or k == "ArrowUp" or k == "Enter" or k == "Tab" or k == "Escape")
       preventDefault()
       if k == "Escape"
         dismissMention()
@@ -178,7 +186,7 @@ members Bots
       let again = failedText
       lastText = again
       failedText = ""
-      send sent = sendMessage(slug, again, "", childThread, replyTo, replyQuote, id)
+      send sent = sendMessage(slug, again, "", childThread, replyTo, replyQuote, id, (childThread != "" ? "child" : ""))
 
   action startReply(id: string, text: string)
     if top(nav).name == "chat"
@@ -196,7 +204,7 @@ members Bots
   action doReact(item: string, emoji: string)
     reactFor = ""
     if top(nav).name == "chat"
-      send reacted = reactTo(slug, item, emoji)
+      send reacted = reactTo(slug, item, emoji, "")
 
   action openReact(item: string)
     reactFor = (reactFor == item ? "" : item)
@@ -223,6 +231,7 @@ members Bots
       focus(`bubble-${id}`)
 
   action filesDropped(e: DragEvent)
+    attachKey = dkey
     if slug != "" and not pending(attached) and e.files.length > 0
       match e.files.at(0)
         case some(f)
@@ -234,15 +243,16 @@ members Bots
 
   action answer(rid: string, kind: string, key: string, value: string)
     if not pending(answered)
-      send answered = respondRequest(slug, rid, kind, key, value, childThread)
+      send answered = respondRequest(slug, rid, kind, key, value, childThread, (childThread != "" ? "child" : ""))
 
   action afterAnswer
     answerText = ""
 
   action stop
-    send stopped = stopRun(slug, childThread)
+    send stopped = stopRun(slug, childThread, (childThread != "" ? "child" : ""))
 
   action pasted(e: ClipboardEvent)
+    attachKey = dkey
     if slug != "" and not pending(attached) and pendingAttaches.length < 8 and e.files.length > 0
       preventDefault()
       match e.files.at(0)

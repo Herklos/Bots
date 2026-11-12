@@ -9,7 +9,8 @@ use ChatScreen from "./chat/screen.contract"
 use Inbox from "./inbox/screen.contract"
 use VaultScreen from "./vault/screen.contract"
 use LoginSheet from "./settings/settings.contract"
-use Login from "./ui/shapes.contract"
+use Login, Chat from "./ui/shapes.contract"
+use SideList from "./ui/root-types.contract"
 use Screen from "./ui/controls.contract"
 
 routes nav
@@ -32,6 +33,7 @@ component Bots
   members "./bot/memory-model.contract"
   members "./mentions/model.contract"
   members "./chat/model.contract"
+  members "./chat/side.contract"
   members "./voice/model.contract"
   members "./drafts/model.contract"
   members "./scroll/model.contract"
@@ -44,6 +46,8 @@ component Bots
   members "./shell/bag-chat.contract"
   members "./shell/bag-settings.contract"
   members "./shell/bag-rest.contract"
+  resource sideChat = loadChat(slug, sideThread, "side") as shape Chat else empty()
+  resource sideList = loadSideChats(slug) as shape SideList else empty()
   provide
     open
     editVaultQuery
@@ -91,6 +95,37 @@ component Bots
     dropPending
     post
     composerKey
+    acceptSlash
+    cancelSideReply
+    closeSide
+    discardSideVoice
+    dropSidePending
+    editSide
+    editSideAnswer
+    mergeSideChat
+    openSideChat
+    parentAttachError
+    parentRecording
+    pickSideFiles
+    pinSide
+    postSide
+    reactSide
+    reopenSide
+    retrySide
+    sendSideVoice
+    sidePasted
+    sideAnswer
+    sideBag
+    sideCaret
+    sideComposerKey
+    sideHoldVoice
+    sideOffer
+    sideThread
+    newestSide
+    slashIdx
+    slashOpen
+    startSideReply
+    stopSide
     startReply
     cancelReply
     doPinMessage

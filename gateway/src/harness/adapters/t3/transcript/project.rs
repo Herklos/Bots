@@ -366,6 +366,42 @@ pub(crate) fn child_send(
     )
 }
 
+const LAUNCH_MODES: &[&str] = &["approval-required", "auto", "full-access"];
+
+/// A mode the gateway already launches with. Other strings are ignored.
+pub(crate) fn runtime_mode(projection: &Value) -> Option<String> {
+    [
+        projection.get("runtimeMode"),
+        projection
+            .get("thread")
+            .and_then(|thread| thread.get("runtimeMode")),
+        projection
+            .get("session")
+            .and_then(|session| session.get("runtimeMode")),
+    ]
+    .into_iter()
+    .flatten()
+    .find_map(|value| {
+        let mode = value.as_str()?;
+        LAUNCH_MODES.contains(&mode).then(|| mode.to_string())
+    })
+}
+
+/// The last run id. `runs` wins when the key is present, including when it is empty.
+pub(crate) fn latest_run_id(projection: &Value) -> Option<String> {
+    if let Some(runs) = projection.get("runs").and_then(Value::as_array) {
+        return runs
+            .iter()
+            .rev()
+            .find_map(|run| run["id"].as_str().map(str::to_string));
+    }
+    projection
+        .get("latestRunId")
+        .and_then(Value::as_str)
+        .filter(|id| !id.is_empty())
+        .map(str::to_string)
+}
+
 #[cfg(test)]
 pub(crate) fn child_send_with(
     rows: &[Value],
