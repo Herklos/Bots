@@ -92,6 +92,11 @@ impl MemoryStore {
         mutex.lock_owned().await
     }
 
+    /// One writer at a time for `bot:{slug}` or `shared`. Fact writes use the same keys.
+    pub(crate) async fn lock_file(&self, key: &str) -> OwnedMutexGuard<()> {
+        self.lock_store(key).await
+    }
+
     pub(crate) fn bot_memory(slug: &str) -> String {
         format!("{slug}/memory/MEMORY.md")
     }
@@ -330,6 +335,7 @@ pub(crate) use evidence::{
 pub(crate) use facts::{FACT_CHARS, FULL_NOTE_CHARS, MEMORY_CHARS, NOTE_CHARS};
 pub(crate) use mutate::{mutate, Coded, MutateFail, MutateOk, Mutation, Op, Scope};
 pub(crate) use search::{document, list_notes, read_note, search as search_memory, Hit, NoteInfo};
+pub(crate) use state::revision_of;
 pub(crate) use user::{snapshot_user, user_memory_path, verify_user_facts};
 
 fn cap_prefix(bytes: &[u8], cap: usize) -> (String, bool) {
