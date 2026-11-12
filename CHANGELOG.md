@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Improvements
+
+- Ignore an `@` mention inside code when a group message chooses who wakes, and still wake a Bot mentioned after punctuation.
+
 ## 0.3.6
 
 This release adds an independent Bot runtime mode and a revision-safe API for editing memory files.

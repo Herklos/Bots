@@ -32,6 +32,7 @@ use tokio::sync::Mutex;
 mod dispatch;
 mod edit;
 mod members;
+mod mention_rules;
 mod policy;
 #[cfg(test)]
 mod tests;

@@ -216,29 +216,7 @@ pub(crate) fn mention_matches(member: &Member, word: &str) -> bool {
 
 /// The lowercase words that follow an `@`.
 pub(crate) fn mention_words(text: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let chars: Vec<char> = text.chars().collect();
-    let mut i = 0;
-    while i < chars.len() {
-        let starts_word = i == 0 || !chars[i - 1].is_alphanumeric();
-        if chars[i] == '@' && starts_word {
-            let mut word = String::new();
-            let mut j = i + 1;
-            while j < chars.len()
-                && (chars[j].is_alphanumeric() || chars[j] == '-' || chars[j] == '_')
-            {
-                word.extend(chars[j].to_lowercase());
-                j += 1;
-            }
-            if !word.is_empty() {
-                out.push(word);
-            }
-            i = j;
-        } else {
-            i += 1;
-        }
-    }
-    out
+    super::mention_rules::mention_words(text)
 }
 
 /// Members named with `@slug` or `@name` (the name without spaces), in room order.

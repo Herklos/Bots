@@ -3,6 +3,7 @@ use super::*;
 mod dispatch;
 mod lifecycle;
 mod members;
+mod mention_rules;
 mod mentions;
 mod policy;
 mod sync;
@@ -13,6 +14,8 @@ pub(crate) use dispatch::*;
 pub(crate) use lifecycle::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use members::*;
+#[allow(unused_imports, reason = "siblings and old paths use these names")]
+pub(crate) use mention_rules::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use mentions::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
