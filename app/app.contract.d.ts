@@ -31,6 +31,7 @@
 //   loadModels: (args: [string, string, string]) => ModelList
 //   loadNetwork: (args: [string]) => Network
 //   loadNotice: (args: []) => NoticeState
+//   loadPageOrigin: (args: []) => PageOrigin
 //   loadPrefs: (args: []) => Prefs
 //   loadProviders: (args: []) => Provider[]
 //   loadRoom: (args: [string]) => Room
@@ -56,6 +57,7 @@
 //   prepareAnytype: (args: []) => Reply
 //   reactTo: (args: [string, string, string, string]) => Reply
 //   readHealth: (args: []) => Health
+//   readPromptLink: (args: [string]) => PromptLink
 //   recolourBot: (args: [string, string]) => Reply
 //   renameBot: (args: [string, string]) => Reply
 //   reshapeBot: (args: [string, string]) => Reply
@@ -151,6 +153,8 @@
 //   MemorySave = { ok: boolean; error: string; conflict: boolean; text: string; revision: string }
 //   ComputerLink = { id: string; label: string; status: string; access: string; selectable: boolean }
 //   ComputerPlace = { ok: boolean; selected: string; localLabel: string; links: ComputerLink[]; waiting: boolean; error: string }
+//   PromptLink = { bot: string; prompt: string; present: boolean; bad: boolean }
+//   PageOrigin = { origin: string; local: boolean }
 
 /** Storage capabilities supplied by the host. Import these types; there are
  * no ambient fs/sqlite globals and importing a type conveys no authority. */
@@ -496,7 +500,7 @@ type T115 = { "id": T0; "label": T0; "status": T0; "access": T0; "selectable": T
 type T116 = T115[];
 type T117 = { "ok": T9; "selected": T0; "localLabel": T0; "links": T116; "waiting": T9; "error": T0; };
 type T118 = T80 | null;
-type T119 = { "system": T73; "models": T43; "modelError": T0; "shownRows": T24; "searchNote": T0; "away": T9; "answerText": T0; "chatSearching": T9; "messageQuery": T0; "reactFor": T0; "messageMenu": T0; "copiedMenu": T0; "replyTo": T0; "replyQuote": T0; "childThread": T0; "sent": T106; "answered": T94; "attached": T118; "pendingText": T0; "attachError": T0; "answerError": T0; "paintedWorkers": T29; "draft": T0; "mentionIdx": T13; "mentionHits": T105; "usagePeriod": T0; "usageView": T0; "report": T56; "childModels": T43; "routines": T46; "lineage": T49; "shelf": T59; "voiceRecorder": T0; "voiceError": T0; "voiceSent": T94; "voiceHold": T0; "voiceId": T0; "voicePreview": T0; "wide": T9; "panelOpen": T9; "panelTab": T0; "panelPage": T0; "subSlug": T0; "subName": T0; "subShape": T0; "subColor": T0; "subPrompt": T0; "subInherit": T9; "subCreated": T94; "subSaved": T94; "botError": T0; "subError": T0; "subSaveError": T0; "childRemoveError": T0; "heldTab": T0; "computerTab": T0; "computer": T62; "controlError": T0; "openError": T0; "openingBrowser": T9; "closeError": T0; "closingBrowser": T9; "driveError": T0; "holding": T9; "pointerFacts": T86; "bots": T92; "page": T78; "chat": T26; "slug": T0; "pendingAttaches": T16; "canSend": T9; "chatFailed": T9; "chatPending": T9; "answeredPending": T9; "attachedPending": T9; "voiceSentPending": T9; "sentPending": T9; "modelsFailed": T9; "routinesFailed": T9; "lineageFailed": T9; "reportFailed": T9; "shelfFailed": T9; "computerFailed": T9; "subCreatedPending": T9; "subSavedPending": T9; "childModelsFailed": T9; };
+type T119 = { "system": T73; "models": T43; "modelError": T0; "shownRows": T24; "searchNote": T0; "away": T9; "answerText": T0; "chatSearching": T9; "messageQuery": T0; "reactFor": T0; "messageMenu": T0; "copiedMenu": T0; "replyTo": T0; "replyQuote": T0; "childThread": T0; "sent": T106; "answered": T94; "attached": T118; "pendingText": T0; "attachError": T0; "answerError": T0; "paintedWorkers": T29; "draft": T0; "mentionIdx": T13; "mentionHits": T105; "usagePeriod": T0; "usageView": T0; "report": T56; "childModels": T43; "routines": T46; "lineage": T49; "shelf": T59; "voiceRecorder": T0; "voiceError": T0; "voiceSent": T94; "voiceHold": T0; "voiceId": T0; "voicePreview": T0; "wide": T9; "panelOpen": T9; "panelTab": T0; "panelPage": T0; "subSlug": T0; "subName": T0; "subShape": T0; "subColor": T0; "subPrompt": T0; "subInherit": T9; "subCreated": T94; "subSaved": T94; "botError": T0; "subError": T0; "subSaveError": T0; "childRemoveError": T0; "heldTab": T0; "computerTab": T0; "computer": T62; "controlError": T0; "openError": T0; "openingBrowser": T9; "closeError": T0; "closingBrowser": T9; "driveError": T0; "holding": T9; "pointerFacts": T86; "bots": T92; "page": T78; "chat": T26; "slug": T0; "pendingAttaches": T16; "canSend": T9; "chatFailed": T9; "chatPending": T9; "answeredPending": T9; "attachedPending": T9; "voiceSentPending": T9; "sentPending": T9; "modelsFailed": T9; "routinesFailed": T9; "lineageFailed": T9; "reportFailed": T9; "shelfFailed": T9; "computerFailed": T9; "subCreatedPending": T9; "subSavedPending": T9; "childModelsFailed": T9; "linkDraft": T9; "linkLocal": T9; };
 type T120 = { "prefs": T77; "botQuery": T0; "searching": T9; "hiddenOpen": T9; "rowMenu": T0; "firstRun": T9; "visibleBots": T92; "tiles": T92; "hiddenBots": T92; "newColor": T0; "newShape": T0; "wide": T9; "plusOpen": T9; "bots": T92; "convos": T93; "chat": T26; "slug": T0; "query": T0; "roomId": T0; "convoName": T0; "botsFailed": T9; };
 type T121 = T36[];
 type T122 = { "vaultQuery": T0; "vault": T121; "vquery": T0; "shownVault": T121; "query": T0; "vaultFailed": T9; "vaultPending": T9; };
@@ -551,92 +555,94 @@ type T170 = T169 | null;
 type T171 = "inactive" | "recording" | "paused";
 type T172 = { "audioBitsPerSecond": T132; "duration": T13; "error": T1; "id": T0; "mimeType": T0; "path": T0; "reason": T168; "result": T170; "state": T171; };
 type T173 = { "supported": T9; "type": T0; };
-type T174 = "passive" | "active" | "timeSensitive";
-type T175 = T174 | null;
-type T176 = { "interruptionLevel": T175; "relevanceScore": T132; "subtitle": T1; "targetContentIdentifier": T1; "threadIdentifier": T1; };
+type T174 = { "bot": T0; "prompt": T0; "present": T9; "bad": T9; };
+type T175 = { "origin": T0; "local": T9; };
+type T176 = "passive" | "active" | "timeSensitive";
 type T177 = T176 | null;
-type T178 = { "body": T1; "data": T1; "navigate": T1; "showTrigger": T132; "silent": T145; "tag": T1; "title": T0; "apple": T177; };
-type T179 = { "tag": T0; };
-type T180 = { "contents": T132; };
-type T181 = "mic" | "camcorder" | "voiceRecognition" | "voiceCommunication" | "unprocessed" | "voicePerformance";
-type T182 = T181 | null;
-type T183 = { "audioSource": T182; "privacySensitive": T145; };
-type T184 = "mixWithOthers" | "duckOthers" | "allowBluetoothHFP" | "allowBluetoothA2DP" | "defaultToSpeaker" | "bluetoothHighQualityRecording" | "farFieldInput" | "overrideMutedMicrophoneInterruption";
-type T185 = T184[];
-type T186 = T185 | null;
-type T187 = "builtInWideAngleCamera" | "builtInUltraWideCamera" | "builtInTelephotoCamera" | "builtInDualCamera" | "builtInDualWideCamera" | "builtInTripleCamera" | "builtInTrueDepthCamera" | "builtInLiDARDepthCamera" | "continuityCamera" | "deskViewCamera" | "external";
+type T178 = { "interruptionLevel": T177; "relevanceScore": T132; "subtitle": T1; "targetContentIdentifier": T1; "threadIdentifier": T1; };
+type T179 = T178 | null;
+type T180 = { "body": T1; "data": T1; "navigate": T1; "showTrigger": T132; "silent": T145; "tag": T1; "title": T0; "apple": T179; };
+type T181 = { "tag": T0; };
+type T182 = { "contents": T132; };
+type T183 = "mic" | "camcorder" | "voiceRecognition" | "voiceCommunication" | "unprocessed" | "voicePerformance";
+type T184 = T183 | null;
+type T185 = { "audioSource": T184; "privacySensitive": T145; };
+type T186 = "mixWithOthers" | "duckOthers" | "allowBluetoothHFP" | "allowBluetoothA2DP" | "defaultToSpeaker" | "bluetoothHighQualityRecording" | "farFieldInput" | "overrideMutedMicrophoneInterruption";
+type T187 = T186[];
 type T188 = T187 | null;
-type T189 = "default" | "measurement" | "voiceChat" | "videoChat" | "videoRecording";
+type T189 = "builtInWideAngleCamera" | "builtInUltraWideCamera" | "builtInTelephotoCamera" | "builtInDualCamera" | "builtInDualWideCamera" | "builtInTripleCamera" | "builtInTrueDepthCamera" | "builtInLiDARDepthCamera" | "continuityCamera" | "deskViewCamera" | "external";
 type T190 = T189 | null;
-type T191 = "stereo" | "cardioid" | "omnidirectional";
+type T191 = "default" | "measurement" | "voiceChat" | "videoChat" | "videoRecording";
 type T192 = T191 | null;
-type T193 = { "categoryOptions": T186; "deviceType": T188; "inputDataSource": T1; "mode": T190; "polarPattern": T192; "preferredIOBufferDuration": T132; "prefersNoInterruptionsFromSystemAlerts": T145; };
-type T194 = T156 | null;
-type T195 = T183 | null;
-type T196 = T193 | null;
-type T197 = { "audio": T145; "audioConstraints": T194; "video": T145; "videoConstraints": T194; "android": T195; "apple": T196; };
-type T198 = "builtInWideAngleCamera" | "builtInUltraWideCamera" | "builtInTelephotoCamera" | "builtInDualCamera" | "builtInDualWideCamera" | "builtInTripleCamera" | "builtInTrueDepthCamera" | "builtInLiDARDepthCamera" | "continuityCamera" | "deskViewCamera" | "external";
-type T199 = T198 | null;
-type T200 = "locked" | "autoExpose" | "continuousAutoExposure";
+type T193 = "stereo" | "cardioid" | "omnidirectional";
+type T194 = T193 | null;
+type T195 = { "categoryOptions": T188; "deviceType": T190; "inputDataSource": T1; "mode": T192; "polarPattern": T194; "preferredIOBufferDuration": T132; "prefersNoInterruptionsFromSystemAlerts": T145; };
+type T196 = T156 | null;
+type T197 = T185 | null;
+type T198 = T195 | null;
+type T199 = { "audio": T145; "audioConstraints": T196; "video": T145; "videoConstraints": T196; "android": T197; "apple": T198; };
+type T200 = "builtInWideAngleCamera" | "builtInUltraWideCamera" | "builtInTelephotoCamera" | "builtInDualCamera" | "builtInDualWideCamera" | "builtInTripleCamera" | "builtInTrueDepthCamera" | "builtInLiDARDepthCamera" | "continuityCamera" | "deskViewCamera" | "external";
 type T201 = T200 | null;
-type T202 = T164 | null;
-type T203 = "locked" | "autoFocus" | "continuousAutoFocus";
-type T204 = T203 | null;
-type T205 = { "deviceType": T199; "exposureMode": T201; "exposurePointOfInterest": T202; "focusMode": T204; "focusPointOfInterest": T202; };
+type T202 = "locked" | "autoExpose" | "continuousAutoExposure";
+type T203 = T202 | null;
+type T204 = T164 | null;
+type T205 = "locked" | "autoFocus" | "continuousAutoFocus";
 type T206 = T205 | null;
-type T207 = { "aspectRatio": T132; "facingMode": T1; "frameRate": T132; "height": T132; "resizeMode": T1; "torch": T145; "track": T0; "width": T132; "zoom": T132; "apple": T206; };
-type T208 = { "track": T0; };
-type T209 = { "enabled": T9; "track": T0; };
+type T207 = { "deviceType": T201; "exposureMode": T203; "exposurePointOfInterest": T204; "focusMode": T206; "focusPointOfInterest": T204; };
+type T208 = T207 | null;
+type T209 = { "aspectRatio": T132; "facingMode": T1; "frameRate": T132; "height": T132; "resizeMode": T1; "torch": T145; "track": T0; "width": T132; "zoom": T132; "apple": T208; };
 type T210 = { "track": T0; };
-type T211 = "aac" | "heAac" | "opus";
-type T212 = T211 | null;
-type T213 = "mpeg4" | "ogg" | "webm";
+type T211 = { "enabled": T9; "track": T0; };
+type T212 = { "track": T0; };
+type T213 = "aac" | "heAac" | "opus";
 type T214 = T213 | null;
-type T215 = { "audioEncoder": T212; "outputFormat": T214; };
-type T216 = "min" | "low" | "medium" | "high" | "max";
-type T217 = T216 | null;
-type T218 = "constant" | "longTermAverage" | "variableConstrained" | "variable";
+type T215 = "mpeg4" | "ogg" | "webm";
+type T216 = T215 | null;
+type T217 = { "audioEncoder": T214; "outputFormat": T216; };
+type T218 = "min" | "low" | "medium" | "high" | "max";
 type T219 = T218 | null;
-type T220 = "aac" | "alac" | "linearPCM" | "opus";
+type T220 = "constant" | "longTermAverage" | "variableConstrained" | "variable";
 type T221 = T220 | null;
-type T222 = { "audioQuality": T217; "bitRateStrategy": T219; "formatID": T221; };
-type T223 = "constant" | "variable";
-type T224 = T223 | null;
-type T225 = T215 | null;
-type T226 = T222 | null;
-type T227 = { "audioBitrateMode": T224; "audioBitsPerSecond": T132; "mimeType": T1; "path": T0; "stream": T0; "android": T225; "apple": T226; };
-type T228 = { "recorder": T0; };
-type T229 = { "recorder": T0; };
+type T222 = "aac" | "alac" | "linearPCM" | "opus";
+type T223 = T222 | null;
+type T224 = { "audioQuality": T219; "bitRateStrategy": T221; "formatID": T223; };
+type T225 = "constant" | "variable";
+type T226 = T225 | null;
+type T227 = T217 | null;
+type T228 = T224 | null;
+type T229 = { "audioBitrateMode": T226; "audioBitsPerSecond": T132; "mimeType": T1; "path": T0; "stream": T0; "android": T227; "apple": T228; };
 type T230 = { "recorder": T0; };
-type T231 = { "interval": T132; "recorder": T0; };
-type T232 = { "type": T0; };
-type T233 = { "history": T132; "interval": T132; "track": T0; };
-type T234 = { "slug": T0; "id": T0; };
-type T235 = { "id": T13; "name": T0; "url": T0; "tab": T0; "params": T234; "fragment": T0; };
-type T236 = T235[];
-type T237 = { "name": T0; "stack": T236; };
+type T231 = { "recorder": T0; };
+type T232 = { "recorder": T0; };
+type T233 = { "interval": T132; "recorder": T0; };
+type T234 = { "type": T0; };
+type T235 = { "history": T132; "interval": T132; "track": T0; };
+type T236 = { "slug": T0; "id": T0; };
+type T237 = { "id": T13; "name": T0; "url": T0; "tab": T0; "params": T236; "fragment": T0; };
 type T238 = T237[];
-type T239 = { "tab": T0; "tabs": T238; "next": T13; };
-type T240 = null;
-type T241 = T65 | null;
-type T242 = T82 | null;
-type T243 = T75 | null;
-type T244 = T113 | null;
-type T245 = T90 | null;
-type T246 = T155 | null;
-type T247 = T172 | null;
-type T248 = T153 | null;
-type T249 = T81 | null;
-type T250 = { "key": T0; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; "code": T0; "repeat": T9; "isComposing": T9; };
-type T251 = { "offsetX": T13; "offsetY": T13; "button": T13; "buttons": T13; "pressure": T13; "pointerType": T0; "pointerId": T13; "clientX": T13; "clientY": T13; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
-type T252 = { "offsetX": T13; "offsetY": T13; "deltaX": T13; "deltaY": T13; "deltaMode": T13; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
-type T253 = { "text": T0; "files": T16; };
-type T254 = { "value": T0; "checked": T9; "selectionStart": T13; "selectionEnd": T13; "selectionDirection": T0; "inputType": T0; "data": T1; "cancelable": T9; "isComposing": T9; };
-type T255 = { "path": T0; "name": T0; "type": T0; "size": T13; "width": T132; "height": T132; "duration": T132; };
-type T256 = T255[];
-type T257 = { "offsetX": T13; "offsetY": T13; "files": T16; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
-type T258 = { "scrollLeft": T13; "scrollTop": T13; "scrollWidth": T13; "scrollHeight": T13; "clientWidth": T13; "clientHeight": T13; "firstVisibleKey": T1; "firstVisibleOffset": T13; };
-type T259 = { "target": T0; "relatedTarget": T1; };
+type T239 = { "name": T0; "stack": T238; };
+type T240 = T239[];
+type T241 = { "tab": T0; "tabs": T240; "next": T13; };
+type T242 = null;
+type T243 = T65 | null;
+type T244 = T82 | null;
+type T245 = T75 | null;
+type T246 = T113 | null;
+type T247 = T90 | null;
+type T248 = T155 | null;
+type T249 = T172 | null;
+type T250 = T153 | null;
+type T251 = T81 | null;
+type T252 = { "key": T0; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; "code": T0; "repeat": T9; "isComposing": T9; };
+type T253 = { "offsetX": T13; "offsetY": T13; "button": T13; "buttons": T13; "pressure": T13; "pointerType": T0; "pointerId": T13; "clientX": T13; "clientY": T13; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
+type T254 = { "offsetX": T13; "offsetY": T13; "deltaX": T13; "deltaY": T13; "deltaMode": T13; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
+type T255 = { "text": T0; "files": T16; };
+type T256 = { "value": T0; "checked": T9; "selectionStart": T13; "selectionEnd": T13; "selectionDirection": T0; "inputType": T0; "data": T1; "cancelable": T9; "isComposing": T9; };
+type T257 = { "path": T0; "name": T0; "type": T0; "size": T13; "width": T132; "height": T132; "duration": T132; };
+type T258 = T257[];
+type T259 = { "offsetX": T13; "offsetY": T13; "files": T16; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
+type T260 = { "scrollLeft": T13; "scrollTop": T13; "scrollWidth": T13; "scrollHeight": T13; "clientWidth": T13; "clientHeight": T13; "firstVisibleKey": T1; "firstVisibleOffset": T13; };
+type T261 = { "target": T0; "relatedTarget": T1; };
 
 /** Sources called by compiled mutation sends. */
 export type MutationSource = "checkAnytype" | "closeComputer" | "computerControl" | "computerInput" | "confirmPairing" | "copyStorage" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "mergeSide" | "noteUnread" | "openComputer" | "openSide" | "pinBot" | "pinMessage" | "prepareAnytype" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "saveBotMemory" | "saveBotPrompt" | "saveDrafts" | "saveLogin" | "saveSpace" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setComputerPlace" | "setDefaultMode" | "setDefaultModel" | "setGroupAnswerPolicy" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startPairing" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
@@ -669,6 +675,7 @@ export interface SourceMap {
   "loadModels": { args: [T0, T0, T0]; result: T43 };
   "loadNetwork": { args: [T0]; result: T67 };
   "loadNotice": { args: []; result: T79 };
+  "loadPageOrigin": { args: []; result: T175 };
   "loadPrefs": { args: []; result: T77 };
   "loadProviders": { args: []; result: T42 };
   "loadRoom": { args: [T0]; result: T31 };
@@ -694,6 +701,7 @@ export interface SourceMap {
   "prepareAnytype": { args: []; result: T63 };
   "reactTo": { args: [T0, T0, T0, T0]; result: T63 };
   "readHealth": { args: []; result: T75 };
+  "readPromptLink": { args: [T0]; result: T174 };
   "recolourBot": { args: [T0, T0]; result: T63 };
   "renameBot": { args: [T0, T0]; result: T63 };
   "reshapeBot": { args: [T0, T0]; result: T63 };

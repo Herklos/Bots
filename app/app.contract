@@ -36,6 +36,7 @@ component Bots
   members "./chat/side.contract"
   members "./voice/model.contract"
   members "./drafts/model.contract"
+  members "./drafts/link.contract"
   members "./scroll/model.contract"
   members "./inbox/model.contract"
   members "./session/model.contract"
@@ -134,6 +135,7 @@ component Bots
     openMessageMenu
     closeMessageMenu
     noteCopied
+    copyPromptLink
     filesDropped
     editAnswer
     answer

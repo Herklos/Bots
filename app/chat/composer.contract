@@ -45,6 +45,10 @@ component Composer
     acceptSlash: action
     pasted: action
     readOnly: bool
+    linkDraft: bool
+    linkLocal: bool
+    promptSlug: string
+    copyPromptLink: action
   view
     column width="100%" max-width="44rem" align-self="center" box-sizing="border-box" padding="0 space.lg space.xl" gap="space.xs" position="relative"
       if attachError != "" and not attachedPending
@@ -62,6 +66,8 @@ component Composer
         text t("chat.readOnly") color="ink.muted" padding="space.md 0 space.xl" testId="child-readonly"
       else
         column width="100%" box-sizing="border-box" gap="space.xs" position="relative"
+          if linkDraft
+            text t("chat.linkDraft") role="status" testId="link-draft" font="-exact-footnote" color="ink.muted"
           if replyTo != ""
             row gap="space.sm" align-items="center" padding="space.xs space.sm" border-radius="radius.md" background-color="surface.raised" border="1px solid surface.line" testId="reply-bar"
               text replyQuote font="-exact-footnote" color="ink.muted" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="reply-quote"
@@ -83,6 +89,9 @@ component Composer
                 Glyph(name="close", size=16)
             input type="file" id=fileInputId display="none" change=filesPicked testId=fileInputId
             textarea id=composerId value=draft input=edit key=onKey selectionchange=onCaret paste=pasted maxlength=8000 outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=placeholder aria-label=t("chat.message") aria-expanded=(mentionHits.length > 0 or slashOpen) aria-controls=(slashOpen ? "slash-menu" : "mention-menu") testId=composerId flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
+            if draft.trim() != "" and promptSlug != ""
+              button class=IconControl appearance="none" press=copyPromptLink(promptSlug, draft) aria-label=t("chat.copyPromptLink") title=(linkLocal ? t("chat.linkLocal") : t("chat.copyPromptLink")) testId="copy-prompt-link" width=36 height=36
+                Glyph(name="copy", size=16)
             if recording
               button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label=t("chat.stopRecording") title=t("chat.stopRecording") testId="voice-record" background-color="-exact-system-red" color="ink.dark"
                 Glyph(name="stop", size=16)

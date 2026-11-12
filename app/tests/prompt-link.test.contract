@@ -1,0 +1,61 @@
+locale "en-US"
+
+test "a prompt link fills a draft and never sends"
+  at "/?bot=fixture&prompt=Hello%20there"
+  clock settle
+  expect text "composer" == "Hello there"
+  expect text "link-draft" == "Draft from a link"
+  expect state slug == "fixture"
+  expect state linkQuery == ""
+  expect tree missing "message-turn-item:message:m-1"
+
+test "a send mode and extra fields still only fill a draft"
+  at "/?bot=fixture&prompt=Stay%20draft&mode=send&model=opus&repo=x&file=y"
+  clock settle
+  expect text "composer" == "Stay draft"
+  expect tree has "link-draft"
+  expect tree missing "message-turn-item:message:m-1"
+
+test "editing the draft keeps the banner until it is sent"
+  at "/?bot=fixture&prompt=Hello%20there"
+  clock settle
+  type "composer" "Hello there still"
+  expect text "composer" == "Hello there still"
+  expect tree has "link-draft"
+  tap "send"
+  clock data
+  expect tree missing "link-draft"
+
+test "an unknown Bot keeps the prompt until one is chosen"
+  size 1440x900
+  at "/?bot=fixture-pick&prompt=Hold%20this"
+  clock settle
+  expect tree has "bot-search"
+  expect state linkQuery == "Hold this"
+  expect tree missing "composer"
+  tap "bot-fixture"
+  clock settle
+  expect text "composer" == "Hold this"
+  expect tree has "link-draft"
+  expect state slug == "fixture"
+  expect state linkQuery == ""
+
+test "a bad encoding does not fill the draft"
+  at "/?bot=fixture&prompt=%FF"
+  clock settle
+  expect text "composer" == ""
+  expect tree missing "link-draft"
+  expect state linkQuery == ""
+  expect state slug == "fixture"
+
+test "a prompt stays plain text"
+  at "/?bot=fixture&prompt=%3Cb%3Ehi%3C%2Fb%3E"
+  clock settle
+  expect text "composer" == "<b>hi</b>"
+  expect tree has "link-draft"
+
+test "the composer copies a prompt link"
+  at "/?bot=fixture&prompt=Hello%20there"
+  clock settle
+  tap "copy-prompt-link"
+  expect text "toast" == "Copied. This link only works on this device."

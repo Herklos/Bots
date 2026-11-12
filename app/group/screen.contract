@@ -32,6 +32,7 @@ component GroupScreen
     mention: action
     moved: action
     noteCopied: action
+    copyPromptLink: action
     openGroupAdd: action
     openGroupEdit: action
     openMessageMenu: action
@@ -80,7 +81,7 @@ component GroupScreen
             if groupBag.away
               button class=IconControl appearance="none" press=toEnd aria-label=t("chat.jump") title=t("chat.jumpShort") testId="to-end" position="absolute" left="50%" translate="-50% 0" bottom=8 z-index=1 width=32 height=32 border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line"
                 Glyph(name="arrow-down", size=16)
-            ChatLog(rows=groupBag.roomRows, inRoom=true, logId="room-log", logTestId="room-log", bots=groupBag.bots, slug="", pins=groupBag.chat.pins, workers=groupBag.paintedWorkers, hover=(groupBag.pointerFacts.hover == "hover"), reactFor=groupBag.reactFor, messageMenu=groupBag.messageMenu, copiedMenu=groupBag.copiedMenu, answerText=groupBag.answerText, answerError=groupBag.answerError, answering=groupBag.answeredPending, react=doReact, openPicker=openReact, reply=startReply, pin=doPinMessage, openMenu=openMessageMenu, closeMenu=closeMessageMenu, noteCopied=noteCopied, answer=answer, editAnswer=editAnswer, retry=retry, scrolled=moved)
+            ChatLog(rows=groupBag.roomRows, inRoom=true, logId="room-log", logTestId="room-log", bots=groupBag.bots, slug="", pins=groupBag.chat.pins, workers=groupBag.paintedWorkers, hover=(groupBag.pointerFacts.hover == "hover"), reactFor=groupBag.reactFor, messageMenu=groupBag.messageMenu, copiedMenu=groupBag.copiedMenu, answerText=groupBag.answerText, answerError=groupBag.answerError, answering=groupBag.answeredPending, react=doReact, openPicker=openReact, reply=startReply, pin=doPinMessage, openMenu=openMessageMenu, closeMenu=closeMessageMenu, noteCopied=noteCopied, copyPromptLink=copyPromptLink, answer=answer, editAnswer=editAnswer, retry=retry, scrolled=moved)
         column width="calc(100% - 32px)" max-width="44rem" min-width=0 align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.sm" flex-shrink=0 position="relative"
           if groupBag.roomError != "" and not groupBag.roomSentPending
             text groupBag.roomError color="-exact-system-red" font="-exact-footnote" testId="room-send-error"

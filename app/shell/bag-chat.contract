@@ -88,4 +88,6 @@ members Bots
     subCreatedPending=subCreatedPending,
     subSavedPending=subSavedPending,
     childModelsFailed=childModelsFailed,
+    linkDraft=linkDraft,
+    linkLocal=pageOrigin.local,
   )

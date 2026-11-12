@@ -88,3 +88,5 @@ shape ChatBag
   subCreatedPending: bool
   subSavedPending: bool
   childModelsFailed: bool
+  linkDraft: bool
+  linkLocal: bool
