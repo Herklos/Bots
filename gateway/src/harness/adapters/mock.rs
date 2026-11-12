@@ -51,6 +51,8 @@ pub(crate) struct MockHarness {
     provider_refresh_calls: AtomicUsize,
     forks: Mutex<ForkBook>,
     scheduled: Mutex<std::collections::BTreeMap<String, Value>>,
+    /// Deliveries keyed by task id, newest first. Webhook routines only.
+    deliveries: Mutex<std::collections::BTreeMap<String, Vec<Value>>>,
     messages: Mutex<Vec<UserMessage>>,
     approvals: Mutex<Vec<Approval>>,
     search_script: Mutex<search::SearchScript>,
@@ -76,6 +78,7 @@ impl MockHarness {
     pub(crate) fn new() -> Self {
         Self {
             scheduled: Mutex::default(),
+            deliveries: Mutex::default(),
             messages: Mutex::default(),
             approvals: Mutex::default(),
             search_script: Mutex::new(search::SearchScript::Absent),

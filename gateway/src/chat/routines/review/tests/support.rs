@@ -233,3 +233,19 @@ impl Host for World {
         self.pauses.lock().expect("pauses").push(delay);
     }
 }
+
+#[tokio::test]
+async fn a_review_harness_has_no_webhook_log() {
+    let fake = Fake::new(vec![], Arc::new(AtomicBool::new(false)));
+    for err in [
+        fake.rotate_webhook_token("scheduled-task:1")
+            .await
+            .unwrap_err(),
+        fake.list_deliveries("scheduled-task:1").await.unwrap_err(),
+        fake.get_delivery("scheduled-task:1", "delivery:1")
+            .await
+            .unwrap_err(),
+    ] {
+        assert!(matches!(err, HarnessError::Unsupported(_)));
+    }
+}

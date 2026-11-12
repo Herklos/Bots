@@ -69,6 +69,18 @@ pub trait Routines: Send + Sync {
     async fn run_now(&self, body: &Value) -> Result<Value, HarnessError>;
     /// Stay on the task list until the connection drops. Each item is one full snapshot.
     async fn watch(&self) -> Result<RoutineFeed, HarnessError>;
+    /// Replace the hook token. A harness without webhooks returns [`HarnessError::Unsupported`].
+    async fn rotate_webhook_token(&self, _id: &str) -> Result<Value, HarnessError> {
+        Err(HarnessError::unsupported("webhook token rotation"))
+    }
+    /// Delivery summaries, newest first. A harness without webhooks returns [`HarnessError::Unsupported`].
+    async fn list_deliveries(&self, _id: &str) -> Result<Value, HarnessError> {
+        Err(HarnessError::unsupported("webhook deliveries"))
+    }
+    /// One delivery. A harness without webhooks returns [`HarnessError::Unsupported`].
+    async fn get_delivery(&self, _id: &str, _delivery_id: &str) -> Result<Value, HarnessError> {
+        Err(HarnessError::unsupported("webhook deliveries"))
+    }
 }
 
 /// An answer the person gave to a pending request. The secret, when there is one, stays here.
