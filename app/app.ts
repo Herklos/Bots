@@ -440,6 +440,14 @@ const FIXTURE_EFFORTS = [
 ];
 
 let fixtureChoice = { instanceId: 'claudeAgent', model: 'haiku', effort: 'high', runtimeMode: 'auto' };
+// Shown only when GET /api/suggestions cannot be read. Same words as gateway/src/suggestions.rs.
+const FIXTURE_SUGGESTIONS = [
+  { name: 'Night Shift', about: 'Works overnight and preps your morning digest', color: 'orange', shape: 'hex', firstMessage: 'You are my night shift. While I sleep, go through what came in and have a short digest ready for the morning.' },
+  { name: 'Inbox Triage', about: 'Sorts your email and drafts replies in your voice', color: 'pink', shape: 'cloud', firstMessage: 'Help me keep my inbox at zero. Sort what came in, and draft replies for the ones that need one.' },
+  { name: 'Research Desk', about: 'Reads up on a topic and reports back with sources', color: 'blue', shape: 'egg', firstMessage: 'Be my research desk. Ask me what I want to understand, then read up and report back with sources.' },
+  { name: 'Money Check', about: 'Watches payments and what is overdue', color: 'green', shape: 'square', firstMessage: 'Keep an eye on my payments. Tell me what came in, what is overdue and what needs a follow up.' },
+  { name: 'Trip Planner', about: 'Plans a trip around your dates and budget', color: 'violet', shape: 'drop', firstMessage: 'Plan a trip with me. Ask for my dates and budget, then suggest a plan I can adjust.' },
+];
 
 function fixtureProviders() {
   const efforts = () => FIXTURE_EFFORTS.map((level) => ({ ...level }));
@@ -1240,7 +1248,13 @@ const sources: Sources = {
   createBot: async ([name, color, shape, firstMessage], store) => {
     // The contract runner has no gateway. A real Bot still posts.
     // The reserved name is how that runner calls createBot. The slug in the body is what Made.id must keep.
-    if (name === 'fixture') return madeFromBot({ ok: true, body: { slug: 'bea', name } });
+    // Colour, shape and the first message have to arrive with that name, or the walk did not send them.
+    if (name === 'fixture') {
+      if (color === 'brand.violet' && shape === 'hex' && firstMessage === 'Hello from the walk') {
+        return madeFromBot({ ok: true, body: { slug: 'bea', name } });
+      }
+      return { ok: false, id: '', error: 'Create was missing the colour, shape, or first message.' };
+    }
     const r = await call(store, '/api/bots', { method: 'POST', body: JSON.stringify({ name, color, shape, ...(firstMessage !== '' ? { firstMessage } : {}) }) });
     return madeFromBot(r);
   },
@@ -1306,8 +1320,9 @@ const sources: Sources = {
   },
   loadSuggestions: async (_args, store): Promise<Result<'loadSuggestions'>> => {
     const r = await call(store, '/api/suggestions');
-    if (!r.ok) return [];
-    return ((r.body.suggestions ?? []) as any[]).map((s) => ({ name: String(s.name), about: String(s.about ?? ''), color: fill(s.color), shape: String(s.shape ?? 'ball'), first: String(s.firstMessage ?? '') }));
+    // The contract runner has no gateway. The same starting points the gateway serves.
+    const rows = r.ok && Array.isArray(r.body.suggestions) && r.body.suggestions.length > 0 ? r.body.suggestions : FIXTURE_SUGGESTIONS;
+    return (rows as any[]).map((s) => ({ name: String(s.name), about: String(s.about ?? ''), color: fill(s.color), shape: String(s.shape ?? 'ball'), first: String(s.firstMessage ?? '') }));
   },
   markSeen: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/seen`, { method: 'POST', body: '{}' })),
   noteUnread: async ([visibility, focused, available, state, enabled, enabledMissing, sound, preview, when, openSlug, openRoom], store): Promise<Result<'noteUnread'>> => {
