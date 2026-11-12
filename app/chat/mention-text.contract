@@ -1,0 +1,96 @@
+use Bubble from "../ui/controls.contract"
+use Avatar from "../face.contract"
+use faceColor from "../ui/fns.contract"
+use MentionHit from "../ui/shapes.contract"
+use MentionMark, parseMentionSpans from "../mentions/rules.contract"
+
+// One slice of a line: plain text, or a chip. Display only. A chip does not navigate.
+shape MentionRun
+  key: string
+  kind: string
+  text: string
+  slug: string
+  name: string
+  color: string
+  shape: string
+
+fn lineStart(text: string, n: number): number = n <= 0 ? 0 : text.split("\n").slice(0, n).join("\n").length + 1
+
+// One visual line. `key` is the line's start in the message, which stays with that line.
+shape MentionLine
+  key: string
+  text: string
+  start: number
+  n: number
+
+fn lineOf(text: string, n: number): MentionLine = match text.split("\n").at(n) { case some(line) => MentionLine(key=`${lineStart(text, n)}`, text=line, start=lineStart(text, n), n=n), case none => MentionLine(key=`x-${n}`, text="", start=0, n=n) }
+
+fn linesOf(text: string): MentionLine[] = range(text.split("\n").length).map(n => lineOf(text, n))
+
+fn spansOnLine(marks: MentionMark[], start: number, len: number): MentionMark[] = marks.filter(m => m.start >= start and m.start < start + len)
+
+fn cutStart(spans: MentionMark[], i: number, lineStartAt: number): number = i <= 0 ? 0 : match spans.at(i - 1) { case some(s) => s.end - lineStartAt, case none => 0 }
+
+fn cutEnd(spans: MentionMark[], i: number, lineStartAt: number): number = match spans.at(i) { case some(s) => s.start - lineStartAt, case none => 0 }
+
+fn beforeSpan(line: string, spans: MentionMark[], i: number, lineStartAt: number): string = line.slice(cutStart(spans, i, lineStartAt), cutEnd(spans, i, lineStartAt))
+
+fn afterSpans(line: string, spans: MentionMark[], lineStartAt: number): string = spans.length == 0 ? line : match spans.at(spans.length - 1) { case some(s) => line.slice(s.end - lineStartAt), case none => "" }
+
+fn spaced(words: string[], i: number): string = match words.at(i) { case some(word) => i + 1 == words.length ? word : `${word} `, case none => "" }
+
+fn pieces(text: string): string[] = text == "" ? [] : range(text.split(" ").length).map(i => spaced(text.split(" "), i)).filter(p => p != "")
+
+fn textPiece(prefix: string, parts: string[], i: number): MentionRun = match parts.at(i) { case some(p) => MentionRun(key=`${prefix}-${i}`, kind="text", text=p, slug="", name="", color="", shape=""), case none => MentionRun(key=`${prefix}-x`, kind="text", text="", slug="", name="", color="", shape="") }
+
+fn textRuns(prefix: string, text: string): MentionRun[] = range(pieces(text).length).map(i => textPiece(prefix, pieces(text), i)).filter(r => r.text != "")
+
+fn chipOf(n: number, i: number, spans: MentionMark[]): MentionRun = match spans.at(i) { case some(s) => MentionRun(key=`${n}-c-${s.start}`, kind="chip", text=s.name, slug=s.slug, name=s.name, color=s.color, shape=s.shape), case none => MentionRun(key=`${n}-c-x`, kind="chip", text="", slug="", name="", color="", shape="") }
+
+fn lineRuns(line: string, start: number, marks: MentionMark[], n: number): MentionRun[] = range(spansOnLine(marks, start, line.length).length).map(i => textRuns(`${n}-a-${i}`, beforeSpan(line, spansOnLine(marks, start, line.length), i, start)).concat([chipOf(n, i, spansOnLine(marks, start, line.length))])).flat().concat(textRuns(`${n}-z`, afterSpans(line, spansOnLine(marks, start, line.length), start)))
+
+// Mine and room person lines. A Bot reply stays markdown: `@slug` is already visible there.
+// On a Tide bubble the chip uses Night text on a white pill, so it stays readable in both schemes.
+component MentionText
+  props
+    text: string
+    hits: MentionHit[]
+    onMine: bool
+    testId: string
+    ring: string
+    tail: bool
+    opacity: number
+    maxWidth: string
+  derive marks = parseMentionSpans(text, hits)
+  derive ink = onMine ? "ink.dark" : "-exact-label"
+  derive chipFill = onMine ? "ink.light" : "surface.card"
+  view
+    if marks.length == 0
+      text text class=Bubble testId=testId box-shadow=ring opacity=opacity max-width=(maxWidth == "" ? "none" : maxWidth)
+        background-color=(onMine ? "brand.default" : "surface.bubble")
+        color=ink
+        border-top-left-radius="radius.lg"
+        border-top-right-radius="radius.lg"
+        border-bottom-left-radius="radius.lg"
+        border-bottom-right-radius=(tail ? "radius.sm" : "radius.lg")
+    else
+      column class=Bubble testId=testId box-shadow=ring opacity=opacity max-width=(maxWidth == "" ? "100%" : maxWidth) gap=0 min-width=0
+        background-color=(onMine ? "brand.default" : "surface.bubble")
+        color=ink
+        border-top-left-radius="radius.lg"
+        border-top-right-radius="radius.lg"
+        border-bottom-left-radius="radius.lg"
+        border-bottom-right-radius=(tail ? "radius.sm" : "radius.lg")
+        for line in linesOf(text) key=line.key
+          row flex-wrap="wrap" align-items="center" max-width="100%" min-width=0
+            if lineRuns(line.text, line.start, marks, line.n).length == 0
+              text "\u00a0" white-space="pre" color=ink
+            else
+              for run in lineRuns(line.text, line.start, marks, line.n) key=run.key
+                if run.kind == "chip"
+                  row align-items="center" gap="space.xs" flex-shrink=0 padding=(run.shape != "" ? "1px 8px 1px 2px" : "1px 8px") border-radius="radius.full" background-color=chipFill color=ink border=(onMine ? "none" : "1px solid surface.line") aria-label=t("chat.mentionChip", name=run.name) testId=`mention-chip-${run.slug}`
+                    if run.shape != ""
+                      Avatar(shape=run.shape, color=faceColor(run.color), state="idle", size=16, still=true, presence="")
+                    text run.name font="-exact-footnote" font-weight=600 white-space="nowrap" color=ink
+                else
+                  text run.text white-space="pre-wrap" overflow-wrap="break-word" color=ink

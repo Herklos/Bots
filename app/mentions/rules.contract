@@ -61,3 +61,33 @@ fn activeMention(text: string, cursor: number, hits: MentionHit[]): option<Menti
 fn collapsedSuffix(suffix: string): string = suffix.startsWith(" ") ? suffix.slice(1) : suffix
 
 fn withMention(draft: string, cursor: number, slug: string): MentionWrite = match mentionQueryAt(draft, clampCursor(draft, cursor)) { case some(span) => MentionWrite(text=`${draft.slice(0, span.start)}@${slug} ${collapsedSuffix(draft.slice(clampCursor(draft, cursor)))}`, cursor=span.start + slug.length + 2), case none => MentionWrite(text=draft, cursor=clampCursor(draft, cursor)) }
+
+// One `@slug` drawn in a bubble. `end` is the index after the token.
+shape MentionMark
+  start: number
+  end: number
+  slug: string
+  kind: string
+  name: string
+  color: string
+  shape: string
+
+fn compactName(name: string): string = range(name.length).map(i => name.slice(i, i + 1).toLowerCase()).filter(c => "abcdefghijklmnopqrstuvwxyz0123456789".includes(c)).join("")
+
+fn tokenChar(c: string): bool = c != "" and "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_".includes(c)
+
+fn tokenLen(text: string, at: number): number = match range(max(0, text.length - at)).filter(i => not tokenChar(text.slice(at + i, at + i + 1))).at(0) { case some(i) => i, case none => max(0, text.length - at) }
+
+fn tokenAt(text: string, at: number): string = text.slice(at + 1, at + 1 + tokenLen(text, at + 1)).toLowerCase()
+
+fn markKind(h: MentionHit): string = h.shape == "" and h.slug == "everyone" ? "everyone" : h.shape == "" and h.slug == "all" ? "all" : "bot"
+
+// A real Bot wins over the everyone and all broadcasts when the token is the same. The whole token must match, so a shorter name does not take a longer one.
+fn rankedHits(hits: MentionHit[], token: string): MentionHit[] = token == "" ? [] : hits.filter(h => h.slug.toLowerCase() == token and h.shape != "").concat(hits.filter(h => h.slug.toLowerCase() == token and h.shape == "")).concat(hits.filter(h => h.slug.toLowerCase() != token and compactName(h.name) == token))
+
+fn blankMark(): MentionMark = MentionMark(start=-1, end=-1, slug="", kind="", name="", color="", shape="")
+
+fn markAt(text: string, hits: MentionHit[], at: number): MentionMark = match first(rankedHits(hits, tokenAt(text, at))) { case some(h) => MentionMark(start=at, end=at + 1 + tokenLen(text, at + 1), slug=h.slug, kind=markKind(h), name=h.name, color=h.color, shape=h.shape), case none => blankMark() }
+
+// Longest slug or compact name, skipping fenced and inline code. Kind is bot, everyone, or all.
+fn parseMentionSpans(text: string, hits: MentionHit[]): MentionMark[] = range(text.length).filter(i => text.slice(i, i + 1) == "@" and isMentionBoundary(text, i) and not insideCode(text, i)).map(at => markAt(text, hits, at)).filter(m => m.start >= 0)

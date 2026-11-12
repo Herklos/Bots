@@ -27,6 +27,7 @@
   "chat.linkDraft": "Brouillon depuis un lien",
   "chat.linkLocal": "Copié. Ce lien ne fonctionne que sur cet appareil.",
   "chat.loading": "Chargement de la conversation…",
+  "chat.mentionChip": "Mention de {name}",
   "chat.mentions": "Mentionner un Bot",
   "chat.message": "Message",
   "chat.messageActions": "Actions du message",

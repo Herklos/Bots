@@ -1,7 +1,9 @@
 use shapeOf, colorOf, faceColor, eventVerb from "../ui/fns.contract"
+use botMentions, roomMentions from "../ui/root-types.contract"
 use Bot, Row, Pin, RoomMember from "../ui/shapes.contract"
-use ChoiceButton, TextControl, Bubble, Field from "../ui/controls.contract"
+use ChoiceButton, TextControl, Field from "../ui/controls.contract"
 use ChatMessage from "./message.contract"
+use MentionText from "./mention-text.contract"
 use Face, Avatar from "../face.contract"
 use WorkingDots from "../bot/first.contract"
 // The scrolling transcript. The Bot chat and a group both render their rows here.
@@ -13,6 +15,7 @@ component ChatLog
     logId: string
     logTestId: string
     bots: Bot[]
+    members: RoomMember[]
     slug: string
     pins: Pin[]
     workers: RoomMember[]
@@ -35,6 +38,7 @@ component ChatLog
     editAnswer: action
     retry: action
     scrolled: action
+  derive mentions = inRoom ? roomMentions(bots, members, t("group.everyone")) : botMentions(bots)
   view
     column testId="chat-log" flex=1 min-height=0 width="100%"
       list id=logId testId=logTestId width="100%" box-sizing="border-box" flex=1 min-height=0 appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true scroll=scrolled padding=(inRoom ? "space.sm max(0px, calc((100% - 46rem) / 2)) space.xl" : "space.lg max(0px, calc((100% - 46rem) / 2)) space.xl")
@@ -55,14 +59,10 @@ component ChatLog
                   column gap="2px" max-width="82%" align-items=(m.mine ? "flex-end" : "flex-start")
                     if not m.mine
                       text m.botName font="-exact-footnote" font-weight=600 color="ink.muted" testId=`room-from-${m.id}`
-                    ChatMessage(row=m, canHover=hover, picking=(reactFor == m.id), menuOpen=(messageMenu == m.id), pinned=false, nearEnd=(i + 4 >= rows.length), copied=(copiedMenu == m.id), speaker=colorOf(bots, m.botSlug), inRoom=true, textTestId=`room-text-${m.id}`, promptBot=(m.mine ? "" : m.botSlug), react=react, openPicker=openPicker, reply=reply, pin=pin, openMenu=openMenu, closeMenu=closeMenu, noteCopied=noteCopied, copyPromptLink=copyPromptLink)
+                    ChatMessage(row=m, canHover=hover, picking=(reactFor == m.id), menuOpen=(messageMenu == m.id), pinned=false, nearEnd=(i + 4 >= rows.length), copied=(copiedMenu == m.id), speaker=colorOf(bots, m.botSlug), inRoom=true, textTestId=`room-text-${m.id}`, promptBot=(m.mine ? "" : m.botSlug), mentions=mentions, react=react, openPicker=openPicker, reply=reply, pin=pin, openMenu=openMenu, closeMenu=closeMenu, noteCopied=noteCopied, copyPromptLink=copyPromptLink)
               else
                 row justify-content="flex-end" padding="1px 0" testId=`room-msg-${m.id}`
-                  text m.text class=Bubble opacity=0.6 testId=`room-text-${m.id}`
-                    background-color="brand.default"
-                    color="ink.dark"
-                    border-radius="radius.lg"
-                    border-bottom-right-radius="radius.sm"
+                  MentionText(text=m.text, hits=mentions, onMine=true, testId=`room-text-${m.id}`, ring="none", tail=true, opacity=0.6, maxWidth="")
             else if m.kind == "day"
               text m.text text-align="center" font="-exact-footnote" color="ink.faint" padding="space.lg space.lg space.xs" testId=`day-${m.id}`
             else if m.kind == "event"
@@ -77,18 +77,18 @@ component ChatLog
                   if m.resetAt != ""
                     text t("event.resetsAt", time=m.resetAt) font="-exact-footnote" color="-exact-label" testId=`event-reset-${m.id}`
             else if m.kind == "message"
-              ChatMessage(row=m, canHover=hover, picking=(reactFor == m.id), menuOpen=(messageMenu == m.id), pinned=(pins.filter(p => p.id == m.id).length > 0), nearEnd=(i + 4 >= rows.length), copied=(copiedMenu == m.id), speaker=(m.botColor != "" ? m.botColor : colorOf(bots, slug)), inRoom=false, textTestId=`message-${m.id}`, promptBot=slug, react=react, openPicker=openPicker, reply=reply, pin=pin, openMenu=openMenu, closeMenu=closeMenu, noteCopied=noteCopied, copyPromptLink=copyPromptLink)
+              ChatMessage(row=m, canHover=hover, picking=(reactFor == m.id), menuOpen=(messageMenu == m.id), pinned=(pins.filter(p => p.id == m.id).length > 0), nearEnd=(i + 4 >= rows.length), copied=(copiedMenu == m.id), speaker=(m.botColor != "" ? m.botColor : colorOf(bots, slug)), inRoom=false, textTestId=`message-${m.id}`, promptBot=slug, mentions=mentions, react=react, openPicker=openPicker, reply=reply, pin=pin, openMenu=openMenu, closeMenu=closeMenu, noteCopied=noteCopied, copyPromptLink=copyPromptLink)
             else if m.kind == "pending"
               row justify-content="flex-end" padding="2px space.lg" testId=(m.variant == "failed" ? "not-sent" : "sending")
                 if m.variant == "failed"
                   column align-items="flex-end" gap="space.xs" max-width="82%"
-                    text m.text class=Bubble background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" opacity=0.7
+                    MentionText(text=m.text, hits=mentions, onMine=true, testId="", ring="none", tail=true, opacity=0.7, maxWidth="")
                     row gap="space.sm" align-items="center"
                       text t("chat.notSent") font="-exact-footnote" color="-exact-system-red"
                       button class=TextControl appearance="none" press=retry testId="retry-send"
                         text t("common.retry")
                 else
-                  text m.text class=Bubble opacity=0.6 background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" max-width="82%"
+                  MentionText(text=m.text, hits=mentions, onMine=true, testId="", ring="none", tail=true, opacity=0.6, maxWidth="82%")
             else if m.kind == "request"
               row padding="space.sm space.lg"
                 column gap="space.sm" padding="space.md space.lg" border-radius="radius.lg" background-color="surface.bubble" flex=1 max-width="32rem" testId=`request-${m.id}`
