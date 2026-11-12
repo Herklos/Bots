@@ -32,6 +32,8 @@ mod computer_api;
 mod library_api;
 #[cfg(test)]
 mod library_file_tests;
+#[cfg(test)]
+mod provider_switch_tests;
 mod rooms_api;
 mod router;
 mod routines_api;

@@ -1,4 +1,5 @@
 use super::*;
+use crate::bots::provider_switch::{provider_step, running_model, ProviderStep, CONFIRM_SWITCH};
 
 pub(crate) async fn list_bots(State(s): S) -> ApiResult<Response> {
     let mut bots = crate::bots::roster::list(&s, s.bots.list().await?).await;
@@ -148,15 +149,14 @@ pub(crate) async fn model_put(
     require_json(&h)?;
     let bot = require_bot(&s, &slug).await?;
     let body = parse(&body)?;
+    let settings = s.settings().await;
     let selection = checked_selection(&s, &body, &bot["model"]).await?;
     let mut patch = json!({ "model": selection });
     if body.get("runtimeMode").is_some() {
         let mode = body["runtimeMode"].as_str().unwrap_or("");
         let Some(clamped) = crate::bots::runtime_mode::clamp_label(
             mode,
-            crate::bots::runtime_mode::RuntimeMode::cap(
-                s.settings().await["maxRuntimeMode"].as_str(),
-            ),
+            crate::bots::runtime_mode::RuntimeMode::cap(settings["maxRuntimeMode"].as_str()),
         ) else {
             return Err(ApiError::bad_request(
                 "runtimeMode must be approval-required, auto, or full-access",
@@ -164,15 +164,24 @@ pub(crate) async fn model_put(
         };
         patch["runtimeMode"] = json!(clamped);
     }
-    s.bots.save(&slug, &patch, false).await?;
-    if s.harness.connected().await {
-        if let Ok(provisioning) = s.harness.provisioning() {
-            crate::bots::provisioner::push_model(provisioning, &bot, &selection)
-                .await
-                .map_err(|e| ApiError::new(502, format!("T3 didn't take the model: {e}")))?;
+    let running = running_model(&bot["model"], &settings["defaultModel"]);
+    let next = selection["instanceId"].as_str().unwrap_or("");
+    match provider_step(&running, next, &body) {
+        ProviderStep::AwaitConfirm => Err(ApiError::new(409, CONFIRM_SWITCH)),
+        ProviderStep::Apply => {
+            s.bots.save(&slug, &patch, false).await?;
+            if s.harness.connected().await {
+                if let Ok(provisioning) = s.harness.provisioning() {
+                    crate::bots::provisioner::push_model(provisioning, &bot, &selection)
+                        .await
+                        .map_err(|e| {
+                            ApiError::new(502, format!("T3 didn't take the model: {e}"))
+                        })?;
+                }
+            }
+            Ok(Json(json!({ "ok": true })))
         }
     }
-    Ok(Json(json!({ "ok": true })))
 }
 
 pub(crate) async fn lineage_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
