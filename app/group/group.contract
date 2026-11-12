@@ -24,6 +24,26 @@ component Faces
         column z-index=3 flex-shrink=0 margin-left=tuck border="2px solid surface.canvas" border-radius="radius.full" background-color="surface.canvas"
           Avatar(shape=bitShape(faces, 2), color=faceColor(bitColor(faces, 2)), state=bitState(faces, 2), size=size, still=(bitState(faces, 2) != "working"), presence=(bitState(faces, 2) == "working" ? "online" : ""))
 
+// The selected members, when the policy is chief. The chosen row is raised, with a filled radio dot.
+component ChiefList
+  props
+    bots: Bot[]
+    slugs: string[]
+    selected: string
+    pick: action
+  view
+    column gap="space.xs" width="100%" min-width=0
+      text t("group.chief") class=SectionLabel
+      column role="radiogroup" aria-label=t("group.chief") gap="space.xs" width="100%" min-width=0
+        for slug in slugs key=slug
+          for b in bots.filter(x => x.slug == slug) key=b.slug
+            button class=ChoiceRow appearance="none" press=pick(b.slug) role="radio" aria-checked=(selected == b.slug) aria-label=b.name testId=`group-chief-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border="1px solid surface.line" border-radius="radius.md" background-color=(selected == b.slug ? "surface.raised" : "surface.card")
+              Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=32, still=true, presence="")
+              text b.name font-weight=500 flex=1 min-width=0 text-align="left" overflow-wrap="anywhere"
+              column width=22 height=22 flex-shrink=0 align-items="center" justify-content="center" border-radius="radius.full" background-color=(selected == b.slug ? "AccentColor" : "transparent") border=(selected == b.slug ? "none" : "2px solid surface.line")
+                if selected == b.slug
+                  column width=8 height=8 border-radius="radius.full" background-color="ink.dark"
+
 // A Vault login's sheet. The password field starts empty: a saved password is shown only after Reveal.
 component GroupPanel
   props
@@ -59,6 +79,8 @@ component GroupPanel
   action beginAdd
     memberQuery = ""
     openAdd()
+  action chooseChief(m: string)
+    patch("chief", m)
   view
     column id="group-panel" display=(shown ? "flex" : "none") position="absolute" top=(wide ? 0 : 72) right=0 bottom=0 width=(wide ? "20rem" : "100%") box-sizing="border-box" background-color="surface.canvas" border-left="1px solid surface.line" testId="group-panel"
       row align-items="center" gap="space.xs" padding="space.sm space.sm space.sm space.md" min-height=52 box-sizing="border-box"
@@ -107,16 +129,7 @@ component GroupPanel
                   button class=ChoiceRow appearance="none" press=patch("answerPolicy", policy) role="radio" aria-checked=(room.answerPolicy == policy) testId=`group-policy-${policy}` background-color=(room.answerPolicy == policy ? "surface.raised" : "transparent")
                     text (policy == "default" ? t("group.policyDefaultNamed", policy=(room.answerPolicyEffective == "everyone" ? t("group.policyEveryone") : room.answerPolicyEffective == "chief" ? t("group.policyChief") : t("group.policyLast"))) : policy == "last" ? t("group.policyLast") : policy == "everyone" ? t("group.policyEveryone") : t("group.policyChief"))
             if room.answerPolicyEffective == "chief"
-              column gap="space.xs" width="100%" min-width=0
-                text t("group.chief") class=SectionLabel
-                column role="radiogroup" aria-label=t("group.chief") gap="space.xs" width="100%" min-width=0
-                  for m in room.members key=m.slug
-                    button class=ChoiceRow appearance="none" press=patch("chief", m.slug) role="radio" aria-checked=(chiefSlug == m.slug) aria-label=m.name testId=`group-chief-${m.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border="1px solid surface.line" border-radius="radius.md" background-color=(chiefSlug == m.slug ? "surface.raised" : "surface.card")
-                      Avatar(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state=m.state, size=32, still=(m.state != "working"), presence="")
-                      text m.name font-weight=500 flex=1 min-width=0 text-align="left" overflow-wrap="anywhere"
-                      column width=22 height=22 flex-shrink=0 align-items="center" justify-content="center" border-radius="radius.full" background-color=(chiefSlug == m.slug ? "AccentColor" : "transparent") border=(chiefSlug == m.slug ? "none" : "2px solid surface.line")
-                        if chiefSlug == m.slug
-                          column width=8 height=8 border-radius="radius.full" background-color="ink.dark"
+              ChiefList(bots=bots, slugs=room.members.map(m => m.slug), selected=chiefSlug, pick=chooseChief)
             column gap="space.sm"
               row align-items="center" gap="space.sm"
                 text t("common.bots") class=SectionLabel flex=1

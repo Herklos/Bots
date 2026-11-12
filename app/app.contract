@@ -13,7 +13,7 @@ use getUserMedia, stopTrack, MediaStream, MediaStreamTrack from "@exact/media-ca
 use startMediaRecorder, stopMediaRecorder, isTypeSupported, MediaRecorderInfo, RecordedMedia, TypeSupport from "@exact/recording"
 use requestNotificationPermission, NotificationStatus from "@exact/notifications"
 use InboxRow from "./inbox/inbox.contract"
-use Faces, GroupPanel from "./group/group.contract"
+use Faces, GroupPanel, ChiefList from "./group/group.contract"
 use LoginSheet, ModelPicker, UsageView from "./settings/settings.contract"
 use pickerColours, shapeOf, colorOf, faceColor, showUnread, memberFaces, memberCalled, quietPolicyHint from "./ui/fns.contract"
 use PanelRow, ChoiceRow from "./ui/panel.contract"
@@ -25,7 +25,6 @@ use ChatLog from "./chat/log.contract"
 use MentionMenu from "./chat/mention.contract"
 use BotPanel from "./bot/panel.contract"
 use FirstBot from "./bot/first.contract"
-
 routes nav
   inbox "/"
     chat "/bot/:slug"
@@ -36,7 +35,6 @@ routes nav
       vault "/vault"
         vaultAdd "/vault/new"
         vaultEdit "/vault/:id"
-
 component Bots
   // Kept while this send's turn is open, so a poll that says working is false does not drop the row.
   state holdWork = false
@@ -91,13 +89,11 @@ component Bots
   derive onGroup = top(nav).name == "group"
   derive workingHere = onGroup ? (paintedWorkers.length > 0 ? "working" : "") : (onBot and chat.working ? "working" : "")
   derive onLibrary = top(nav).name == "chat" and panelOpen and panelTab == "library"
-
   // The inbox list refreshes on the inbox, and a chat refreshes on that chat.
   // A wide window keeps the list beside the open conversation, so the list still refreshes.
   // A hidden page waits about ten seconds. Sending, answering, or stopping skips the poll.
   task probeAnytype when networkGate == "1" and storage.keySet and not anytypeProbed and not pending(anytypeChecked)
     after(1, doAnytypeCheck)
-
   action pull
     refresh bots
     if top(nav).name == "inbox" or wide
@@ -130,7 +126,6 @@ component Bots
     groupStep = s
   action togglePlus
     plusOpen = not plusOpen
-
   action applyScheme
     setScheme(prefs.theme)
   action doEditSpace(v: string)
@@ -851,17 +846,7 @@ component Bots
                           text t("group.policyChief") font-weight=600
                           text t("group.policyChiefAbout") color="ink.muted" font="-exact-footnote"
                       if groupPolicy == "chief"
-                        column gap="space.xs" width="100%" min-width=0
-                          text t("group.chief") class=SectionLabel
-                          column role="radiogroup" aria-label=t("group.chief") gap="space.xs" width="100%" min-width=0
-                            for slug in groupMembers key=slug
-                              for b in pickableBots.filter(x => x.slug == slug) key=b.slug
-                                button class=ChoiceRow appearance="none" press=pickGroupChief(b.slug) role="radio" aria-checked=(groupChief == b.slug) aria-label=b.name testId=`group-chief-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border="1px solid surface.line" border-radius="radius.md" background-color=(groupChief == b.slug ? "surface.raised" : "surface.card")
-                                  Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=32, still=true, presence="")
-                                  text b.name font-weight=500 flex=1 min-width=0 text-align="left" overflow-wrap="anywhere"
-                                  column width=22 height=22 flex-shrink=0 align-items="center" justify-content="center" border-radius="radius.full" background-color=(groupChief == b.slug ? "AccentColor" : "transparent") border=(groupChief == b.slug ? "none" : "2px solid surface.line")
-                                    if groupChief == b.slug
-                                      column width=8 height=8 border-radius="radius.full" background-color="ink.dark"
+                        ChiefList(bots=pickableBots, slugs=groupMembers, selected=groupChief, pick=pickGroupChief)
                   else if groupStep == "kickoff"
                     column gap="space.sm"
                       text t("group.askKickoff") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-group-kickoff"

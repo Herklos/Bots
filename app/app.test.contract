@@ -136,7 +136,6 @@ test "a wide window does not invent a panel for a missing Bot"
   expect tree missing "open-library"
   expect tree missing "open-projects"
   expect tree has "panel-toggle"
-
 test "a room shows who is working and who is still getting set up"
   at "/group/fixture"
   clock data
@@ -150,7 +149,6 @@ test "a room shows who is working and who is still getting set up"
   expect tree missing "room-working-bea"
   expect tree has "room-msg-r1"
   expect tree has "room-msg-r2"
-
 test "a room shows one working mark when several members are working"
   at "/group/fixture-busy"
   clock data
@@ -159,7 +157,6 @@ test "a room shows one working mark when several members are working"
   expect tree has "room-working-ada"
   expect tree has "room-working-bea"
   expect tree has "room-msg-r1"
-
 test "a tool line is a chip with the translated verb, not a message bubble"
   at "/bot/fixture"
   clock data
@@ -170,7 +167,6 @@ test "a tool line is a chip with the translated verb, not a message bubble"
   expect tree missing "message-e1"
   expect text "event-verb-e2" == "Messaged"
   expect text "event-bot-e2" == "Inbox"
-
 test "an unchanged open chat keeps its transcript"
   at "/bot/quiet"
   clock data
@@ -178,14 +174,12 @@ test "an unchanged open chat keeps its transcript"
   clock +1600
   clock data
   expect text "message-q1" == "Still here"
-
 test "a message shows a reaction, a quote, and a pin that is not in view"
   at "/bot/fixture"
   clock data
   expect text "react-m2" == "🔥"
   expect text "quote-m2" == "Hello"
   expect text "pin-missing" == "This message is not in view."
-
 test "reply quotes a line and pin toggles a row"
   at "/bot/fixture"
   clock data
@@ -206,7 +200,6 @@ test "reply quotes a line and pin toggles a row"
   clock data
   expect tree missing "pin-m2"
   expect text "pin-missing" == "This message is not in view."
-
 test "a secondary click on a Bot row offers pin and hide"
   size 1200x800
   at "/bot/fixture"
@@ -218,7 +211,6 @@ test "a secondary click on a Bot row offers pin and hide"
   expect tree has "menu-hide-fixture"
   expect text "menu-pin-fixture" == "Pin to the top"
   expect text "menu-hide-fixture" == "Hide from inbox"
-
 test "a secondary click on a Bot message offers reply and pin"
   at "/bot/fixture"
   clock data
@@ -232,7 +224,6 @@ test "a secondary click on a Bot message offers reply and pin"
   expect text "menu-pin-m2" == "Pin"
   expect text "menu-reply-m2" == "Reply"
   expect text "menu-copy-m2" == "Copy"
-
 test "the message menu copies, unpins, and closes from the strip, Esc, outside, and arrows"
   at "/bot/fixture"
   clock data
@@ -262,7 +253,6 @@ test "the message menu copies, unpins, and closes from the strip, Esc, outside, 
   clock +700
   clock settle
   expect tree missing "message-menu"
-
 test "a group message uses the same menu"
   at "/group/fixture"
   clock data
@@ -277,7 +267,6 @@ test "a group message uses the same menu"
   expect text "room-from-r2" == "Ada"
   tap "message-menu-scrim"
   expect tree missing "message-menu"
-
 test "the open chat is clear and a hidden Bot keeps its mark"
   size 1440x900
   at "/bot/fixture"
@@ -285,14 +274,12 @@ test "the open chat is clear and a hidden Bot keeps its mark"
   expect tree missing "unread-fixture"
   tap "hidden-toggle"
   expect tree has "unread-bea"
-
 test "a pipe table is a grid"
   at "/bot/fixture"
   clock data
   expect tree has "message-m4-table-0"
   expect tree has "message-m2"
   expect tree missing "message-m4"
-
 test "search filters the loaded conversation"
   at "/bot/fixture"
   clock data
@@ -302,7 +289,6 @@ test "search filters the loaded conversation"
   expect tree missing "message-m1"
   expect tree has "message-m2"
   expect text "search-note" == "Search covers the loaded conversation."
-
 test "a local child opens and a remote child stays on the other machine"
   size 1440x900
   at "/bot/fixture"
@@ -321,7 +307,6 @@ test "a local child opens and a remote child stays on the other machine"
   expect tree missing "child-readonly"
   type "composer" "On the child"
   expect tree has "send"
-
 test "a read-only child keeps the back strip"
   size 1440x900
   at "/bot/fixture"
@@ -339,13 +324,11 @@ test "a read-only child keeps the back strip"
   clock data
   expect tree missing "child-strip"
   expect tree has "transcript"
-
 test "a token line shows only when the turn shares an id"
   at "/bot/fixture"
   clock data
   expect text "tokens-m2" == "12 in, 3 out, 4 read from cache, 1 written to cache."
   expect tree missing "tokens-m3"
-
 test "the composer holds a voice clip and the sent clip is that attachment"
   at "/bot/fixture"
   clock data
@@ -353,7 +336,6 @@ test "the composer holds a voice clip and the sent clip is that attachment"
   tap "voice-record"
   clock settle
   expect text "voice-hold" == "voice.m4a"
-
 test "rapid composer edits save once, and a pause saves the latest text"
   size 1440x900
   at "/bot/fixture"
@@ -371,7 +353,6 @@ test "rapid composer edits save once, and a pause saves the latest text"
   clock data
   expect state savedRev == 3
   expect text "composer" == "abc"
-
 test "a draft stays with its Bot and a child keeps its own"
   size 1440x900
   at "/bot/fixture"
@@ -416,7 +397,6 @@ test "a draft stays with its Bot and a child keeps its own"
   tap "open-local-1"
   clock data
   expect text "composer" == "Child draft"
-
 test "creating a Bot opens that chat"
   size 340x740
   tap "new-bot"
@@ -440,7 +420,6 @@ test "creating a Bot opens that chat"
   clock settle
   expect tree missing "new-name"
   expect text "chat-title" == "Bea"
-
 test "creating a Bot works on a narrow screen"
   size 340x740
   tap "new-bot"
@@ -460,7 +439,6 @@ test "creating a Bot works on a narrow screen"
   clock settle
   expect disabled "create-next"
   expect text "new-name" == ""
-
 test "the new Bot walk keeps each step to its own field"
   size 340x740
   tap "new-bot"
@@ -517,7 +495,6 @@ test "the new Bot walk keeps each step to its own field"
   type "new-name" ""
   expect disabled "create-next"
   expect tree missing "create"
-
 test "the parent sheet lists its subagents without a new subagent button"
   size 340x740
   at "/bot/fixture"
@@ -536,7 +513,6 @@ test "the parent sheet lists its subagents without a new subagent button"
   expect tree has "subagent-inherit"
   expect tree has "subagent-save"
   expect tree has "delete-subagent"
-
 test "the reaction picker opens beside a Bot message"
   // The smile stays mounted. Opacity and pointer-events hide it until chrome shows, same as reply and pin.
   at "/bot/fixture"
@@ -546,7 +522,6 @@ test "the reaction picker opens beside a Bot message"
   tap "add-react-m3"
   expect tree has "react-picker"
   expect tree has "pick-🎉"
-
 test "the plus button offers a Bot or a group, and a group needs a name and two Bots"
   size 1200x800
   at "/bot/fixture"
@@ -580,7 +555,6 @@ test "the plus button offers a Bot or a group, and a group needs a name and two 
   expect text "room-title" == "Crew"
   expect tree has "room-composer"
   expect tree missing "room-working"
-
 test "groups sit in the same list as Bots, with no section of their own"
   size 1200x800
   at "/bot/fixture"
@@ -590,7 +564,6 @@ test "groups sit in the same list as Bots, with no section of their own"
   expect text "group-title-fixture" == "Design"
   expect tree missing "groups-label"
   expect tree missing "new-group"
-
 test "a group shows who said what and its mention chips"
   size 1200x800
   at "/group/fixture"
@@ -606,7 +579,6 @@ test "a group shows who said what and its mention chips"
   tap "mention-ada"
   expect text "room-hint" == "Only the Bots you mention are woken."
   expect enabled "room-send"
-
 test "typing @ in a group offers bot slug completions"
   size 1200x800
   at "/group/fixture"
@@ -625,7 +597,6 @@ test "typing @ in a group offers bot slug completions"
   expect tree missing "mention-menu"
   expect text "room-hint" == "Only the Bots you mention are woken."
   expect enabled "room-send"
-
 test "typing @ in a bot chat offers bot slug completions"
   size 1200x800
   at "/bot/fixture"
@@ -635,7 +606,6 @@ test "typing @ in a bot chat offers bot slug completions"
   expect tree has "mention-opt-fixture"
   tap "mention-opt-fixture"
   expect tree missing "mention-menu"
-
 test "the everyone chip inserts that mention and the hint says it wakes the group"
   size 1200x800
   at "/group/fixture"
@@ -645,7 +615,6 @@ test "the everyone chip inserts that mention and the hint says it wakes the grou
   expect text "room-composer" == "@everyone "
   expect text "room-hint" == "@everyone wakes every Bot in the group."
   expect enabled "room-send"
-
 test "the mention menu offers everyone"
   size 1200x800
   at "/group/fixture"
@@ -656,7 +625,6 @@ test "the mention menu offers everyone"
   tap "mention-opt-everyone"
   expect tree missing "mention-menu"
   expect text "room-hint" == "@everyone wakes every Bot in the group."
-
 test "a group has a details panel like a Bot, and deleting lives inside it"
   size 1200x800
   at "/group/fixture"
@@ -681,7 +649,6 @@ test "a group has a details panel like a Bot, and deleting lives inside it"
   tap "group-panel-back"
   expect tree missing "group-edit-name"
   tap "group-panel-close"
-
 test "the library says when it cannot open, in French"
   locale "fr"
   size 340x740
@@ -692,7 +659,6 @@ test "the library says when it cannot open, in French"
   clock data
   expect tree has "library-error"
   expect text "library-error" == "Impossible d’ouvrir cette bibliothèque. Vérifiez qu’hbots tourne, puis réessayez."
-
 test "one server tab shows its title once"
   size 340x740
   at "/bot/page"
@@ -704,7 +670,6 @@ test "one server tab shows its title once"
   expect tree missing "tab-only"
   expect tree has "computer-take"
   expect tree missing "computer-frame"
-
 test "tapping the page picture covers the screen until close"
   size 340x740
   at "/bot/frame"
@@ -726,7 +691,6 @@ test "tapping the page picture covers the screen until close"
   expect tree missing "computer-overlay"
   expect tree has "computer-frame"
   expect tree has "computer-take"
-
 test "taking control sends the picture's keys and does not open the overlay from a click"
   size 340x740
   at "/bot/frame"
@@ -758,7 +722,6 @@ test "taking control sends the picture's keys and does not open the overlay from
   expect tree missing "computer-enlarge"
   tap "computer-frame"
   expect tree has "computer-overlay"
-
 test "two server tabs are listed and the second can be chosen"
   size 340x740
   at "/bot/tabs"
@@ -772,7 +735,6 @@ test "two server tabs are listed and the second can be chosen"
   tap "tab-two"
   clock data
   expect text "computer-tab-title" == "Two"
-
 test "a subagent stays out of the inbox, Hidden, search, and group pickers"
   size 1200x800
   at "/bot/fixture"
@@ -808,7 +770,6 @@ test "a subagent stays out of the inbox, Hidden, search, and group pickers"
   expect tree missing "group-add-ada-junior-1"
   expect tree has "group-add-fixture"
   expect tree missing "group-add-bea"
-
 test "Settings shows the notification switch and the two timing choices"
   tap "Settings"
   clock data
@@ -817,7 +778,6 @@ test "Settings shows the notification switch and the two timing choices"
   expect tree has "notice-enabled"
   expect tree has "notice-when-any"
   expect tree has "notice-when-background"
-
 test "mute flips on a Bot edit page and a group menu"
   size 1200x800
   at "/bot/fixture"
@@ -837,7 +797,6 @@ test "mute flips on a Bot edit page and a group menu"
   clock data
   tap "group-fixture" contextmenu
   expect text "menu-mute-fixture" == "Unmute"
-
 test "the model page shows five effort levels and keeps the current one"
   size 340x740
   at "/bot/fixture"
@@ -856,7 +815,6 @@ test "the model page shows five effort levels and keeps the current one"
   clock data
   expect checked "model-sonnet"
   expect checked "effort-high"
-
 test "a sent line stays one row and the working mark stays while the turn is open"
   at "/bot/fixture"
   clock data
@@ -876,7 +834,6 @@ test "a sent line stays one row and the working mark stays while the turn is ope
   expect tree missing "working"
   expect tree has "message-turn-item:message:m-1"
   expect text "message-turn-item:message:m-1" == "Stay put"
-
 test "Access shows where Bots are stored"
   tap "Settings"
   clock data
@@ -897,7 +854,6 @@ test "Access shows where Bots are stored"
   expect text "storage-copy" == "Copy Bots here"
   expect tree missing "storage-key"
   expect tree missing "storage-restart"
-
 test "adding and removing a Bot on a group saves one member at a time"
   size 1200x800
   at "/group/fixture"
@@ -933,7 +889,6 @@ test "adding and removing a Bot on a group saves one member at a time"
   expect tree has "pick-bot-bea"
   expect tree missing "group-add-open"
   expect tree missing "group-roster-ada"
-
 test "the new Group walk keeps each step to its own field"
   size 340x740
   tap "new-bot"
@@ -1003,7 +958,6 @@ test "the new Group walk keeps each step to its own field"
   expect text "group-details-about" == "Stand up"
   expect tree has "group-member-fixture"
   expect tree has "group-member-bea"
-
 test "searching Bots to add appears only when more than six can be added"
   size 1200x800
   at "/group/fixture-crowd"
@@ -1021,7 +975,6 @@ test "searching Bots to add appears only when more than six can be added"
   expect tree has "group-add-seven"
   expect tree missing "group-add-one"
   expect tree missing "group-add-fixture"
-
 test "a wide window replaces a chat with the group"
   size 1440x900
   at "/bot/fixture"
@@ -1038,7 +991,6 @@ test "a wide window replaces a chat with the group"
   back
   expect tree missing "room-title"
   expect tree missing "chat-title"
-
 test "a wide window replaces a group with the chat"
   size 1440x900
   at "/group/fixture"
@@ -1055,7 +1007,6 @@ test "a wide window replaces a group with the chat"
   back
   expect tree missing "chat-title"
   expect tree missing "room-title"
-
 test "Settings saves who answers in a group"
   tap "Settings"
   clock data
@@ -1068,7 +1019,6 @@ test "Settings saves who answers in a group"
   clock data
   expect checked "group-answer-everyone"
   expect tree missing "group-answer-default"
-
 test "a group's edit page saves who answers"
   size 1200x800
   at "/group/fixture"
@@ -1082,7 +1032,6 @@ test "a group's edit page saves who answers"
   clock data
   expect checked "group-policy-chief"
   expect text "group-policy-chief" == "A chief"
-
 test "a mention names a Bot and leaves the group selected"
   size 1440x900
   at "/group/fixture"
@@ -1104,7 +1053,6 @@ test "a mention names a Bot and leaves the group selected"
   back
   expect tree missing "chat-title"
   expect tree missing "room-title"
-
 test "the Bot chat and a group both use ChatLog"
   at "/bot/fixture"
   clock data
@@ -1116,7 +1064,6 @@ test "the Bot chat and a group both use ChatLog"
   expect tree has "chat-log"
   expect tree has "room-log"
   expect tree has "room-text-r2"
-
 test "a chief group names the second Bot and sends that slug"
   size 340x740
   tap "new-bot"
@@ -1146,7 +1093,6 @@ test "a chief group names the second Bot and sends that slug"
   tap "group-edit"
   expect checked "group-chief-bea"
   expect text "group-chief-bea" == "Bea"
-
 test "the room hint follows each answer policy"
   size 340x740
   at "/group/fixture"

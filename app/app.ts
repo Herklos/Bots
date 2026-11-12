@@ -3,12 +3,12 @@ import { when, isGroupLeak, lineOf, stackFaces, initials } from './host/time.ts'
 import { REACH_GATEWAY, noteLocale, say, localize, call, read, fresh, botsBody, roomsBody, noticeHost, setNoticeHost, hostNotice, reply, sentFrom, systemChecked, setSystemChecked, madeFromBot } from './host/gateway.ts';
 import { NOT_IN_VIEW, roomMessage } from './host/markdown.ts';
 import { blankChat, PinRow, fixtureMade, setFixtureMade, fixtureMemberEdits, fixtureMemberRow, fixtureCrowdBots, fixtureSent, fixtureRoomSent, fixtureBotNotify, fixtureRoomNotify, fixtureRoomPolicy, fixtureRoomChief, fixtureGroupAnswer, setFixtureGroupAnswer, roomAnswer, roomChief, wantsNotice, FIXTURE_SUGGESTIONS, fixtureModelList, rememberFixtureModel, savedEffort, fixturePins, quietChatView, fixtureChat, explain } from './host/fixture.ts';
-import { prettyModel, nextLabel, emptyReport, usageReport } from './host/report.ts';
-import { frames, threads, chatKept, roomKept, forgetChat, forgetMeta, lastMessageId, threadMeta, blank, chatRows, storeUpload, draftMap, draftRows } from './host/session.ts';
-import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, shutNotice, postUnread } from './host/notices.ts';
 
 // A group on the machine default follows the Settings choice; fixtures use last speaker.
 const effectivePolicy = (policy: string): string => (policy === 'everyone' || policy === 'chief' ? policy : 'last');
+import { prettyModel, nextLabel, emptyReport, usageReport } from './host/report.ts';
+import { frames, threads, chatKept, roomKept, forgetChat, forgetMeta, lastMessageId, threadMeta, blank, chatRows, storeUpload, draftMap, draftRows } from './host/session.ts';
+import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, shutNotice, postUnread } from './host/notices.ts';
 
 // Where the hbots gateway (the `hbots` binary) listens. A data module can't read the page's address
 // (no `location`, and `fetch` refuses a relative URL), so the web build is made with this placeholder
@@ -356,10 +356,7 @@ const sources: Sources = {
       fixtureRoomPolicy.set(id, policy);
       return { ok: true, error: '' };
     }
-    if (fixtureRoom && field === 'chief') {
-      fixtureRoomChief.set(id, value.trim());
-      return { ok: true, error: '' };
-    }
+    if (fixtureRoom && field === 'chief') return (fixtureRoomChief.set(id, value.trim()), { ok: true, error: '' });
     const body = field === 'members'
       ? { members: value === '' ? [] : value.split('\n') }
       : field === 'notifications'
@@ -370,7 +367,6 @@ const sources: Sources = {
   createGroup: async ([title, description, color, shape, members, answerPolicy, chief], store): Promise<Result<'createGroup'>> => {
     const slugs = members === '' ? [] : members.split('\n').filter((s) => s !== '');
     const policy = answerPolicy.trim();
-    const chiefSlug = chief.trim();
     // The contract runner's Bots. A real room still goes to the gateway.
     // The answer policy has to arrive with the name: create already stores one per group.
     if (slugs.length >= 2 && slugs.every((s) => s === 'fixture' || s === 'bea')) {
@@ -380,16 +376,11 @@ const sources: Sources = {
       if (policy !== 'last' && policy !== 'everyone' && policy !== 'chief' && policy !== 'default') {
         return { ok: false, id: '', error: 'Create was missing the answer policy.' };
       }
-      if (policy === 'chief' && !slugs.includes(chiefSlug)) {
-        return { ok: false, id: '', error: 'Create was missing the chief.' };
-      }
-      setFixtureMade({ title, description, color, shape, slugs, answerPolicy: policy, chief: policy === 'chief' ? chiefSlug : '' });
+      if (policy === 'chief' && !slugs.includes(chief.trim())) return { ok: false, id: '', error: 'Create was missing the chief.' };
+      setFixtureMade({ title, description, color, shape, slugs, answerPolicy: policy, chief: policy === 'chief' ? chief.trim() : '' });
       return { ok: true, id: 'fixture', error: '' };
     }
-    const r = await call(store, '/api/rooms', {
-      method: 'POST',
-      body: JSON.stringify({ title, description, color, shape, members: slugs, answerPolicy: policy, chief: chiefSlug }),
-    });
+    const r = await call(store, '/api/rooms', { method: 'POST', body: JSON.stringify({ title, description, color, shape, members: slugs, answerPolicy: policy, chief: chief.trim() }) });
     return r.ok ? { ok: true, id: String(r.body.id ?? ''), error: '' } : { ok: false, id: '', error: r.error };
   },
   sendRoom: async ([id, text, messageId], store) => {
@@ -822,8 +813,7 @@ const sources: Sources = {
           messages: fixtureRoomSent.map((m) => roomMessage({ id: m.id, name: 'You', text: m.text, from: 'user' })),
           notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
           answerPolicy: roomAnswer('fixture', fixtureMade?.answerPolicy),
-          answerPolicyEffective: effectivePolicy(roomAnswer('fixture', fixtureMade?.answerPolicy)),
-          chief: roomChief('fixture', fixtureMade?.chief ?? ''),
+          answerPolicyEffective: effectivePolicy(roomAnswer('fixture', fixtureMade?.answerPolicy)), chief: roomChief('fixture', fixtureMade?.chief ?? ''),
         };
       }
       return {
@@ -839,8 +829,7 @@ const sources: Sources = {
         ],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
         answerPolicy: roomAnswer('fixture', fixtureMade?.answerPolicy),
-        answerPolicyEffective: effectivePolicy(roomAnswer('fixture', fixtureMade?.answerPolicy)),
-        chief: roomChief('fixture', fixtureMade?.chief ?? ''),
+        answerPolicyEffective: effectivePolicy(roomAnswer('fixture', fixtureMade?.answerPolicy)), chief: roomChief('fixture', fixtureMade?.chief ?? ''),
       };
     }
     if (id === 'fixture-crowd') {
@@ -851,8 +840,7 @@ const sources: Sources = {
         messages: [],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture-crowd')),
         answerPolicy: roomAnswer('fixture-crowd'),
-        answerPolicyEffective: effectivePolicy(roomAnswer('fixture-crowd')),
-        chief: roomChief('fixture-crowd'),
+        answerPolicyEffective: effectivePolicy(roomAnswer('fixture-crowd')), chief: roomChief('fixture-crowd'),
       };
     }
     if (id === 'fixture-busy') {
@@ -869,8 +857,7 @@ const sources: Sources = {
         ],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture-busy')),
         answerPolicy: roomAnswer('fixture-busy'),
-        answerPolicyEffective: effectivePolicy(roomAnswer('fixture-busy')),
-        chief: roomChief('fixture-busy'),
+        answerPolicyEffective: effectivePolicy(roomAnswer('fixture-busy')), chief: roomChief('fixture-busy'),
       };
     }
     const kept = roomKept.get(id);
