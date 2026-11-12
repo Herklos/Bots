@@ -18,6 +18,7 @@ use tokio::sync::Mutex;
 mod instructions;
 mod lifecycle;
 mod names;
+mod prompt_policy;
 #[cfg(test)]
 mod tests;
 

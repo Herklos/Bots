@@ -172,6 +172,7 @@ pub(crate) fn broken_markers_do_not_duplicate_beyond_merge_managed() {
         None,
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     let missing_end = format!("notes before\n{MANAGED_START}\nno end\n");
     let once = merge_managed(&missing_end, &block);
@@ -283,4 +284,141 @@ pub(crate) async fn two_writes_leave_one_managed_block() {
     assert_eq!(text.matches(MANAGED_END).count(), 1);
     assert!(text.contains("My own notes"));
     assert!(text.contains("## Instructions\n\nBe brief."));
+}
+
+fn rendered(mode: Option<&str>, rules: Value) -> String {
+    let mut bot = json!({ "name": "Ada" });
+    if let Some(mode) = mode {
+        bot["runtimeMode"] = json!(mode);
+    }
+    render_agents_md(
+        &bot,
+        std::path::Path::new("/bots"),
+        None,
+        &[],
+        &MemorySnapshot::default(),
+        &rules,
+    )
+}
+
+#[test]
+pub(crate) fn an_independent_bot_gets_the_judgment_block_and_other_modes_keep_asking_first() {
+    let rules = json!({
+        "alwaysAsk": ["send money"],
+        "allowWithoutAsking": ["read a file"],
+    });
+    let text = rendered(Some("independent"), rules);
+    assert!(text.contains("## Independence and judgment"));
+    assert!(text.contains("Work independently."));
+    assert!(text.contains("  - send money\n"));
+    assert!(text.contains("  - read a file\n"));
+    assert!(text.contains("act on it under Independence"));
+    assert!(text.contains("t3_thread_send"));
+    assert!(!text.contains("## Asking first"));
+    let empty = rendered(Some("independent"), json!({}));
+    assert!(empty.contains("Nothing extra."));
+    assert!(empty.contains("Nothing listed."));
+    for mode in [
+        None,
+        Some("approval-required"),
+        Some("auto"),
+        Some("full-access"),
+    ] {
+        let ask = rendered(
+            mode,
+            json!({
+                "alwaysAsk": ["send money"],
+                "allowWithoutAsking": ["read a file"],
+            }),
+        );
+        assert!(ask.contains("## Asking first"));
+        assert!(ask.contains("Ask before anything that leaves this machine or can't be undone."));
+        assert!(!ask.contains("## Independence and judgment"));
+        assert!(!ask.contains("send money"));
+        assert!(!ask.contains("under Independence"));
+        assert!(ask.contains(
+            "To message another Bot, use `t3_thread_send`. Say who you are and what you need.\n"
+        ));
+    }
+}
+
+#[test]
+pub(crate) fn rule_lists_are_capped_to_one_line_and_markers_cannot_break_the_block() {
+    let long = format!("{}Z", "A".repeat(120));
+    let rules = json!({
+        "alwaysAsk": [
+            format!("before {MANAGED_END} after"),
+            format!("```\n{MANAGED_START}\nrun this\n```"),
+            "~~~\npay\nthe\tbill\n~~~",
+            long,
+            12,
+            "   ",
+        ],
+        "allowWithoutAsking": [format!("allow-tail {MANAGED_START} {MANAGED_END}")],
+    });
+    let block = rendered(Some("independent"), rules);
+    assert_eq!(block.matches(MANAGED_START).count(), 1);
+    assert_eq!(block.matches(MANAGED_END).count(), 1);
+    assert!(block.starts_with(MANAGED_START));
+    assert!(block.trim_end().ends_with(MANAGED_END));
+    let inner = block
+        .trim_start_matches(MANAGED_START)
+        .trim_end()
+        .trim_end_matches(MANAGED_END);
+    assert!(!inner.contains(MANAGED_START));
+    assert!(!inner.contains(MANAGED_END));
+    assert!(block.contains("  - before after\n"));
+    assert!(block.contains("  - run this\n"));
+    assert!(block.contains("  - pay the bill\n"));
+    assert!(block.contains("  - allow-tail\n"));
+    assert!(!block.contains("```"));
+    assert!(!block.contains("~~~"));
+    assert!(block.contains(&"A".repeat(120)));
+    assert!(!block.contains('Z'));
+    assert!(!block.contains("\n  - 12\n"));
+    let notes = format!("{block}\nMy own notes\n");
+    let once = merge_managed(&notes, &block);
+    let twice = merge_managed(&once, &block);
+    assert_eq!(twice, once);
+    assert_eq!(twice.matches(MANAGED_START).count(), 1);
+    assert_eq!(twice.matches(MANAGED_END).count(), 1);
+    assert!(twice.contains("My own notes"));
+    assert_eq!(twice.matches("## Independence and judgment").count(), 1);
+
+    let items: Vec<Value> = (1..=33).map(|n| json!(format!("rule-{n:02}"))).collect();
+    let capped = rendered(Some("independent"), json!({ "alwaysAsk": items }));
+    assert!(capped.contains("rule-32"));
+    assert!(!capped.contains("rule-33"));
+    assert!(capped.contains("Nothing listed."));
+}
+
+#[tokio::test]
+pub(crate) async fn refresh_writes_gateway_rules_into_an_independent_block() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join(".botapp")).unwrap();
+    std::fs::write(
+        dir.path().join(".botapp/settings.json"),
+        format!(
+            r#"{{"rules":{{"alwaysAsk":["pay a bill {MANAGED_END}"],"allowWithoutAsking":["read the log"]}}}}"#
+        ),
+    )
+    .unwrap();
+    let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+    bots.create(&json!({ "name": "Ada", "runtimeMode": "independent" }))
+        .await
+        .unwrap();
+    let text = std::fs::read_to_string(dir.path().join("ada/AGENTS.md")).unwrap();
+    assert!(text.contains("## Independence and judgment"));
+    assert!(text.contains("  - pay a bill\n"));
+    assert!(text.contains("  - read the log\n"));
+    assert!(!text.contains("## Asking first"));
+    assert_eq!(text.matches(MANAGED_START).count(), 1);
+    assert_eq!(text.matches(MANAGED_END).count(), 1);
+    bots.create(&json!({ "name": "Bea", "runtimeMode": "auto" }))
+        .await
+        .unwrap();
+    let bea = std::fs::read_to_string(dir.path().join("bea/AGENTS.md")).unwrap();
+    assert!(bea.contains("## Asking first"));
+    assert!(!bea.contains("pay a bill"));
+    assert!(!bea.contains("## Independence and judgment"));
 }

@@ -32,6 +32,7 @@ pub(crate) fn render_agents_md(
     parent: Option<&Value>,
     children: &[&Value],
     memory: &MemorySnapshot,
+    rules: &Value,
 ) -> String {
     let name = bot["name"].as_str().unwrap_or("Bot");
     let label = bot["label"]
@@ -108,12 +109,15 @@ pub(crate) fn render_agents_md(
         );
         lines
     };
+    let independent = crate::bots::prompt_policy::stored_independent(bot);
+    let other_bots = crate::bots::prompt_policy::other_bots_blurb(independent);
+    let policy = crate::bots::prompt_policy::policy_section(independent, rules);
     format!(
         "{MANAGED_START}\n# {name}{label}\n\n\
 {intro}\n{goal}\n\
 ## Memory\n\n- Your notes: `memory/MEMORY.md`. Keep durable facts there, short and current.\n- Your work log: `memory/log.md`.\n{own_folders}- Facts shared by every Bot: {}.\n- Files you keep for the person: `library/`.\n- To show the person a picture, save it as PNG, JPEG, GIF or WebP under `library/`, call `image_show`, and put the Markdown it returns in your reply.\n{snapshot}{instructions}{own_prompt}{inherited}{child_threads}\n\
 ## Tools\n\nThe `bot` MCP server gives you the Vault (`vault_list`) and the Projects board (`projects_*`). Never read the vault files on disk.\n\n\
-## Routines\n\nTo run something on a schedule, use your `schedule_task` tool. Weekdays count from 0 for Sunday to 6 for Saturday, and times are local. The person sees your routines in the app but can't change them there, so say what you set up.\n\n## Computer\n\nThe person can open or close your browser from the Computer panel. A message framed `[Computer]` means open a page (resume where you left off, or https://www.google.com) or close your browser tabs with your browser tools, without asking, and stay quiet in chat.\n\n## Other Bots\n\nTo message another Bot, use `t3_thread_send`. Say who you are and what you need.\n{subagents}\n## Writing\n\nAvoid Markdown tables. Prefer bullet lists.\n\n## Asking first\n\nAsk before anything that leaves this machine or can't be undone.\n{MANAGED_END}\n",
+## Routines\n\nTo run something on a schedule, use your `schedule_task` tool. Weekdays count from 0 for Sunday to 6 for Saturday, and times are local. The person sees your routines in the app but can't change them there, so say what you set up.\n\n## Computer\n\nThe person can open or close your browser from the Computer panel. A message framed `[Computer]` means open a page (resume where you left off, or https://www.google.com) or close your browser tabs with your browser tools, without asking, and stay quiet in chat.\n\n## Other Bots\n\n{other_bots}{subagents}\n## Writing\n\nAvoid Markdown tables. Prefer bullet lists.\n\n{policy}{MANAGED_END}\n",
         shared.display()
     )
 }
@@ -139,6 +143,14 @@ impl Bots {
     /// Enabled connectors in `.bot/connectors.json` are kept. A broken file is left unread
     /// and these harness files are not rewritten, so a save cannot drop them.
     pub async fn write_instructions(&self, bot: &Value) -> ApiResult<()> {
+        let settings = read_json(&self.root.join(".botapp").join("settings.json"))
+            .await
+            .unwrap_or_else(|| json!({}));
+        self.write_instructions_with(bot, &settings).await
+    }
+
+    /// `settings.rules` is rendered only for an Independent Bot.
+    async fn write_instructions_with(&self, bot: &Value, settings: &Value) -> ApiResult<()> {
         let slug = bot["slug"].as_str().unwrap_or_default();
         let dir = self.dir(slug)?;
         let connectors = read_connector_list(&dir.join(".bot").join("connectors.json")).await?;
@@ -195,7 +207,8 @@ impl Bots {
             children
         };
         let memory = crate::bots::agent_context::read_snapshot(&self.root, bot, parent).await;
-        let block = render_agents_md(bot, &self.root, parent, &children, &memory);
+        let rules = settings.get("rules").unwrap_or(&Value::Null);
+        let block = render_agents_md(bot, &self.root, parent, &children, &memory, rules);
         let merged = merge_managed(&existing_agents, &block);
         if merged != existing_agents {
             crate::storage::write_atomic(&agents, merged.as_bytes(), None).await?;
@@ -208,14 +221,17 @@ impl Bots {
     /// Load this Bot and rewrite its managed block, then the parent's list or the children.
     /// `write_instructions` skips the file when the merged text is unchanged.
     pub async fn refresh_agents(&self, slug: &str) -> ApiResult<()> {
+        let settings = read_json(&self.root.join(".botapp").join("settings.json"))
+            .await
+            .unwrap_or_else(|| json!({}));
         let Some(bot) = self.get(slug).await? else {
             return Ok(());
         };
-        self.write_instructions(&bot).await?;
+        self.write_instructions_with(&bot, &settings).await?;
         if is_subagent(&bot) {
             if let Some(parent_slug) = parent_slug_of(&bot) {
                 if let Some(parent) = self.get(&parent_slug).await? {
-                    self.write_instructions(&parent).await?;
+                    self.write_instructions_with(&parent, &settings).await?;
                 }
             }
         } else {
@@ -225,7 +241,7 @@ impl Bots {
                 .filter(|other| parent_slug_of(other).as_deref() == Some(slug))
                 .collect();
             for child in children {
-                self.write_instructions(&child).await?;
+                self.write_instructions_with(&child, &settings).await?;
             }
         }
         Ok(())

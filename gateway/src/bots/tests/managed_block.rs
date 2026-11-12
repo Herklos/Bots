@@ -253,6 +253,7 @@ pub(crate) fn a_child_block_names_its_parent_and_its_own_folders() {
         Some(&parent),
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert!(text.starts_with(MANAGED_START) && text.contains(MANAGED_END));
     assert!(text.contains("a subagent of Ada"));
@@ -280,6 +281,7 @@ pub(crate) fn a_child_block_includes_the_parent_prompt_field_when_asked() {
         Some(&parent),
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert!(text.contains("Be brief. This is the prompt field."));
     let quiet = json!({
@@ -294,6 +296,7 @@ pub(crate) fn a_child_block_includes_the_parent_prompt_field_when_asked() {
         Some(&parent),
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert!(!without.contains("Be brief."));
 }
