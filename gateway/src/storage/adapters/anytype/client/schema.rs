@@ -1,5 +1,8 @@
-//! Type and property lists, plus create. Create bodies are the short form
-//! `{name, key, layout}` and `{name, key, format}`: the spike did not record the full schema.
+//! Type and property lists, plus create. Every create takes an idempotency key.
+//!
+//! Measured bodies, which the caller supplies:
+//! type `{name, api_key, layout, property_definitions: [{name, format}]}`,
+//! property `{name, format, key}`.
 
 use super::error::AnytypeError;
 use super::http::{require_idempotency, send_json, JsonCall};
@@ -50,6 +53,7 @@ impl AnytypeClient {
                 idem_key: Some(idem_key),
                 etag: None,
                 body: Some(body),
+                limited: true,
             },
         )
         .await
@@ -71,6 +75,7 @@ impl AnytypeClient {
                     idem_key: None,
                     etag: None,
                     body: None,
+                    limited: false,
                 },
             )
             .await?;

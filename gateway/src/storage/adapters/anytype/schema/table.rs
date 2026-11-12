@@ -1,9 +1,9 @@
 //! The four types v1 stores in Anytype. Keys have no digits: Anytype splits a digit
 //! off the key (`hbprobe2` came back as `hbprobe_2`) and the key is then permanent.
 //!
-//! Create uses `{name, key, layout}` and `{name, key, format}`. The spike did not
-//! record a body for select options, so `hb_conflict_state` is created as `select`
-//! and its options stay here for writers. They are not sent on create.
+//! Create uses `{name, api_key, layout}` and `{name, key, format}` (measured, spike S2).
+//! The spike did not record a body for select options, so `hb_conflict_state` is
+//! created as `select` and its options stay here for writers. They are not sent on create.
 
 #[derive(Clone, Copy)]
 pub(crate) struct Column {

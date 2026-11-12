@@ -1,4 +1,6 @@
-//! Token bucket in front of every authenticated call. A 429 halves the refill rate.
+//! Token bucket for mutating object, type, and property calls.
+//! Reads and file uploads are not counted: the live app only 429s the object routes.
+//! A 429 halves the refill rate.
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -36,15 +38,11 @@ impl Limiter {
         self.inner.lock().expect("limiter").rate
     }
 
-    /// Halve the refill rate and the burst. The floor stays above zero so a call can still leave.
+    /// Halve the refill rate. The floor stays above zero so a call can still leave.
     pub(super) fn shrink(&self) {
         let mut bucket = self.inner.lock().expect("limiter");
         bucket.refill();
         bucket.rate = (bucket.rate * 0.5).max(MIN_RATE);
-        bucket.burst = (bucket.burst * 0.5).max(1.0);
-        if bucket.tokens > bucket.burst {
-            bucket.tokens = bucket.burst;
-        }
     }
 
     pub(super) async fn acquire(&self) {

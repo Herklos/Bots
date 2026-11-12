@@ -4,6 +4,8 @@ mod files;
 mod idempotency;
 mod limiter;
 mod mock;
+mod objects;
 mod pairing;
+mod peer;
 mod schema;
 mod search;

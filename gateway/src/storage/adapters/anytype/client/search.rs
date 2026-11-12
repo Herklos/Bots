@@ -1,6 +1,7 @@
-//! Space search. Pagination stays in the query string. The body carries `query`,
-//! `type`, `filters`, and `fields`. `filters` here are `{key, value}` equality objects,
-//! a smaller shape than the full filter language.
+//! Space search. Pagination stays in the query string (`?limit=&offset=`).
+//! A `limit` member in the body is refused by the app. The walker follows `has_more`.
+//!
+//! The body is the caller's: `query`, `type`, `filters` or `filter`, `fields`, `sorts`.
 
 use super::error::AnytypeError;
 use super::http::{send_json, JsonCall};
@@ -34,6 +35,7 @@ impl AnytypeClient {
                 idem_key: None,
                 etag: None,
                 body: Some(body),
+                limited: false,
             },
         )
         .await?;

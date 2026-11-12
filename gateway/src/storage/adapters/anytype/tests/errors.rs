@@ -63,7 +63,7 @@ async fn each_failure_maps_to_its_error() {
         .patch_object(
             id,
             &json!({"ops": [{"op": "set_properties", "set": {"name": "Next"}}]}),
-            etag,
+            Some(etag),
             "patch-1",
         )
         .await

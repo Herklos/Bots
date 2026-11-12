@@ -1,11 +1,11 @@
 //! HTTP routes for the in-memory Anytype stand-in.
 
-use super::search::search;
-use super::state::{object_json, page, MockState, ReplayHit};
+use super::search::{reject_search_body, search};
+use super::state::{page, MockState, ReplayHit, Reply};
 use super::Shared;
 use axum::body::Bytes;
 use axum::extract::{Path, Query, State};
-use axum::http::{header, HeaderMap, StatusCode};
+use axum::http::{header, HeaderMap, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -18,12 +18,21 @@ struct PageQuery {
     limit: Option<usize>,
 }
 
+#[derive(Deserialize)]
+struct DeleteQuery {
+    permanent: Option<bool>,
+}
+
 pub(super) fn router(state: Shared) -> Router {
     Router::new()
         .route("/v2/spaces/{space}/objects", post(create_object))
         .route(
             "/v2/spaces/{space}/objects/{id}",
-            get(get_object).patch(patch_object).delete(archive_object),
+            get(get_object).patch(patch_object).delete(delete_object),
+        )
+        .route(
+            "/v2/spaces/{space}/objects/{id}/restore",
+            post(restore_object),
         )
         .route("/v2/spaces/{space}/search", post(search_space))
         .route(
@@ -35,8 +44,10 @@ pub(super) fn router(state: Shared) -> Router {
             get(list_properties).post(create_property),
         )
         .route("/v2/spaces/{space}/files", post(upload_file))
-        .route("/v2/spaces/{space}/files/{id}", get(file_meta))
-        .route("/v2/spaces/{space}/files/{id}/content", get(file_content))
+        .route(
+            "/v2/spaces/{space}/files/{id}/content",
+            get(file_content).head(file_head),
+        )
         .with_state(state)
 }
 
@@ -45,12 +56,11 @@ async fn create_object(
     headers: HeaderMap,
     body: Bytes,
 ) -> axum::response::Response {
-    if let Some(response) = prelude(&state).await {
-        return response;
-    }
-    mutate(&state, &headers, "POST", "/objects", &body, 201, |mock| {
-        mock.create_object(&parse_json(&body))
+    let parsed = parse_json(&body);
+    mutation(&state, &headers, "POST", "/objects", &body, move |mock| {
+        mock.create_object(&parsed)
     })
+    .await
 }
 
 async fn get_object(
@@ -61,9 +71,9 @@ async fn get_object(
         return response;
     }
     let mock = state.lock().expect("mock");
-    match mock.objects.get(&id) {
-        Some(object) => json_response(StatusCode::OK, object_json(object)),
-        None => gone(),
+    match mock.document(&id) {
+        Some(reply) => respond(reply),
+        None => respond(missing_reply()),
     }
 }
 
@@ -73,59 +83,49 @@ async fn patch_object(
     headers: HeaderMap,
     body: Bytes,
 ) -> axum::response::Response {
-    if let Some(response) = prelude(&state).await {
-        return response;
-    }
-    {
-        let mock = state.lock().expect("mock");
-        if let Some(response) = write_guard(&mock, &headers, mock.objects.get(&id)) {
-            return response;
-        }
-    }
-    mutate(
-        &state,
-        &headers,
-        "PATCH",
-        &format!("/objects/{id}"),
-        &body,
-        200,
-        |mock| {
-            mock.patch_object(&id, &parse_json(&body))
-                .unwrap_or_else(|| json!({"code": "not_found"}))
-        },
-    )
+    let if_match = header_str(&headers, header::IF_MATCH);
+    let parsed = parse_json(&body);
+    let path = format!("/objects/{id}");
+    mutation(&state, &headers, "PATCH", &path, &body, move |mock| {
+        mock.patch(&id, if_match.as_deref(), &parsed)
+    })
+    .await
 }
 
-async fn archive_object(
+async fn delete_object(
+    State(state): State<Shared>,
+    Path((space, id)): Path<(String, String)>,
+    Query(query): Query<DeleteQuery>,
+    headers: HeaderMap,
+) -> axum::response::Response {
+    let permanent = query.permanent.unwrap_or(false);
+    let path = if permanent {
+        format!("/objects/{id}?permanent=true")
+    } else {
+        format!("/objects/{id}")
+    };
+    let empty = Bytes::new();
+    mutation(&state, &headers, "DELETE", &path, &empty, move |mock| {
+        if permanent {
+            mock.delete_permanent(&id)
+        } else {
+            mock.archive(&space, &id)
+        }
+    })
+    .await
+}
+
+async fn restore_object(
     State(state): State<Shared>,
     Path((_, id)): Path<(String, String)>,
     headers: HeaderMap,
 ) -> axum::response::Response {
-    if let Some(response) = prelude(&state).await {
-        return response;
-    }
-    {
-        let mock = state.lock().expect("mock");
-        if let Some(response) = write_guard(&mock, &headers, mock.objects.get(&id)) {
-            return response;
-        }
-    }
     let empty = Bytes::new();
-    mutate(
-        &state,
-        &headers,
-        "DELETE",
-        &format!("/objects/{id}"),
-        &empty,
-        200,
-        |mock| {
-            let Some(object) = mock.objects.get_mut(&id) else {
-                return json!({"code": "not_found"});
-            };
-            object.archived = true;
-            object_json(object)
-        },
-    )
+    let path = format!("/objects/{id}/restore");
+    mutation(&state, &headers, "POST", &path, &empty, move |mock| {
+        mock.restore(&id)
+    })
+    .await
 }
 
 async fn search_space(
@@ -136,36 +136,54 @@ async fn search_space(
     if let Some(response) = prelude(&state).await {
         return response;
     }
-    let mock = state.lock().expect("mock");
     let query = parse_json(&body);
+    if let Some(error) = reject_search_body(&query) {
+        return respond(Reply {
+            status: 400,
+            body: error,
+            etag: None,
+        });
+    }
+    let mock = state.lock().expect("mock");
     let objects: Vec<_> = mock.objects.values().collect();
     let rows = search(&objects, &query);
     let (offset, limit) = page_bounds(&page_query);
-    json_response(StatusCode::OK, page(&rows, offset, limit))
+    respond(Reply {
+        status: 200,
+        body: page(&rows, offset, limit),
+        etag: None,
+    })
 }
 
 async fn list_types(
     State(state): State<Shared>,
     Query(page_query): Query<PageQuery>,
 ) -> axum::response::Response {
-    if let Some(response) = prelude(&state).await {
-        return response;
-    }
-    let mock = state.lock().expect("mock");
-    let (offset, limit) = page_bounds(&page_query);
-    json_response(StatusCode::OK, page(&mock.types, offset, limit))
+    list_rows(&state, page_query, |mock| mock.types.clone()).await
 }
 
 async fn list_properties(
     State(state): State<Shared>,
     Query(page_query): Query<PageQuery>,
 ) -> axum::response::Response {
-    if let Some(response) = prelude(&state).await {
+    list_rows(&state, page_query, |mock| mock.properties.clone()).await
+}
+
+async fn list_rows(
+    state: &Shared,
+    page_query: PageQuery,
+    rows: impl FnOnce(&MockState) -> Vec<Value>,
+) -> axum::response::Response {
+    if let Some(response) = prelude(state).await {
         return response;
     }
     let mock = state.lock().expect("mock");
     let (offset, limit) = page_bounds(&page_query);
-    json_response(StatusCode::OK, page(&mock.properties, offset, limit))
+    respond(Reply {
+        status: 200,
+        body: page(&rows(&mock), offset, limit),
+        etag: None,
+    })
 }
 
 async fn create_type(
@@ -173,12 +191,11 @@ async fn create_type(
     headers: HeaderMap,
     body: Bytes,
 ) -> axum::response::Response {
-    if let Some(response) = prelude(&state).await {
-        return response;
-    }
-    mutate(&state, &headers, "POST", "/types", &body, 201, |mock| {
-        mock.add_type(&parse_json(&body))
+    let parsed = parse_json(&body);
+    mutation(&state, &headers, "POST", "/types", &body, move |mock| {
+        mock.add_type(&parsed)
     })
+    .await
 }
 
 async fn create_property(
@@ -186,18 +203,16 @@ async fn create_property(
     headers: HeaderMap,
     body: Bytes,
 ) -> axum::response::Response {
-    if let Some(response) = prelude(&state).await {
-        return response;
-    }
-    mutate(
+    let parsed = parse_json(&body);
+    mutation(
         &state,
         &headers,
         "POST",
         "/properties",
         &body,
-        201,
-        |mock| mock.add_property(&parse_json(&body)),
+        move |mock| mock.add_property(&parsed),
     )
+    .await
 }
 
 async fn upload_file(
@@ -205,73 +220,93 @@ async fn upload_file(
     headers: HeaderMap,
     body: Bytes,
 ) -> axum::response::Response {
-    if let Some(response) = prelude(&state).await {
-        return response;
-    }
-    let content_type = headers
-        .get(header::CONTENT_TYPE)
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("");
+    let content_type = header_str(&headers, header::CONTENT_TYPE).unwrap_or_default();
     let (name, mime, bytes) = if content_type.starts_with("multipart/") {
-        let (name, bytes) = file_part(&body);
-        (name, "application/octet-stream".into(), bytes)
+        file_part(&body)
     } else {
-        let json = parse_json(&body);
-        let name = json["name"].as_str().unwrap_or("file").to_string();
-        let url = json["url"].as_str().unwrap_or("").to_string();
-        (name, "text/uri-list".into(), url.into_bytes())
+        (
+            "file".to_string(),
+            "application/octet-stream".to_string(),
+            Vec::new(),
+        )
     };
-    mutate(
-        &state,
-        &headers,
-        "POST",
-        "/files",
-        &body,
-        201,
-        move |mock| mock.add_file(name, mime, bytes),
-    )
-}
-
-async fn file_meta(
-    State(state): State<Shared>,
-    Path((_, id)): Path<(String, String)>,
-) -> axum::response::Response {
-    if let Some(response) = prelude(&state).await {
-        return response;
-    }
-    let mock = state.lock().expect("mock");
-    match mock.files.get(&id) {
-        Some(file) => json_response(
-            StatusCode::OK,
-            json!({
-                "id": file.id,
-                "name": file.name,
-                "mime_type": file.mime,
-                "size": file.bytes.len(),
-                "sha": file.sha,
-            }),
-        ),
-        None => gone(),
-    }
+    mutation(&state, &headers, "POST", "/files", &body, move |mock| {
+        mock.add_file(name, mime, bytes)
+    })
+    .await
 }
 
 async fn file_content(
     State(state): State<Shared>,
     Path((_, id)): Path<(String, String)>,
+    headers: HeaderMap,
 ) -> axum::response::Response {
-    if let Some(response) = prelude(&state).await {
+    file_bytes(&state, &id, headers.get(header::RANGE), false).await
+}
+
+async fn file_head(
+    State(state): State<Shared>,
+    Path((_, id)): Path<(String, String)>,
+) -> axum::response::Response {
+    file_bytes(&state, &id, None, true).await
+}
+
+async fn file_bytes(
+    state: &Shared,
+    id: &str,
+    range: Option<&HeaderValue>,
+    head: bool,
+) -> axum::response::Response {
+    if let Some(response) = prelude(state).await {
         return response;
     }
     let mock = state.lock().expect("mock");
-    match mock.files.get(&id) {
-        Some(file) => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, "application/octet-stream")],
-            file.bytes.clone(),
-        )
-            .into_response(),
-        None => gone(),
+    let Some(file) = mock.files.get(id) else {
+        return respond(missing_reply());
+    };
+    let etag = file.sha.clone();
+    let bytes = if head { Vec::new() } else { file.bytes.clone() };
+    let full = file.bytes.clone();
+    drop(mock);
+    if let Some(spec) = range.and_then(|value| value.to_str().ok()) {
+        let Some((start, end)) = slice_range(spec, full.len()) else {
+            return respond(Reply {
+                status: 400,
+                body: json!({"message": "The range is not valid."}),
+                etag: None,
+            });
+        };
+        return bytes_response(
+            StatusCode::PARTIAL_CONTENT,
+            &etag,
+            full[start..=end].to_vec(),
+        );
     }
+    bytes_response(StatusCode::OK, &etag, bytes)
+}
+
+async fn mutation(
+    state: &Shared,
+    headers: &HeaderMap,
+    method: &str,
+    path: &str,
+    body: &Bytes,
+    apply: impl FnOnce(&mut MockState) -> Reply,
+) -> axum::response::Response {
+    if let Some(response) = prelude(state).await {
+        return response;
+    }
+    let key = header_str(headers, "Idempotency-Key");
+    let fingerprint = format!("{method} {path} {}", hex::encode(body));
+    let mut mock = state.lock().expect("mock");
+    if let Some(response) = replay(&mock, key.as_deref(), &fingerprint) {
+        return response;
+    }
+    let reply = apply(&mut mock);
+    if let Some(key) = key.as_deref() {
+        mock.store_replay(key, fingerprint, reply.status, reply.body.clone());
+    }
+    respond(reply)
 }
 
 async fn prelude(state: &Shared) -> Option<axum::response::Response> {
@@ -295,10 +330,11 @@ async fn prelude(state: &Shared) -> Option<axum::response::Response> {
         tokio::time::sleep(delay).await;
     }
     if not_granted {
-        return Some(json_response(
-            StatusCode::FORBIDDEN,
-            json!({"code": "forbidden", "message": "The key cannot use this space."}),
-        ));
+        return Some(respond(Reply {
+            status: 403,
+            body: json!({"code": "forbidden", "message": "The key cannot use this space."}),
+            etag: None,
+        }));
     }
     if malformed {
         return Some(
@@ -311,97 +347,74 @@ async fn prelude(state: &Shared) -> Option<axum::response::Response> {
         );
     }
     if let Some(status) = status_override {
-        let code = StatusCode::from_u16(status).unwrap_or(StatusCode::BAD_REQUEST);
-        return Some(json_response(
-            code,
-            json!({"code": "gone", "message": "missing"}),
-        ));
+        return Some(respond(Reply {
+            status,
+            body: json!({"code": "gone", "message": "missing"}),
+            etag: None,
+        }));
     }
     if let Some(retry_after) = rate {
-        return Some(
-            (
-                StatusCode::TOO_MANY_REQUESTS,
-                [
-                    (header::RETRY_AFTER, retry_after.to_string()),
-                    (header::CONTENT_TYPE, "application/json".into()),
-                ],
-                Json(json!({"code": "rate_limit_exceeded", "message": "Rate limit exceeded"})),
-            )
-                .into_response(),
-        );
-    }
-    None
-}
-
-fn write_guard(
-    mock: &MockState,
-    headers: &HeaderMap,
-    object: Option<&super::state::Object>,
-) -> Option<axum::response::Response> {
-    let Some(object) = object else {
-        return Some(gone());
-    };
-    if object.archived || mock.archived_writes {
-        return Some(json_response(
-            StatusCode::CONFLICT,
-            json!({"code": "object_archived", "message": "The object is archived."}),
-        ));
-    }
-    let presented = headers
-        .get(header::IF_MATCH)
-        .and_then(|value| value.to_str().ok());
-    let stale = presented.is_some_and(|etag| etag != object.etag);
-    if mock.etag_mismatch || stale {
-        return Some(json_response(
-            StatusCode::CONFLICT,
-            json!({
-                "code": "etag_mismatch",
-                "message": "The object changed.",
-                "etag": object.etag,
+        let mut response = respond(Reply {
+            status: 429,
+            body: json!({
+                "object": "error",
+                "status": 429,
+                "code": "rate_limit_exceeded",
+                "message": "You have reached maximum request limit.",
             }),
-        ));
+            etag: None,
+        });
+        if retry_after > 0 {
+            if let Ok(value) = HeaderValue::from_str(&retry_after.to_string()) {
+                response.headers_mut().insert(header::RETRY_AFTER, value);
+            }
+        }
+        return Some(response);
     }
     None
 }
 
-fn mutate(
-    state: &Shared,
-    headers: &HeaderMap,
-    method: &str,
-    path: &str,
-    body: &Bytes,
-    status: u16,
-    apply: impl FnOnce(&mut MockState) -> Value,
-) -> axum::response::Response {
-    let key = headers
-        .get("Idempotency-Key")
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_string);
-    let fingerprint = format!("{method} {path} {}", hex::encode(body));
-    let mut mock = state.lock().expect("mock");
-    if let Some(key) = key.as_deref() {
-        match mock.replay(key, &fingerprint) {
-            ReplayHit::Hit(status, body) => {
-                return json_response(StatusCode::from_u16(status).unwrap_or(StatusCode::OK), body);
-            }
-            ReplayHit::Conflict => {
-                return json_response(
-                    StatusCode::CONFLICT,
-                    json!({
-                        "code": "idempotency_conflict",
-                        "message": "This idempotency key was used for a different request.",
-                    }),
-                );
-            }
-            ReplayHit::Miss => {}
+fn replay(
+    mock: &MockState,
+    key: Option<&str>,
+    fingerprint: &str,
+) -> Option<axum::response::Response> {
+    let key = key?;
+    match mock.replay(key, fingerprint) {
+        ReplayHit::Miss => None,
+        ReplayHit::Hit(status, body) => Some(respond(Reply {
+            status,
+            etag: body["etag"].as_str().map(str::to_string),
+            body,
+        })),
+        ReplayHit::Conflict => Some(respond(Reply {
+            status: 409,
+            body: json!({
+                "code": "idempotency_conflict",
+                "message": "This idempotency key was used for a different request.",
+            }),
+            etag: None,
+        })),
+    }
+}
+
+fn respond(reply: Reply) -> axum::response::Response {
+    let status = StatusCode::from_u16(reply.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+    let mut response = (status, Json(reply.body)).into_response();
+    if let Some(etag) = reply.etag {
+        if let Ok(value) = HeaderValue::from_str(&etag) {
+            response.headers_mut().insert(header::ETAG, value);
         }
     }
-    let body = apply(&mut mock);
-    let http = StatusCode::from_u16(status).unwrap_or(StatusCode::OK);
-    if let Some(key) = key.as_deref() {
-        mock.store_replay(key, fingerprint, status, body.clone());
+    response
+}
+
+fn missing_reply() -> Reply {
+    Reply {
+        status: 404,
+        body: json!({"code": "not_found", "message": "missing"}),
+        etag: None,
     }
-    json_response(http, body)
 }
 
 fn page_bounds(query: &PageQuery) -> (usize, usize) {
@@ -414,18 +427,38 @@ fn parse_json(body: &Bytes) -> Value {
     serde_json::from_slice(body).unwrap_or_else(|_| json!({}))
 }
 
-fn gone() -> axum::response::Response {
-    json_response(
-        StatusCode::NOT_FOUND,
-        json!({"code": "not_found", "message": "missing"}),
-    )
+fn header_str(headers: &HeaderMap, name: impl header::AsHeaderName) -> Option<String> {
+    headers
+        .get(name)
+        .and_then(|value| value.to_str().ok())
+        .map(str::to_string)
 }
 
-fn json_response(status: StatusCode, body: Value) -> axum::response::Response {
-    (status, Json(body)).into_response()
+fn slice_range(spec: &str, len: usize) -> Option<(usize, usize)> {
+    let rest = spec.trim().strip_prefix("bytes=")?;
+    let (start, end) = rest.split_once('-')?;
+    let start: usize = start.parse().ok()?;
+    let end: usize = end.parse().ok()?;
+    if start > end || end >= len {
+        return None;
+    }
+    Some((start, end))
 }
 
-fn file_part(body: &[u8]) -> (String, Vec<u8>) {
+fn bytes_response(status: StatusCode, etag: &str, bytes: Vec<u8>) -> axum::response::Response {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    headers.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    if let Ok(value) = HeaderValue::from_str(etag) {
+        headers.insert(header::ETAG, value);
+    }
+    (status, headers, bytes).into_response()
+}
+
+fn file_part(body: &[u8]) -> (String, String, Vec<u8>) {
     let header_end = body
         .windows(4)
         .position(|window| window == b"\r\n\r\n")
@@ -437,11 +470,28 @@ fn file_part(body: &[u8]) -> (String, Vec<u8>) {
         .and_then(|rest| rest.split('"').next())
         .unwrap_or("upload")
         .to_string();
+    let mime = part_content_type(&headers);
     let start = if header_end == 0 { 0 } else { header_end + 4 };
     let rest = &body[start..];
     let end = rest
         .windows(4)
         .position(|window| window == b"\r\n--")
         .unwrap_or(rest.len());
-    (name, rest[..end].to_vec())
+    (name, mime, rest[..end].to_vec())
+}
+
+fn part_content_type(headers: &str) -> String {
+    for line in headers.split('\n') {
+        let line = line.trim().trim_end_matches('\r');
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        if name.eq_ignore_ascii_case("content-type") {
+            let mime = value.trim();
+            if !mime.is_empty() {
+                return mime.to_string();
+            }
+        }
+    }
+    "application/octet-stream".to_string()
 }

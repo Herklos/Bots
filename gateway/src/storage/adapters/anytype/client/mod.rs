@@ -1,8 +1,9 @@
 //! Local Anytype HTTP client. `host` is the API origin, `key` is the scoped API key,
 //! and `space_id` is the space later calls read and write.
 //!
-//! Object, search, schema, and file calls are part of this milestone and are not
-//! reached by the running gateway yet. The filesystem backend stays the one in use.
+//! One `reqwest::Client` is reused for every call. Object, search, schema, and file
+//! calls are part of this milestone and are not reached by the running gateway yet.
+//! The filesystem backend stays the one in use.
 
 #![allow(
     dead_code,
@@ -24,6 +25,10 @@ pub(crate) use pairing::{confirm_pairing, start_pairing};
 pub(crate) use status::{open_client, status};
 
 use limiter::Limiter;
+
+/// Measured envelope: burst 60, then 1 write per second. 0.8/s with burst 40 sits inside it.
+const WRITE_RATE: f64 = 0.8;
+const WRITE_BURST: f64 = 40.0;
 
 pub(crate) struct AnytypeClient {
     host: String,
@@ -50,7 +55,7 @@ impl AnytypeClient {
         key: impl Into<String>,
         space_id: impl Into<String>,
     ) -> Result<Self, AnytypeError> {
-        Self::with_rate(host, key, space_id, 8.0, 8.0)
+        Self::with_rate(host, key, space_id, WRITE_RATE, WRITE_BURST)
     }
 
     pub(crate) fn with_rate(

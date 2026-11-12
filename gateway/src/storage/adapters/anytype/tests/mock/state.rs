@@ -1,6 +1,7 @@
-//! In-memory Anytype: types, properties, objects, files, and the fault switches.
+//! In-memory Anytype records and the fault switches.
 
-use serde_json::{json, Value};
+use super::objects::Block;
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -12,15 +13,15 @@ pub(super) struct Object {
     pub type_key: String,
     pub properties: Value,
     pub markdown: String,
+    pub blocks: Vec<Block>,
     pub etag: String,
     pub archived: bool,
+    pub created_date: String,
+    pub last_modified: Option<String>,
 }
 
 #[derive(Clone)]
 pub(super) struct FileBlob {
-    pub id: String,
-    pub name: String,
-    pub mime: String,
     pub bytes: Vec<u8>,
     pub sha: String,
 }
@@ -32,12 +33,20 @@ struct Replay {
     body: Value,
 }
 
+pub(super) struct Reply {
+    pub status: u16,
+    pub body: Value,
+    pub etag: Option<String>,
+}
+
 pub(super) struct MockState {
     pub objects: BTreeMap<String, Object>,
     pub files: BTreeMap<String, FileBlob>,
     pub types: Vec<Value>,
     pub properties: Vec<Value>,
     next: u64,
+    etag_clock: u64,
+    tick: u64,
     replays: BTreeMap<String, Replay>,
     pub not_granted: bool,
     pub malformed: bool,
@@ -58,6 +67,8 @@ impl MockState {
             types: Vec::new(),
             properties: Vec::new(),
             next: 1,
+            etag_clock: 0,
+            tick: 0,
             replays: BTreeMap::new(),
             not_granted: false,
             malformed: false,
@@ -65,7 +76,7 @@ impl MockState {
             archived_writes: false,
             status_override: None,
             rate_limits_left: 0,
-            retry_after_secs: 1,
+            retry_after_secs: 0,
             delay: Duration::ZERO,
             rewrites: BTreeMap::new(),
         }
@@ -73,38 +84,56 @@ impl MockState {
 
     pub(super) fn seed_objects(&mut self, count: usize) {
         for index in 0..count {
-            let id = self.alloc("obj");
-            self.objects.insert(
-                id.clone(),
-                Object {
-                    id,
-                    name: format!("note-{index}"),
-                    type_key: "page".into(),
-                    properties: json!({}),
-                    markdown: String::new(),
-                    etag: "1".into(),
-                    archived: false,
-                },
-            );
+            let body = serde_json::json!({
+                "name": format!("note-{index}"),
+                "type": "page",
+            });
+            self.create_object(&body);
         }
     }
 
     pub(super) fn seed_types(&mut self, count: usize) {
         for index in 0..count {
-            self.types.push(json!({
-                "key": format!("type_{index}"),
+            let body = serde_json::json!({
                 "name": format!("Type {index}"),
+                "api_key": format!("type_{index}"),
                 "layout": "basic",
-            }));
+            });
+            self.add_type(&body);
         }
     }
 
-    pub(super) fn tear_file(&mut self, id: &str) -> bool {
-        let Some(file) = self.files.get_mut(id) else {
-            return false;
-        };
-        file.bytes = b"torn-by-peer".to_vec();
-        true
+    pub(super) fn alloc(&mut self, prefix: &str) -> String {
+        let id = format!("{prefix}-{}", self.next);
+        self.next += 1;
+        id
+    }
+
+    pub(super) fn next_etag(&mut self) -> String {
+        self.etag_clock += 1;
+        format!("{:08x}", self.etag_clock)
+    }
+
+    pub(super) fn now(&self) -> String {
+        stamp(self.tick)
+    }
+
+    pub(super) fn touch(&mut self) -> String {
+        self.tick += 1;
+        stamp(self.tick)
+    }
+
+    /// Digits split a snake key (`hb_probe2` comes back `hb_probe_2`).
+    /// An explicit rewrite, used by the drift test, wins over that rule.
+    pub(super) fn finish_key(&self, key: &str) -> String {
+        if let Some(rewritten) = self.rewrites.get(key) {
+            return rewritten.clone();
+        }
+        let normalized = normalize_key(key);
+        self.rewrites
+            .get(&normalized)
+            .cloned()
+            .unwrap_or(normalized)
     }
 
     pub(super) fn replay(&self, key: &str, fingerprint: &str) -> ReplayHit {
@@ -133,117 +162,24 @@ impl MockState {
             },
         );
     }
-
-    pub(super) fn create_object(&mut self, body: &Value) -> Value {
-        let id = self.alloc("obj");
-        let object = Object {
-            id: id.clone(),
-            name: body["name"].as_str().unwrap_or("").to_string(),
-            type_key: body["type"].as_str().unwrap_or("page").to_string(),
-            properties: body["properties"].clone(),
-            markdown: body["markdown"].as_str().unwrap_or("").to_string(),
-            etag: "1".into(),
-            archived: false,
-        };
-        let view = object_json(&object);
-        self.objects.insert(id, object);
-        view
-    }
-
-    pub(super) fn patch_object(&mut self, id: &str, body: &Value) -> Option<Value> {
-        let object = self.objects.get_mut(id)?;
-        if let Some(ops) = body["ops"].as_array() {
-            for op in ops {
-                if op["op"] == "set_properties" {
-                    if let Some(name) = op["set"]["name"].as_str() {
-                        object.name = name.to_string();
-                    }
-                    if let Some(props) = op["set"].as_object() {
-                        let properties = object.properties.as_object_mut();
-                        if let Some(properties) = properties {
-                            for (key, value) in props {
-                                if key != "name" {
-                                    properties.insert(key.clone(), value.clone());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        object.etag = format!("{}", object.etag.parse::<u64>().unwrap_or(1) + 1);
-        Some(object_json(object))
-    }
-
-    fn rewritten(&self, body: &Value) -> String {
-        let key = body["key"].as_str().unwrap_or("custom");
-        self.rewrites
-            .get(key)
-            .cloned()
-            .unwrap_or_else(|| key.to_string())
-    }
-
-    pub(super) fn add_type(&mut self, body: &Value) -> Value {
-        let row = json!({
-            "key": self.rewritten(body),
-            "name": body["name"].as_str().unwrap_or(""),
-            "layout": body["layout"].as_str().unwrap_or("basic"),
-        });
-        self.types.push(row.clone());
-        row
-    }
-
-    pub(super) fn add_property(&mut self, body: &Value) -> Value {
-        let row = json!({
-            "key": self.rewritten(body),
-            "name": body["name"].as_str().unwrap_or(""),
-            "format": body["format"].as_str().unwrap_or("text"),
-        });
-        self.properties.push(row.clone());
-        row
-    }
-
-    pub(super) fn add_file(&mut self, name: String, mime: String, bytes: Vec<u8>) -> Value {
-        let id = self.alloc("file");
-        let sha = sha_hex(&bytes);
-        let size = bytes.len();
-        let view = json!({
-            "id": id,
-            "name": name,
-            "mime_type": mime,
-            "size": size,
-            "sha": sha,
-        });
-        self.files.insert(
-            id,
-            FileBlob {
-                id: view["id"].as_str().unwrap_or_default().to_string(),
-                name,
-                mime,
-                bytes,
-                sha,
-            },
-        );
-        view
-    }
-
-    fn alloc(&mut self, prefix: &str) -> String {
-        let id = format!("{prefix}-{}", self.next);
-        self.next += 1;
-        id
-    }
 }
 
-pub(super) fn object_json(object: &Object) -> Value {
-    json!({
-        "id": object.id,
-        "name": object.name,
-        "type": object.type_key,
-        "properties": object.properties,
-        "markdown": object.markdown,
-        "etag": object.etag,
-        "archived": object.archived,
-    })
+pub(super) fn normalize_key(key: &str) -> String {
+    let mut out = String::new();
+    for ch in key.chars() {
+        if ch.is_ascii_digit() && !out.ends_with('_') && !out.is_empty() {
+            out.push('_');
+        }
+        out.push(ch);
+    }
+    out
+}
+
+pub(super) fn snake_name(name: &str) -> String {
+    name.split_whitespace()
+        .map(str::to_ascii_lowercase)
+        .collect::<Vec<_>>()
+        .join("_")
 }
 
 pub(super) fn sha_hex(bytes: &[u8]) -> String {
@@ -264,11 +200,20 @@ pub(super) fn page(rows: &[Value], offset: usize, limit: usize) -> Value {
     } else {
         &rows[offset..end]
     };
-    json!({
+    serde_json::json!({
         "data": slice,
         "total": total,
         "offset": offset,
         "limit": limit,
         "has_more": end < total,
     })
+}
+
+fn stamp(step: u64) -> String {
+    let total = 16 * 3600 + 52 * 60 + 18 + step;
+    let hour = (total / 3600) % 24;
+    let minute = (total % 3600) / 60;
+    let second = total % 60;
+    let day = 12 + total / 86_400;
+    format!("2026-11-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
 }

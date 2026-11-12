@@ -1,5 +1,9 @@
 //! Local stand-in for the Anytype HTTP API. Nothing here dials a real app.
+//! Fault switches force 409, 429, 404, 410, an archived object, a bad body, or a delay.
+//! `peer_write` mutates one object the way another machine would.
 
+mod catalog;
+mod objects;
 mod routes;
 mod search;
 mod state;
@@ -50,6 +54,7 @@ impl Mock {
         self.state.lock().expect("mock").status_override = status;
     }
 
+    /// `retry_after_secs == 0` omits `Retry-After`, matching the live 429.
     pub(super) fn set_rate_limit(&self, times: u32, retry_after_secs: u64) {
         let mut state = self.state.lock().expect("mock");
         state.rate_limits_left = times;
@@ -90,7 +95,10 @@ impl Mock {
         state.create_object(&body);
     }
 
-    pub(super) fn tear_file(&self, id: &str) -> bool {
-        self.state.lock().expect("mock").tear_file(id)
+    pub(super) fn peer_write(&self, id: &str, properties: serde_json::Value, tear: bool) -> bool {
+        self.state
+            .lock()
+            .expect("mock")
+            .peer_write(id, &properties, tear)
     }
 }

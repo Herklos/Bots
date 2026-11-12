@@ -60,11 +60,12 @@ async fn bootstrap_twice_is_a_no_op() {
         .search(&json!({ "type": "hb_meta", "query": "hb_meta" }))
         .await
         .unwrap();
-    let object = &rows[0];
+    let id = rows[0]["id"].as_str().unwrap();
+    let fetched = api.get_object(id).await.unwrap();
     api.patch_object(
-        object["id"].as_str().unwrap(),
+        id,
         &json!({ "ops": [{ "op": "set_properties", "set": { "hb_note": "extra" } }] }),
-        object["etag"].as_str().unwrap(),
+        Some(fetched["etag"].as_str().unwrap()),
         "note-1",
     )
     .await
@@ -93,7 +94,7 @@ async fn a_missing_property_is_the_only_create() {
     let api = client(&mock);
     for table in TABLES {
         api.create_type(
-            &json!({ "name": table.name, "key": table.key, "layout": table.layout }),
+            &json!({ "name": table.name, "api_key": table.key, "layout": table.layout }),
             &format!("seed-type-{}", table.key),
         )
         .await
