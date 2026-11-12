@@ -8,7 +8,7 @@ Five small features borrowed from upcomputer. Each is independent and can ship a
 4. Files attached to question answers.
 5. A diagnostics and triage helper.
 
-Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to verify]**.
+Status: the approval cap, provider-switch confirmation, prompt links, and the diagnostics report are in the app. Files attached to question answers stay a separate slice. The answer command has no verified attachment field, so this change does not add one. Facts below are tagged **[verified]** or **[to verify]**.
 
 ## 0. Shared facts
 

@@ -134,6 +134,9 @@ pub(crate) async fn chat_view(
             s.providers.attach_notices(&mut out, slug, instance);
         }
     }
+    if on_main {
+        crate::bots::provider_switch::attach(&mut out, &s.cfg.bots_root, slug).await;
+    }
     // The client has no clock it may read in its data code, so the gateway says what time it is.
     // The tag ignores this field: a body that only moves `now` is not a new transcript.
     out["now"] = json!(unix_now() * 1000);

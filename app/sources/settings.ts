@@ -1,5 +1,5 @@
 import type { Sources, Result } from '../app.contract.d.ts';
-import { fixtureDefaultMode, fixtureGroupAnswer, setFixtureDefaultMode, setFixtureGroupAnswer, savedEffort } from '../host/fixture.ts';
+import { fixtureDefaultMode, fixtureGroupAnswer, fixtureMaxMode, setFixtureDefaultMode, setFixtureGroupAnswer, setFixtureMaxMode, savedEffort } from '../host/fixture.ts';
 import { fetchLimits, refreshLimitBars } from '../host/limits.ts';
 import { REACH_GATEWAY, say, localize, call, read, noteLocale, setNoticeHost, hostNotice, reply, systemChecked, setSystemChecked } from '../host/gateway.ts';
 import { forgetSections, offlineSections, readSections, rememberSections, sectionsFromRows } from '../host/sections.ts';
@@ -7,6 +7,9 @@ import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, postUnread } from 
 
 const storedRuntimeMode = (mode: string): boolean =>
   mode === 'approval-required' || mode === 'auto' || mode === 'full-access' || mode === 'independent';
+
+const storedCap = (mode: string): boolean =>
+  mode === 'approval-required' || mode === 'auto' || mode === 'full-access';
 
 export const settingsSources = {
   loadManagementMcp: async ([gate], store) => {
@@ -36,7 +39,7 @@ export const settingsSources = {
       body = await read(store, '/api/settings');
     } catch (error) {
       offline = true;
-      if (fixtureGroupAnswer === '' && fixtureDefaultMode === '' && held === null) throw error;
+      if (fixtureGroupAnswer === '' && fixtureDefaultMode === '' && fixtureMaxMode === '' && held === null) throw error;
     }
     const note = noticePrefs(body);
     return {
@@ -52,6 +55,7 @@ export const settingsSources = {
       noticeWhen: note.when,
       noticeEnabledMissing: note.enabled === null,
       groupAnswerPolicy: fixtureGroupAnswer !== '' ? fixtureGroupAnswer : (body.groupAnswerPolicy === 'everyone' || body.groupAnswerPolicy === 'chief' ? body.groupAnswerPolicy : 'last'),
+      maxRuntimeMode: fixtureMaxMode !== '' ? fixtureMaxMode : (storedCap(String(body.maxRuntimeMode ?? '')) ? String(body.maxRuntimeMode) : 'full-access'),
       sections: offline ? (held ?? []) : readSections(body.sections),
     };
   },
@@ -85,6 +89,15 @@ export const settingsSources = {
     return reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ notifications }) }));
   },
   setUserName: async ([userName], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ userName }) })),
+  setMaxMode: async ([maxRuntimeMode], store) => {
+    const r = await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ maxRuntimeMode }) });
+    if (!r.ok && r.error === REACH_GATEWAY && storedCap(maxRuntimeMode)) {
+      setFixtureMaxMode(maxRuntimeMode);
+      return { ok: true, error: '' };
+    }
+    if (r.ok) setFixtureMaxMode('');
+    return reply(r);
+  },
   setDefaultMode: async ([defaultRuntimeMode], store) => {
     const r = await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ defaultRuntimeMode }) });
     // The contract runner has no gateway. Remember the stored mode so the radio can show it.
@@ -241,7 +254,19 @@ export const settingsSources = {
     }
     return { ok: true, error: '' };
   },
+  loadDiagnostics: async ([gate], store) => {
+    if (gate !== '1') return { ok: false, text: '', error: '' };
+    const r = await call(store, '/api/diagnostics');
+    if (!r.ok && r.error === REACH_GATEWAY) return { ok: true, text: 'hbots diagnostics\nversion sample\n', error: '' };
+    if (!r.ok) return { ok: false, text: '', error: localize(r.error) };
+    return { ok: true, text: String(r.body?.text ?? ''), error: '' };
+  },
+  askDiagnostics: async ([slug], store) => {
+    const r = await call(store, '/api/diagnostics/ask', { method: 'POST', body: JSON.stringify({ slug }) });
+    if (!r.ok && r.error === REACH_GATEWAY) return { ok: true, error: '' };
+    return reply(r);
+  },
   setDefaultModel: async ([instanceId, model, effort], store) => reply(await call(store, '/api/settings', {
     method: 'PUT', body: JSON.stringify({ defaultModel: { instanceId, model, ...(effort !== '' ? { effort } : {}) } }),
   })),
-} satisfies Pick<Sources, 'loadManagementMcp' | 'setManagementMcp' | 'createManagementMcpCredential' | 'revokeManagementMcpCredential' | 'enableNotifications' | 'loadPrefs' | 'saveSections' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadLimits' | 'refreshLimits' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'setDefaultModel'>;
+} satisfies Pick<Sources, 'loadManagementMcp' | 'setManagementMcp' | 'createManagementMcpCredential' | 'revokeManagementMcpCredential' | 'enableNotifications' | 'loadPrefs' | 'saveSections' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setMaxMode' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadLimits' | 'refreshLimits' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'loadDiagnostics' | 'askDiagnostics' | 'setDefaultModel'>;

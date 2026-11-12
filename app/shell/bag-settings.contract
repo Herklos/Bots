@@ -88,4 +88,7 @@ members Bots
     machines=machines,
     machinesFailed=machinesFailed,
     machinesPending=machinesPending,
+    diagnostics=diagnostics,
+    diagAskError=diagAskError,
+    diagAskPending=diagAskPending,
   )

@@ -267,18 +267,17 @@ members Bots
       case none
         anytypeProbed = anytypeProbed
 
-  // Projects: a board of items by kind, edited in a sheet.
-  action doPickModel(bslug: string, instanceId: string, model: string, effort: string, mode: string)
-    if not pending(modelSaved)
-      send modelSaved = setModel(bslug, instanceId, model, effort, mode, "")
-
   action afterModel
     if modelError == ""
+      switchBot = ""
       toast = t("toast.modelSaved")
 
   action doDefaultMode(mode: string)
     if not pending(prefsSaved)
-      send prefsSaved = setDefaultMode(mode)
+      if mode.startsWith("cap:")
+        send prefsSaved = setMaxMode(mode.slice(4))
+      else
+        send prefsSaved = setDefaultMode(mode)
 
   action doGroupAnswer(policy: string)
     if not pending(prefsSaved)

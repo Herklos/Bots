@@ -1,0 +1,21 @@
+use TextControl from "../ui/controls.contract"
+
+component SwitchSheet
+  props
+    open: bool
+    name: string
+    from: string
+    to: string
+    pick: action
+    pending: bool
+  view
+    if open
+      column position="absolute" inset=0 z-index=40 background-color="surface.canvas" align-items="center" justify-content="center" padding="space.lg" testId="switch-sheet"
+        column gap="space.md" width="100%" max-width="24rem" box-sizing="border-box" padding="space.lg" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.raised"
+          text t("model.switchTitle") font="-exact-title3" testId="switch-title"
+          text t("model.switchBody", name=name, from=from, to=to) font="-exact-body" testId="switch-body"
+          row gap="space.sm" justify-content="flex-end"
+            button class=TextControl appearance="none" press=pick("", "", "", "", "cancel-switch") testId="switch-cancel"
+              text t("common.cancel")
+            button class=TextControl appearance="none" press=pick("", "", "", "", "confirm-switch") disabled=pending testId="switch-confirm"
+              text t("model.switchConfirm")

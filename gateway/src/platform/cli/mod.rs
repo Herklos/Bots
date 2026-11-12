@@ -17,6 +17,7 @@ mod env;
 mod tests;
 mod update;
 
+pub(crate) use doctor::bundle;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use env::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]

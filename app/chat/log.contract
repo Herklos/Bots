@@ -69,7 +69,7 @@ component ChatLog
               row justify-content="center" padding="space.sm space.lg"
                 row gap="space.xs" align-items="center" padding="2px space.sm 2px 2px" border-radius="radius.full" background-color="surface.bubble" testId=`event-${m.id}`
                   Face(shape=(m.botSlug != "" ? m.botShape : shapeOf(bots, slug)), color=faceColor(m.botSlug != "" ? m.botColor : colorOf(bots, slug)), state="idle", size=18, still=true)
-                  text eventVerb(m.variant, m.text, t("event.sent"), t("event.routineCreated"), t("event.routineUpdated"), t("event.routineDeleted"), t("event.from"), t("event.ran"), t("event.started"), t("event.providerLimit"), t("event.providerError")) font="-exact-footnote" color="-exact-label" white-space="nowrap" flex-shrink=0 testId=`event-verb-${m.id}`
+                  text eventVerb(m.variant, m.text, t("event.sent"), t("event.routineCreated"), t("event.routineUpdated"), t("event.routineDeleted"), t("event.from"), t("event.ran"), t("event.started"), t("event.providerLimit"), t("event.providerError"), t("event.switched")) font="-exact-footnote" color="-exact-label" white-space="nowrap" flex-shrink=0 testId=`event-verb-${m.id}`
                   if m.botName != "" or m.variant == "from" or m.variant == "sent"
                     text (m.botName != "" ? m.botName : t("settings.unknown")) font="-exact-footnote" color="-exact-label" white-space="nowrap" testId=`event-bot-${m.id}`
                   if m.title != ""

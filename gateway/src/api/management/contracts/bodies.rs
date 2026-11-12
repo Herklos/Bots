@@ -289,6 +289,7 @@ impl Operation {
             "hbots_open_side" => string_object(&["text"]),
             "hbots_merge_side" => object(&[("threadId", string())], &[]),
             "hbots_environment_put" => object(&[("id", string())], &["id"]),
+            "hbots_ask_diagnostics" => object(&[("slug", string())], &["slug"]),
             "hbots_mark_seen"
             | "hbots_room_seen"
             | "hbots_access_network_restart"

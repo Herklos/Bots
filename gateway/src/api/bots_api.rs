@@ -206,7 +206,9 @@ pub(crate) async fn model_put(
     match provider_step(&running, next, &body) {
         ProviderStep::AwaitConfirm => Err(ApiError::new(409, CONFIRM_SWITCH)),
         ProviderStep::Apply => {
+            let switching = crate::bots::provider_switch::switched(&running, next);
             s.bots.save(&slug, &patch, false).await?;
+            let mut confirmed = false;
             if s.harness.connected().await {
                 if let Ok(provisioning) = s.harness.provisioning() {
                     crate::bots::provisioner::push_model(provisioning, &bot, &selection)
@@ -214,7 +216,13 @@ pub(crate) async fn model_put(
                         .map_err(|e| {
                             ApiError::new(502, format!("T3 didn't take the model: {e}"))
                         })?;
+                    confirmed = true;
                 }
+            }
+            if switching && confirmed {
+                let listed = s.providers.list(s.harness.as_ref()).await.ok();
+                let name = crate::bots::provider_switch::display_name(listed.as_ref(), next);
+                crate::bots::provider_switch::remember(&s.cfg.bots_root, &slug, &name).await;
             }
             Ok(Json(json!({ "ok": true })))
         }

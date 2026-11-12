@@ -1,0 +1,31 @@
+use Bot from "../ui/shapes.contract"
+use Diagnostics from "../ui/root-types.contract"
+use TextControl from "../ui/controls.contract"
+
+component DiagnosticsReport
+  props
+    report: Diagnostics
+    bots: Bot[]
+    ask: action
+    asking: bool
+    askError: string
+  action copyReport
+    copyText(report.text)
+  view
+    column gap="space.sm" testId="diagnostics"
+      if report.error != ""
+        text report.error color="-exact-system-red" font="-exact-footnote" testId="diagnostics-error"
+      if report.text != ""
+        text report.text font="-exact-footnote" white-space="pre-wrap" testId="diagnostics-text"
+        row gap="space.sm"
+          button class=TextControl appearance="none" press=copyReport testId="diagnostics-copy"
+            text t("diagnostics.copy")
+          link href="/api/diagnostics?download=1" target="_blank" testId="diagnostics-save"
+            text t("diagnostics.save")
+      text t("diagnostics.ask") color="ink.muted" font="-exact-footnote" testId="diagnostics-ask"
+      row gap="space.xs" flex-wrap="wrap"
+        for b in bots.filter(x => not x.hidden and not x.subagent) key=b.slug
+          button class=TextControl appearance="none" press=ask("", b.slug, "", "", "ask-diagnostics") disabled=asking testId=`diagnostics-ask-${b.slug}`
+            text t("diagnostics.askBot", name=b.name)
+      if askError != ""
+        text askError color="-exact-system-red" font="-exact-footnote" testId="diagnostics-ask-error"

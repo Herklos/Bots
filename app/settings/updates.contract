@@ -1,6 +1,8 @@
 use Glyph from "../glyph.contract"
 use SectionLabel from "../ui/controls.contract"
-use Session, About, SystemStatus from "../ui/root-types.contract"
+use Session, About, SystemStatus, Diagnostics from "../ui/root-types.contract"
+use Bot from "../ui/shapes.contract"
+use DiagnosticsReport from "./diag.contract"
 use GroupCard, SettingsRow, SettingsFoot from "../ui/sidebar.contract"
 // UpdateSettings: one settings domain, values injected from the root through SettingsScreen.
 component UpdateSettings
@@ -18,6 +20,11 @@ component UpdateSettings
     updateStartedPending: bool
     updateStuck: bool
     updateTo: string
+    diagnostics: Diagnostics
+    diagAskError: string
+    diagAskPending: bool
+    bots: Bot[]
+    doPickModel: action
   view
     column gap="space.xl"
       column
@@ -61,6 +68,9 @@ component UpdateSettings
             text t("settings.changelog") font-weight=500 flex=1
             column color="ink.muted"
               Glyph(name="chevron", size=18)
+      column
+        text t("diagnostics.title") class=SectionLabel
+        DiagnosticsReport(report=diagnostics, bots=bots, ask=doPickModel, asking=diagAskPending, askError=diagAskError)
       if session.passwordRequired
         column class=GroupCard padding="0"
           button class=SettingsRow appearance="none" press=logout justify-content="flex-start" color="-exact-system-red" testId="sign-out"

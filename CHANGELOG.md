@@ -11,6 +11,9 @@ This release adds side conversations and prompt links, and improves helper polic
 
 ### Improvements
 
+- Set a maximum approval mode in Settings. Existing Bots keep the mode already saved. The next message uses the cap, and the inbox shows Above the limit. hbots applies the cap itself and does not write T3's `limits.maxRuntimeMode`.
+- Confirm a provider switch before it is applied, then show a Switched to chip in the transcript.
+- Open the redacted diagnostics report from Settings, then copy it, save it, or ask a Bot to read it.
 - Apply the parent's helper policy when Bots create durable subagents through MCP, including enabled state, limits and defaults.
 - Keep the large computer preview visible while the next frame loads.
 - Close the mention menu with Escape or after a completed mention, and use shared mention rules across conversations.

@@ -40,6 +40,7 @@ component SettingsScreen
     doPairStart: action
     doPrepareAnytype: action
     doPickBackend: action
+    doPickModel: action
     doPickTheme: action
     doRestartNetwork: action
     doRestartStorage: action
@@ -168,6 +169,10 @@ component SettingsScreen
     updateTo = settingsBag.updateTo
     usagePeriod = settingsBag.usagePeriod
     usageView = settingsBag.usageView
+    diagnostics = settingsBag.diagnostics
+    diagAskError = settingsBag.diagAskError
+    diagAskPending = settingsBag.diagAskPending
+    doPickModel
   view
     column class=Screen navigationKey=`${route}` navigationScroll="settings-form" position="absolute" inset=0
       header class=PageHeader

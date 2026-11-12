@@ -1,4 +1,4 @@
-use Reply, Session, Network, Storage, Pairing, AnytypeCheck, About, SystemStatus, UpdateStart, Prefs, NoticeState from "../ui/root-types.contract"
+use Reply, Session, Network, Storage, Pairing, AnytypeCheck, About, SystemStatus, UpdateStart, Prefs, NoticeState, Diagnostics from "../ui/root-types.contract"
 use MachineList from "./machines.contract"
 use Bot, Convo, Provider, UsageReport from "../ui/shapes.contract"
 use LimitList from "./limits.contract"
@@ -94,3 +94,6 @@ shape SettingsBag
   machines: MachineList
   machinesFailed: bool
   machinesPending: bool
+  diagnostics: Diagnostics
+  diagAskError: string
+  diagAskPending: bool

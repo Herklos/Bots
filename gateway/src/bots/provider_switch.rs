@@ -4,10 +4,11 @@
 //! does not set `confirmSwitch` to true is refused: nothing is saved, and the
 //! harness is not told. A later request with `confirmSwitch: true` is the step
 //! that applies it. A model on the provider already in use still applies on the
-//! first request. The app sheet that asks for that confirmation waits on a real
-//! cross-provider spike.
+//! first request. The app shows a confirm sheet before it sends that request.
+//! A successful switch is remembered beside the Bot folder and shown as a chip.
 
-use serde_json::Value;
+use serde_json::{json, Value};
+use std::path::Path;
 
 pub(crate) const CONFIRM_SWITCH: &str = "Confirm the provider switch before it is applied.";
 
@@ -38,6 +39,82 @@ pub(crate) fn provider_step(running: &Value, next_instance: &str, body: &Value) 
     } else {
         ProviderStep::AwaitConfirm
     }
+}
+
+/// True when this choice leaves the provider the Bot is running.
+pub(crate) fn switched(running: &Value, next_instance: &str) -> bool {
+    instance_of(running) != next_instance
+}
+
+/// The name shown on the chip. A missing list keeps the instance id.
+pub(crate) fn display_name(list: Option<&Value>, instance: &str) -> String {
+    list.and_then(|list| list["providers"].as_array())
+        .and_then(|rows| {
+            rows.iter()
+                .find(|row| row["instanceId"].as_str() == Some(instance))
+        })
+        .and_then(|row| row["displayName"].as_str())
+        .filter(|name| !name.is_empty())
+        .unwrap_or(instance)
+        .to_string()
+}
+
+fn book_path(root: &Path) -> std::path::PathBuf {
+    root.join(".botapp").join("provider-switches.json")
+}
+
+/// Remember the latest confirmed switch. Old versions ignore this file.
+pub(crate) async fn remember(root: &Path, slug: &str, name: &str) {
+    if slug.is_empty() || name.is_empty() {
+        return;
+    }
+    let path = book_path(root);
+    let mut book = crate::storage::read_json(&path)
+        .await
+        .unwrap_or_else(|| json!({}));
+    book[slug] = json!({ "name": name, "at": crate::vault::now_iso() });
+    if let Err(err) = crate::storage::write_json(&path, &book).await {
+        tracing::warn!("provider switch note was not saved: {err}");
+    }
+}
+
+/// Attach one chip for the latest switch. The view is rebuilt on each read.
+pub(crate) async fn attach(view: &mut Value, root: &Path, slug: &str) {
+    let Some(row) = crate::storage::read_json(&book_path(root))
+        .await
+        .and_then(|book| book.get(slug).cloned())
+    else {
+        return;
+    };
+    let Some(name) = row["name"].as_str().filter(|name| !name.is_empty()) else {
+        return;
+    };
+    let base = max_ordinal(view);
+    let mut events = view["events"].as_array().cloned().unwrap_or_default();
+    events.push(json!({
+        "id": format!("provider-switch-{slug}"),
+        "ordinal": base + 1,
+        "at": row["at"].as_str().unwrap_or(""),
+        "kind": "provider-switch",
+        "text": "Switched to",
+        "title": name,
+    }));
+    view["events"] = json!(events);
+}
+
+fn max_ordinal(view: &Value) -> i64 {
+    let mut max = 0_i64;
+    for key in ["messages", "events"] {
+        let Some(rows) = view[key].as_array() else {
+            continue;
+        };
+        for row in rows {
+            if let Some(ordinal) = row["ordinal"].as_i64() {
+                max = max.max(ordinal);
+            }
+        }
+    }
+    max
 }
 
 fn instance_of(selection: &Value) -> String {

@@ -55,6 +55,8 @@ pub(crate) fn application_routes() -> (
     }
     route!("/api/config", get(config_route));
     route!("/api/settings", get(get_settings).put(put_settings));
+    route!("/api/diagnostics", get(get_diagnostics));
+    route!("/api/diagnostics/ask", post(ask_diagnostics));
     route!("/api/bots", get(list_bots).post(create_bot));
     route!(
         "/api/bots/{slug}",

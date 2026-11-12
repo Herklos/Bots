@@ -66,6 +66,11 @@ export let fixtureDefaultMode = '';
 export function setFixtureDefaultMode(value: string) {
   fixtureDefaultMode = value;
 }
+// The approval cap the contract runner saves when the gateway is down.
+export let fixtureMaxMode = '';
+export function setFixtureMaxMode(value: string) {
+  fixtureMaxMode = value;
+}
 export function roomAnswer(id: string, made?: string): string {
   const saved = fixtureRoomPolicy.get(id);
   if (saved) return saved;
@@ -102,6 +107,13 @@ export function fixtureProviders() {
     models: [
       { slug: 'haiku', name: 'Haiku', recommended: true, effort: 'medium', efforts: efforts() },
       { slug: 'sonnet', name: 'Sonnet', recommended: false, effort: 'medium', efforts: efforts() },
+    ],
+  }, {
+    instanceId: 'codex',
+    name: 'Codex',
+    account: '',
+    models: [
+      { slug: 'gpt', name: 'GPT', recommended: false, effort: '', efforts: [] },
     ],
   }];
 }

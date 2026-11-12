@@ -213,6 +213,113 @@
         }
       }
     },
+    "/api/diagnostics": {
+      "get": {
+        "operationId": "hbots_get_diagnostics",
+        "summary": "GET /api/diagnostics",
+        "parameters": [],
+        "x-hbots-permission": "read",
+        "responses": {
+          "200": {
+            "description": "Original gateway operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                  "x-hbots-dynamic": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Gateway error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "applicationSession": []
+          }
+        ]
+      }
+    },
+    "/api/diagnostics/ask": {
+      "post": {
+        "operationId": "hbots_ask_diagnostics",
+        "summary": "POST /api/diagnostics/ask",
+        "parameters": [],
+        "x-hbots-permission": "write",
+        "responses": {
+          "200": {
+            "description": "Original gateway operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                  "x-hbots-dynamic": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Gateway error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "applicationSession": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "slug": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "slug"
+                ],
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/bots": {
       "get": {
         "operationId": "hbots_list_bots",

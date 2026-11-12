@@ -114,7 +114,13 @@ shape Prefs
   noticeWhen: string
   noticeEnabledMissing: bool
   groupAnswerPolicy: string
+  maxRuntimeMode: string
   sections: Section[]
+
+shape Diagnostics
+  ok: bool
+  text: string
+  error: string
 
 // The host page, as the poster reads it. `hidden` or an unfocused window is background.
 shape PageState

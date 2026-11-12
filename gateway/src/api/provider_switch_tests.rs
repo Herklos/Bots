@@ -82,6 +82,18 @@ async fn a_provider_switch_is_a_separate_confirmed_step() {
         mock.model_pushes().is_empty(),
         "an unconfirmed switch is not sent to the harness"
     );
+    assert!(
+        storage::read_json(
+            &state
+                .cfg
+                .bots_root
+                .join(".botapp")
+                .join("provider-switches.json"),
+        )
+        .await
+        .is_none(),
+        "an unconfirmed switch writes no chip"
+    );
 
     let same = put_model(
         &state,
@@ -128,6 +140,25 @@ async fn a_provider_switch_is_a_separate_confirmed_step() {
             .count()
             == 1
     );
+    let note = storage::read_json(
+        &state
+            .cfg
+            .bots_root
+            .join(".botapp")
+            .join("provider-switches.json"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(note[&slug]["name"], "codex");
+    let view = chat_view(&state, &slug, None, None).await.unwrap();
+    let chip = view["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["kind"] == "provider-switch")
+        .unwrap();
+    assert_eq!(chip["title"], "codex");
+    assert_eq!(chip["text"], "Switched to");
 }
 
 #[tokio::test]

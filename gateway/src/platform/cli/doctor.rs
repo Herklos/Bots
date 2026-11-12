@@ -196,6 +196,10 @@ fn format_free(bytes: Option<u64>) -> String {
 }
 
 fn render_json(report: &Report) -> String {
+    serde_json::to_string_pretty(&report_value(report)).unwrap_or_else(|_| "{}".into())
+}
+
+fn report_value(report: &Report) -> Value {
     let (present, valid, scopes, token_error) = match &report.token {
         TokenReport::Missing => (false, Value::Null, Vec::new(), None),
         TokenReport::Unchecked { reason } => (true, Value::Null, Vec::new(), Some(reason.clone())),
@@ -261,7 +265,28 @@ fn render_json(report: &Report) -> String {
         },
         "logs": report.logs,
     });
-    serde_json::to_string_pretty(&body).unwrap_or_else(|_| "{}".into())
+    body
+}
+
+/// The same redacted report `hbots doctor` prints, for Settings and Ask a Bot.
+pub(crate) async fn bundle() -> (String, Value) {
+    let home = crate::platform::release::home_dir();
+    let file = file_env(&home);
+    let process = process_env();
+    let view = EnvView {
+        file: &file,
+        process: &process,
+    };
+    let secrets = secrets_from(&home, &view);
+    let report = collect(&home, &view, &secrets).await;
+    let value = report_value(&report);
+    let text = redact(&render_text(&report), &secrets);
+    let encoded = redact(
+        &serde_json::to_string(&value).unwrap_or_else(|_| "{}".into()),
+        &secrets,
+    );
+    let value = serde_json::from_str(&encoded).unwrap_or(value);
+    (text, value)
 }
 
 async fn collect(home: &Path, view: &EnvView<'_>, secrets: &Secrets) -> Report {

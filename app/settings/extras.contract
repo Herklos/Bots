@@ -1,0 +1,52 @@
+use Diagnostics, Reply from "../ui/root-types.contract"
+
+members Bots
+  state switchBot = ""
+  state switchInstance = ""
+  state switchModel = ""
+  state switchEffort = ""
+  state switchMode = ""
+  state switchFrom = ""
+  state switchTo = ""
+
+  resource diagnostics = loadDiagnostics(systemGate) as shape Diagnostics else empty()
+  mutation diagnosticsAsked as shape Reply then afterDiagnosticsAsk
+  derive diagAskError = match diagnosticsAsked { case some(r) => r.error, case none => "" }
+  derive diagAskPending = pending(diagnosticsAsked)
+  derive modelSavedPending = pending(modelSaved)
+
+  action doPickModel(bslug: string, instanceId: string, model: string, effort: string, mode: string)
+    if mode == "cancel-switch"
+      switchBot = ""
+    else if mode == "confirm-switch"
+      if switchBot != "" and not pending(modelSaved)
+        send modelSaved = setModel(switchBot, switchInstance, switchModel, switchEffort, switchMode, "1")
+    else if mode == "ask-diagnostics"
+      if instanceId != "" and not pending(diagnosticsAsked)
+        send diagnosticsAsked = askDiagnostics(instanceId)
+    else if not pending(modelSaved)
+      let listed = models.providers.length > 0 ? models.providers : childModels.providers
+      let picked = first(listed.filter(p => p.instanceId == instanceId))
+      let nextName = match picked { case some(p) => p.name, case none => "" }
+      let onChild = subSlug != "" and bslug == subSlug
+      let currentId = onChild ? childModels.instanceId : models.instanceId
+      let fromName = onChild ? childModels.providerName : models.providerName
+      if currentId != "" and instanceId != "" and instanceId != currentId
+        switchBot = bslug
+        switchInstance = instanceId
+        switchModel = model
+        switchEffort = effort
+        switchMode = mode
+        switchFrom = fromName
+        switchTo = nextName
+      else
+        switchBot = ""
+        send modelSaved = setModel(bslug, instanceId, model, effort, mode, "")
+
+  action afterDiagnosticsAsk
+    match diagnosticsAsked
+      case some(r)
+        if r.ok
+          toast = t("diagnostics.sent")
+      case none
+        toast = toast

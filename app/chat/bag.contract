@@ -93,3 +93,7 @@ shape ChatBag
   linkLocal: bool
   limits: ProviderLimit[]
   limitFocus: string
+  switchBot: string
+  switchFrom: string
+  switchTo: string
+  modelSavedPending: bool
