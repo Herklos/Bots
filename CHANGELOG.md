@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.1
+
+This release wires Anytype sync into the gateway and adds webhook routines, alongside activity-level tool display and settings polish.
+
+### New features
+
+- Wire Anytype sync into the gateway (M5): property definitions, routine wiring and the five sync tools, gated behind the beta flag.
+- Show Anytype sync in Settings with its connection status.
+- Add the webhook routine builder, harness calls, and a public `/hooks` route that accepts webhook deliveries.
+- Show tool calls beside chat, following the chosen activity level.
+
+### Improvements
+
+- Hide not-installed providers from the settings limit bars.
+- Count the five Anytype sync tools in the MCP SDK catalog check.
+
 ## 0.4.0
 
 This release adds a management MCP interface, a Code tab on Bot details, provider limit visibility and memory reflection, and improves conversation controls, helper permissions and chat layout.
