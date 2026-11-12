@@ -6,14 +6,24 @@ const { chromium } = require('playwright');
   const p = await b.newPage({ viewport: { width: 400, height: 800 }, deviceScaleFactor: 2 });
   p.on('console', m => { if (m.type() === 'error') console.log('console error:', m.text()); });
   await p.goto(base + '/');
-  await p.waitForSelector('[data-testid="empty-new"]', { timeout: 20000 }); // a clean home has no Bots
+  await p.waitForSelector('[data-testid="first-bot"]', { timeout: 20000 }); // a clean home has no Bots
   await p.screenshot({ path: S + '/1-empty.png' });
-  await p.click('[data-testid="new-bot"]');
-  await p.waitForSelector('[data-testid="new-name"]');
+  await p.click('[data-testid="first-create"]');
+  await p.waitForSelector('[data-testid="step-name"]');
   await p.fill('[data-testid="new-name"]', 'Ada');
+  await p.click('[data-testid="create-next"]');
+  await p.waitForSelector('[data-testid="step-colour"]');
   await p.click('[data-testid="colour-brand.violet"]');
   await p.mouse.move(5, 700); await p.waitForTimeout(400);
   await p.screenshot({ path: S + '/2-new.png' });
+  await p.click('[data-testid="create-next"]');
+  await p.waitForSelector('[data-testid="step-shape"]');
+  await p.click('[data-testid="create-next"]');
+  await p.waitForSelector('[data-testid="step-template"]');
+  await p.click('[data-testid="create-skip"]');
+  await p.waitForSelector('[data-testid="step-message"]');
+  await p.click('[data-testid="create-next"]');
+  await p.waitForSelector('[data-testid="step-review"]');
   await p.click('[data-testid="create"]');
   await p.waitForSelector('[data-testid="bot-ada"]', { timeout: 20000 });
   await p.waitForTimeout(500);

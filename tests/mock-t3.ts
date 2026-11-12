@@ -128,6 +128,13 @@ Bun.serve({
         answered.push({ tag, turnItemId: payload.turnItemId, answerType: payload.answer?.type ?? null });
         return ok(ws, id, {});
       }
+      if (tag === 'server.getConfig') {
+        return ok(ws, id, {
+          providers: [{ instanceId: 'codex', enabled: true, installed: true, status: 'ready',
+            models: [{ slug: 'claude-haiku-5-5', name: 'Haiku 5.5', capabilities: { optionDescriptors: [] } }] }],
+          settings: {},
+        });
+      }
       fail(ws, id, `unknown rpc ${tag}`);
     },
   },
