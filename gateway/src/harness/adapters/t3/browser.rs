@@ -75,6 +75,10 @@ impl Browser for T3 {
         super::hold::input(slug, tab_id, messages).await
     }
 
+    async fn held_frame(&self, slug: &str) -> Option<Vec<u8>> {
+        super::hold::latest(slug).await
+    }
+
     async fn release(&self, slug: &str) -> bool {
         super::hold::release(slug).await
     }

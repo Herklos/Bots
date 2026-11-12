@@ -148,6 +148,13 @@ members Bots
   task aimComputerLarge when holding and computerEnlarged
     after(1, focusLarge)
 
+  // The inbox poll is 1.5s. While driving, sample the held picture sooner.
+  task followHeld when holding and onComputer
+    every(250, pullComputer)
+
+  action pullComputer
+    refresh computer
+
   action largePageKey(k: string, event: KeyboardEvent)
     if holding and not event.isComposing
       let chord = pageChord(k, event.metaKey, event.ctrlKey)

@@ -281,6 +281,10 @@ impl Browser for MockHarness {
         None
     }
 
+    async fn held_frame(&self, _slug: &str) -> Option<Vec<u8>> {
+        None
+    }
+
     async fn release(&self, _slug: &str) -> bool {
         false
     }

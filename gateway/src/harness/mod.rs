@@ -161,6 +161,8 @@ pub trait Browser: Send + Sync {
     ) -> Result<Frame, HarnessError>;
     /// Input on the socket this viewer already holds. `None` means there is no live one.
     async fn held_input(&self, slug: &str, tab_id: &str, messages: &[Value]) -> Option<Vec<u8>>;
+    /// Newest JPEG on the socket this viewer holds. `None` when it holds none.
+    async fn held_frame(&self, slug: &str) -> Option<Vec<u8>>;
     /// Close the held socket. False when this viewer was not holding one.
     async fn release(&self, slug: &str) -> bool;
     async fn edit(&self, thread_id: &str, tab_id: &str, kind: &str) -> Result<Frame, HarnessError>;

@@ -20,7 +20,8 @@ pub(crate) async fn computer_get(
     let mut image = String::new();
     let mut error = String::new();
     // A held page keeps the JPEG from its interactive session. Watching that
-    // same tab does not open a second socket.
+    // same tab does not open a second socket. The reader on that socket is
+    // newer than the frame stored at take, so the poll shows the live page.
     let held = {
         let sessions = crate::bots::computer::sessions()
             .lock()
@@ -28,7 +29,12 @@ pub(crate) async fn computer_get(
         sessions.picture(&slug, &selected)
     };
     match held {
-        Some(frame) => image = frame,
+        Some(frame) => {
+            image = match browser.held_frame(&slug).await {
+                Some(bytes) if !bytes.is_empty() => crate::bots::library::encode_file(&bytes),
+                _ => frame,
+            };
+        }
         None if !selected.is_empty() => {
             let large = q.get("view").is_some_and(|view| view == "large");
             match browser
@@ -108,12 +114,31 @@ pub(crate) async fn computer_control(
     if tab.is_empty() {
         return Err(ApiError::bad_request("Pick a page first."));
     }
+    let width = u32::try_from(body["width"].as_u64().unwrap_or(0)).unwrap_or(0);
+    let height = u32::try_from(body["height"].as_u64().unwrap_or(0)).unwrap_or(0);
+    // The reader stores frames during take. The session has to exist first,
+    // or those frames are dropped and the take-time JPEG overwrites them.
+    if action == "take" {
+        crate::bots::computer::sessions()
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .take(&slug, tab, width, height);
+    }
     let browser = s.harness.browser().map_err(|err| err.api())?;
     let frame = match action {
-        "take" => browser
-            .take(&thread, &slug, tab)
-            .await
-            .map_err(|err| err.to_string()),
+        "take" => match browser.take(&thread, &slug, tab).await {
+            Ok(bytes) => Ok(bytes),
+            Err(err) => {
+                // A failed first take leaves no socket. A failed re-take leaves the old one.
+                if browser.held_frame(&slug).await.is_none() {
+                    crate::bots::computer::sessions()
+                        .lock()
+                        .unwrap_or_else(|poison| poison.into_inner())
+                        .release(&slug);
+                }
+                Err(err.to_string())
+            }
+        },
         "release" if browser.release(&slug).await => Ok(Vec::new()),
         _ => browser
             .control(&thread, tab, action)
@@ -121,18 +146,29 @@ pub(crate) async fn computer_control(
             .map_err(|err| err.to_string()),
     }
     .map_err(ApiError::bad_request)?;
+    let live = if action == "take" {
+        browser.held_frame(&slug).await.unwrap_or_default()
+    } else {
+        Vec::new()
+    };
     let mut sessions = crate::bots::computer::sessions()
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
     match action {
         "take" => {
-            let width = u32::try_from(body["width"].as_u64().unwrap_or(0)).unwrap_or(0);
-            let height = u32::try_from(body["height"].as_u64().unwrap_or(0)).unwrap_or(0);
             sessions.take(&slug, tab, width, height);
-            if !frame.is_empty() {
-                sessions.note_image(&slug, &crate::bots::library::encode_file(&frame));
-                if let Some((w, h)) = crate::bots::computer::jpeg_size(&frame) {
-                    sessions.remember_size(&slug, w, h);
+            // The reader may already have stored a newer frame. Do not put the
+            // take-time JPEG back on top of it.
+            if sessions
+                .picture(&slug, tab)
+                .is_some_and(|image| image.is_empty())
+            {
+                let bytes = if live.is_empty() { &frame } else { &live };
+                if !bytes.is_empty() {
+                    sessions.note_image(&slug, &crate::bots::library::encode_file(bytes));
+                    if let Some((w, h)) = crate::bots::computer::jpeg_size(bytes) {
+                        sessions.remember_size(&slug, w, h);
+                    }
                 }
             }
         }

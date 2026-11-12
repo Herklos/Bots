@@ -1,24 +1,44 @@
 //! One preview socket for the whole hold. Take opens it, input reuses it, release closes it.
 //! A held page then pays the connect and take once, not on every key.
+//!
+//! That socket is the only picture of the page. A reader acks each JPEG into [`Live::latest`]
+//! for the whole hold. Input only writes. Without the reader, frames sit unread and the
+//! picture stays on the take frame until release opens a fresh watch socket.
 use crate::bots::computer::{control_message, watch_message};
 use crate::harness::t3::T3;
-use futures_util::{SinkExt, StreamExt};
+use futures_util::{stream::SplitSink, SinkExt, StreamExt};
 use serde_json::Value;
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
+use tokio::sync::Notify;
 use tokio_tungstenite::tungstenite::{client::IntoClientRequest, http::HeaderValue, Message};
 
 type Ws =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
-struct Held {
+type Write = SplitSink<Ws, Message>;
+
+/// How long to wait after a frame before asking for the next. A peer that emits one
+/// JPEG per ack would otherwise spin. A still page sends nothing, so this is idle.
+const ACK_PACE: Duration = Duration::from_millis(80);
+
+struct Live {
     tab: String,
-    ws: Ws,
+    write: Arc<tokio::sync::Mutex<Write>>,
+    /// Newest JPEG. Empty until the first one arrives.
+    latest: Arc<std::sync::Mutex<Vec<u8>>>,
+    stopped: Arc<AtomicBool>,
+    stop: Arc<Notify>,
 }
 
-type Slot = Arc<tokio::sync::Mutex<Held>>;
-
-fn slots() -> &'static tokio::sync::Mutex<HashMap<String, Slot>> {
-    static SLOTS: std::sync::OnceLock<tokio::sync::Mutex<HashMap<String, Slot>>> =
+fn slots() -> &'static tokio::sync::Mutex<HashMap<String, Arc<Live>>> {
+    static SLOTS: std::sync::OnceLock<tokio::sync::Mutex<HashMap<String, Arc<Live>>>> =
         std::sync::OnceLock::new();
     SLOTS.get_or_init(Default::default)
 }
@@ -111,6 +131,77 @@ async fn next_jpeg(ws: &mut Ws, wait: Duration) -> Result<Vec<u8>, String> {
     }
 }
 
+fn remember(slug: &str, live: &Live, bytes: &[u8]) {
+    if let Ok(mut latest) = live.latest.lock() {
+        *latest = bytes.to_vec();
+    }
+    let mut sessions = crate::bots::computer::sessions()
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
+    sessions.note_image(slug, &crate::bots::library::encode_file(bytes));
+    if let Some((width, height)) = crate::bots::computer::jpeg_size(bytes) {
+        sessions.remember_size(slug, width, height);
+    }
+}
+
+fn stop(live: &Live) {
+    live.stopped.store(true, Ordering::Release);
+    live.stop.notify_waiters();
+}
+
+fn retire(old: Arc<Live>) {
+    stop(&old);
+    tokio::spawn(async move {
+        let mut write = old.write.lock().await;
+        let _ = write.close().await;
+    });
+}
+
+/// Read frames for as long as the hold lasts. Each one is acked, or the stream stalls.
+async fn pump(slug: String, live: Arc<Live>, mut read: futures_util::stream::SplitStream<Ws>) {
+    loop {
+        let notified = live.stop.notified();
+        tokio::pin!(notified);
+        if live.stopped.load(Ordering::Acquire) {
+            break;
+        }
+        let message = tokio::select! {
+            _ = notified => break,
+            message = read.next() => message,
+        };
+        match message {
+            Some(Ok(Message::Binary(bytes))) => {
+                remember(&slug, &live, &bytes);
+                let pause = live.stop.notified();
+                tokio::pin!(pause);
+                tokio::select! {
+                    _ = pause => break,
+                    _ = tokio::time::sleep(ACK_PACE) => {}
+                }
+                if live.stopped.load(Ordering::Acquire) {
+                    break;
+                }
+                let mut write = live.write.lock().await;
+                if write
+                    .send(Message::text(watch_message().to_string()))
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+            Some(Ok(_)) => {}
+            _ => break,
+        }
+    }
+    if !live.stopped.load(Ordering::Acquire) {
+        let mut all = slots().lock().await;
+        if all.get(&slug).is_some_and(|now| Arc::ptr_eq(now, &live)) {
+            all.remove(&slug);
+        }
+    }
+}
+
 /// Take the page on a new socket and keep it. Returns the first frame, possibly empty.
 pub(crate) async fn take(t3: &T3, thread: &str, slug: &str, tab: &str) -> Result<Vec<u8>, String> {
     let mut ws = connect(t3, thread, tab).await?;
@@ -126,58 +217,92 @@ pub(crate) async fn take(t3: &T3, thread: &str, slug: &str, tab: &str) -> Result
             .await
             .unwrap_or_default();
     }
-    let held = Held {
+    let (write, read) = ws.split();
+    let live = Arc::new(Live {
         tab: tab.to_string(),
-        ws,
+        write: Arc::new(tokio::sync::Mutex::new(write)),
+        latest: Arc::new(std::sync::Mutex::new(frame.clone())),
+        stopped: Arc::new(AtomicBool::new(false)),
+        stop: Arc::new(Notify::new()),
+    });
+    if !frame.is_empty() {
+        remember(slug, &live, &frame);
+    }
+    let replaced = {
+        let mut all = slots().lock().await;
+        all.insert(slug.to_string(), live.clone())
     };
-    slots()
-        .lock()
-        .await
-        .insert(slug.to_string(), Arc::new(tokio::sync::Mutex::new(held)));
+    if let Some(old) = replaced {
+        retire(old);
+    }
+    tokio::spawn(pump(slug.to_string(), live, read));
     Ok(frame)
 }
 
 /// Send input on the held socket. `None` means there is no live one for this tab,
-/// so the caller falls back to a socket of its own.
+/// so the caller falls back to a socket of its own. The picture arrives on the reader.
 pub(crate) async fn input(slug: &str, tab: &str, messages: &[Value]) -> Option<Vec<u8>> {
-    let slot = slots().lock().await.get(slug).cloned()?;
-    let mut held = slot.lock().await;
-    if held.tab != tab {
+    let live = {
+        let all = slots().lock().await;
+        all.get(slug).cloned()
+    }?;
+    if live.tab != tab || live.stopped.load(Ordering::Acquire) {
         return None;
     }
     let sent = async {
+        let mut write = live.write.lock().await;
         for message in messages {
-            held.ws
+            write
                 .send(Message::text(message.to_string()))
                 .await
                 .map_err(|_e| CLOSED.to_string())?;
         }
-        // A still page sends nothing new, so don't wait long for a picture.
-        next_jpeg(&mut held.ws, Duration::from_millis(100)).await
+        Ok::<(), String>(())
     }
     .await;
-    match sent {
-        Ok(frame) => Some(frame),
-        Err(_) => {
-            drop(held);
-            let mut all = slots().lock().await;
-            if all.get(slug).is_some_and(|now| Arc::ptr_eq(now, &slot)) {
-                all.remove(slug);
-            }
-            None
+    if sent.is_err() {
+        stop(&live);
+        let mut all = slots().lock().await;
+        if all.get(slug).is_some_and(|now| Arc::ptr_eq(now, &live)) {
+            all.remove(slug);
         }
+        return None;
+    }
+    Some(Vec::new())
+}
+
+/// The newest JPEG on the held socket. `None` when this viewer is not holding one.
+pub(crate) async fn latest(slug: &str) -> Option<Vec<u8>> {
+    let live = {
+        let all = slots().lock().await;
+        all.get(slug).cloned()
+    }?;
+    let bytes = live
+        .latest
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner())
+        .clone();
+    if bytes.is_empty() {
+        None
+    } else {
+        Some(bytes)
     }
 }
 
 /// Release on the held socket and close it. False when none was held.
 pub(crate) async fn release(slug: &str) -> bool {
-    let Some(slot) = slots().lock().await.remove(slug) else {
+    let Some(live) = slots().lock().await.remove(slug) else {
         return false;
     };
-    let mut held = slot.lock().await;
+    stop(&live);
+    let mut write = live.write.lock().await;
     if let Ok(message) = control_message("release") {
-        let _ = held.ws.send(Message::text(message.to_string())).await;
+        let _ = write.send(Message::text(message.to_string())).await;
     }
-    let _ = held.ws.close(None).await;
+    let _ = write.close().await;
     true
 }
+
+#[cfg(test)]
+#[path = "hold_tests.rs"]
+mod tests;
