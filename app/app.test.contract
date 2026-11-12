@@ -998,3 +998,59 @@ test "searching Bots to add appears only when more than six can be added"
   expect tree has "group-add-seven"
   expect tree missing "group-add-one"
   expect tree missing "group-add-fixture"
+
+test "a wide window replaces a chat with the group"
+  size 1440x900
+  at "/bot/fixture"
+  clock +600
+  clock data
+  expect tree has "open-bot-fixture"
+  expect tree missing "open-group-fixture"
+  tap "group-fixture"
+  clock data
+  expect text "room-title" == "Design"
+  expect tree has "open-group-fixture"
+  expect tree missing "open-bot-fixture"
+  expect tree missing "chat-title"
+  back
+  expect tree missing "room-title"
+  expect tree missing "chat-title"
+
+test "a wide window replaces a group with the chat"
+  size 1440x900
+  at "/group/fixture"
+  clock +600
+  clock data
+  expect tree has "open-group-fixture"
+  expect tree missing "open-bot-fixture"
+  tap "bot-fixture"
+  clock data
+  expect text "chat-title" == "Ada"
+  expect tree has "open-bot-fixture"
+  expect tree missing "open-group-fixture"
+  expect tree missing "room-title"
+  back
+  expect tree missing "chat-title"
+  expect tree missing "room-title"
+
+test "a mention names a Bot and leaves the group selected"
+  size 1440x900
+  at "/group/fixture"
+  clock +600
+  clock data
+  expect tree has "open-group-fixture"
+  expect tree missing "open-bot-fixture"
+  tap "mention-ada"
+  expect text "room-composer" == "@ada "
+  expect text "room-hint" == "Only the Bots you mention are woken."
+  expect tree has "open-group-fixture"
+  expect tree missing "open-bot-fixture"
+  tap "hidden-toggle"
+  tap "hidden-bea"
+  clock data
+  expect text "chat-title" == "Bea"
+  expect tree missing "open-group-fixture"
+  expect tree missing "room-title"
+  back
+  expect tree missing "chat-title"
+  expect tree missing "room-title"

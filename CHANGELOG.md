@@ -4,6 +4,7 @@
 
 ### Improvements
 
+- The sidebar highlights only the open conversation. On a wide window, switching conversations replaces that route.
 - Creating a group is a short walk: a name, the member faces, who answers, a kickoff, then review.
 - Creating a Bot is a short walk: name, colour, shape, an optional template, a first message, then review.
 - Add or remove one Bot at a time on an existing group. A group keeps at least two Bots.
