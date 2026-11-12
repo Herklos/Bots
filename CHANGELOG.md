@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.4.0
+
+This release adds a management MCP interface, a Code tab on Bot details, provider limit visibility and memory reflection, and improves conversation controls, helper permissions and chat layout.
+
+### New features
+
+- Enable management MCP in Settings → Access and issue or revoke scoped tokens for external clients. New installations and existing homes leave it disabled by default.
+- Configure lasting helpers and one-off help from the Bot details panel.
+- Reorder sidebar sections from their row menus; an empty section configuration retains the recency feed.
+- Render mentions as chips in sent messages and include supported HTML tool results in transcript data.
+- Add a read-only Code tab on Bot details when `beta.code` is on.
+- Search a Bot's own threads from the chat tools, with a local fallback when T3 search cannot.
+- Add memory reflection over the owner conversation stream.
+- Send question answers together with their uploaded files.
+- Show linked computers on the Settings page and count them in the MCP catalog.
+
+### Improvements
+
+- Restrict gateway MCP tools offered to durable subagents according to their configured allowlist; T3 tools are unaffected.
+- Add the local sync core for Anytype as groundwork. It is not yet a complete, wired storage backend.
+- Show provider limit bars, picker hints and near-limit warnings, confirm provider switches, and add the remaining settings entries.
+- Adjust chat layout and panel tabs, and move Memory into Bot details.
+- Stop the side chat loading flicker and use an icon for the side header.
+- Run CI on Ubuntu only.
+
 ## 0.3.8
 
 This release adds side conversations and prompt links, and improves helper policy enforcement and computer preview stability. It includes the changes described under 0.3.7, which has not yet been published.
