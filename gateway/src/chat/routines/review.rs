@@ -6,14 +6,17 @@
 //! ask, an agent interval repeats no faster than every 15 minutes, and rejecting a
 //! routine deletes it.
 //!
-//! `decide` does not talk to the harness. A later watcher applies the [`Action`].
+//! `decide` does not talk to the harness. [`watch`] applies the [`Action`].
 //! Load and save go through [`store::ReviewFile`]. The store keeps the decision,
 //! not the routine prompt.
 
 use crate::bots::runtime_mode::{turn_mode, RuntimeMode};
 use serde_json::Value;
 
+mod apply;
+mod notice;
 pub(crate) mod store;
+pub(crate) mod watch;
 
 #[cfg(test)]
 mod tests;
@@ -50,6 +53,10 @@ impl ReviewMode {
         }
     }
 
+    #[allow(
+        dead_code,
+        reason = "a later phase shows the saved mode; the rule tests cover the names"
+    )]
     pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Ask => "ask",
@@ -110,6 +117,10 @@ pub(crate) struct ReviewContext {
 }
 
 impl ReviewContext {
+    #[allow(
+        dead_code,
+        reason = "the rule tests build a context this way; the watcher fills the fields itself"
+    )]
     pub(crate) fn ask(runtime_cap: RuntimeMode) -> Self {
         Self {
             mode: ReviewMode::DEFAULT,
@@ -216,6 +227,10 @@ pub(crate) fn note_run(store: &mut ReviewStore, task_id: &str, status: RunStatus
     }
 }
 
+#[allow(
+    dead_code,
+    reason = "resolve clears the streak; a later phase is the other call site"
+)]
 pub(crate) fn clear_failures(store: &mut ReviewStore, task_id: &str) {
     store.failures.remove(task_id);
 }
@@ -365,6 +380,10 @@ pub(crate) fn record(
 
 /// The person's decision on a routine that is waiting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(
+    dead_code,
+    reason = "a later phase records the person's decision; the rule tests cover it"
+)]
 pub(crate) enum Choice {
     Approve,
     Reject,
@@ -374,12 +393,20 @@ pub(crate) enum Choice {
 /// Reject deletes it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[must_use]
+#[allow(
+    dead_code,
+    reason = "resolve returns this; a later phase is the call site outside the tests"
+)]
 pub(crate) enum Resolution {
     Enable,
     Delete,
     Absent,
 }
 
+#[allow(
+    dead_code,
+    reason = "a later phase applies the person's decision; the rule tests cover it"
+)]
 pub(crate) fn resolve(
     store: &mut ReviewStore,
     task_id: &str,

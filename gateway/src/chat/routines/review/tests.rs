@@ -37,5 +37,8 @@ pub(super) fn ask() -> ReviewContext {
     ReviewContext::ask(RuntimeMode::FullAccess)
 }
 
+mod follow;
 mod persistence;
 mod rules;
+mod support;
+mod watch;

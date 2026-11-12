@@ -170,6 +170,7 @@ async fn main() -> anyhow::Result<()> {
     }
     crate::bots::provisioner::start(state.clone());
     crate::bots::agent_context::start(state.clone());
+    crate::chat::routines::review::watch::start(state.clone());
     crate::platform::release::start(state.clone()).await;
 
     let applied = network::apply(

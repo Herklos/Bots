@@ -50,6 +50,9 @@ pub trait Previews: Send + Sync {
     ) -> Result<Option<Value>, HarnessError>;
 }
 
+/// Snapshots from a staying-open routine list. The channel closes when the connection drops.
+pub(crate) type RoutineFeed = tokio::sync::mpsc::Receiver<Result<Value, HarnessError>>;
+
 #[async_trait]
 pub trait Routines: Send + Sync {
     async fn list(&self) -> Result<Value, HarnessError>;
@@ -57,6 +60,8 @@ pub trait Routines: Send + Sync {
     async fn set_enabled(&self, body: &Value) -> Result<Value, HarnessError>;
     async fn delete(&self, body: &Value) -> Result<Value, HarnessError>;
     async fn run_now(&self, body: &Value) -> Result<Value, HarnessError>;
+    /// Stay on the task list until the connection drops. Each item is one full snapshot.
+    async fn watch(&self) -> Result<RoutineFeed, HarnessError>;
 }
 
 /// An answer the person gave to a pending request. The secret, when there is one, stays here.

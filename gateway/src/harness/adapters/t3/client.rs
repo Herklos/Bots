@@ -3,10 +3,9 @@
 //!
 //! - [`T3Client`]: a minimal client for T3's Effect RPC over WebSocket (orchestration protocol 2,
 //!   JSON, one message per frame).
-//! - [`proxy_http`] and [`proxy_ws`]: the `/t3/*` passthrough the browser uses, which adds the
-//!   bearer so T3's token never reaches a client.
+//!
+//! The `/t3/*` passthrough lives in [`super::proxy`].
 use anyhow::{anyhow, Context};
-use axum::extract::ws::{Message as AxMsg, WebSocket};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Value};
 use std::{
@@ -55,7 +54,7 @@ pub(crate) fn ws_base(http_base: &str) -> String {
     }
 }
 
-fn bearer_request(
+pub(crate) fn bearer_request(
     url: &str,
     token: &str,
 ) -> anyhow::Result<tokio_tungstenite::tungstenite::handshake::client::Request> {
@@ -358,113 +357,93 @@ impl T3 {
     }
 }
 
-/// `/t3/api/...` → T3's `/api/...`, with the bearer added and the client's cookies dropped.
-pub(crate) async fn proxy_http(
-    t3: &T3,
-    method: axum::http::Method,
-    path_and_query: &str,
-    headers: &axum::http::HeaderMap,
-    body: axum::body::Bytes,
-) -> axum::response::Response {
-    use axum::response::IntoResponse;
-    let url = format!("{}{path_and_query}", t3.base_url);
-    let mut req = t3
-        .http
-        .request(method, url)
-        .bearer_auth(&t3.token)
-        .body(body);
-    for name in ["content-type", "accept", "range", "if-none-match"] {
-        if let Some(v) = headers.get(name) {
-            req = req.header(name, v);
-        }
-    }
-    match req.send().await {
-        Ok(res) => {
-            let status = res.status();
-            let mut out = axum::http::HeaderMap::new();
-            for name in [
-                "content-type",
-                "cache-control",
-                "etag",
-                "content-range",
-                "accept-ranges",
-                "content-disposition",
-            ] {
-                if let Some(v) = res.headers().get(name) {
-                    out.insert(name, v.clone());
-                }
-            }
-            let bytes = res.bytes().await.unwrap_or_default();
-            (status, out, bytes).into_response()
-        }
-        Err(e) => (
-            axum::http::StatusCode::BAD_GATEWAY,
-            axum::Json(json!({ "error": format!("T3 unavailable: {e}") })),
-        )
-            .into_response(),
+/// One staying-open stream. Dropping it interrupts the request so a second
+/// subscribe does not pile on.
+pub(crate) struct LiveStream {
+    rx: mpsc::UnboundedReceiver<anyhow::Result<Value>>,
+    stop: Option<StreamStop>,
+}
+
+struct StreamStop {
+    id: String,
+    out: mpsc::UnboundedSender<WsMsg>,
+    pending: Pending,
+}
+
+impl StreamStop {
+    fn interrupt(self) {
+        let _ = self.out.send(WsMsg::text(
+            json!({ "_tag": "Interrupt", "requestId": self.id, "interruptors": [] }).to_string(),
+        ));
+        let pending = self.pending.clone();
+        let id = self.id.clone();
+        tokio::spawn(async move {
+            pending.lock().await.remove(&id);
+        });
     }
 }
 
-/// Pipes a client WebSocket to T3 (`/ws` for RPC, `/api/preview-stream/ws` for a Bot's screen).
-pub(crate) async fn proxy_ws(
-    client: WebSocket,
-    upstream_url: String,
-    token: String,
-    close_sockets: std::sync::Arc<tokio::sync::Notify>,
-) {
-    // Registered before the upstream connects, so a password change during that wait still closes this socket.
-    let closed = close_sockets.notified();
-    tokio::pin!(closed);
-    closed.as_mut().enable();
-    let upstream = match bearer_request(&upstream_url, &token) {
-        Ok(req) => tokio_tungstenite::connect_async(req).await,
-        Err(e) => {
-            tracing::error!("bad upstream url: {e}");
-            return;
+impl Drop for LiveStream {
+    fn drop(&mut self) {
+        if let Some(stop) = self.stop.take() {
+            stop.interrupt();
         }
-    };
-    let Ok((upstream, _)) = upstream.map_err(|e| tracing::error!("upstream ws error: {e}")) else {
-        let mut client = client;
-        let _ = client.send(AxMsg::Close(None)).await;
-        return;
-    };
-    let (mut up_tx, mut up_rx) = upstream.split();
-    let (mut cl_tx, mut cl_rx) = client.split();
-    let to_upstream = async {
-        while let Some(Ok(m)) = cl_rx.next().await {
-            let m = match m {
-                AxMsg::Text(t) => WsMsg::text(t.to_string()),
-                AxMsg::Binary(b) => WsMsg::binary(b),
-                AxMsg::Ping(p) => WsMsg::Ping(p),
-                AxMsg::Pong(p) => WsMsg::Pong(p),
-                AxMsg::Close(_) => break,
-            };
-            if up_tx.send(m).await.is_err() {
-                break;
+    }
+}
+
+impl LiveStream {
+    pub(crate) async fn recv(&mut self) -> Option<anyhow::Result<Value>> {
+        self.rx.recv().await
+    }
+}
+
+impl T3Client {
+    /// Keep a stream open until it ends or this value is dropped.
+    /// `read_until` still takes one item and interrupts. This is the other shape:
+    /// the routine watcher holds one `scheduledTasks.subscribe` and drops it before
+    /// opening the next.
+    pub(crate) async fn open_stream(
+        &self,
+        tag: &str,
+        payload: Value,
+    ) -> anyhow::Result<LiveStream> {
+        let id = self.next.fetch_add(1, Ordering::SeqCst).to_string();
+        let (notes_tx, mut notes_rx) = mpsc::unbounded_channel();
+        self.pending
+            .lock()
+            .await
+            .insert(id.clone(), Waiter::Many(notes_tx));
+        let request =
+            json!({ "_tag": "Request", "id": id, "tag": tag, "payload": payload, "headers": [] });
+        if self.out.send(WsMsg::text(request.to_string())).is_err() {
+            self.pending.lock().await.remove(&id);
+            return Err(anyhow!("T3 closed the connection"));
+        }
+        let (out_tx, out_rx) = mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            while let Some(note) = notes_rx.recv().await {
+                match note {
+                    Note::Chunk(value) => {
+                        if out_tx.send(Ok(value)).is_err() {
+                            break;
+                        }
+                    }
+                    Note::Ended(Ok(_)) => break,
+                    Note::Ended(Err(err)) => {
+                        let _ = out_tx.send(Err(err));
+                        break;
+                    }
+                }
             }
-        }
-        let _ = up_tx.close().await;
-    };
-    let to_client = async {
-        while let Some(Ok(m)) = up_rx.next().await {
-            let m = match m {
-                WsMsg::Text(t) => AxMsg::text(t.to_string()),
-                WsMsg::Binary(b) => AxMsg::Binary(b),
-                WsMsg::Ping(p) => AxMsg::Ping(p),
-                WsMsg::Pong(p) => AxMsg::Pong(p),
-                WsMsg::Close(_) | WsMsg::Frame(_) => break,
-            };
-            if cl_tx.send(m).await.is_err() {
-                break;
-            }
-        }
-        let _ = cl_tx.close().await;
-    };
-    tokio::select! {
-        _ = to_upstream => {},
-        _ = to_client => {},
-        // A new remote password signs everyone out, including sockets already open.
-        _ = closed.as_mut() => {},
+        });
+        Ok(LiveStream {
+            rx: out_rx,
+            stop: Some(StreamStop {
+                id,
+                out: self.out.clone(),
+                pending: Arc::clone(&self.pending),
+            }),
+        })
     }
 }
 

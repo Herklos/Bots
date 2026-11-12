@@ -11,10 +11,6 @@ use crate::platform::error::{ApiError, ApiResult};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
-#[allow(
-    dead_code,
-    reason = "the watcher that applies these rules is a later phase"
-)]
 pub(crate) mod review;
 
 #[cfg(test)]
