@@ -1,13 +1,9 @@
-//! Routines are scheduled tasks on the harness. T3 Code is the one wired today
-//! (`scheduledTasks.*`); other backends may be added.
+//! Routines are scheduled tasks on the harness. T3 Code is the one wired today;
+//! other backends may be added.
 //!
-//! Tags, from `packages/contracts/src/rpc.ts` (`WS_METHODS`, the `scheduledTasks*` entries):
-//! `scheduledTasks.subscribe`, `scheduledTasks.upsert`, `scheduledTasks.setEnabled`,
-//! `scheduledTasks.delete`, `scheduledTasks.runNow`. `subscribe` is a stream; its first
-//! item is `{ tasks }` (`ScheduledTaskListResult` in `packages/contracts/src/scheduledTask.ts`).
-//! The gateway takes that chunk and interrupts the subscription. Task objects already
-//! carry `lastRunAt`, `lastRunStatus`, `lastRunError` and `runCount`. There is no
-//! `scheduledTasks.listRuns`. The gateway keeps a short local history of the changes it made.
+//! The harness lists tasks and applies upsert, enable, delete, and run. Task objects
+//! already carry `lastRunAt`, `lastRunStatus`, `lastRunError` and `runCount`. The
+//! gateway keeps a short local history of the changes it made. Labels and clocks stay here.
 
 use crate::harness::{HarnessError, Routines};
 use crate::platform::error::{ApiError, ApiResult};
@@ -268,7 +264,7 @@ fn clock_24(time: &str) -> bool {
         && minute.chars().all(|c| c.is_ascii_digit())
 }
 
-/// The `scheduledTasks.upsert` body for one stored entry, bound to this thread.
+/// The task body for one stored entry, bound to this thread.
 pub(crate) fn pending_routine_task(
     project_id: &str,
     thread_id: &str,
