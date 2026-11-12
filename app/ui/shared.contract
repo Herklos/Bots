@@ -600,3 +600,21 @@ style ChoiceRow
 
 // The Bot's right panel: its Face and name, then three tabs, and pages for its model, its usage and editing it.
 // The details beside a group, as a Bot has: who is in it, and its name, look and members.
+
+keyframes dot
+  from opacity=0.3 translate="0 0"
+  40% opacity=1 translate="0 -3px"
+  to opacity=0.3 translate="0 0"
+
+// The message tray scales in, then rests. trayFade is the same entrance with no scale.
+keyframes trayIn
+  from opacity=0 scale=0.96
+  to opacity=1 scale=1
+
+keyframes trayFade
+  from opacity=0
+  to opacity=1
+
+keyframes emojiIn
+  from opacity=0 scale=0.96
+  to opacity=1 scale=1

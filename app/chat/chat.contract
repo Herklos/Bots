@@ -2,7 +2,7 @@ use Face from "../face.contract"
 use Avatar from "../face.contract"
 use Glyph from "../glyph.contract"
 use faceHex from "../face.contract"
-use FileCard, ChoiceButton, TextControl, IconTile, Bubble, ReactionChip, Field, Bot, Part, Row, Pin, RoomMember, MentionHit, shapeOf, colorOf, faceColor, chromeTarget, reactStrip, eventVerb, alignAt from "../ui/shared.contract"
+use FileCard, ChoiceButton, TextControl, IconTile, Bubble, ReactionChip, Field, Bot, Part, Row, Pin, RoomMember, MentionHit, shapeOf, colorOf, faceColor, chromeTarget, reactStrip, eventVerb, alignAt, trayIn, emojiIn from "../ui/shared.contract"
 use WorkingDots from "../bot/bot.contract"
 
 component MessageParts

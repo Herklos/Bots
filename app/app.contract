@@ -379,24 +379,6 @@ fn botMentions(bots: Bot[]): MentionHit[] = bots.filter(b => not b.hideFromSideb
 fn roomMentions(bots: Bot[], members: RoomMember[], allName: string): MentionHit[] = [MentionHit(slug="everyone", name=allName, color="brand.default", shape="ball"), MentionHit(slug="all", name=allName, color="brand.default", shape="ball")].concat(members.map(m => MentionHit(slug=m.slug, name=m.name, color=colorOf(bots, m.slug), shape=shapeOf(bots, m.slug))))
 fn filterMentions(hits: MentionHit[], q: string): MentionHit[] = hits.filter(h => q == "" or h.slug.toLowerCase().startsWith(q) or h.name.toLowerCase().startsWith(q) or h.name.toLowerCase().replaceAll(" ", "").startsWith(q)).slice(0, 8)
 
-keyframes dot
-  from opacity=0.3 translate="0 0"
-  40% opacity=1 translate="0 -3px"
-  to opacity=0.3 translate="0 0"
-
-// The message tray scales in, then rests. trayFade is the same entrance with no scale.
-keyframes trayIn
-  from opacity=0 scale=0.96
-  to opacity=1 scale=1
-
-keyframes trayFade
-  from opacity=0
-  to opacity=1
-
-keyframes emojiIn
-  from opacity=0 scale=0.96
-  to opacity=1 scale=1
-
 routes nav
   inbox "/"
     chat "/bot/:slug"
