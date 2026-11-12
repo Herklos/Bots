@@ -1,6 +1,47 @@
 use super::*;
 
 #[tokio::test]
+pub(crate) async fn a_main_prompt_is_listed_written_and_cleared() {
+    let dir = tempfile::tempdir().unwrap();
+    let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+    bots.create(&json!({ "name": "Ada", "prompt": "Be brief." }))
+        .await
+        .unwrap();
+    let created = std::fs::read_to_string(dir.path().join("ada/AGENTS.md")).unwrap();
+    assert!(created.contains("## Instructions\n\nBe brief."));
+    let listed = bots.list().await.unwrap();
+    let ada = listed.iter().find(|b| b["slug"] == "ada").unwrap();
+    assert_eq!(ada["prompt"], "Be brief.");
+    bots.create(&json!({
+        "parentSlug": "ada",
+        "name": "Scout",
+        "subagent": { "inheritParentPrompt": true, "prompt": "Look things up." }
+    }))
+    .await
+    .unwrap();
+    bots.save("ada", &json!({ "prompt": "Be shorter." }), false)
+        .await
+        .unwrap();
+    let agents = std::fs::read_to_string(dir.path().join("ada/AGENTS.md")).unwrap();
+    let scout = std::fs::read_to_string(dir.path().join("scout/AGENTS.md")).unwrap();
+    assert!(agents.contains("## Instructions\n\nBe shorter."));
+    assert!(!agents.contains("Be brief."));
+    assert!(scout.contains("## Parent prompt\n\nBe shorter."));
+    bots.save("ada", &json!({ "prompt": "" }), false)
+        .await
+        .unwrap();
+    let cleared = std::fs::read_to_string(dir.path().join("ada/AGENTS.md")).unwrap();
+    let scout = std::fs::read_to_string(dir.path().join("scout/AGENTS.md")).unwrap();
+    assert!(!cleared.contains("## Instructions"));
+    assert!(!scout.contains("## Parent prompt"));
+    let listed = bots.list().await.unwrap();
+    assert_eq!(
+        listed.iter().find(|b| b["slug"] == "ada").unwrap()["prompt"],
+        ""
+    );
+}
+
+#[tokio::test]
 pub(crate) async fn saving_a_main_bot_rewrites_its_children() {
     let dir = tempfile::tempdir().unwrap();
     let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());

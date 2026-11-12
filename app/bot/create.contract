@@ -1,0 +1,124 @@
+use Avatar, shapeNames from "../face.contract"
+use Glyph from "../glyph.contract"
+use Screen, PageTitle, PageHeader, TextControl, IconControl, SwatchControl, SectionLabel, Field, PrimaryButton from "../ui/controls.contract"
+use faceColor, pickerColours from "../ui/fns.contract"
+use PanelRow from "../ui/panel.contract"
+use Suggestion from "../ui/root-types.contract"
+use GroupCard, SettingsRow from "../ui/sidebar.contract"
+// The new-Bot walk, including the instructions field saved with the create request.
+component CreateBotScreen
+  props
+    route: number
+  inject
+    back: action
+    create: action
+    createBack: action
+    createError: string
+    createNext: action
+    createStep: string
+    createdPending: bool
+    editFirst: action
+    editName: action
+    editNewPrompt: action
+    goCreateStep: action
+    newColor: string
+    newFirst: string
+    newName: string
+    newPrompt: string
+    newShape: string
+    pick: action
+    pickShape: action
+    suggestions: Suggestion[]
+    useStart: action
+  view
+    column class=Screen navigationKey=`${route}` navigationPresentation="modal" navigationScroll="new-form" position="absolute" inset=0
+      header class=PageHeader
+        if createStep != "name"
+          button id="back" class=TextControl appearance="none" press=createBack testId="create-back"
+            text t("common.back")
+        text t("inbox.newBot") role="heading" aria-level=1 class=PageTitle flex=1
+        button class=IconControl appearance="none" press=back aria-label=t("common.close") title=t("common.close") testId="new-close"
+          Glyph(name="close", size=20)
+      scroll id="new-form" flex=1 min-height=0
+        column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.lg" gap="space.lg"
+          column align-items="center" gap="space.md" testId="create-face"
+            Avatar(shape=newShape, color=faceColor(newColor), state="idle", size=96, still=false, presence="")
+          if createStep == "name"
+            column gap="space.sm"
+              text t("create.askName") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-name"
+              input appearance="none" class=Field value=newName input=editName submit=createNext placeholder=t("create.namePlaceholder") aria-label=t("common.name") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-name"
+          else if createStep == "colour"
+            column gap="space.sm"
+              text t("create.askColour") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-colour"
+              row gap="space.xs" flex-wrap="wrap" justify-content="center"
+                for c in pickerColours() key=c
+                  button class=SwatchControl press=pick(c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(newColor == c) testId=`colour-${c}` width=44 height=44 padding=0
+                    column width=32 height=32 box-sizing="border-box" border-radius="radius.full" background-color=c border=(newColor == c ? "3px solid AccentColor" : "3px solid transparent")
+          else if createStep == "shape"
+            column gap="space.sm"
+              text t("create.askShape") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-shape"
+              row gap="space.xs" flex-wrap="wrap" justify-content="center"
+                for s in shapeNames() key=s
+                  button class=SwatchControl press=pickShape(s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(newShape == s) testId=`shape-${s}` width=44 height=44 padding=0 border-radius="radius.md" background-color=(newShape == s ? "surface.raised" : "transparent")
+                    Avatar(shape=s, color=faceColor(newColor), state="idle", size=30, still=true, presence="")
+          else if createStep == "template"
+            column gap="space.sm" width="100%"
+              text t("create.askTemplate") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-template"
+              text t("create.or") color="ink.muted"
+              if suggestions.length > 0
+                column gap="space.sm"
+                  for s in suggestions key=s.name
+                    button class=PanelRow appearance="none" press=useStart(s.name, s.color, s.shape, s.first) testId=`start-${s.name}`
+                      Avatar(shape=s.shape, color=faceColor(s.color), state="idle", size=44, still=true, presence="")
+                      column flex=1 gap="2px" min-width=0
+                        text s.name font-weight=600
+                        text s.about color="ink.muted" font="-exact-footnote"
+          else if createStep == "message"
+            column gap="space.sm"
+              text t("create.askMessage") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-message"
+              textarea appearance="none" class=Field value=newFirst input=editFirst placeholder=t("create.messagePlaceholder") aria-label=t("create.firstMessage") rows=4 maxlength=2000 padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-first"
+              text t("edit.prompt") class=SectionLabel
+              textarea appearance="none" class=Field value=newPrompt input=editNewPrompt placeholder=t("edit.promptPlaceholder") aria-label=t("edit.prompt") rows=4 padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-prompt"
+              text t("edit.promptNote") color="ink.muted" font="-exact-footnote"
+          else
+            column gap="space.sm" testId="step-review"
+              text t("create.review") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2
+              column class=GroupCard padding="0"
+                button class=SettingsRow appearance="none" press=goCreateStep("name") min-height=56 padding="space.sm space.md" testId="review-edit-name"
+                  column flex=1 min-width=0 gap="2px" align-items="flex-start"
+                    text t("common.name") color="ink.muted" font="-exact-footnote"
+                    text newName font-weight=600 testId="review-name"
+                  Glyph(name="chevron", size=18)
+                button class=SettingsRow appearance="none" press=goCreateStep("colour") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-colour"
+                  column flex=1 min-width=0 gap="2px" align-items="flex-start"
+                    text t("edit.colour") color="ink.muted" font="-exact-footnote"
+                    text faceColor(newColor) font-weight=600 testId="review-colour"
+                  Glyph(name="chevron", size=18)
+                button class=SettingsRow appearance="none" press=goCreateStep("shape") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-shape"
+                  column flex=1 min-width=0 gap="2px" align-items="flex-start"
+                    text t("edit.shape") color="ink.muted" font="-exact-footnote"
+                    text newShape font-weight=600 testId="review-shape"
+                  Glyph(name="chevron", size=18)
+                button class=SettingsRow appearance="none" press=goCreateStep("message") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-message"
+                  column flex=1 min-width=0 gap="2px" align-items="flex-start"
+                    text t("create.firstMessage") color="ink.muted" font="-exact-footnote"
+                    text (newFirst.trim() == "" ? t("create.noMessage") : newFirst) font-weight=600 testId="review-first"
+                  Glyph(name="chevron", size=18)
+                button class=SettingsRow appearance="none" press=goCreateStep("message") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-prompt"
+                  column flex=1 min-width=0 gap="2px" align-items="flex-start"
+                    text t("edit.prompt") color="ink.muted" font="-exact-footnote"
+                    text (newPrompt.trim() == "" ? t("edit.promptPlaceholder") : newPrompt) font-weight=600 testId="review-prompt"
+                  Glyph(name="chevron", size=18)
+          if createError != "" and not createdPending
+            text createError color="-exact-system-red" testId="create-error"
+      row justify-content="center" padding="space.md space.lg" border-top="1px solid surface.line" box-sizing="border-box"
+        column width="100%" max-width="34rem"
+          if createStep == "review"
+            button class=PrimaryButton buttonStyle="filled" press=create disabled=(newName.trim() == "" or createdPending) width="100%" testId="create"
+              text (createdPending ? t("common.creating") : t("create.start"))
+          else if createStep == "template"
+            button class=PrimaryButton buttonStyle="filled" press=createNext width="100%" testId="create-skip"
+              text t("create.skip")
+          else
+            button class=PrimaryButton buttonStyle="filled" press=createNext disabled=(createStep == "name" and newName.trim() == "") width="100%" testId="create-next"
+              text t("create.next")

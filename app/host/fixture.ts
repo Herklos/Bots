@@ -37,7 +37,7 @@ export function fixtureMemberRow(slug: string) {
 
 export function fixtureCrowdBots() {
   return FIXTURE_CROWD.map(([slug, name]) => ({
-    slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: '', inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get(slug)),
+    slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt(slug, ''), inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get(slug)),
   }));
 }
 // Lines the contract runner has sent. The transcript uses the same id the send returned.
@@ -45,6 +45,11 @@ export const fixtureSent: { id: string; text: string }[] = [];
 export const fixtureRoomSent: { id: string; text: string }[] = [];
 // Mute choices the contract runner makes. Missing means the chat still notifies.
 export const fixtureBotNotify = new Map<string, boolean>();
+export const fixtureBotPrompt = new Map<string, string>();
+export function fixturePrompt(slug: string, fallback: string): string {
+  const saved = fixtureBotPrompt.get(slug);
+  return saved !== undefined ? saved : fallback;
+}
 export const fixtureRoomNotify = new Map<string, boolean>();
 export const fixtureRoomPolicy = new Map<string, string>();
 export const fixtureRoomChief = new Map<string, string>();

@@ -1,5 +1,4 @@
 locale "en-US"
-
 // Navigation reflects the features available today. No live gateway is used.
 test "About shows the version and changelog and no update when none is available"
   tap "Settings"
@@ -11,7 +10,6 @@ test "About shows the version and changelog and no update when none is available
   expect tree has "about-changelog"
   expect tree has "update-status"
   expect tree missing "start-update"
-
 test "Settings owns the Vault and does not expose Projects"
   expect tree missing "open-vault"
   expect tree missing "open-projects"
@@ -25,7 +23,6 @@ test "Settings owns the Vault and does not expose Projects"
   expect disabled "save-password"
   type "new-password" "a-password"
   expect enabled "save-password"
-
 test "a login is reached through Settings and needs a title or website"
   tap "Settings"
   clock data
@@ -45,7 +42,6 @@ test "a login is reached through Settings and needs a title or website"
   expect tree has "open-vault"
   tap "settings-domain-user"
   expect tree has "user-name"
-
 test "Settings counts usage and still hides Projects"
   tap "Settings"
   clock data
@@ -57,7 +53,6 @@ test "Settings counts usage and still hides Projects"
   expect tree missing "beta-projects"
   tap "settings-domain-access"
   expect tree has "open-vault"
-
 test "the library says when it cannot open"
   size 340x740
   at "/bot/fixture"
@@ -70,7 +65,6 @@ test "the library says when it cannot open"
   expect tree missing "open-projects"
   expect tree missing "add-library"
   expect tree missing "add-connector"
-
 test "the computer says when it cannot open"
   size 340x740
   at "/bot/fixture"
@@ -82,7 +76,6 @@ test "the computer says when it cannot open"
   expect text "computer-error" == "Can’t open this Bot’s browser. Check that hbots is running, then try again."
   expect tree missing "computer-frame"
   expect tree missing "open-projects"
-
 test "the model page shows ask, auto, and full access"
   size 340x740
   at "/bot/fixture"
@@ -98,7 +91,6 @@ test "the model page shows ask, auto, and full access"
   expect text "access-ask" == "Ask"
   expect text "access-auto" == "Auto"
   expect text "access-full" == "Full access"
-
 test "a missing Bot has no model, routine, or library row"
   size 340x740
   at "/bot/ada"
@@ -112,7 +104,6 @@ test "a missing Bot has no model, routine, or library row"
   expect tree missing "model-error"
   expect tree missing "lineage-error"
   expect tree missing "open-projects"
-
 test "the header does not invent Bot details when the Bot is missing"
   size 340x740
   at "/bot/ada"
@@ -126,7 +117,6 @@ test "the header does not invent Bot details when the Bot is missing"
   tap "panel-toggle"
   clock settle
   expect tree missing "bot-panel"
-
 test "a wide window does not invent a panel for a missing Bot"
   size 1440x900
   at "/bot/ada"
@@ -410,6 +400,7 @@ test "creating a Bot opens that chat"
   tap "create-next"
   tap "create-skip"
   type "new-first" "Hello from the walk"
+  type "new-prompt" "Stay terse."
   tap "create-next"
   expect text "review-name" == "fixture"
   expect text "review-colour" == "violet"
@@ -420,6 +411,14 @@ test "creating a Bot opens that chat"
   clock settle
   expect tree missing "new-name"
   expect text "chat-title" == "Bea"
+test "a main Bot saves instructions on blur"
+  at "/bot/fixture"
+  tap "panel-toggle"
+  tap "panel-edit"
+  type "bot-prompt" "Be brief."
+  tap "panel-back"
+  tap "panel-edit"
+  expect text "bot-prompt" == "Be brief."
 test "creating a Bot works on a narrow screen"
   size 340x740
   tap "new-bot"
@@ -510,6 +509,7 @@ test "the parent sheet lists its subagents without a new subagent button"
   clock settle
   expect text "panel-page-title" == "Subagent"
   expect tree has "subagent-prompt"
+  expect tree missing "bot-prompt"
   expect tree has "subagent-inherit"
   expect tree has "subagent-save"
   expect tree has "delete-subagent"

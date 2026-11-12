@@ -22,7 +22,7 @@ Injection channel
 Prompt
 - `prompt` is validated as a string (`bots.rs:106`, `:336`), stored (`bots.rs:123`, `:641`), and never rendered for a main Bot. `render_agents_md` renders `goal` for everyone, `subagent.prompt` as `## Your prompt` for a child (`bots.rs:849-860`) and the parent's `prompt` as `## Parent prompt` only when `subagent.inheritParentPrompt == true` (`bots.rs:861-872`).
 - Net effect: a main Bot's `prompt` reaches no thread. A child with `inheritParentPrompt` inherits text that was never injected for the parent itself.
-- `app/app.ts` only sends `prompt` for subagents (`createSubagent`, `saveSubagent`, lines ~1058-1070). I did not find a main Bot prompt editor **[unverified]**: confirm in `app/app.ts` and the create wizard (commit 2ce0db2 added `goal`).
+- The edit page and the create wizard save a main Bot's `prompt` (`saveBotPrompt`, `createBot` in `app/sources/bots.ts`). A subagent still uses `subagent.prompt` on its own page. The gateway list returns the stored `prompt` (default `""`).
 
 Memory
 - Memory is a path reference only: "Your notes: `memory/MEMORY.md`" (`bots.rs:894`). Files are created on `create` (`bots.rs:574-587`): `memory/MEMORY.md`, `memory/log.md`, `.botapp/shared-memory.md`.
@@ -186,7 +186,7 @@ PR 1: main Bot prompt
 3. Validation: `PROMPT_MAX` in `save`/`create`/`check_subagent_keys`.
 4. Reverse rewrite: `save` of a main Bot rewrites its children.
 5. Atomic write plus unchanged-skip in `write_instructions`.
-6. UI (only if V7 shows none): main prompt textarea on the Bot details page; strings in `app/strings/en.json` and `fr.json`; contract change then rebuild per `.agents/skills/exact-client/SKILL.md`. Chrome wording must not be hardcoded.
+6. UI: a main Bot's instructions field on the edit page and in the create wizard (`app/bot/edit.contract`, `app/bot/create.contract`). Strings are `edit.prompt`, `edit.promptPlaceholder`, and `edit.promptNote`. The control is a textarea. It saves on blur, or with the create request.
 7. Docs for this PR (section 8).
 
 PR 2: memory snapshot and refresh

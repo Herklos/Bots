@@ -28,6 +28,7 @@ component BotPanel
     mute: action
     makeMain: action
     drop: action
+    savePrompt: action
     models: ModelList
     modelsDown: bool
     pickModel: action
@@ -136,7 +137,7 @@ component BotPanel
           UsageView(report=report, down=reportDown, period=period, view=usageView, pickPeriod=pickPeriod, pickView=pickView, showBots=false)
       else if page == "edit"
         scroll flex=1 min-height=0
-          EditBotPage(bot=bot, error=error, rename=rename, recolour=recolour, reshape=reshape, pin=pin, hide=hide, mute=mute, makeMain=makeMain, drop=drop)
+          EditBotPage(bot=bot, error=error, rename=rename, recolour=recolour, reshape=reshape, pin=pin, hide=hide, mute=mute, makeMain=makeMain, drop=drop, savePrompt=savePrompt)
       else if page == "subagent"
         scroll flex=1 min-height=0
           column gap="space.lg" padding="space.sm space.lg space.xl" testId="subagent-page"

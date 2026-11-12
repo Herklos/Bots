@@ -17,9 +17,13 @@ component EditBotPage
     mute: action
     makeMain: action
     drop: action
+    savePrompt: action
   state name = bot.name
+  state prompt = bot.prompt
   action editName(v: string)
     name = v
+  action editPrompt(v: string)
+    prompt = v
   view
     column gap="space.lg" padding="space.sm space.lg space.xl" testId="edit-page"
       column gap="space.sm"
@@ -37,6 +41,11 @@ component EditBotPage
           for s in shapeNames() key=s
             button class=SwatchControl press=reshape(bot.slug, s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(bot.shape == s) testId=`shape-${s}` width=48 height=48 padding=0 border-radius="radius.md" background-color=(bot.shape == s ? "surface.raised" : "transparent")
               Avatar(shape=s, color=faceColor(bot.color), state="idle", size=34, still=true, presence="")
+      if not bot.subagent
+        column gap="space.sm"
+          text t("edit.prompt") class=SectionLabel
+          textarea appearance="none" class=Field value=prompt input=editPrompt change=savePrompt(bot.slug, prompt) placeholder=t("edit.promptPlaceholder") aria-label=t("edit.prompt") rows=4 padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="bot-prompt"
+          text t("edit.promptNote") color="ink.muted" font="-exact-footnote"
       column gap="2px"
         row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
           column class=IconTile color="AccentColor"

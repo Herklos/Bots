@@ -10,6 +10,8 @@ members Bots
 
   state newFirst = ""
 
+  state newPrompt = ""
+
   // The new-Bot walk: name, colour, shape, an optional template, a first message, then review.
   state createStep = "name"
 
@@ -55,6 +57,8 @@ members Bots
 
   mutation renamed as shape Reply refreshes bots
 
+  mutation prompted as shape Reply refreshes bots
+
   mutation recoloured as shape Reply refreshes bots
 
   mutation reshaped as shape Reply refreshes bots
@@ -73,6 +77,8 @@ members Bots
 
   derive renameError = match renamed { case some(r) => r.error, case none => "" }
 
+  derive promptError = match prompted { case some(r) => r.error, case none => "" }
+
   derive colourError = match recoloured { case some(r) => r.error, case none => "" }
 
   derive hideError = match hidSaved { case some(r) => r.error, case none => "" }
@@ -83,7 +89,7 @@ members Bots
 
   derive pinError = match pinned { case some(r) => r.error, case none => "" }
 
-  derive botError = renameError != "" ? renameError : colourError != "" ? colourError : reshapeError != "" ? reshapeError : pinError != "" ? pinError : hideError != "" ? hideError : mainError
+  derive botError = renameError != "" ? renameError : promptError != "" ? promptError : colourError != "" ? colourError : reshapeError != "" ? reshapeError : pinError != "" ? pinError : hideError != "" ? hideError : mainError
 
   derive botRemoveError = match botRemoved { case some(r) => r.error, case none => "" }
 
@@ -122,6 +128,7 @@ members Bots
     newColor = "brand.default"
     newShape = "ball"
     newFirst = ""
+    newPrompt = ""
     createStep = "name"
     nav = push(nav, "/new")
 
@@ -130,6 +137,7 @@ members Bots
     newColor = "brand.default"
     newShape = "ball"
     newFirst = ""
+    newPrompt = ""
     createStep = "name"
     plusOpen = false
     welcomed = true
@@ -148,6 +156,9 @@ members Bots
 
   action editFirst(v: string)
     newFirst = v
+
+  action editNewPrompt(v: string)
+    newPrompt = v
 
   action useStart(name: string, color: string, shape: string, first: string)
     newName = name
@@ -183,7 +194,7 @@ members Bots
 
   action create
     if newName.trim() != "" and not pending(created)
-      send created = createBot(newName.trim(), newColor, newShape, newFirst)
+      send created = createBot(newName.trim(), newColor, newShape, newFirst, newPrompt)
 
   action afterCreate
     match created
@@ -198,6 +209,9 @@ members Bots
   action doRename(bslug: string, name: string)
     if name.trim() != ""
       send renamed = renameBot(bslug, name.trim())
+
+  action doSavePrompt(bslug: string, text: string)
+    send prompted = saveBotPrompt(bslug, text)
 
   action doRecolour(bslug: string, color: string)
     send recoloured = recolourBot(bslug, color)
