@@ -9,14 +9,8 @@ const effectivePolicy = (policy: string): string => (policy === 'everyone' || po
 import { prettyModel, nextLabel, emptyReport, usageReport } from './host/report.ts';
 import { frames, threads, chatKept, roomKept, forgetChat, forgetMeta, lastMessageId, threadMeta, blank, chatRows, storeUpload, draftMap, draftRows } from './host/session.ts';
 import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, shutNotice, postUnread } from './host/notices.ts';
+import { API } from './host/config.ts';
 
-// Where the hbots gateway (the `hbots` binary) listens. A data module can't read the page's address
-// (no `location`, and `fetch` refuses a relative URL), so the web build is made with this placeholder
-// and the gateway, which serves it, swaps in the address the page was loaded from. One build then works
-// on localhost, Tailscale or a tunnel. Native apps have no page: build them with HBOTS_URL set to the
-// gateway, e.g. `HBOTS_URL=https://hbots.example.ts.net bun exact.mjs mac`.
-const HBOTS_URL = import.meta.env.HBOTS_URL ?? 'http://hbots-origin.invalid';
-export const API: string = HBOTS_URL.replace(/\/$/, '');
 // Any gateway the person runs: their machine, a Tailscale address or a tunnel. Plain `http:` to a host
 // name on Apple also needs `appTransportSecurity.allowsArbitraryLoads` in app.json.
 export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session\nsecret.keep drafts\nfs.read app:/tmp\nfs.write app:/tmp\ndevice.microphone purpose.microphone\ndevice.notifications purpose.notifications';
