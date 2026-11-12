@@ -4,7 +4,7 @@ use super::*;
 pub struct AppState {
     pub cfg: crate::platform::config::Config,
     pub auth: crate::network::auth::Auth,
-    pub t3: crate::harness::t3::T3,
+    pub harness: std::sync::Arc<dyn crate::harness::Harness>,
     pub bots: bots::Bots,
     pub vault: vault::Vault,
     pub projects: projects::Projects,

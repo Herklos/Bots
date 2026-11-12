@@ -11,7 +11,7 @@
 //! A result, an error or a log line never contains a password, a token or the typed text.
 
 use crate::{
-    harness::t3::{ws_base, T3},
+    harness::Browser,
     vault::{self, Vault},
     AppState,
 };
@@ -48,7 +48,7 @@ const NAMES: [&str; 5] = [
 
 /// What the tools need, passed in so tests can supply their own.
 pub(crate) struct Deps<'a> {
-    pub t3: &'a T3,
+    pub browser: &'a dyn Browser,
     pub vault: &'a Vault,
     /// The Bots, as `bots.list()` gives them (each has `mainThreadId`).
     pub bots: &'a [Value],
@@ -152,7 +152,7 @@ pub(crate) async fn call(state: &AppState, name: &str, args: &Value) -> Result<V
         .join("bot-secrets");
     dispatch(
         &Deps {
-            t3: &state.t3,
+            browser: state.harness.browser().map_err(|err| err.to_string())?,
             vault: &state.vault,
             bots: &bots,
             secrets_dir: &secrets_dir,

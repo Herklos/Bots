@@ -128,19 +128,18 @@ pub(crate) fn thread_model_command(thread_id: &str, selection: &Value) -> Value 
 /// A model change lands on this Bot's own project and main thread. A subagent is a Bot, so
 /// the ids are the child's, never its parent's.
 pub(crate) async fn push_model(
-    rpc: &crate::harness::t3::T3Client,
+    provisioning: &dyn crate::harness::Provisioning,
     bot: &Value,
     selection: &Value,
 ) -> anyhow::Result<()> {
-    if let Some(project) = bot["projectId"].as_str().filter(|id| !id.is_empty()) {
-        rpc.call("projects.mutate", project_model_update(project, selection))
-            .await?;
-    }
-    if let Some(thread) = bot["mainThreadId"].as_str().filter(|id| !id.is_empty()) {
-        rpc.dispatch(thread_model_command(thread, selection))
-            .await?;
-    }
-    Ok(())
+    provisioning
+        .set_model(
+            bot["projectId"].as_str(),
+            bot["mainThreadId"].as_str(),
+            selection,
+        )
+        .await
+        .map_err(|err| anyhow::anyhow!(err.to_string()))
 }
 
 pub(crate) fn start(state: Arc<AppState>) {
@@ -166,10 +165,12 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
     if bots.is_empty() {
         return Ok(());
     }
-    let projects = state.t3.get_json("/api/projects").await?;
-    let projects = projects["projects"].as_array().cloned().unwrap_or_default();
+    let provisioning = state
+        .harness
+        .provisioning()
+        .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+    let projects = provisioning.projects().await?;
     let settings = state.settings().await;
-    let rpc = state.t3.rpc().await?;
     for bot in bots {
         let slug = bot["slug"].as_str().unwrap_or_default().to_string();
         let model = [&bot["model"], &settings["defaultModel"]]
@@ -179,22 +180,25 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
             .unwrap_or_else(default_model);
         let known = bot["projectId"]
             .as_str()
-            .and_then(|id| projects.iter().find(|p| p["id"] == id));
+            .and_then(|id| projects.iter().find(|p| p.id == id));
         let project_id = match known {
-            Some(p) => p["id"].as_str().unwrap_or_default().to_string(),
+            Some(p) => p.id.clone(),
             None => {
                 let existing = projects
                     .iter()
-                    .find(|p| p["workspaceRoot"] == bot["workspaceRoot"]);
-                let id = match existing.and_then(|p| p["id"].as_str()) {
+                    .find(|p| p.workspace_root == bot["workspaceRoot"]);
+                let id = match existing.map(|p| p.id.as_str()) {
                     Some(id) => id.to_string(),
                     None => {
                         let id = uuid::Uuid::new_v4().to_string();
-                        rpc.call("projects.mutate", json!({
-                            "type": "project.create", "commandId": uuid::Uuid::new_v4().to_string(), "projectId": id,
-                            "title": bot["name"], "workspaceRoot": bot["workspaceRoot"], "createWorkspaceRootIfMissing": true,
-                            "defaultModelSelection": model,
-                        })).await?;
+                        provisioning
+                            .create_project(
+                                &id,
+                                bot["name"].as_str().unwrap_or(""),
+                                bot["workspaceRoot"].as_str().unwrap_or(""),
+                                &model,
+                            )
+                            .await?;
                         tracing::info!("[provisioner] created project for {slug}");
                         id
                     }
@@ -219,27 +223,33 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
         .await
         .map_err(|e| anyhow::anyhow!("face write task: {e}"))?
         .map_err(|e| anyhow::anyhow!("face write: {e}"))?;
-        let listed = projects
-            .iter()
-            .find(|p| p["id"].as_str() == Some(project_id.as_str()));
+        let listed = projects.iter().find(|p| p.id == project_id);
         let name = bot["name"].as_str().unwrap_or_default();
-        if !face_in_sync(listed, name, &favicon) {
-            rpc.call(
-                "projects.mutate",
-                project_face_update(&project_id, name, &favicon),
-            )
-            .await?;
+        let listed_value = listed.map(|project| {
+            json!({
+                "title": project.title,
+                "faviconPath": project.favicon_path,
+                "projectIcon": if project.project_icon_null { Value::Null } else { json!("set") },
+            })
+        });
+        if !face_in_sync(listed_value.as_ref(), name, &favicon) {
+            provisioning
+                .update_face(&project_id, name, &favicon)
+                .await?;
         }
         let thread = match bot["mainThreadId"].as_str() {
             Some(t) => t.to_string(),
             None => {
                 let thread = uuid::Uuid::new_v4().to_string();
-                rpc.call("orchestration.launchThread", json!({
-                    "commandId": uuid::Uuid::new_v4().to_string(), "threadId": thread, "projectId": project_id,
-                    "title": bot["name"], "modelSelection": model,
-                    "runtimeMode": launch_runtime_mode(&bot, &settings),
-                    "interactionMode": "default", "workspaceStrategy": { "type": "root" },
-                })).await?;
+                provisioning
+                    .launch(&crate::harness::LaunchThread {
+                        thread_id: thread.clone(),
+                        project_id: project_id.clone(),
+                        title: bot["name"].as_str().unwrap_or("").to_string(),
+                        model: model.clone(),
+                        runtime_mode: launch_runtime_mode(&bot, &settings).to_string(),
+                    })
+                    .await?;
                 state
                     .bots
                     .save(&slug, &json!({ "mainThreadId": thread }), false)
@@ -258,11 +268,13 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
                 .as_str()
                 .map(|c| format!("From {c}: "))
                 .unwrap_or_default();
-            rpc.dispatch(json!({
-                "type": "message.dispatch", "threadId": thread, "messageId": uuid::Uuid::new_v4().to_string(),
-                "text": format!("{from}{brief}"), "attachments": [], "createdBy": "agent", "creationSource": "server",
-                "dispatchMode": { "type": "queue_after_active" },
-            })).await?;
+            provisioning
+                .send_provisioned(
+                    &thread,
+                    &format!("{from}{brief}"),
+                    crate::harness::ProvisionedSend::Brief,
+                )
+                .await?;
             state
                 .bots
                 .save(
@@ -275,13 +287,9 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
         }
         // What the person typed on New Bot goes out once, as their own message.
         if let Some(first) = bot["firstMessage"].as_str().filter(|m| !m.is_empty()) {
-            let id = uuid::Uuid::new_v4().to_string();
-            rpc.dispatch(json!({
-                "type": "message.dispatch", "threadId": thread, "messageId": id, "text": first,
-                "attachments": [], "createdBy": "user", "creationSource": "web",
-                "dispatchMode": { "type": "start_immediately" },
-            }))
-            .await?;
+            provisioning
+                .send_provisioned(&thread, first, crate::harness::ProvisionedSend::First)
+                .await?;
             state
                 .bots
                 .save(&slug, &json!({ "firstMessage": null }), false)
@@ -310,11 +318,14 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
                         continue;
                     }
                 };
+                let routines = state
+                    .harness
+                    .routines()
+                    .map_err(|err| anyhow::anyhow!(err.to_string()))?;
                 match crate::chat::routines::change(
-                    &state.t3,
+                    routines,
                     &state.routine_history,
                     "upsert",
-                    crate::chat::routines::UPSERT,
                     task,
                 )
                 .await

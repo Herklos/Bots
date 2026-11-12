@@ -1,4 +1,5 @@
 use super::*;
+use crate::harness::adapters::mock::MockHarness;
 
 fn bots() -> Vec<Value> {
     vec![json!({ "mainThreadId": "thread-main", "slug": "main", "name": "Main" })]
@@ -152,10 +153,10 @@ fn sweep_removes_only_files_older_than_the_cutoff() {
 async fn a_contact_is_saved_and_needs_a_name_or_a_way_to_reach_them() {
     let dir = tempfile::tempdir().unwrap();
     let vault = Vault::new(dir.path().join("vault.enc"), dir.path().join(".vault-key"));
-    let t3 = T3::new("http://127.0.0.1:1".into(), "t".into());
+    let browser = MockHarness::new();
     let b = bots();
     let deps = Deps {
-        t3: &t3,
+        browser: &browser,
         vault: &vault,
         bots: &b,
         secrets_dir: dir.path(),
@@ -191,10 +192,10 @@ async fn saving_a_login_moves_the_secret_and_never_returns_it() {
     let secrets = dir.path().join("secrets");
     std::fs::create_dir_all(&secrets).unwrap();
     let vault = Vault::new(dir.path().join("vault.enc"), dir.path().join(".vault-key"));
-    let t3 = T3::new("http://127.0.0.1:1".into(), "t".into());
+    let browser = MockHarness::new();
     let b = bots();
     let deps = Deps {
-        t3: &t3,
+        browser: &browser,
         vault: &vault,
         bots: &b,
         secrets_dir: &secrets,
@@ -231,10 +232,10 @@ async fn a_token_file_is_private_and_only_for_api_tokens() {
     let dir = tempfile::tempdir().unwrap();
     let tokens = dir.path().join("bot-secrets");
     let vault = Vault::new(dir.path().join("vault.enc"), dir.path().join(".vault-key"));
-    let t3 = T3::new("http://127.0.0.1:1".into(), "t".into());
+    let browser = MockHarness::new();
     let b = bots();
     let deps = Deps {
-        t3: &t3,
+        browser: &browser,
         vault: &vault,
         bots: &b,
         secrets_dir: dir.path(),
@@ -275,10 +276,10 @@ async fn a_token_file_is_private_and_only_for_api_tokens() {
 async fn fill_refuses_without_a_bot_or_a_login() {
     let dir = tempfile::tempdir().unwrap();
     let vault = Vault::new(dir.path().join("vault.enc"), dir.path().join(".vault-key"));
-    let t3 = T3::new("http://127.0.0.1:1".into(), "t".into());
+    let browser = MockHarness::new();
     let b = bots();
     let deps = Deps {
-        t3: &t3,
+        browser: &browser,
         vault: &vault,
         bots: &b,
         secrets_dir: dir.path(),
@@ -302,69 +303,24 @@ async fn fill_refuses_without_a_bot_or_a_login() {
     assert_eq!(err, NO_LOGIN);
 }
 
-/// A T3 stand-in (`tests/mock-t3.ts`, run with bun). Skipped when bun isn't installed.
-struct MockT3 {
-    child: std::process::Child,
-    url: String,
-}
-
-impl Drop for MockT3 {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-impl MockT3 {
-    async fn start() -> Option<Self> {
-        let port = std::net::TcpListener::bind("127.0.0.1:0")
-            .ok()?
-            .local_addr()
-            .ok()?
-            .port();
-        let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../tests/mock-t3.ts");
-        let child = std::process::Command::new("bun")
-            .arg(script)
-            .arg(port.to_string())
-            .env("T3_TOKEN", "test-token")
-            .spawn()
-            .ok()?;
-        let mut mock = Self {
-            child,
-            url: format!("http://127.0.0.1:{port}"),
-        };
-        for _ in 0..100 {
-            if tokio::net::TcpStream::connect(("127.0.0.1", port))
-                .await
-                .is_ok()
-            {
-                return Some(mock);
-            }
-            tokio::time::sleep(Duration::from_millis(50)).await;
-        }
-        let _ = mock.child.kill();
-        None
-    }
-
-    /// What the mock has typed into a tab.
-    async fn typed(&self, tab: &str) -> String {
-        let res = reqwest::Client::new()
-            .get(format!("{}/mock/typed?tabId={tab}", self.url))
-            .bearer_auth("test-token")
-            .send()
-            .await
-            .unwrap();
-        let body: Value = res.json().await.unwrap();
-        body["text"].as_str().unwrap_or_default().to_string()
-    }
-}
-
 #[tokio::test]
 async fn fills_a_password_through_the_browser_tab() {
-    let Some(mock) = MockT3::start().await else {
-        eprintln!("bun is not available: skipped the T3 round trip");
-        return;
-    };
+    let mut browser = MockHarness::new();
+    browser.tabs = vec![
+        crate::harness::BrowserTab {
+            id: "t-evil".into(),
+            url: "https://evil.example/login".into(),
+        },
+        crate::harness::BrowserTab {
+            id: "busy".into(),
+            url: "https://github.com/login".into(),
+        },
+        crate::harness::BrowserTab {
+            id: "t-github".into(),
+            url: "https://github.com/login".into(),
+        },
+    ];
+    browser.busy.push("busy".into());
     let dir = tempfile::tempdir().unwrap();
     let vault = Vault::new(dir.path().join("vault.enc"), dir.path().join(".vault-key"));
     let item = vault
@@ -372,17 +328,15 @@ async fn fills_a_password_through_the_browser_tab() {
         .await
         .unwrap();
     let id = item["id"].as_str().unwrap();
-    let t3 = T3::new(mock.url.clone(), "test-token".into());
     let b = bots();
     let deps = Deps {
-        t3: &t3,
+        browser: &browser,
         vault: &vault,
         bots: &b,
         secrets_dir: dir.path(),
         token_dir: dir.path(),
     };
 
-    // A lookalike tab is refused and nothing is typed into it.
     let refused = dispatch(
         &deps,
         "vault_fill_password",
@@ -392,9 +346,8 @@ async fn fills_a_password_through_the_browser_tab() {
     .unwrap_err();
     assert!(refused.contains("Refused"));
     assert!(!refused.contains("s3cret-pass"));
-    assert_eq!(mock.typed("t-evil").await, "");
+    assert_eq!(browser.typed("t-evil"), "");
 
-    // A tab that another viewer controls is refused with the reason.
     let busy = dispatch(
         &deps,
         "vault_fill_password",
@@ -416,7 +369,7 @@ async fn fills_a_password_through_the_browser_tab() {
         json!({ "filled": true, "field": "password", "site": "github.com", "tabId": "t-github" })
     );
     assert!(!ok.to_string().contains("s3cret-pass"));
-    assert_eq!(mock.typed("t-github").await, "s3cret-pass");
+    assert_eq!(browser.typed("t-github"), "s3cret-pass");
 
     let user = dispatch(
         &deps,
@@ -426,5 +379,5 @@ async fn fills_a_password_through_the_browser_tab() {
     .await
     .unwrap();
     assert_eq!(user["field"], "username");
-    assert_eq!(mock.typed("t-github").await, "s3cret-passme");
+    assert_eq!(browser.typed("t-github"), "s3cret-passme");
 }

@@ -92,7 +92,7 @@ fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
     let tailnet = Arc::new(crate::network::exposure::Tailnet::new());
     Arc::new(AppState {
         auth: crate::network::auth::Auth::load(&app_dir, String::new(), vec![]).unwrap(),
-        t3: crate::harness::t3::T3::new(cfg.t3_url.clone(), cfg.t3_token.clone()),
+        harness: crate::harness::connect(cfg.t3_url.clone(), cfg.t3_token.clone()),
         bots: bots::Bots::new(
             cfg.bots_root.clone(),
             cfg.bot_mcp_url.clone(),

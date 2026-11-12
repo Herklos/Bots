@@ -185,7 +185,7 @@ pub(crate) async fn group_thread_reads_stay_within_the_fan_out_limit() {
             peak_load.fetch_max(now, Ordering::SeqCst);
             tokio::time::sleep(Duration::from_millis(40)).await;
             current_load.fetch_sub(1, Ordering::SeqCst);
-            Ok(json!({ "items": [], "runs": [] }))
+            Ok((false, Vec::new()))
         }
     })
     .await;

@@ -115,9 +115,10 @@ async fn previews_reload_only_moved_threads_and_never_pass_on_a_stale_stamp() {
             if fails {
                 anyhow::bail!("offline");
             }
-            Ok(
-                json!({ "turnItems": [message(i64::try_from(n).unwrap_or(i64::MAX), "assistant_message", json!({ "text": format!("reply {n}") }))] }),
-            )
+            Ok(latest_preview(
+                &json!({ "turnItems": [message(i64::try_from(n).unwrap_or(i64::MAX), "assistant_message", json!({ "text": format!("reply {n}") }))] }),
+                &HashMap::new(),
+            ))
         }
     };
     let names = HashMap::new();

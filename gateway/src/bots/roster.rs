@@ -9,7 +9,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-const SHELL: &str = "orchestration.subscribeShell";
 const KEEP: Duration = Duration::from_millis(1500);
 
 /// What the shell snapshot says about one thread.
@@ -43,13 +42,18 @@ impl Roster {
 }
 
 async fn read(s: &AppState) -> anyhow::Result<HashMap<String, Fact>> {
-    let client = s.t3.rpc().await?;
-    let item = client
-        .read_until(SHELL, json!({}), |item| {
-            item.get("kind").and_then(Value::as_str) == Some("snapshot")
-        })
-        .await?;
-    Ok(facts_in(item.get("snapshot").unwrap_or(&Value::Null)))
+    let shell = s
+        .harness
+        .transcript()
+        .map_err(|err| anyhow::anyhow!(err.to_string()))?
+        .activity()
+        .await
+        .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+    Ok(shell
+        .facts()
+        .into_iter()
+        .map(|(id, (stamp, working))| (id, Fact { stamp, working }))
+        .collect())
 }
 
 pub(crate) fn facts_in(snapshot: &Value) -> HashMap<String, Fact> {
@@ -139,18 +143,20 @@ pub(crate) async fn list(s: &AppState, bots: Vec<Value>) -> Vec<Value> {
             Some((thread.to_string(), json!(fact.stamp)))
         })
         .collect();
-    let rpc = s.t3.rpc().await.ok();
+    let harness = s.harness.clone();
+    let preview_names = names.clone();
     let previews = s
         .threads
         .previews(Some(&Value::Object(stamps)), &names, |thread| {
-            let rpc = rpc.clone();
+            let harness = harness.clone();
+            let preview_names = preview_names.clone();
             async move {
-                let rpc = rpc.ok_or_else(|| anyhow::anyhow!("T3 unavailable"))?;
-                rpc.call(
-                    "orchestration.getThreadProjection",
-                    json!({ "threadId": thread }),
-                )
-                .await
+                harness
+                    .previews()
+                    .map_err(|err| anyhow::anyhow!(err.to_string()))?
+                    .inbox(&thread, &preview_names)
+                    .await
+                    .map_err(|err| anyhow::anyhow!(err.to_string()))
             }
         })
         .await

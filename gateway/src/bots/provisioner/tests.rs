@@ -181,7 +181,6 @@ async fn fake_harness() -> (String, Arc<std::sync::Mutex<Vec<Value>>>) {
 
 fn fixture_state(dir: &std::path::Path, t3_url: String) -> Arc<AppState> {
     use crate::bots::Bots;
-    use crate::harness::t3::T3;
     use crate::network::auth::Auth;
     use crate::network::exposure::{Exposure, Tailnet};
     use crate::network::remote_access::{RemoteAccess, RemoteConfig};
@@ -212,7 +211,7 @@ fn fixture_state(dir: &std::path::Path, t3_url: String) -> Arc<AppState> {
     let tailnet = Arc::new(Tailnet::new());
     Arc::new(AppState {
         auth: Auth::load(&app_dir, String::new(), vec![]).unwrap(),
-        t3: T3::new(t3_url, cfg.t3_token.clone()),
+        harness: crate::harness::connect(t3_url, cfg.t3_token.clone()),
         bots: Bots::new(
             cfg.bots_root.clone(),
             cfg.bot_mcp_url.clone(),
@@ -306,8 +305,8 @@ async fn a_child_is_launched_and_its_model_stays_on_the_child() {
         "model": "claude-haiku-5-5",
         "options": [{ "id": "effort", "value": "low" }],
     });
-    let rpc = state.t3.rpc().await.unwrap();
-    push_model(&rpc, &child, &selection).await.unwrap();
+    let provisioning = state.harness.provisioning().unwrap();
+    push_model(provisioning, &child, &selection).await.unwrap();
 
     let calls = log.lock().expect("log").clone();
     let updates: Vec<_> = calls

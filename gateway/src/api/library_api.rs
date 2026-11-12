@@ -18,19 +18,13 @@ pub(crate) async fn library_messages(s: &AppState, slug: &str) -> Vec<Value> {
     let Ok(thread) = main_thread(s, slug).await else {
         return Vec::new();
     };
-    let Ok(rpc) = s.t3.rpc().await else {
+    let Ok(transcript) = s.harness.transcript() else {
         return Vec::new();
     };
-    let Ok(projection) = rpc
-        .call(
-            "orchestration.getThreadProjection",
-            json!({ "threadId": thread }),
-        )
-        .await
-    else {
+    let Ok(snapshot) = transcript.read(&thread).await else {
         return Vec::new();
     };
-    chat::transcript(&projection)["messages"]
+    snapshot.transcript()["messages"]
         .as_array()
         .cloned()
         .unwrap_or_default()

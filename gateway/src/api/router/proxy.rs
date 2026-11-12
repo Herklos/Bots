@@ -10,6 +10,9 @@ pub(crate) async fn t3_route(
     h: HeaderMap,
     body: Bytes,
 ) -> Response {
+    let Ok(relay) = s.harness.relay() else {
+        return ApiError::not_found("not found").into_response();
+    };
     let rest = uri.path().trim_start_matches("/t3");
     let query = uri.query().map(|q| format!("?{q}")).unwrap_or_default();
     if let Ok(ws) = ws {
@@ -17,7 +20,7 @@ pub(crate) async fn t3_route(
             "/ws" => {
                 let mut u = format!(
                     "{}/ws?orchestrationProtocol=2&clientSurface=web&clientAppVersion=bots-rs",
-                    crate::harness::t3::ws_base(&s.t3.base_url)
+                    crate::harness::t3::ws_base(relay.http_base())
                 );
                 if let Some(q) = uri.query() {
                     u.push('&');
@@ -25,22 +28,28 @@ pub(crate) async fn t3_route(
                 }
                 u
             }
-            "/api/preview-stream/ws" => format!(
-                "{}{rest}{query}",
-                crate::harness::t3::ws_base(&s.t3.base_url)
-            ),
+            "/api/preview-stream/ws" => {
+                format!(
+                    "{}{rest}{query}",
+                    crate::harness::t3::ws_base(relay.http_base())
+                )
+            }
             _ => return ApiError::not_found("not found").into_response(),
         };
-        let token = s.t3.token.clone();
         let close_sockets = s.auth.close_sockets.clone();
-        return ws.on_upgrade(move |socket| {
-            crate::harness::t3::proxy_ws(socket, target, token, close_sockets)
+        let harness = s.harness.clone();
+        return ws.on_upgrade(move |socket| async move {
+            if let Ok(relay) = harness.relay() {
+                relay.proxy_ws(socket, target, close_sockets).await;
+            }
         });
     }
     if !rest.starts_with("/api/") {
         return ApiError::not_found("not found").into_response();
     }
-    crate::harness::t3::proxy_http(&s.t3, method, &format!("{rest}{query}"), &h, body).await
+    relay
+        .proxy_http(method, &format!("{rest}{query}"), &h, body)
+        .await
 }
 
 // ---------- the Bots' tool server ----------

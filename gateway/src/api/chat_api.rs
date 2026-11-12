@@ -14,18 +14,14 @@ pub(crate) async fn main_thread(s: &AppState, slug: &str) -> ApiResult<String> {
 
 /// Rows of the parent's thread family. Used only to decide which child a send may use.
 pub(crate) async fn parent_rows(s: &AppState, parent: &str) -> ApiResult<Vec<Value>> {
-    let rpc =
-        s.t3.rpc()
-            .await
-            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
-    let projection = rpc
-        .call(
-            "orchestration.getThreadProjection",
-            json!({ "threadId": parent }),
-        )
+    let snapshot = s
+        .harness
+        .transcript()
+        .map_err(|err| err.api())?
+        .read(parent)
         .await
-        .map_err(|e| ApiError::new(502, e.to_string()))?;
-    Ok(crate::bots::lineage::rows(&projection))
+        .map_err(|err| err.api())?;
+    Ok(snapshot.lineage())
 }
 
 /// Parent thread, or a resolved local child. A remote child or the parent id is an error
@@ -65,36 +61,17 @@ pub(crate) fn with_etag(tag: &str, body: Value, send_body: bool) -> Response {
 
 pub(crate) async fn chat_view(s: &AppState, slug: &str, asked: Option<&str>) -> ApiResult<Value> {
     let parent = main_thread(s, slug).await?;
-    let rpc =
-        s.t3.rpc()
-            .await
-            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
+    let transcript = s.harness.transcript().map_err(|err| err.api())?;
     let (thread, read_only) = if let Some(child) = asked {
-        let parent_projection = rpc
-            .call(
-                "orchestration.getThreadProjection",
-                json!({ "threadId": parent }),
-            )
-            .await
-            .map_err(|e| ApiError::new(502, e.to_string()))?;
-        let id = crate::bots::lineage::thread_for(
-            &crate::bots::lineage::rows(&parent_projection),
-            &parent,
-            Some(child),
-        )
-        .map_err(ApiError::bad_request)?;
+        let parent_snapshot = transcript.read(&parent).await.map_err(|err| err.api())?;
+        let id = crate::bots::lineage::thread_for(&parent_snapshot.lineage(), &parent, Some(child))
+            .map_err(ApiError::bad_request)?;
         // A resolved local child is the thread the person is in, and they can send on it.
         (id, false)
     } else {
         (parent, false)
     };
-    let projection = rpc
-        .call(
-            "orchestration.getThreadProjection",
-            json!({ "threadId": thread }),
-        )
-        .await
-        .map_err(|e| ApiError::new(502, e.to_string()))?;
+    let snapshot = transcript.read(&thread).await.map_err(|err| err.api())?;
     let listed = s.bots.list().await?;
     let hidden = listed
         .iter()
@@ -119,7 +96,7 @@ pub(crate) async fn chat_view(s: &AppState, slug: &str, asked: Option<&str>) -> 
             }
         }
     }
-    let mut out = chat::with_tokens(chat::transcript_for(&projection, &peers), &projection);
+    let mut out = snapshot.transcript_for(&peers);
     out["threadId"] = json!(thread);
     out["readOnly"] = json!(read_only);
     out["hidden"] = json!(hidden);
@@ -212,10 +189,7 @@ pub(crate) async fn send_chat(
         chat::command_with(&parent, &text, &files, &message_id)
     };
     let thread = command["threadId"].as_str().unwrap_or(&parent).to_string();
-    let rpc =
-        s.t3.rpc()
-            .await
-            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
+    let turns = s.harness.turns().map_err(|err| err.api())?;
     if let Some(reply_to) = body["replyTo"].as_str().filter(|id| !id.is_empty()) {
         s.threads
             .set_reply(
@@ -226,9 +200,15 @@ pub(crate) async fn send_chat(
             )
             .await?;
     }
-    rpc.call("orchestration.dispatchCommand", command.clone())
+    turns
+        .send_user(&crate::harness::UserMessage::new(
+            &thread,
+            command["messageId"].as_str().unwrap_or(""),
+            command["text"].as_str().unwrap_or(""),
+            command["attachments"].as_array().unwrap_or(&Vec::new()),
+        ))
         .await
-        .map_err(|e| ApiError::new(502, e.to_string()))?;
+        .map_err(|err| err.api())?;
     s.usage
         .note_for(&slug, crate::bots::usage::Event::Message)
         .await;
@@ -300,13 +280,18 @@ pub(crate) async fn send_voice(
             true,
         )
     };
-    let rpc =
-        s.t3.rpc()
-            .await
-            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
-    rpc.call("orchestration.dispatchCommand", stored["command"].clone())
+    let command = &stored["command"];
+    s.harness
+        .turns()
+        .map_err(|err| err.api())?
+        .send_user(&crate::harness::UserMessage::new(
+            command["threadId"].as_str().unwrap_or(&thread),
+            command["messageId"].as_str().unwrap_or(""),
+            command["text"].as_str().unwrap_or(""),
+            command["attachments"].as_array().unwrap_or(&Vec::new()),
+        ))
         .await
-        .map_err(|e| ApiError::new(502, e.to_string()))?;
+        .map_err(|err| err.api())?;
     s.usage
         .note_for(&slug, crate::bots::usage::Event::Message)
         .await;
@@ -332,25 +317,21 @@ pub(crate) async fn stop_chat(
     require_json(&h)?;
     let body = parse(&body)?;
     let thread = resolve_chat_thread(&s, &slug, body["child"].as_str()).await?;
-    let rpc =
-        s.t3.rpc()
-            .await
-            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
-    let projection = rpc
-        .call(
-            "orchestration.getThreadProjection",
-            json!({ "threadId": thread }),
-        )
+    let snapshot = s
+        .harness
+        .transcript()
+        .map_err(|err| err.api())?
+        .read(&thread)
         .await
-        .map_err(|e| ApiError::new(502, e.to_string()))?;
-    let Some(run) = chat::transcript(&projection)["activeRunId"]
-        .as_str()
-        .map(String::from)
-    else {
+        .map_err(|err| err.api())?;
+    let Some(run) = snapshot.active_run_id() else {
         return Ok(Json(json!({ "ok": true, "stopped": false })));
     };
-    rpc.dispatch(json!({ "type": "run.interrupt", "threadId": thread, "runId": run }))
+    s.harness
+        .turns()
+        .map_err(|err| err.api())?
+        .interrupt(&thread, &run)
         .await
-        .map_err(|e| ApiError::new(502, e.to_string()))?;
+        .map_err(|err| err.api())?;
     Ok(Json(json!({ "ok": true, "stopped": true })))
 }

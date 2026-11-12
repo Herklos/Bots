@@ -109,7 +109,10 @@ pub(crate) async fn respond_request(
     let kind = body["kind"].as_str().unwrap_or("");
     let outbound = crate::chat::approvals::outbound(kind, &thread, &id, &body)
         .map_err(ApiError::bad_request)?;
-    Ok(Json(crate::chat::approvals::send(&s.t3, outbound).await?))
+    Ok(Json(
+        crate::chat::approvals::send(s.harness.approvals().map_err(|err| err.api())?, outbound)
+            .await?,
+    ))
 }
 
 pub(crate) async fn thread_previews(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Response> {
@@ -127,18 +130,20 @@ pub(crate) async fn thread_previews(State(s): S, h: HeaderMap, body: Bytes) -> A
             ))
         })
         .collect();
-    let rpc = s.t3.rpc().await.ok();
+    let harness = s.harness.clone();
+    let preview_names = names.clone();
     let previews = s
         .threads
         .previews(b.get("stamps"), &names, |thread| {
-            let rpc = rpc.clone();
+            let harness = harness.clone();
+            let preview_names = preview_names.clone();
             async move {
-                let rpc = rpc.ok_or_else(|| anyhow::anyhow!("T3 unavailable"))?;
-                rpc.call(
-                    "orchestration.getThreadProjection",
-                    json!({ "threadId": thread }),
-                )
-                .await
+                harness
+                    .previews()
+                    .map_err(|err| anyhow::anyhow!(err.to_string()))?
+                    .inbox(&thread, &preview_names)
+                    .await
+                    .map_err(|err| anyhow::anyhow!(err.to_string()))
             }
         })
         .await?;

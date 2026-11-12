@@ -141,7 +141,18 @@ pub(crate) async fn start(state: Arc<AppState>) {
 /// may be added. `orchestration.subscribeShell` stays open, so the read waits for one
 /// snapshot and then interrupts it.
 pub(super) async fn busy_threads(state: &AppState) -> Result<usize> {
-    read_busy(&state.t3).await
+    let transcript = state
+        .harness
+        .transcript()
+        .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+    let shell = transcript
+        .busy()
+        .await
+        .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+    if shell.http_required {
+        bail!("T3 asked for an HTTP snapshot before the shell stream; auto-update will wait");
+    }
+    Ok(shell.busy_count())
 }
 
 pub(super) const SHELL: &str = "orchestration.subscribeShell";

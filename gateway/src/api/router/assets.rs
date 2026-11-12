@@ -18,7 +18,7 @@ pub(crate) async fn config_route(
         "accessLogout": s.access.is_some() && !on_tailnet,
         "appUrl": s.cfg.app_url,
         "version": env!("CARGO_PKG_VERSION"),
-        "harness": { "name": "T3 Code", "connected": s.t3.rpc().await.is_ok() },
+        "harness": { "name": "T3 Code", "connected": s.harness.connected().await },
     }))
 }
 

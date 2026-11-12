@@ -38,7 +38,7 @@ enum Waiter {
 type Pending = Arc<Mutex<HashMap<String, Waiter>>>;
 
 #[derive(Debug)]
-pub struct T3Client {
+pub(crate) struct T3Client {
     out: mpsc::UnboundedSender<WsMsg>,
     pending: Pending,
     next: AtomicU64,
@@ -85,7 +85,7 @@ fn describe_cause(cause: &Value) -> String {
 }
 
 impl T3Client {
-    pub async fn connect(base_url: &str, token: &str) -> anyhow::Result<Self> {
+    pub(crate) async fn connect(base_url: &str, token: &str) -> anyhow::Result<Self> {
         let url = format!(
             "{}/ws?orchestrationProtocol=2&clientSurface=web&clientAppVersion=bots-rs-{}",
             ws_base(base_url),
@@ -212,12 +212,12 @@ impl T3Client {
         })
     }
 
-    pub fn is_closed(&self) -> bool {
+    pub(crate) fn is_closed(&self) -> bool {
         self.closed.load(Ordering::SeqCst)
     }
 
     /// A unary RPC, e.g. `orchestration.getThreadProjection`.
-    pub async fn call(&self, tag: &str, payload: Value) -> anyhow::Result<Value> {
+    pub(crate) async fn call(&self, tag: &str, payload: Value) -> anyhow::Result<Value> {
         let id = self.next.fetch_add(1, Ordering::SeqCst).to_string();
         let (tx, rx) = oneshot::channel();
         self.pending
@@ -247,7 +247,7 @@ impl T3Client {
     /// A staying-open subscribe (`orchestration.subscribeShell`,
     /// `scheduledTasks.subscribe`) must not be left running: the next read
     /// would add another one.
-    pub async fn read_until<F>(
+    pub(crate) async fn read_until<F>(
         &self,
         tag: &str,
         payload: Value,
@@ -295,7 +295,7 @@ impl T3Client {
     }
 
     /// `orchestration.dispatchCommand` with a fresh commandId unless the command has one.
-    pub async fn dispatch(&self, mut command: Value) -> anyhow::Result<Value> {
+    pub(crate) async fn dispatch(&self, mut command: Value) -> anyhow::Result<Value> {
         if command.get("commandId").is_none() {
             command["commandId"] = json!(uuid::Uuid::new_v4().to_string());
         }
@@ -304,7 +304,7 @@ impl T3Client {
 }
 
 /// One shared connection, reopened after T3 restarts.
-pub struct T3 {
+pub(crate) struct T3 {
     pub base_url: String,
     pub token: String,
     pub http: reqwest::Client,
@@ -323,7 +323,7 @@ impl std::fmt::Debug for T3 {
 }
 
 impl T3 {
-    pub fn new(base_url: String, token: String) -> Self {
+    pub(crate) fn new(base_url: String, token: String) -> Self {
         Self {
             base_url,
             token,
@@ -332,7 +332,7 @@ impl T3 {
         }
     }
 
-    pub async fn rpc(&self) -> anyhow::Result<Arc<T3Client>> {
+    pub(crate) async fn rpc(&self) -> anyhow::Result<Arc<T3Client>> {
         let mut g = self.client.lock().await;
         if let Some(c) = g.as_ref().filter(|c| !c.is_closed()) {
             return Ok(c.clone());
@@ -342,7 +342,7 @@ impl T3 {
         Ok(c)
     }
 
-    pub async fn get_json(&self, path: &str) -> anyhow::Result<Value> {
+    pub(crate) async fn get_json(&self, path: &str) -> anyhow::Result<Value> {
         let res = self
             .http
             .get(format!("{}{path}", self.base_url))

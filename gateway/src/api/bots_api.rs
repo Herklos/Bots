@@ -69,7 +69,7 @@ pub(crate) async fn suggestions_get() -> Json<Value> {
 pub(crate) async fn providers_get(State(s): S) -> ApiResult<Json<Value>> {
     let list = s
         .providers
-        .list(&s.t3)
+        .list(s.harness.as_ref())
         .await
         .map_err(|e| ApiError::new(502, format!("T3 didn't list providers: {e}")))?;
     Ok(Json(json!({ "ok": true, "providers": list["providers"] })))
@@ -88,7 +88,7 @@ pub(crate) async fn checked_selection(
     // The character check first: it also refuses an empty choice.
     let plain = crate::bots::provisioner::model_selection(instance, model)
         .map_err(ApiError::bad_request)?;
-    match s.providers.list(&s.t3).await {
+    match s.providers.list(s.harness.as_ref()).await {
         Ok(list) => crate::harness::providers::selection(&list, instance, model, effort, current)
             .map_err(ApiError::bad_request),
         Err(_) => Ok(plain),
@@ -134,28 +134,24 @@ pub(crate) async fn model_put(
         patch["runtimeMode"] = json!(mode);
     }
     s.bots.save(&slug, &patch, false).await?;
-    if let Ok(rpc) = s.t3.rpc().await {
-        crate::bots::provisioner::push_model(&rpc, &bot, &selection)
-            .await
-            .map_err(|e| ApiError::new(502, format!("T3 didn't take the model: {e}")))?;
+    if s.harness.connected().await {
+        if let Ok(provisioning) = s.harness.provisioning() {
+            crate::bots::provisioner::push_model(provisioning, &bot, &selection)
+                .await
+                .map_err(|e| ApiError::new(502, format!("T3 didn't take the model: {e}")))?;
+        }
     }
     Ok(Json(json!({ "ok": true })))
 }
 
 pub(crate) async fn lineage_get(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
     let thread = main_thread(&s, &slug).await?;
-    let rpc =
-        s.t3.rpc()
-            .await
-            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
-    let projection = rpc
-        .call(
-            "orchestration.getThreadProjection",
-            json!({ "threadId": thread }),
-        )
+    let snapshot = s
+        .harness
+        .transcript()
+        .map_err(|err| err.api())?
+        .read(&thread)
         .await
-        .map_err(|e| ApiError::new(502, format!("T3 didn't return the thread: {e}")))?;
-    Ok(Json(
-        json!({ "ok": true, "rows": crate::bots::lineage::rows(&projection) }),
-    ))
+        .map_err(|err| err.api_note(|msg| format!("T3 didn't return the thread: {msg}")))?;
+    Ok(Json(json!({ "ok": true, "rows": snapshot.lineage() })))
 }

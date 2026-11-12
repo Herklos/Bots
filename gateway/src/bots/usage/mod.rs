@@ -105,15 +105,14 @@ impl Usage {
                 }
             }
         }
-        let projection =
-            s.t3.rpc()
-                .await?
-                .call(
-                    "orchestration.getThreadProjection",
-                    json!({ "threadId": thread }),
-                )
-                .await?;
-        let turns = turns_from_projection(&projection);
+        let turns = s
+            .harness
+            .transcript()
+            .map_err(|err| anyhow::anyhow!(err.to_string()))?
+            .read(thread)
+            .await
+            .map_err(|err| anyhow::anyhow!(err.to_string()))?
+            .turns();
         if !stamp.is_empty() {
             self.turns
                 .lock()

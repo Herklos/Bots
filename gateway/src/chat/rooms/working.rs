@@ -68,7 +68,7 @@ pub(crate) async fn read_group_threads<F, Fut>(
 ) -> HashMap<String, (MemberProbe, Vec<Value>)>
 where
     F: Fn(String) -> Fut,
-    Fut: Future<Output = anyhow::Result<Value>>,
+    Fut: Future<Output = anyhow::Result<(bool, Vec<Value>)>>,
 {
     let mut out = HashMap::new();
     let mut ids = thread_ids;
@@ -82,13 +82,7 @@ where
         });
         for (id, result) in join_all(loads).await {
             match result {
-                Ok(projection) => {
-                    let transcript = crate::chat::group_transcript(&projection);
-                    let working = transcript["working"] == true;
-                    let messages = transcript["messages"]
-                        .as_array()
-                        .cloned()
-                        .unwrap_or_default();
+                Ok((working, messages)) => {
                     out.insert(id, (MemberProbe::Read { working }, messages));
                 }
                 Err(_) => {
