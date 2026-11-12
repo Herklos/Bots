@@ -263,21 +263,59 @@ impl Library {
     }
 
     /// Bytes of one file under `library/`. The path is workspace-relative (`library/name`).
-    pub async fn file_bytes(&self, slug: &str, path: &str) -> ApiResult<Vec<u8>> {
-        Self::require_slug(slug)?;
-        let rel = path.trim_start_matches('/');
-        if !rel.starts_with("library/") || rel.contains("..") {
-            return Err(ApiError::bad_request("That file is not in the library."));
-        }
-        let full = format!("{slug}/{rel}");
-        self.ws.read(&full).await.map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                ApiError::not_found("no such file")
-            } else if e.kind() == std::io::ErrorKind::InvalidInput {
-                ApiError::bad_request("That file is not in the library.")
-            } else {
-                e.into()
+    /// A symlink is refused. An image extension must match its signature and stay within 5 MiB.
+    pub(crate) async fn file_bytes(&self, slug: &str, path: &str) -> Result<Vec<u8>, FileError> {
+        Self::require_slug(slug).map_err(|_err| FileError::BadPath)?;
+        let rel = crate::chat::images::library_rel(path).ok_or(FileError::BadPath)?;
+        let bytes =
+            crate::chat::images::read_regular(self.ws.as_ref(), &format!("{slug}/{rel}")).await?;
+        if let Some(kind) = crate::chat::images::kind_of(&rel) {
+            if bytes.len() > crate::chat::images::MAX_IMAGE_BYTES {
+                return Err(FileError::TooBig);
             }
-        })
+            if crate::chat::images::picture(kind, &bytes).is_none() {
+                return Err(FileError::NotImage);
+            }
+        }
+        Ok(bytes)
+    }
+}
+
+/// Why [`Library::file_bytes`] refused a path. The route maps each one to a status.
+#[derive(Debug)]
+pub(crate) enum FileError {
+    BadPath,
+    Missing,
+    Link,
+    TooBig,
+    NotImage,
+    Io,
+}
+
+impl From<crate::chat::images::ImageFault> for FileError {
+    fn from(fault: crate::chat::images::ImageFault) -> Self {
+        match fault {
+            crate::chat::images::ImageFault::Missing => Self::Missing,
+            crate::chat::images::ImageFault::Link => Self::Link,
+            crate::chat::images::ImageFault::BadPath => Self::BadPath,
+            crate::chat::images::ImageFault::Io => Self::Io,
+            crate::chat::images::ImageFault::TooBig => Self::TooBig,
+            crate::chat::images::ImageFault::NotImage => Self::NotImage,
+        }
+    }
+}
+
+impl FileError {
+    pub(crate) fn api(self) -> ApiError {
+        match self {
+            Self::BadPath | Self::Link => ApiError::bad_request("That file is not in the library."),
+            Self::Missing => ApiError::not_found("no such file"),
+            Self::TooBig => ApiError::new(413, "That image is larger than 5 MiB."),
+            Self::NotImage => ApiError::new(415, "That file is not an image."),
+            Self::Io => {
+                tracing::error!("library file could not be read");
+                ApiError::new(500, "The file could not be read.")
+            }
+        }
     }
 }

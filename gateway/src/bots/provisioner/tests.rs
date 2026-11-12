@@ -237,6 +237,7 @@ fn fixture_state(dir: &std::path::Path, t3_url: String) -> Arc<AppState> {
             cfg.bot_mcp_url.clone(),
             "fixture-only".into(),
         ),
+        images: crate::chat::images::Resolver::new(),
         system: crate::platform::release::System::new(cfg.data_root.clone(), cfg.app_dir()),
         mcp_token: "fixture-only".into(),
         provision_now: tokio::sync::Notify::new(),

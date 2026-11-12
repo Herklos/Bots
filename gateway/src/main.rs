@@ -140,6 +140,7 @@ async fn main() -> anyhow::Result<()> {
             cfg.bot_mcp_url.clone(),
             mcp_token.clone(),
         ),
+        images: chat::images::Resolver::new(),
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
         holds: chat::HeldReads::new(),

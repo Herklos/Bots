@@ -32,6 +32,7 @@ pub(crate) type Peers = HashMap<String, Value>;
 
 pub(crate) mod approvals; // T5: answering a pending request.
 pub(crate) mod attachments; // Chat files stored on the Bot.
+pub(crate) mod images; // Library pictures named in a Bot reply.
 pub(crate) mod rooms; // Local rooms. A send is stored here, then dispatched to each member's main thread.
 pub(crate) mod routines;
 pub(crate) mod thread_meta; // T5: reactions, voice calls, roster previews. // T5: T3 scheduled tasks.

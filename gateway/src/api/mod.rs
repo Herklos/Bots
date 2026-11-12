@@ -30,6 +30,8 @@ mod bots_api;
 mod chat_api;
 mod computer_api;
 mod library_api;
+#[cfg(test)]
+mod library_file_tests;
 mod rooms_api;
 mod router;
 mod routines_api;

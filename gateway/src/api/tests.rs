@@ -68,12 +68,17 @@ async fn html_library_file_is_sandboxed_and_a_png_is_not() {
     let library = dir.path().join("bots/ada/library");
     std::fs::create_dir_all(&library).unwrap();
     std::fs::write(library.join("page.html"), b"<script>alert(1)</script>").unwrap();
-    std::fs::write(library.join("shot.png"), b"\x89PNG not really").unwrap();
+    std::fs::write(
+        library.join("shot.png"),
+        crate::chat::images::png_bytes(2, 1),
+    )
+    .unwrap();
 
     let html = library_file(
         State(state.clone()),
         Path("ada".into()),
         Query(HashMap::from([("path".into(), "library/page.html".into())])),
+        HeaderMap::new(),
     )
     .await
     .unwrap();
@@ -95,6 +100,7 @@ async fn html_library_file_is_sandboxed_and_a_png_is_not() {
         State(state),
         Path("ada".into()),
         Query(HashMap::from([("path".into(), "library/shot.png".into())])),
+        HeaderMap::new(),
     )
     .await
     .unwrap();
@@ -115,10 +121,12 @@ fn library_mime_ignores_extension_case() {
     assert_eq!(library_mime("shot.PNG"), "image/png");
     assert_eq!(library_mime("shot.JPEG"), "image/jpeg");
     assert_eq!(library_mime("shot.JPG"), "image/jpeg");
+    assert_eq!(library_mime("shot.GIF"), "image/gif");
+    assert_eq!(library_mime("shot.WEBP"), "image/webp");
     assert_eq!(library_mime("notes.TXT"), "application/octet-stream");
 }
 
-fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
+pub(super) fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
     let app_dir = dir.join("bots/.botapp");
     let cfg = crate::platform::config::Config {
         host: "127.0.0.1".into(),
@@ -168,6 +176,7 @@ fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
             cfg.bot_mcp_url.clone(),
             "fixture-only".into(),
         ),
+        images: chat::images::Resolver::new(),
         system: crate::platform::release::System::new(cfg.data_root.clone(), cfg.app_dir()),
         mcp_token: "fixture-only".into(),
         provision_now: tokio::sync::Notify::new(),

@@ -63,6 +63,17 @@ export function dayLabel(at: string, now: number): string {
 }
 export const blank = { quote: '', tokens: '', react: '', key: '', time: '', title: '', files: [] as any[], botSlug: '', botName: '', botColor: 'brand.default', botShape: 'ball', variant: '', choices: [] as any[], placeholder: '', resetAt: '', parts: [] as MessagePart[] };
 
+// A library picture is served from the Bot's folder. Any other file stays an attachment.
+// A path that is not `library/...` must not become a URL the page would fetch.
+export function fileUrl(slug: string, file: { id?: unknown; path?: unknown }): string {
+  const path = typeof file.path === 'string' ? file.path : '';
+  const parts = path.split('/');
+  const local = parts[0] === 'library' && parts.length > 1 && !path.includes('\\') && !path.includes('://')
+    && parts.every((part) => part !== '' && part !== '.' && part !== '..' && !part.startsWith('.'));
+  if (local) return `${API}/api/bots/${encodeURIComponent(slug)}/library/file?path=${encodeURIComponent(path)}`;
+  return `${API}/api/bots/${encodeURIComponent(slug)}/attachments/${encodeURIComponent(String(file.id ?? ''))}`;
+}
+
 // The transcript as rows: day marks, messages in runs, the lines between them, what the Bot is
 // waiting on, and the working line. A run is one sender's messages with no break between them.
 export function chatRows(slug: string, body: any, now: number, reactions: Record<string, string[]> = {}, replyTo: unknown = {}): any[] {
@@ -96,7 +107,7 @@ export function chatRows(slug: string, body: any, now: number, reactions: Record
     const who = `${mine}:${item.from?.slug ?? ''}`;
     const files = ((item.files ?? []) as any[]).map((f) => ({
       id: String(f.id), name: String(f.name), kind: String(f.kind), size: fileSize(Number(f.bytes ?? 0)),
-      url: `${API}/api/bots/${encodeURIComponent(slug)}/attachments/${encodeURIComponent(String(f.id))}`,
+      url: fileUrl(slug, f),
     }));
     const text = String(item.text ?? '');
     const row = { ...blank, ...peer(item.from), id: String(item.id), kind: 'message', mine, text, parts: mine ? [] : splitTables(text), react: ((reactions[String(item.id)] ?? []) as string[]).join(' '), quote: quoteOf(replyTo, String(item.id)), tokens: tokenText(item.tokens), files, head: !(prev && prev.who === who && t - prev.t < 5 * 60_000), tail: true,

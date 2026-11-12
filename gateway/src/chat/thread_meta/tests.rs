@@ -44,6 +44,25 @@ fn preview_text_reads_as_prose() {
 }
 
 #[test]
+fn an_image_only_reply_previews_as_image() {
+    let preview = |text: &str| {
+        latest_preview(
+            &json!({ "turnItems": [message(1, "assistant_message", json!({ "text": text }))] }),
+            &peers(),
+        )
+    };
+    assert_eq!(
+        preview("![chart](library/chart.png)").unwrap()["text"],
+        "Image"
+    );
+    assert_eq!(
+        preview("See ![chart](library/chart.png)").unwrap()["text"],
+        "See"
+    );
+    assert!(preview("").is_none());
+}
+
+#[test]
 fn the_newest_recognizable_item_wins() {
     let preview = |items: Vec<Value>| latest_preview(&json!({ "turnItems": items }), &peers());
     assert_eq!(

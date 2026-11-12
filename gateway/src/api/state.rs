@@ -27,6 +27,8 @@ pub struct AppState {
     /// Shared with [`crate::bots::library::Library`].
     pub workspace: Arc<dyn crate::storage::workspace::Workspace>,
     pub library: crate::bots::library::Library,
+    /// Checked library images named in Bot replies. A hit does no file IO.
+    pub(crate) images: crate::chat::images::Resolver,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
     /// One held chat or group read at a time. Shutdown wakes it.
