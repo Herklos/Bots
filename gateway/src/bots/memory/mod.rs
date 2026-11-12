@@ -19,6 +19,11 @@ mod mutate;
 #[cfg(test)]
 #[path = "mutate_tests.rs"]
 mod mutate_tests;
+mod owner_stream;
+mod reflect;
+#[cfg(test)]
+#[path = "reflect_tests.rs"]
+mod reflect_tests;
 mod search;
 mod skills;
 mod state;
@@ -338,6 +343,10 @@ pub(crate) use evidence::{
 };
 pub(crate) use facts::{FACT_CHARS, FULL_NOTE_CHARS, MEMORY_CHARS, NOTE_CHARS};
 pub(crate) use mutate::{mutate, Coded, MutateFail, MutateOk, Mutation, Op, Scope};
+pub(crate) use reflect::{
+    apply as reflect_apply, packet as reflect_packet, require_unreviewed, ApplyInput, ApplyOp,
+    ReflectError,
+};
 pub(crate) use search::{document, list_notes, read_note, search as search_memory, Hit, NoteInfo};
 pub(crate) use state::revision_of;
 pub(crate) use suggest::{propose, Proposal, ProposalResult};

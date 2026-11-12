@@ -2,7 +2,7 @@
 use super::{caller, scope, Deps};
 use crate::bots::memory::{
     check_owner_evidence, generic_attachment_quote, mutate, owner_messages, pick_message,
-    search_memory, Coded, Hit, MutateFail, MutateOk, Mutation, Op, Scope,
+    require_unreviewed, search_memory, Coded, Hit, MutateFail, MutateOk, Mutation, Op, Scope,
 };
 use serde_json::{json, Value};
 
@@ -176,6 +176,7 @@ async fn write(d: &Deps<'_>, args: &Value, op: Op) -> Result<Value, String> {
     }
     let messages = owner_messages(d.turn_items);
     let message = pick_message(&messages, args["sourceMessageId"].as_str())?;
+    require_unreviewed(d.memory, &slug, d.turn_items, &message.id).await?;
     check_owner_evidence(&message.text, quote).map_err(|err| err.message)?;
     if message.attachments > 0 && generic_attachment_quote(quote) {
         return Err("That message only points at an attachment. Quote the user's own sentence that states the fact, or ask them to type it.".into());

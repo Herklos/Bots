@@ -178,51 +178,14 @@ pub(crate) fn generic_attachment_quote(quote: &str) -> bool {
 
 /// Owner messages from a thread projection. Routine and group frames are not evidence.
 pub(crate) fn owner_messages(items: &[Value]) -> Vec<OwnerMessage> {
-    let mut out = Vec::new();
-    for raw in items {
-        let item = if raw.get("item").is_some_and(Value::is_object) {
-            &raw["item"]
-        } else {
-            raw
-        };
-        if item["type"] != "user_message" {
-            continue;
-        }
-        if item
-            .get("scheduledTaskId")
-            .is_some_and(|value| !value.is_null())
-        {
-            continue;
-        }
-        if item["senderThreadId"]
-            .as_str()
-            .is_some_and(|sender| !sender.trim().is_empty())
-        {
-            continue;
-        }
-        if item["createdBy"]
-            .as_str()
-            .is_some_and(|created_by| created_by != "user")
-        {
-            continue;
-        }
-        if item["creationSource"]
-            .as_str()
-            .is_some_and(|source| source == "server" || source == "agent")
-        {
-            continue;
-        }
-        let text = item["text"].as_str().unwrap_or("").to_string();
-        if text.trim().is_empty() {
-            continue;
-        }
-        out.push(OwnerMessage {
-            id: item["id"].as_str().unwrap_or("").to_string(),
-            text,
-            attachments: item["attachments"].as_array().map(Vec::len).unwrap_or(0),
-        });
-    }
-    out
+    super::owner_stream::owner_stream(items)
+        .into_iter()
+        .map(|turn| OwnerMessage {
+            id: turn.id,
+            text: turn.text,
+            attachments: turn.attachments,
+        })
+        .collect()
 }
 
 pub(crate) fn pick_message<'a>(
