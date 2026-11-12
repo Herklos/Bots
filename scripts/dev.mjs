@@ -168,6 +168,7 @@ function checkContract() {
   checkTimer = setTimeout(() => {
     const child = spawnGroup(process.execPath, [resolve(root, 'scripts/check-contract.mjs')], process.env);
     prefix(child, 'contract');
+    prefix(spawnGroup(process.execPath, [resolve(root, 'scripts/check-size.mjs')], process.env), 'size');
   }, 400);
 }
 
@@ -243,7 +244,7 @@ web.on('exit', (code, signal) => {
   shutdown();
 });
 
-if (existsSync(resolve(root, 'app'))) watch(resolve(root, 'app'), (_, name) => { if (name?.endsWith('.contract')) checkContract(); });
+if (existsSync(resolve(root, 'app'))) watch(resolve(root, 'app'), { recursive: true }, (_, name) => { if (name?.endsWith('.contract') || name?.endsWith('.ts')) checkContract(); });
 arm('gateway/src', true);
 arm('design/src', true);
 arm('gateway/Cargo.toml', false);
