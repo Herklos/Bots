@@ -244,6 +244,8 @@
   "model.defaultNote": "Les nouveaux Bots commencent avec ce modèle.",
   "model.effort": "Effort",
   "model.fullAccess": "Accès complet",
+  "model.independent": "Indépendant",
+  "model.independentNote": "Agit sans demander pour la plupart des outils. Utilisez Toujours demander pour l’argent, l’identité et tout ce que vous devez approuver.",
   "model.nextThread": "Utilisé la prochaine fois qu’un fil est créé.",
   "model.noProviderLong": "Aucun fournisseur n’est prêt dans T3 Code. Configurez-en un là-bas, puis revenez.",
   "model.provider": "Fournisseur",

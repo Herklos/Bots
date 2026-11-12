@@ -1,7 +1,10 @@
 import type { Sources, Result } from '../app.contract.d.ts';
-import { fixtureGroupAnswer, setFixtureGroupAnswer, savedEffort } from '../host/fixture.ts';
+import { fixtureDefaultMode, fixtureGroupAnswer, setFixtureDefaultMode, setFixtureGroupAnswer, savedEffort } from '../host/fixture.ts';
 import { REACH_GATEWAY, localize, call, read, setNoticeHost, hostNotice, reply, systemChecked, setSystemChecked } from '../host/gateway.ts';
 import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, postUnread } from '../host/notices.ts';
+
+const storedRuntimeMode = (mode: string): boolean =>
+  mode === 'approval-required' || mode === 'auto' || mode === 'full-access' || mode === 'independent';
 
 export const settingsSources = {
   enableNotifications: async (_args, store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ notifications: { enabled: true } }) })),
@@ -10,7 +13,7 @@ export const settingsSources = {
     try {
       body = await read(store, '/api/settings');
     } catch (error) {
-      if (fixtureGroupAnswer === '') throw error;
+      if (fixtureGroupAnswer === '' && fixtureDefaultMode === '') throw error;
     }
     const note = noticePrefs(body);
     return {
@@ -19,7 +22,7 @@ export const settingsSources = {
       defaultInstance: String(body.defaultModel?.instanceId ?? ''),
       defaultModel: String(body.defaultModel?.model ?? ''),
       defaultEffort: savedEffort(body),
-      defaultRuntimeMode: String(body.defaultRuntimeMode ?? (body.autoReview === false ? "full-access" : "auto")),
+      defaultRuntimeMode: fixtureDefaultMode !== '' ? fixtureDefaultMode : String(body.defaultRuntimeMode ?? (body.autoReview === false ? "full-access" : "auto")),
       noticeEnabled: note.enabled === true,
       noticeSound: note.sound,
       noticePreview: note.preview,
@@ -47,7 +50,16 @@ export const settingsSources = {
     return reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ notifications }) }));
   },
   setUserName: async ([userName], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ userName }) })),
-  setDefaultMode: async ([defaultRuntimeMode], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ defaultRuntimeMode }) })),
+  setDefaultMode: async ([defaultRuntimeMode], store) => {
+    const r = await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ defaultRuntimeMode }) });
+    // The contract runner has no gateway. Remember the stored mode so the radio can show it.
+    if (!r.ok && r.error === REACH_GATEWAY && storedRuntimeMode(defaultRuntimeMode)) {
+      setFixtureDefaultMode(defaultRuntimeMode);
+      return { ok: true, error: '' };
+    }
+    if (r.ok) setFixtureDefaultMode('');
+    return reply(r);
+  },
   setGroupAnswerPolicy: async ([groupAnswerPolicy], store) => {
     const policy = groupAnswerPolicy === 'everyone' || groupAnswerPolicy === 'chief' ? groupAnswerPolicy : 'last';
     const r = await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ groupAnswerPolicy: policy }) });

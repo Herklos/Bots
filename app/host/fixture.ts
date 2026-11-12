@@ -61,6 +61,11 @@ export let fixtureGroupAnswer = '';
 export function setFixtureGroupAnswer(value: string) {
   fixtureGroupAnswer = value;
 }
+// The default approval the contract runner saves when the gateway is down.
+export let fixtureDefaultMode = '';
+export function setFixtureDefaultMode(value: string) {
+  fixtureDefaultMode = value;
+}
 export function roomAnswer(id: string, made?: string): string {
   const saved = fixtureRoomPolicy.get(id);
   if (saved) return saved;
