@@ -13,6 +13,7 @@ fn bot(
 ) -> BotFiles {
     BotFiles {
         slug: slug.to_string(),
+        user: None,
         memory,
         log,
         inherit_parent: parent.map(str::to_string),
@@ -74,6 +75,9 @@ fn changed_reports_only_moved_stamps() {
     let mut log_only = prev.clone();
     log_only.bots[0].log = Some(stamp(9, 4));
     assert_eq!(changed(&prev, &log_only), vec!["ada".to_string()]);
+    let mut user_only = prev.clone();
+    user_only.bots[0].user = Some(stamp(10, 4));
+    assert_eq!(changed(&prev, &user_only), vec!["ada".to_string()]);
 }
 
 #[test]
