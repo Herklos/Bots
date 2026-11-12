@@ -1,7 +1,7 @@
 //! Text embedded in a Bot's managed `AGENTS.md` block.
 //!
-//! There is no per-thread instructions field on `orchestration.launchThread` or
-//! `message.dispatch`, so this file is the channel a Bot's prompt and memory use.
+//! There is no per-thread instructions field on a launch or a dispatched message,
+//! so this file is the channel a Bot's prompt and memory use.
 
 use crate::bots::memory_tools::Folder;
 use crate::bots::{is_subagent, valid_slug, MANAGED_END, MANAGED_START};
