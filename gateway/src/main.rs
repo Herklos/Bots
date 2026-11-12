@@ -19,6 +19,7 @@
 )]
 mod access; // T4: Cloudflare Access JWTs.
 mod agent_context; // The managed block of AGENTS.md: prompt text, and later a memory snapshot.
+mod anytype; // Local Anytype API client: pairing and key checks.
 mod approvals; // T5: answering a pending request.
 mod attachments; // Chat files stored on the Bot.
 mod auth;
@@ -509,6 +510,18 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route(
             "/api/storage/key",
             put(storage_settings::put_storage_key).delete(storage_settings::delete_storage_key),
+        )
+        .route(
+            "/api/storage/anytype/pair",
+            post(storage_settings::pair_start),
+        )
+        .route(
+            "/api/storage/anytype/pair/confirm",
+            post(storage_settings::pair_confirm),
+        )
+        .route(
+            "/api/storage/anytype/check",
+            post(storage_settings::anytype_check),
         )
         .route("/api/access/tailscale", post(access_tailscale))
         .route("/api/access/tunnel", post(access_tunnel))

@@ -953,6 +953,88 @@ pub(crate) async fn put_storage_key(
     ))
 }
 
+fn read_key(data_root: &Path, env: &ProcessEnv) -> Option<String> {
+    let text = if env.key_locked {
+        match (
+            non_empty_var("HBOTS_ANYTYPE_KEY"),
+            non_empty_var("HBOTS_ANYTYPE_KEY_FILE"),
+        ) {
+            (Some(key), _) => key,
+            (None, Some(path)) => std::fs::read_to_string(path).ok()?,
+            _ => return None,
+        }
+    } else {
+        std::fs::read_to_string(key_path(data_root)).ok()?
+    };
+    let text = text.trim().to_string();
+    (!text.is_empty()).then_some(text)
+}
+
+/// Starts pairing with the saved host. Anytype Desktop shows the approval dialog.
+pub(crate) async fn pair_start(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    surface: Option<Extension<Surface>>,
+    headers: HeaderMap,
+) -> ApiResult<Json<Value>> {
+    ensure_local(peer, &headers, surface_of(surface).as_ref())?;
+    if state.cfg.storage.key_locked {
+        return Err(ApiError::new(
+            409,
+            "The Anytype key is set by the environment.",
+        ));
+    }
+    let load = read_load(&state.cfg.data_root);
+    let host = effective_host(&state.cfg.storage, &load.stored);
+    let challenge = crate::anytype::start_pairing(&host).await?;
+    Ok(Json(json!({ "challengeId": challenge, "host": host })))
+}
+
+/// Exchanges the 4 digit code for a scoped key and stores it. The key is never returned.
+pub(crate) async fn pair_confirm(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    surface: Option<Extension<Surface>>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    ensure_local(peer, &headers, surface_of(surface).as_ref())?;
+    let body = parse_json(&headers, &body)?;
+    let challenge = field_string(&body, "challengeId")?
+        .filter(|value| !value.is_empty() && value.len() <= 128)
+        .ok_or_else(|| ApiError::bad_request("The pairing challenge is missing."))?;
+    let code = field_string(&body, "code")?
+        .map(|value| value.trim().to_string())
+        .filter(|value| value.len() == 4 && value.chars().all(|c| c.is_ascii_digit()))
+        .ok_or_else(|| ApiError::bad_request("The code is 4 digits."))?;
+    let load = read_load(&state.cfg.data_root);
+    let host = effective_host(&state.cfg.storage, &load.stored);
+    let (key, grant) = crate::anytype::confirm_pairing(&host, &challenge, &code).await?;
+    write_key(&state.cfg.data_root, &state.cfg.storage, &key).await?;
+    Ok(Json(json!({
+        "keySet": true,
+        "permission": grant["permission"],
+        "allSpaces": grant["all_spaces"],
+    })))
+}
+
+/// Checks the saved key against Anytype: scope, reachable spaces, and whether the chosen
+/// space is private.
+pub(crate) async fn anytype_check(
+    State(state): State<Arc<AppState>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    surface: Option<Extension<Surface>>,
+    headers: HeaderMap,
+) -> ApiResult<Json<Value>> {
+    ensure_local(peer, &headers, surface_of(surface).as_ref())?;
+    let key = read_key(&state.cfg.data_root, &state.cfg.storage)
+        .ok_or_else(|| ApiError::new(409, "Connect to Anytype first."))?;
+    let load = read_load(&state.cfg.data_root);
+    let host = effective_host(&state.cfg.storage, &load.stored);
+    let space = effective_space(&state.cfg.storage, &load.stored);
+    Ok(Json(crate::anytype::status(&host, &key, &space).await?))
+}
+
 pub(crate) async fn delete_storage_key(
     State(state): State<Arc<AppState>>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
