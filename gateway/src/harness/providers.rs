@@ -1,7 +1,7 @@
 //! The providers and models a Bot can use. T3 Code is the harness wired today: its server
 //! config lists every provider instance with its models and what each model lets you tune.
 //! Only what the app shows leaves this module: never an account's email or workspace.
-use crate::harness::t3::T3;
+use crate::harness::Harness;
 use serde_json::{json, Value};
 use std::{
     sync::Mutex,
@@ -17,14 +17,18 @@ pub struct Providers {
 }
 
 impl Providers {
-    pub async fn list(&self, t3: &T3) -> anyhow::Result<Value> {
+    pub async fn list(&self, harness: &dyn Harness) -> anyhow::Result<Value> {
         if let Some((at, list)) = self.cached.lock().ok().and_then(|g| g.clone()) {
             if at.elapsed() < KEEP {
                 return Ok(list);
             }
         }
-        let config = t3.rpc().await?.call("server.getConfig", json!({})).await?;
-        let list = from_config(&config);
+        let list = harness
+            .provisioning()
+            .map_err(|err| anyhow::anyhow!(err.to_string()))?
+            .provider_config()
+            .await
+            .map_err(|err| anyhow::anyhow!(err.to_string()))?;
         if let Ok(mut slot) = self.cached.lock() {
             *slot = Some((Instant::now(), list.clone()));
         }

@@ -6,15 +6,11 @@ pub(crate) async fn computer_get(
     Query(q): Query<HashMap<String, String>>,
 ) -> ApiResult<Json<Value>> {
     let thread = main_thread(&s, &slug).await?;
-    let rpc =
-        s.t3.rpc()
-            .await
-            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
-    let listed = rpc
-        .call("preview.list", json!({ "threadId": thread }))
+    let browser = s.harness.browser().map_err(|err| err.api())?;
+    let tabs = browser
+        .pages(&thread)
         .await
-        .map_err(|e| ApiError::new(502, format!("T3 didn't list pages: {e}")))?;
-    let tabs = crate::bots::computer::tabs_for_screen(&listed);
+        .map_err(|err| err.api_note(|msg| format!("T3 didn't list pages: {msg}")))?;
     let asked = q.get("tab").map(String::as_str);
     let selected = crate::bots::computer::frame_tab(&tabs, asked)
         .and_then(|tab| tab.get("id"))
@@ -34,12 +30,12 @@ pub(crate) async fn computer_get(
     match held {
         Some(frame) => image = frame,
         None if !selected.is_empty() => {
-            let size = if q.get("view").is_some_and(|view| view == "large") {
-                crate::bots::computer::WatchSize::Large
-            } else {
-                crate::bots::computer::WatchSize::Card
-            };
-            match crate::bots::computer::one_frame(&s.t3, &thread, &selected, size).await {
+            let large = q.get("view").is_some_and(|view| view == "large");
+            match browser
+                .frame(&thread, &selected, large)
+                .await
+                .map_err(|err| err.to_string())
+            {
                 Ok(bytes) => image = crate::bots::library::encode_file(&bytes),
                 Err(reason) => error = reason,
             }
@@ -62,7 +58,12 @@ pub(crate) async fn computer_get(
 
 /// Steers the Bot to open a server browser tab. Does not wait for the tab to appear.
 pub(crate) async fn computer_open(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
-    computer_steer(&s, &slug, crate::bots::computer::open_command).await
+    let thread = main_thread(&s, &slug).await?;
+    let text = crate::bots::computer::open_command(&thread)["text"]
+        .as_str()
+        .unwrap_or(crate::bots::computer::OPEN_PROMPT)
+        .to_string();
+    steer_text(&s, &thread, &text).await
 }
 
 /// Steers the Bot to close its server browser tabs. Does not wait for them to go.
@@ -70,26 +71,23 @@ pub(crate) async fn computer_close(
     State(s): S,
     Path(slug): Path<String>,
 ) -> ApiResult<Json<Value>> {
-    computer_steer(&s, &slug, crate::bots::computer::close_command).await
+    let thread = main_thread(&s, &slug).await?;
+    let text = crate::bots::computer::close_command(&thread)["text"]
+        .as_str()
+        .unwrap_or(crate::bots::computer::CLOSE_PROMPT)
+        .to_string();
+    steer_text(&s, &thread, &text).await
 }
 
-pub(crate) async fn computer_steer(
-    s: &AppState,
-    slug: &str,
-    command: fn(&str) -> Value,
-) -> ApiResult<Json<Value>> {
-    let thread = main_thread(s, slug).await?;
-    let command = command(&thread);
-    let rpc =
-        s.t3.rpc()
-            .await
-            .map_err(|e| ApiError::new(502, format!("T3 unavailable: {e}")))?;
-    rpc.call("orchestration.dispatchCommand", command.clone())
+async fn steer_text(s: &AppState, thread: &str, text: &str) -> ApiResult<Json<Value>> {
+    let message_id = s
+        .harness
+        .turns()
+        .map_err(|err| err.api())?
+        .steer(thread, text)
         .await
-        .map_err(|e| ApiError::new(502, e.to_string()))?;
-    Ok(Json(
-        json!({ "ok": true, "messageId": command["messageId"] }),
-    ))
+        .map_err(|err| err.api())?;
+    Ok(Json(json!({ "ok": true, "messageId": message_id })))
 }
 
 pub(crate) async fn computer_control(
@@ -106,10 +104,17 @@ pub(crate) async fn computer_control(
     if tab.is_empty() {
         return Err(ApiError::bad_request("Pick a page first."));
     }
+    let browser = s.harness.browser().map_err(|err| err.api())?;
     let frame = match action {
-        "take" => crate::bots::computer::hold::take(&s.t3, &thread, &slug, tab).await,
+        "take" => browser
+            .take(&thread, &slug, tab)
+            .await
+            .map_err(|err| err.to_string()),
         "release" if crate::bots::computer::hold::release(&slug).await => Ok(Vec::new()),
-        _ => crate::bots::computer::send_control(&s.t3, &thread, tab, action).await,
+        _ => browser
+            .control(&thread, tab, action)
+            .await
+            .map_err(|err| err.to_string()),
     }
     .map_err(ApiError::bad_request)?;
     let mut sessions = crate::bots::computer::sessions()
@@ -140,13 +145,19 @@ pub(crate) async fn held_input(
     thread: &str,
     tab: &str,
     messages: &[Value],
-) -> Result<crate::bots::computer::Driven, String> {
+) -> Result<crate::harness::Frame, String> {
     match crate::bots::computer::hold::input(slug, tab, messages).await {
-        Some(image) => Ok(crate::bots::computer::Driven {
-            image,
+        Some(image) => Ok(crate::harness::Frame {
+            bytes: image,
             clipboard: String::new(),
         }),
-        None => crate::bots::computer::send_input(&s.t3, thread, tab, messages).await,
+        None => {
+            let browser = s.harness.browser().map_err(|err| err.to_string())?;
+            browser
+                .input(thread, tab, messages)
+                .await
+                .map_err(|err| err.to_string())
+        }
     }
 }
 
@@ -251,9 +262,13 @@ pub(crate) async fn computer_input(
                 .await
                 .map_err(ApiError::bad_request)?
         }
-        "copy" | "cut" => crate::bots::computer::send_edit(&s.t3, &thread, &hold.tab, kind)
-            .await
-            .map_err(ApiError::bad_request)?,
+        "copy" | "cut" => {
+            let browser = s.harness.browser().map_err(|err| err.api())?;
+            browser
+                .edit(&thread, &hold.tab, kind)
+                .await
+                .map_err(|err| ApiError::bad_request(err.to_string()))?
+        }
         "selectAll" => {
             let messages =
                 vec![crate::bots::computer::edit_message("selectAll")
@@ -275,9 +290,9 @@ pub(crate) async fn computer_input(
         if width > 0 && height > 0 {
             sessions.take(&slug, &hold.tab, width, height);
         }
-        if !driven.image.is_empty() {
-            sessions.note_image(&slug, &crate::bots::library::encode_file(&driven.image));
-            if let Some((w, h)) = crate::bots::computer::jpeg_size(&driven.image) {
+        if !driven.bytes.is_empty() {
+            sessions.note_image(&slug, &crate::bots::library::encode_file(&driven.bytes));
+            if let Some((w, h)) = crate::bots::computer::jpeg_size(&driven.bytes) {
                 sessions.remember_size(&slug, w, h);
             }
         }

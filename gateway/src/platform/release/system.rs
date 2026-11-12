@@ -141,11 +141,24 @@ pub(crate) async fn start(state: Arc<AppState>) {
 /// may be added. `orchestration.subscribeShell` stays open, so the read waits for one
 /// snapshot and then interrupts it.
 pub(super) async fn busy_threads(state: &AppState) -> Result<usize> {
-    read_busy(&state.t3).await
+    let transcript = state
+        .harness
+        .transcript()
+        .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+    let shell = transcript
+        .busy()
+        .await
+        .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+    if shell.http_required {
+        bail!("T3 asked for an HTTP snapshot before the shell stream; auto-update will wait");
+    }
+    Ok(shell.busy_count())
 }
 
-pub(super) const SHELL: &str = "orchestration.subscribeShell";
+pub(crate) const SHELL: &str = "orchestration.subscribeShell";
 
+/// Live probe of a running T3. The ignored updater test is the caller.
+#[cfg(test)]
 pub(super) async fn read_busy(t3: &crate::harness::t3::T3) -> Result<usize> {
     let client = t3.rpc().await.context("couldn't reach T3")?;
     let item = client
@@ -169,7 +182,7 @@ pub(super) async fn read_busy(t3: &crate::harness::t3::T3) -> Result<usize> {
 /// Live run statuses are `queued`, `preparing`, `starting`, `running` and `waiting`.
 /// A settled thread still counts when it has live activity, a pending runtime request,
 /// or a pending background task.
-pub(super) fn busy_in_snapshot(snapshot: &Value) -> usize {
+pub(crate) fn busy_in_snapshot(snapshot: &Value) -> usize {
     ["threads", "archivedThreads"]
         .into_iter()
         .filter_map(|key| snapshot.get(key).and_then(Value::as_array))

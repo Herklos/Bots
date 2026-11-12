@@ -226,16 +226,23 @@ pub(crate) async fn dispatch_room(
     if dispatches.is_empty() {
         return Ok(sent);
     }
-    let Ok(rpc) = s.t3.rpc().await else {
+    let Ok(turns) = s.harness.turns() else {
         return Ok(sent);
     };
-    for (item, command) in dispatches
-        .iter()
-        .zip(crate::chat::rooms::dispatch_commands(dispatches))
-    {
-        rpc.call("orchestration.dispatchCommand", command)
+    let commands = crate::chat::rooms::dispatch_commands(dispatches);
+    for (item, command) in dispatches.iter().zip(commands) {
+        turns
+            .send_user(&crate::harness::UserMessage::new(
+                command["threadId"].as_str().unwrap_or(&item.thread_id),
+                command["messageId"].as_str().unwrap_or(&item.message_id),
+                command["text"].as_str().unwrap_or(&item.text),
+                command["attachments"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]),
+            ))
             .await
-            .map_err(|err| ApiError::new(502, err.to_string()))?;
+            .map_err(|err| err.api())?;
         s.usage
             .note_for(&item.slug, crate::bots::usage::Event::Message)
             .await;
@@ -283,16 +290,17 @@ pub(crate) async fn read_room_threads(
     s: &AppState,
     thread_ids: Vec<String>,
 ) -> HashMap<String, (crate::chat::rooms::MemberProbe, Vec<Value>)> {
-    let rpc = s.t3.rpc().await.ok();
+    let harness = s.harness.clone();
     crate::chat::rooms::read_group_threads(thread_ids, |thread| {
-        let rpc = rpc.clone();
+        let harness = harness.clone();
         async move {
-            let rpc = rpc.ok_or_else(|| anyhow::anyhow!("T3 unavailable"))?;
-            rpc.call(
-                "orchestration.getThreadProjection",
-                json!({ "threadId": thread }),
-            )
-            .await
+            let snapshot = harness
+                .transcript()
+                .map_err(|err| anyhow::anyhow!(err.to_string()))?
+                .read(&thread)
+                .await
+                .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+            Ok(snapshot.group())
         }
     })
     .await
@@ -349,7 +357,7 @@ pub(crate) async fn room_members(
     bots: &[Value],
     ensure: bool,
 ) -> ApiResult<Vec<crate::chat::rooms::Member>> {
-    let rpc = s.t3.rpc().await.ok();
+    let provisioning = s.harness.provisioning().ok();
     let room_id = room["id"].as_str().unwrap_or("").to_string();
     let settings = if ensure {
         s.settings().await
@@ -371,23 +379,23 @@ pub(crate) async fn room_members(
             thread.clear();
         }
         if thread.is_empty() && ensure && provisioned {
-            if let (Some(rpc), Some(project)) = (&rpc, bot["projectId"].as_str()) {
+            if let (Some(provisioning), Some(project)) = (&provisioning, bot["projectId"].as_str())
+            {
                 let model = [&bot["model"], &settings["defaultModel"]]
                     .into_iter()
                     .find(|m| m.is_object())
                     .cloned()
                     .unwrap_or_else(crate::bots::provisioner::default_model);
                 let id = uuid::Uuid::new_v4().to_string();
-                let launched = rpc
-                    .call(
-                        "orchestration.launchThread",
-                        json!({
-                            "commandId": uuid::Uuid::new_v4().to_string(), "threadId": id, "projectId": project,
-                            "title": room["title"], "modelSelection": model,
-                            "runtimeMode": crate::bots::provisioner::launch_runtime_mode(bot, &settings),
-                            "interactionMode": "default", "workspaceStrategy": { "type": "root" },
-                        }),
-                    )
+                let launched = provisioning
+                    .launch(&crate::harness::LaunchThread {
+                        thread_id: id.clone(),
+                        project_id: project.to_string(),
+                        title: room["title"].as_str().unwrap_or("").to_string(),
+                        model,
+                        runtime_mode: crate::bots::provisioner::launch_runtime_mode(bot, &settings)
+                            .to_string(),
+                    })
                     .await;
                 match launched {
                     Ok(_) => {

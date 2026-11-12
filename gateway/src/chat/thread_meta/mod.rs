@@ -251,12 +251,12 @@ impl ThreadMeta {
     pub async fn previews<F, Fut>(
         &self,
         stamps: Option<&Value>,
-        names: &HashMap<String, String>,
+        _names: &HashMap<String, String>,
         fetch: F,
     ) -> ApiResult<Value>
     where
         F: Fn(String) -> Fut,
-        Fut: Future<Output = anyhow::Result<Value>>,
+        Fut: Future<Output = anyhow::Result<Option<Value>>>,
     {
         for chunk in self.stale(stamps).await?.chunks(4) {
             let loads = chunk.iter().map(|(id, stamp)| {
@@ -264,13 +264,8 @@ impl ThreadMeta {
                 async move { (id, stamp, load.await) }
             });
             for (id, stamp, result) in join_all(loads).await {
-                if let Ok(projection) = result {
-                    self.remember(
-                        id.clone(),
-                        stamp.clone(),
-                        latest_preview(&projection, names),
-                    )
-                    .await;
+                if let Ok(preview) = result {
+                    self.remember(id.clone(), stamp.clone(), preview).await;
                 }
             }
         }

@@ -77,7 +77,7 @@ pub(crate) async fn bot_usage(State(s): S, Path(slug): Path<String>) -> ApiResul
             "This Bot is still getting set up.",
         )));
     };
-    let Ok(rpc) = s.t3.rpc().await else {
+    let Ok(transcript) = s.harness.transcript() else {
         return Ok(Json(crate::bots::usage::bot_payload(
             messages,
             attachments,
@@ -86,14 +86,8 @@ pub(crate) async fn bot_usage(State(s): S, Path(slug): Path<String>) -> ApiResul
             "Open T3 Code, then try again.",
         )));
     };
-    let projection = match rpc
-        .call(
-            "orchestration.getThreadProjection",
-            json!({ "threadId": thread }),
-        )
-        .await
-    {
-        Ok(projection) => projection,
+    let snapshot = match transcript.read(thread).await {
+        Ok(snapshot) => snapshot,
         Err(_) => {
             return Ok(Json(crate::bots::usage::bot_payload(
                 messages,
@@ -104,7 +98,7 @@ pub(crate) async fn bot_usage(State(s): S, Path(slug): Path<String>) -> ApiResul
             )));
         }
     };
-    let (totals, known) = crate::bots::usage::tokens_from_projection(&projection);
+    let (totals, known) = snapshot.token_totals();
     Ok(Json(crate::bots::usage::bot_payload(
         messages,
         attachments,

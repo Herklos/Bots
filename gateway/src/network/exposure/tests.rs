@@ -2,7 +2,6 @@ use super::*;
 use crate::{
     app,
     bots::Bots,
-    harness::t3::T3,
     network::auth::Auth,
     network::remote_access::{RemoteAccess, RemoteConfig},
     platform::config::Config,
@@ -119,7 +118,7 @@ fn state(dir: &Path, exposure: Exposure) -> Arc<AppState> {
     let tailnet = Arc::new(Tailnet::new());
     Arc::new(AppState {
         auth: Auth::load(&app_dir, String::new(), vec![]).unwrap(),
-        t3: T3::new(cfg.t3_url.clone(), cfg.t3_token.clone()),
+        harness: crate::harness::connect(cfg.t3_url.clone(), cfg.t3_token.clone()),
         bots: Bots::new(
             cfg.bots_root.clone(),
             cfg.bot_mcp_url.clone(),

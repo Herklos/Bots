@@ -1,4 +1,5 @@
 use super::*;
+use crate::harness::t3::{ws_base, T3};
 
 pub(crate) const TAB_LIST_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -111,7 +112,16 @@ pub(crate) async fn fill(d: &Deps<'_>, args: &Value, field: &str) -> Result<Valu
     if sites.is_empty() {
         return Err("That login has no website saved, so it can't be filled anywhere. Ask the user to add the website in Settings › Vault.".into());
     }
-    let tabs = list_tabs(d.t3, thread).await?;
+    let tabs = d
+        .browser
+        .tabs(thread)
+        .await?
+        .into_iter()
+        .map(|tab| Tab {
+            tab_id: tab.id,
+            url: tab.url,
+        })
+        .collect::<Vec<_>>();
     let tab = pick_tab(&tabs, args["tabId"].as_str(), &sites)?;
     let Some(site) = site_for_page(&tab.url, &sites) else {
         let domains = sites
@@ -133,7 +143,7 @@ pub(crate) async fn fill(d: &Deps<'_>, args: &Value, field: &str) -> Result<Valu
              (question tool) to confirm and add this site to the login in Settings › Vault, or to sign in themselves with Take over."
         ));
     };
-    type_into_tab(d.t3, thread, &tab.tab_id, &value).await?;
+    d.browser.type_text(thread, &tab.tab_id, &value).await?;
     tracing::info!(
         "vault: filled {field} for login {id} on {}, bot {}",
         host_of(&tab.url),

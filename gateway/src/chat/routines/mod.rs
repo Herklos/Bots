@@ -9,23 +9,13 @@
 //! carry `lastRunAt`, `lastRunStatus`, `lastRunError` and `runCount`. There is no
 //! `scheduledTasks.listRuns`. The gateway keeps a short local history of the changes it made.
 
-use crate::harness::t3::T3;
-use crate::platform::error::ApiResult;
+use crate::harness::{HarnessError, Routines};
+use crate::platform::error::{ApiError, ApiResult};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
 #[cfg(test)]
 mod tests;
-
-pub(crate) const LIST: &str = "scheduledTasks.subscribe";
-
-pub(crate) const UPSERT: &str = "scheduledTasks.upsert";
-
-pub(crate) const SET_ENABLED: &str = "scheduledTasks.setEnabled";
-
-pub(crate) const DELETE: &str = "scheduledTasks.delete";
-
-pub(crate) const RUN_NOW: &str = "scheduledTasks.runNow";
 
 const HISTORY_LIMIT: usize = 50;
 
@@ -327,23 +317,27 @@ pub(crate) fn task_row(task: &Value) -> Value {
     })
 }
 
-pub(crate) async fn list(t3: &T3) -> ApiResult<Value> {
-    let value = t3
-        .rpc()
-        .await?
-        .read_until(LIST, json!({}), |_| true)
-        .await?;
-    Ok(value)
+fn api(err: HarnessError) -> ApiError {
+    ApiError::new(500, err.to_string())
+}
+
+pub(crate) async fn list(routines: &dyn Routines) -> ApiResult<Value> {
+    routines.list().await.map_err(api)
 }
 
 pub(crate) async fn change(
-    t3: &T3,
+    routines: &dyn Routines,
     history: &RoutineHistory,
     action: &str,
-    tag: &str,
     payload: Value,
 ) -> ApiResult<Value> {
-    let value = t3.rpc().await?.call(tag, payload).await?;
+    let value = match action {
+        "upsert" => routines.upsert(&payload).await.map_err(api)?,
+        "enabled" => routines.set_enabled(&payload).await.map_err(api)?,
+        "delete" => routines.delete(&payload).await.map_err(api)?,
+        "run" => routines.run_now(&payload).await.map_err(api)?,
+        _ => return Err(ApiError::bad_request("Unknown routine action")),
+    };
     let task = value.get("task").cloned().unwrap_or_else(|| value.clone());
     history.record(action, &task).await;
     Ok(value)
