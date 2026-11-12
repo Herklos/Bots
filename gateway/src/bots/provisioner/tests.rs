@@ -117,6 +117,44 @@ fn a_missing_mode_follows_auto_review_and_a_stored_mode_wins() {
 }
 
 #[test]
+fn stored_independent_launches_as_full_access_and_the_default_stays() {
+    let review_on = json!({ "autoReview": true });
+    let review_off = json!({ "autoReview": false });
+    assert_eq!(
+        launch_runtime_mode(&json!({ "runtimeMode": "independent" }), &review_on),
+        "full-access"
+    );
+    assert_eq!(
+        launch_runtime_mode(&json!({ "runtimeMode": "independent" }), &review_off),
+        "full-access"
+    );
+    assert_eq!(
+        launch_runtime_mode(
+            &json!({}),
+            &json!({ "defaultRuntimeMode": "independent", "autoReview": true })
+        ),
+        "full-access"
+    );
+    assert_eq!(
+        launch_runtime_mode(
+            &json!({ "runtimeMode": "independent" }),
+            &json!({ "maxRuntimeMode": "auto", "autoReview": false })
+        ),
+        "auto"
+    );
+    assert_eq!(
+        launch_runtime_mode(&json!({ "runtimeMode": "nope" }), &review_on),
+        "auto"
+    );
+    assert_eq!(
+        launch_runtime_mode(&json!({ "runtimeMode": "nope" }), &review_off),
+        "full-access"
+    );
+    assert_eq!(launch_runtime_mode(&json!({}), &review_on), "auto");
+    assert_eq!(launch_runtime_mode(&json!({}), &review_off), "full-access");
+}
+
+#[test]
 fn empty_and_odd_models_are_refused_and_a_settings_default_is_listed_once() {
     assert!(model_selection("", "claude-haiku-5-5").is_err());
     assert!(model_selection("claudeAgent", "").is_err());

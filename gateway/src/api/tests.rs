@@ -215,13 +215,13 @@ pub(super) fn settings_state_with(
     })
 }
 
-fn json_headers() -> HeaderMap {
+pub(super) fn json_headers() -> HeaderMap {
     let mut h = HeaderMap::new();
     h.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
     h
 }
 
-async fn put(state: &Arc<AppState>, body: Value) -> Result<Value, ApiError> {
+pub(super) async fn put(state: &Arc<AppState>, body: Value) -> Result<Value, ApiError> {
     put_settings(
         State(state.clone()),
         json_headers(),

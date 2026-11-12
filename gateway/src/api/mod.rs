@@ -40,6 +40,8 @@ mod provider_switch_tests;
 mod rooms_api;
 mod router;
 mod routines_api;
+#[cfg(test)]
+mod runtime_mode_tests;
 mod server;
 mod settings;
 mod state;

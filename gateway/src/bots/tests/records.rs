@@ -145,12 +145,31 @@ pub(crate) async fn create_accepts_a_runtime_mode_and_rejects_an_unknown_one() {
         .await
         .unwrap();
     assert_eq!(ada["runtimeMode"], "auto");
+    let bea = bots
+        .create(&json!({ "name": "Bea", "runtimeMode": "independent" }))
+        .await
+        .unwrap();
+    assert_eq!(bea["runtimeMode"], "independent");
     let err = bots
         .create(&json!({ "name": "Cy", "runtimeMode": "ask" }))
         .await
         .unwrap_err();
     assert_eq!(status_of(err), 400);
     assert!(bots.get("cy").await.unwrap().is_none());
+    let patched = bots
+        .save("ada", &json!({ "runtimeMode": "independent" }), false)
+        .await
+        .unwrap();
+    assert_eq!(patched["runtimeMode"], "independent");
+    let garbage = bots
+        .save("ada", &json!({ "runtimeMode": "nope" }), false)
+        .await
+        .unwrap_err();
+    assert_eq!(status_of(garbage), 400);
+    assert_eq!(
+        bots.get("ada").await.unwrap().unwrap()["runtimeMode"],
+        "independent"
+    );
 }
 
 #[tokio::test]
