@@ -45,6 +45,7 @@ impl AppState {
             "beta": { "projects": false },
             "notifications": { "enabled": false, "sound": true, "preview": "full", "when": "any" },
             "groupAnswerPolicy": "last",
+            "maxRuntimeMode": "full-access",
         })
     }
 
@@ -87,6 +88,8 @@ impl AppState {
         out["beta"] = json!({ "projects": saved["beta"]["projects"] == true });
         out["notifications"] = Self::notifications_view(&saved);
         out["groupAnswerPolicy"] = json!(group_answer_policy(&out).as_str());
+        // Unknown or missing is full access, so the cap is off.
+        out["maxRuntimeMode"] = json!(max_runtime_mode(&out).as_str());
         out
     }
 }
@@ -94,6 +97,12 @@ impl AppState {
 pub(crate) fn group_answer_policy(settings: &Value) -> crate::chat::rooms::AnswerPolicy {
     crate::chat::rooms::AnswerPolicy::parse(settings["groupAnswerPolicy"].as_str())
         .unwrap_or(crate::chat::rooms::AnswerPolicy::Last)
+}
+
+/// Stored `maxRuntimeMode`. Missing or unknown is full access, which is no cap.
+pub(crate) fn max_runtime_mode(settings: &Value) -> crate::bots::runtime_mode::RuntimeMode {
+    crate::bots::runtime_mode::RuntimeMode::parse(settings["maxRuntimeMode"].as_str())
+        .unwrap_or(crate::bots::runtime_mode::RuntimeMode::FullAccess)
 }
 
 pub(crate) type S = State<Arc<AppState>>;

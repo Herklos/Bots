@@ -26,14 +26,11 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
         }
     }
     if let Some(mode) = patch.get("defaultRuntimeMode") {
-        if !matches!(
-            mode.as_str(),
-            Some("approval-required" | "auto" | "full-access")
-        ) {
-            return Err(ApiError::bad_request(
-                "defaultRuntimeMode must be approval-required, auto, or full-access",
-            ));
-        }
+        require_runtime_mode("defaultRuntimeMode", mode)?;
+    }
+    // Stored here only. Bots, routines, and the default mode read the cap in a later change.
+    if let Some(mode) = patch.get("maxRuntimeMode") {
+        require_runtime_mode("maxRuntimeMode", mode)?;
     }
     let mut next = storage::merge(&current, &patch);
     if let Some(beta) = patch.get("beta") {
@@ -92,4 +89,13 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
     }
     storage::write_json(&s.settings_path(), &next).await?;
     Ok(Json(next))
+}
+
+fn require_runtime_mode(key: &str, value: &Value) -> Result<(), ApiError> {
+    if crate::bots::runtime_mode::RuntimeMode::parse(value.as_str()).is_some() {
+        return Ok(());
+    }
+    Err(ApiError::bad_request(format!(
+        "{key} must be approval-required, auto, or full-access"
+    )))
 }
