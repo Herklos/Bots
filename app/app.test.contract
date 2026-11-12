@@ -636,6 +636,27 @@ test "typing @ in a bot chat offers bot slug completions"
   tap "mention-opt-fixture"
   expect tree missing "mention-menu"
 
+test "the everyone chip inserts that mention and the hint says it wakes the group"
+  size 1200x800
+  at "/group/fixture"
+  clock data
+  expect tree has "mention-everyone"
+  tap "mention-everyone"
+  expect text "room-composer" == "@everyone "
+  expect text "room-hint" == "@everyone wakes every Bot in the group."
+  expect enabled "room-send"
+
+test "the mention menu offers everyone"
+  size 1200x800
+  at "/group/fixture"
+  clock data
+  type "room-composer" "@e"
+  expect tree has "mention-menu"
+  expect tree has "mention-opt-everyone"
+  tap "mention-opt-everyone"
+  expect tree missing "mention-menu"
+  expect text "room-hint" == "@everyone wakes every Bot in the group."
+
 test "a group has a details panel like a Bot, and deleting lives inside it"
   size 1200x800
   at "/group/fixture"
