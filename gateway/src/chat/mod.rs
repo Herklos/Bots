@@ -33,6 +33,7 @@ pub(crate) use prompts::*;
 /// sender into the Bot the person knows.
 pub(crate) type Peers = HashMap<String, Value>;
 
+pub(crate) mod answer_files; // Files on a question answer.
 pub(crate) mod approvals; // T5: answering a pending request.
 pub(crate) mod attachments; // Chat files stored on the Bot.
 pub(crate) mod code; // Gate for code work. Off unless beta.code is on.

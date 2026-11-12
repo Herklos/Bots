@@ -82,6 +82,8 @@ pub enum Approval {
         decision: Option<String>,
         answers: Option<Value>,
         feedback: Option<String>,
+        /// Chat attachment records keyed by question id. `None` when the answer has no files.
+        attachments_by_question: Option<Value>,
     },
 }
 

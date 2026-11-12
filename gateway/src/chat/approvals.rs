@@ -3,6 +3,7 @@
 //! This matches the request the client named to a secret or a runtime request.
 //! The harness sends it. A secret is saved or declined. An approval or a question
 //! carries a decision, answers, or feedback, and needs at least one of the first two.
+//! A question may also carry files, already checked and turned into attachment records.
 use crate::harness::{Approval, Approvals};
 use crate::platform::error::{ApiError, ApiResult};
 use serde_json::Value;
@@ -12,14 +13,23 @@ pub(crate) fn outbound(
     thread_id: &str,
     request_id: &str,
     body: &Value,
+    attachments_by_question: Option<Value>,
 ) -> Result<Approval, String> {
     if thread_id.is_empty() || request_id.is_empty() {
         return Err("This Bot has no conversation to answer in.".into());
     }
     match kind {
-        "secret" | "secret_request" => secret(thread_id, request_id, body),
-        "approval" | "approval_request" | "question" | "user_input" | "user_input_request" => {
-            command(thread_id, request_id, body)
+        "secret" | "secret_request" => {
+            if attachments_by_question.is_some() {
+                return Err("Files go on a question.".into());
+            }
+            secret(thread_id, request_id, body)
+        }
+        "approval" | "approval_request" => {
+            command(thread_id, request_id, body, false, attachments_by_question)
+        }
+        "question" | "user_input" | "user_input_request" => {
+            command(thread_id, request_id, body, true, attachments_by_question)
         }
         _ => Err("That request is not one this app can answer.".into()),
     }
@@ -46,7 +56,13 @@ fn secret(thread_id: &str, request_id: &str, body: &Value) -> Result<Approval, S
     })
 }
 
-fn command(thread_id: &str, request_id: &str, body: &Value) -> Result<Approval, String> {
+fn command(
+    thread_id: &str,
+    request_id: &str,
+    body: &Value,
+    files_ok: bool,
+    attachments_by_question: Option<Value>,
+) -> Result<Approval, String> {
     let decision = body["decision"]
         .as_str()
         .filter(|s| !s.is_empty())
@@ -56,7 +72,10 @@ fn command(thread_id: &str, request_id: &str, body: &Value) -> Result<Approval, 
         .as_str()
         .filter(|s| !s.is_empty())
         .map(str::to_string);
-    if decision.is_none() && answers.is_none() {
+    if attachments_by_question.is_some() && !files_ok {
+        return Err("Files go on a question.".into());
+    }
+    if decision.is_none() && answers.is_none() && attachments_by_question.is_none() {
         return Err("Choose an answer first.".into());
     }
     Ok(Approval::Request {
@@ -65,6 +84,7 @@ fn command(thread_id: &str, request_id: &str, body: &Value) -> Result<Approval, 
         decision,
         answers,
         feedback,
+        attachments_by_question,
     })
 }
 
@@ -88,6 +108,7 @@ mod tests {
             "thread-1",
             "turn-9",
             &json!({ "secret": "hunter2" }),
+            None,
         )
         .unwrap();
         let Approval::Secret {
@@ -107,6 +128,7 @@ mod tests {
             "thread-1",
             "turn-9",
             &json!({ "decision": "decline" }),
+            None,
         )
         .unwrap();
         let Approval::Secret { secret, .. } = declined else {
@@ -122,6 +144,7 @@ mod tests {
             "thread-1",
             "req-2",
             &json!({ "decision": "decline", "feedback": "Use an explicit path." }),
+            None,
         )
         .unwrap();
         let Approval::Request {
@@ -142,18 +165,47 @@ mod tests {
             "thread-1",
             "req-3",
             &json!({ "answers": { "name": "Ada" } }),
+            None,
         )
         .unwrap();
         let Approval::Request { answers, .. } = question else {
             panic!("a question is a request");
         };
         assert_eq!(answers.unwrap()["name"], "Ada");
-        assert!(outbound("approval", "thread-1", "req-2", &json!({})).is_err());
+        assert!(outbound("approval", "thread-1", "req-2", &json!({}), None).is_err());
         assert!(outbound(
             "nope",
             "thread-1",
             "req-2",
-            &json!({ "decision": "accept" })
+            &json!({ "decision": "accept" }),
+            None,
+        )
+        .is_err());
+        let files = json!({ "q1": [{ "type": "file", "id": "a", "name": "n.txt" }] });
+        let with_file = outbound(
+            "user_input_request",
+            "thread-1",
+            "req-3",
+            &json!({}),
+            Some(files.clone()),
+        )
+        .unwrap();
+        let Approval::Request {
+            answers,
+            attachments_by_question,
+            ..
+        } = with_file
+        else {
+            panic!("files are enough to answer a question");
+        };
+        assert!(answers.is_none());
+        assert_eq!(attachments_by_question.unwrap(), files);
+        assert!(outbound(
+            "approval_request",
+            "thread-1",
+            "req-2",
+            &json!({ "decision": "accept" }),
+            Some(files),
         )
         .is_err());
     }
