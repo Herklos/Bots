@@ -65,7 +65,7 @@ impl Usage {
         let _g = self.lock.lock().await;
         let mut doc = read_doc(&self.path).await?;
         record_for(&mut doc, &day_key(unix_secs), slug, event.key(), KEEP_DAYS);
-        crate::store::write_json(&self.path, &doc).await?;
+        crate::storage::write_json(&self.path, &doc).await?;
         Ok(())
     }
 

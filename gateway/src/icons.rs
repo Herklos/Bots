@@ -71,8 +71,8 @@ impl Icons {
             ));
         };
         tokio::fs::create_dir_all(&self.dir).await?;
-        crate::store::write_atomic(&self.dir.join(&name), bytes, Some(0o644)).await?;
-        crate::store::write_atomic(
+        crate::storage::write_atomic(&self.dir.join(&name), bytes, Some(0o644)).await?;
+        crate::storage::write_atomic(
             &self.dir.join(format!("{name}.type")),
             ctype.as_bytes(),
             Some(0o644),

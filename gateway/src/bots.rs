@@ -3,7 +3,7 @@
 use crate::{
     agent_context::{self, MemorySnapshot},
     error::{ApiError, ApiResult},
-    store::{read_json, write_json},
+    storage::{read_json, write_json},
     vault::now_iso,
 };
 use serde_json::{json, Map, Value};
@@ -721,14 +721,14 @@ impl Bots {
         let mcp_path = dir.join(".mcp.json");
         let existing = read_json(&mcp_path).await.unwrap_or_else(|| json!({}));
         let mcp = crate::library::merge_mcp(&existing, &connectors, &self.mcp_url, &self.mcp_token);
-        crate::store::write_atomic(
+        crate::storage::write_atomic(
             &mcp_path,
             (serde_json::to_string_pretty(&mcp).unwrap_or_default() + "\n").as_bytes(),
             Some(0o600),
         )
         .await?;
         let toml = crate::library::codex_toml(&mcp);
-        crate::store::write_atomic(
+        crate::storage::write_atomic(
             &dir.join(".codex").join("config.toml"),
             toml.as_bytes(),
             Some(0o600),
@@ -768,7 +768,7 @@ impl Bots {
         let block = render_agents_md(bot, &self.root, parent, &children, &memory);
         let merged = merge_managed(&existing_agents, &block);
         if merged != existing_agents {
-            crate::store::write_atomic(&agents, merged.as_bytes(), None).await?;
+            crate::storage::write_atomic(&agents, merged.as_bytes(), None).await?;
         }
         #[cfg(unix)]
         self.merge_claude_md(&dir, slug, &block).await?;
@@ -817,7 +817,7 @@ impl Bots {
                 let existing = tokio::fs::read_to_string(&claude).await.unwrap_or_default();
                 let merged = merge_managed(&existing, block);
                 if merged != existing {
-                    crate::store::write_atomic(&claude, merged.as_bytes(), None).await?;
+                    crate::storage::write_atomic(&claude, merged.as_bytes(), None).await?;
                 }
                 Ok(())
             }

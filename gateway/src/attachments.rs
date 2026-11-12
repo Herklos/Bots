@@ -230,8 +230,8 @@ pub(crate) async fn write_file(
         "bytes": bytes.len(),
         "createdAt": now_iso(),
     });
-    crate::store::write_atomic(&bin_path(&dir, &id)?, bytes, Some(0o600)).await?;
-    crate::store::write_json(&json_path(&dir, &id)?, &meta).await?;
+    crate::storage::write_atomic(&bin_path(&dir, &id)?, bytes, Some(0o600)).await?;
+    crate::storage::write_json(&json_path(&dir, &id)?, &meta).await?;
     Ok(meta)
 }
 
@@ -241,7 +241,7 @@ pub(crate) async fn read_file(
     id: &str,
 ) -> ApiResult<(Value, Vec<u8>)> {
     let dir = dir_for(root, slug)?;
-    let meta = crate::store::read_json(&json_path(&dir, id)?)
+    let meta = crate::storage::read_json(&json_path(&dir, id)?)
         .await
         .ok_or_else(|| ApiError::not_found("no such file"))?;
     #[allow(
@@ -267,7 +267,7 @@ pub(crate) async fn read_dir(root: &std::path::Path, slug: &str) -> ApiResult<Ve
         let Some(id) = name.strip_suffix(".json") else {
             continue;
         };
-        if let Some(meta) = crate::store::read_json(&json_path(&dir, id)?).await {
+        if let Some(meta) = crate::storage::read_json(&json_path(&dir, id)?).await {
             out.push(meta);
         }
     }

@@ -1103,7 +1103,7 @@ async fn read_doc(path: &std::path::Path) -> ApiResult<Value> {
 }
 
 async fn write_doc(path: &std::path::Path, doc: &Value) -> ApiResult<()> {
-    crate::store::write_json(path, doc).await?;
+    crate::storage::write_json(path, doc).await?;
     Ok(())
 }
 

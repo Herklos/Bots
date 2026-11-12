@@ -548,7 +548,7 @@ mod tests {
             access_team: String::new(),
             access_aud: String::new(),
             access_emails: vec![],
-            storage: crate::storage_settings::ProcessEnv::default(),
+            storage: crate::storage::settings::ProcessEnv::default(),
         };
         let tailnet = Arc::new(Tailnet::new());
         Arc::new(AppState {
@@ -572,7 +572,7 @@ mod tests {
             icons: crate::icons::Icons::new(dir.join("icons")),
             usage: crate::usage::Usage::new(app_dir.join("usage.json")),
             library: crate::library::Library::new(
-                Arc::new(crate::workspace::LocalDisk::new(cfg.bots_root.clone())),
+                Arc::new(crate::storage::LocalDisk::new(cfg.bots_root.clone())),
                 cfg.bot_mcp_url.clone(),
                 "fixture-only".into(),
             ),

@@ -1,9 +1,9 @@
 //! One Bot's library: files under `library/`, conversation links, attachment records,
 //! and the records the person keeps (projects, notes, tasks, plans, and the other
-//! board kinds). Every read and write goes through [`crate::workspace::Workspace`].
+//! board kinds). Every read and write goes through [`crate::storage::workspace::Workspace`].
 use crate::error::{ApiError, ApiResult};
+use crate::storage::workspace::{DirEntry, Workspace};
 use crate::usage::day_key;
-use crate::workspace::{DirEntry, Workspace};
 use base64::Engine;
 use serde_json::{json, Value};
 use std::sync::Arc;
@@ -727,7 +727,7 @@ pub(crate) fn encode_file(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::workspace::MemoryWorkspace;
+    use crate::storage::adapters::memory::MemoryWorkspace;
 
     fn lib() -> Library {
         Library::new(

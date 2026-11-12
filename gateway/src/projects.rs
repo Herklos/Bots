@@ -8,7 +8,7 @@
 //! Items stay as JSON objects, so fields this module does not know about survive a re-save.
 use crate::{
     error::{ApiError, ApiResult},
-    store::write_atomic,
+    storage::write_atomic,
     vault::now_iso,
 };
 use serde_json::{json, Map, Value};

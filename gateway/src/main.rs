@@ -19,7 +19,6 @@
 )]
 mod access; // T4: Cloudflare Access JWTs.
 mod agent_context; // The managed block of AGENTS.md: prompt text, and later a memory snapshot.
-mod anytype; // Local Anytype API client: pairing and key checks.
 mod approvals; // T5: answering a pending request.
 mod attachments; // Chat files stored on the Bot.
 mod auth;
@@ -60,8 +59,7 @@ mod rooms; // Local rooms. A send is stored here, then dispatched to each member
 mod roster; // What an inbox row needs: preview, working, unread.
 mod routines; // T5: T3 scheduled tasks.
 mod service; // T6b: install and remove the background service.
-mod storage_settings;
-mod store;
+mod storage; // Where Bots live: the Workspace trait, saved choice, and backend adapters.
 mod subagent_tools;
 mod suggestions; // New Bot starting points.
 mod t3;
@@ -70,7 +68,6 @@ mod usage; // Local usage counts. Nothing leaves the machine.
 mod vault;
 mod vault_csv; // T2: CSV import and export (hook)
 mod vault_tools;
-mod workspace; // Where Bot folders live. Library and connectors use this. // T1 hook: the Vault tools of POST /mcp/bot
 
 use axum::{
     body::Bytes,
@@ -168,10 +165,10 @@ impl AppState {
 
     /// `settings.json` with hbots defaults filled in.
     pub async fn settings(&self) -> Value {
-        let saved = store::read_json(&self.settings_path())
+        let saved = storage::read_json(&self.settings_path())
             .await
             .unwrap_or_else(|| json!({}));
-        let mut out = store::merge(&Self::settings_defaults(), &saved);
+        let mut out = storage::merge(&Self::settings_defaults(), &saved);
         out["beta"] = json!({ "projects": saved["beta"]["projects"] == true });
         out["notifications"] = Self::notifications_view(&saved);
         out["groupAnswerPolicy"] = json!(group_answer_policy(&out).as_str());
@@ -278,7 +275,7 @@ async fn main() -> anyhow::Result<()> {
         icons: icons::Icons::new(cfg.data_root.join("icons")),
         usage: usage::Usage::new(app_dir.join("usage.json")),
         library: library::Library::new(
-            Arc::new(workspace::LocalDisk::new(cfg.bots_root.clone())),
+            Arc::new(storage::LocalDisk::new(cfg.bots_root.clone())),
             cfg.bot_mcp_url.clone(),
             mcp_token.clone(),
         ),
@@ -290,7 +287,7 @@ async fn main() -> anyhow::Result<()> {
     // Write the defaults once; an existing file, even an unreadable one, is left alone.
     if !state.settings_path().exists() {
         if let Err(e) =
-            store::write_json(&state.settings_path(), &AppState::settings_defaults()).await
+            storage::write_json(&state.settings_path(), &AppState::settings_defaults()).await
         {
             tracing::warn!("writing settings.json: {e}");
         }
@@ -500,29 +497,29 @@ pub fn app(state: Arc<AppState>) -> Router {
         .route("/api/access/network/restart", post(access_network_restart))
         .route(
             "/api/storage",
-            get(storage_settings::get_storage).put(storage_settings::put_storage),
+            get(storage::settings::get_storage).put(storage::settings::put_storage),
         )
-        .route("/api/storage/test", post(storage_settings::test_storage))
-        .route("/api/storage/copy", post(storage_settings::copy_storage))
+        .route("/api/storage/test", post(storage::settings::test_storage))
+        .route("/api/storage/copy", post(storage::settings::copy_storage))
         .route(
             "/api/storage/restart",
-            post(storage_settings::restart_storage),
+            post(storage::settings::restart_storage),
         )
         .route(
             "/api/storage/key",
-            put(storage_settings::put_storage_key).delete(storage_settings::delete_storage_key),
+            put(storage::settings::put_storage_key).delete(storage::settings::delete_storage_key),
         )
         .route(
             "/api/storage/anytype/pair",
-            post(storage_settings::pair_start),
+            post(storage::settings::pair_start),
         )
         .route(
             "/api/storage/anytype/pair/confirm",
-            post(storage_settings::pair_confirm),
+            post(storage::settings::pair_confirm),
         )
         .route(
             "/api/storage/anytype/check",
-            post(storage_settings::anytype_check),
+            post(storage::settings::anytype_check),
         )
         .route("/api/access/tailscale", post(access_tailscale))
         .route("/api/access/tunnel", post(access_tunnel))
@@ -1503,7 +1500,7 @@ async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
             ));
         }
     }
-    let mut next = store::merge(&current, &patch);
+    let mut next = storage::merge(&current, &patch);
     if let Some(beta) = patch.get("beta") {
         let beta = beta
             .as_object()
@@ -1558,7 +1555,7 @@ async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<
         }
         next["notifications"] = merged;
     }
-    store::write_json(&s.settings_path(), &next).await?;
+    storage::write_json(&s.settings_path(), &next).await?;
     Ok(Json(next))
 }
 
@@ -3027,7 +3024,7 @@ mod tests {
             access_team: String::new(),
             access_aud: String::new(),
             access_emails: vec![],
-            storage: storage_settings::ProcessEnv::default(),
+            storage: storage::settings::ProcessEnv::default(),
         };
         let tailnet = Arc::new(exposure::Tailnet::new());
         Arc::new(AppState {
@@ -3049,7 +3046,7 @@ mod tests {
             icons: icons::Icons::new(dir.join("icons")),
             usage: usage::Usage::new(app_dir.join("usage.json")),
             library: library::Library::new(
-                Arc::new(workspace::LocalDisk::new(cfg.bots_root.clone())),
+                Arc::new(storage::LocalDisk::new(cfg.bots_root.clone())),
                 cfg.bot_mcp_url.clone(),
                 "fixture-only".into(),
             ),
@@ -3104,13 +3101,13 @@ mod tests {
             "userName": "Ada",
             "notifications": { "enabled": true, "sound": false, "preview": "hidden", "when": "background" }
         });
-        store::write_json(&state.settings_path(), &saved)
+        storage::write_json(&state.settings_path(), &saved)
             .await
             .unwrap();
         let next = put(&state, json!({ "userName": "Bea" })).await.unwrap();
         assert_eq!(next["userName"], "Bea");
         assert_eq!(next["notifications"], saved["notifications"]);
-        let on_disk = store::read_json(&state.settings_path()).await.unwrap();
+        let on_disk = storage::read_json(&state.settings_path()).await.unwrap();
         assert_eq!(on_disk["notifications"], saved["notifications"]);
     }
 
@@ -3118,14 +3115,14 @@ mod tests {
     async fn bad_notifications_when_is_rejected() {
         let dir = tempfile::tempdir().unwrap();
         let state = settings_state(dir.path());
-        store::write_json(&state.settings_path(), &json!({ "userName": "Ada" }))
+        storage::write_json(&state.settings_path(), &json!({ "userName": "Ada" }))
             .await
             .unwrap();
         let err = put(&state, json!({ "notifications": { "when": "always" } }))
             .await
             .unwrap_err();
         assert_eq!(err.status, StatusCode::BAD_REQUEST);
-        let on_disk = store::read_json(&state.settings_path()).await.unwrap();
+        let on_disk = storage::read_json(&state.settings_path()).await.unwrap();
         assert!(on_disk.get("notifications").is_none());
     }
 
@@ -3133,7 +3130,7 @@ mod tests {
     async fn notifications_patch_keeps_other_fields() {
         let dir = tempfile::tempdir().unwrap();
         let state = settings_state(dir.path());
-        store::write_json(
+        storage::write_json(
             &state.settings_path(),
             &json!({
                 "notifications": { "enabled": false, "sound": false, "preview": "hidden", "when": "background" }
@@ -3158,7 +3155,7 @@ mod tests {
             AppState::settings_defaults()["groupAnswerPolicy"],
             json!("last")
         );
-        store::write_json(
+        storage::write_json(
             &state.settings_path(),
             &json!({ "groupAnswerPolicy": "nope", "userName": "Ada" }),
         )

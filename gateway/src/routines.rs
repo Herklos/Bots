@@ -50,7 +50,7 @@ impl RoutineHistory {
             }),
         );
         items.truncate(HISTORY_LIMIT);
-        let _ = crate::store::write_json(&self.file, &Value::Array(items)).await;
+        let _ = crate::storage::write_json(&self.file, &Value::Array(items)).await;
     }
 }
 

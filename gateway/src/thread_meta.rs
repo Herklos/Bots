@@ -3,7 +3,7 @@
 //! may be added. Stored as `thread-meta.json` in the app directory.
 use crate::{
     error::{ApiError, ApiResult},
-    store,
+    storage,
 };
 use futures_util::future::join_all;
 use regex::Regex;
@@ -232,7 +232,7 @@ async fn loaded<'a>(
 async fn save(file: &Path, state: &Map<String, Value>) -> ApiResult<()> {
     let text =
         serde_json::to_string_pretty(state).map_err(|e| ApiError::new(500, e.to_string()))?;
-    store::write_atomic(file, (text + "\n").as_bytes(), None).await?;
+    storage::write_atomic(file, (text + "\n").as_bytes(), None).await?;
     Ok(())
 }
 

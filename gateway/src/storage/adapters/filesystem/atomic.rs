@@ -33,14 +33,3 @@ pub(crate) async fn write_atomic(
     }
     tokio::fs::rename(&tmp, path).await
 }
-
-/// Shallow merge, as JavaScript's `{ ...a, ...b }`.
-pub(crate) fn merge(base: &Value, patch: &Value) -> Value {
-    let mut out = base.as_object().cloned().unwrap_or_default();
-    if let Some(p) = patch.as_object() {
-        for (k, v) in p {
-            out.insert(k.clone(), v.clone());
-        }
-    }
-    Value::Object(out)
-}

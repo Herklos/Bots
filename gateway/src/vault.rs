@@ -293,7 +293,7 @@ impl Vault {
             Ok(k) => k.try_into().map_err(|_| ApiError::new(500, "The vault key file is not a 32-byte key.")),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound && create => {
                 let key: [u8; 32] = rand::random();
-                crate::store::write_atomic(&self.key_file, &key, Some(0o600)).await?;
+                crate::storage::write_atomic(&self.key_file, &key, Some(0o600)).await?;
                 Ok(key)
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -387,7 +387,7 @@ impl Vault {
         let create = !tokio::fs::try_exists(&self.file).await.unwrap_or(false);
         let key = self.key(create).await?;
         let envelope = Self::encrypt(&key, &json!({ "items": items, "updatedAt": now() }));
-        crate::store::write_atomic(&self.file, envelope.to_string().as_bytes(), Some(0o600))
+        crate::storage::write_atomic(&self.file, envelope.to_string().as_bytes(), Some(0o600))
             .await?;
         Ok(())
     }
