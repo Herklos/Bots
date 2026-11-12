@@ -1,14 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync, writeFileSync } from 'node:fs';
 import test from 'node:test';
-import { pathToFileURL } from 'node:url';
-
-const source = readFileSync(new URL('../app/host/markdown.ts', import.meta.url), 'utf8');
-const start = source.indexOf('type TableAlign');
-const end = source.indexOf('function roomMessage(');
-const extracted = '/tmp/hbots-split-tables.ts';
-writeFileSync(extracted, source.slice(start, end));
-const { splitTables } = await import(pathToFileURL(extracted).href);
+import { splitTables } from '../app/host/markdown.ts';
 
 test('a pipe table splits into a header and rows', () => {
   const parts = splitTables('| A | B |\n| --- | --- |\n| c | d |\n');

@@ -1,19 +1,27 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
+
+This release makes creating and managing Bots and groups easier, adds storage controls, and improves conversation responsiveness.
+
+### New features
+
+- Create a Bot through a guided flow for its name, appearance, optional template and first message.
+- Create a group through a guided flow for its members, answer policy and optional kickoff; add or remove members from existing groups while keeping at least two.
+- Choose whether groups follow the machine default or use their own last-speaker, everyone or chief answer policy. Insert `@everyone` from the group composer to address every Bot.
+- Configure the file-system Bot folder in Settings → Access → Storage and restart when the folder changes.
 
 ### Improvements
 
-- Settings and a group’s edit page choose who answers: the last speaker, everyone, or a chief. A group can follow the machine setting.
-- The group composer offers @everyone: a chip and a mention suggestion insert it, and the hint says it wakes every Bot in the group.
-- The sidebar highlights only the open conversation. On a wide window, switching conversations replaces that route.
-- Creating a group is a short walk: a name, the member faces, who answers, a kickoff, then review.
-- Creating a Bot is a short walk: name, colour, shape, an optional template, a first message, then review.
-- Add or remove one Bot at a time on an existing group. A group keeps at least two Bots.
-- An open chat stays as it is when the transcript has not changed. The read carries a tag and waits on that request until a message arrives or about 25 seconds pass.
-- Typing in the composer writes the draft once after a short pause, and before send, a conversation change, closing the panel, or leaving the screen.
-- Settings shows Storage with Access: the file system, the Bots folder, and a restart when that folder changes.
-- Keep a sent message on one row, and keep the working indicator under it while that turn is still in flight.
+- Keep an unchanged conversation in place using conditional, held chat reads, and reduce writes when saving composer drafts.
+- Highlight only the open conversation in the sidebar and replace the conversation route when switching on wide screens.
+- Share Bot and group transcript components and split the Exact client into smaller Contract and host modules.
+
+### Bug fixes
+
+- Keep a sent message on one transcript row and retain the working indicator while its turn is in flight.
+- Restore inbox loading by removing an unsupported timer from the room data source.
+- Make options excluded by a locked network setting visibly unavailable.
 
 ## 0.2.2
 
