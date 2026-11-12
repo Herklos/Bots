@@ -46,6 +46,9 @@ pub(crate) struct ReviewStore {
     pub items: BTreeMap<String, ReviewItem>,
     #[serde(default)]
     pub failures: BTreeMap<String, u32>,
+    /// Last finished run already counted. A later snapshot that still shows it is not counted again.
+    #[serde(default)]
+    pub seen_runs: BTreeMap<String, String>,
 }
 
 fn store_version() -> u32 {
@@ -60,6 +63,7 @@ impl ReviewStore {
             grandfathered: BTreeSet::new(),
             items: BTreeMap::new(),
             failures: BTreeMap::new(),
+            seen_runs: BTreeMap::new(),
         }
     }
 

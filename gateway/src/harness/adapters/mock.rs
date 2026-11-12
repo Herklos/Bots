@@ -183,6 +183,15 @@ impl Routines for MockHarness {
     async fn run_now(&self, body: &Value) -> Result<Value, HarnessError> {
         Ok(body.clone())
     }
+
+    async fn watch(&self) -> Result<crate::harness::RoutineFeed, HarnessError> {
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            let _ = tx.send(Ok(json!({ "tasks": [] }))).await;
+            std::future::pending::<()>().await;
+        });
+        Ok(rx)
+    }
 }
 
 #[async_trait]

@@ -9,14 +9,16 @@ pub(crate) mod fill;
 pub(crate) mod hold;
 mod previews;
 mod provision;
+mod proxy;
 mod routines;
 pub(crate) mod setup;
 pub(crate) mod stream;
 pub(crate) mod transcript;
 mod turns;
 
-pub(crate) use client::{proxy_http, proxy_ws, ws_base, T3Client, T3};
+pub(crate) use client::{ws_base, T3Client, T3};
 pub(crate) use provision::provider_health;
+pub(crate) use proxy::{proxy_http, proxy_ws};
 
 use crate::harness::{
     Approvals as ApprovalsCap, Browser as BrowserCap, Harness, HarnessError,
