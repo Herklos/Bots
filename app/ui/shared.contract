@@ -231,17 +231,6 @@ style FormList
 style PrimaryButton
   min-height=44
 
-routes nav
-  inbox "/"
-    chat "/bot/:slug"
-    group "/group/:id"
-    create "/new"
-    newGroup "/new-group"
-    settings "/settings"
-      vault "/vault"
-        vaultAdd "/vault/new"
-        vaultEdit "/vault/:id"
-
 shape Bot
   slug: string
   name: string
