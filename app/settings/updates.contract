@@ -1,0 +1,67 @@
+use Glyph from "../glyph.contract"
+use SectionLabel from "../ui/controls.contract"
+use Session, About, SystemStatus from "../ui/root-types.contract"
+use GroupCard, SettingsRow, SettingsFoot from "../ui/sidebar.contract"
+// UpdateSettings: one settings domain, values injected from the root through SettingsScreen.
+component UpdateSettings
+  inject
+    about: About
+    canUpdate: bool
+    doStartUpdate: action
+    logout: action
+    session: Session
+    system: SystemStatus
+    systemPending: bool
+    updateError: string
+    updateFrom: string
+    updateNeedsService: bool
+    updateStartedPending: bool
+    updateStuck: bool
+    updateTo: string
+  view
+    column gap="space.xl"
+      column
+        text t("settings.domainUpdates") class=SectionLabel
+        column class=GroupCard padding="0"
+          row align-items="center" min-height=44 padding="0 space.md" box-sizing="border-box"
+            if updateTo != "" and not updateStuck
+              text t("settings.updating", version=updateTo) font="-exact-subheadline" testId="update-status"
+            else if updateStuck
+              text t("settings.updateStuck", version=(updateFrom != "" ? updateFrom : system.version)) font="-exact-subheadline" color="-exact-system-red" testId="update-status"
+            else if systemPending and not system.ok
+              text t("settings.updateChecking") font="-exact-subheadline" color="ink.muted" testId="update-status"
+            else if system.error != ""
+              text system.error font="-exact-subheadline" color="ink.muted" testId="update-status"
+            else if not system.ok
+              text t("settings.updateFailed") font="-exact-subheadline" color="ink.muted" testId="update-status"
+            else if not system.installed
+              text t("settings.updateSource") font="-exact-subheadline" testId="update-status"
+            else if system.updateAvailable
+              text t("settings.updateAvailable", version=system.latest) font="-exact-subheadline" testId="update-status"
+            else
+              text t("settings.updateCurrent", version=system.version) font="-exact-subheadline" testId="update-status"
+          if canUpdate
+            row align-items="center" min-height=44 padding="space.sm space.md" box-sizing="border-box" border-top="1px solid surface.line"
+              button appearance="none" press=doStartUpdate disabled=updateStartedPending testId="start-update" min-height=36 padding="0 space.lg" border="none" border-radius="radius.full" background-color="brand.default" color="ink.dark" font="-exact-subheadline" font-weight=600
+                text t("settings.updateRestart")
+        if updateNeedsService
+          text t("settings.updateNotService") class=SettingsFoot
+        if updateError != "" and updateTo == ""
+          text updateError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="update-error"
+      column
+        text t("settings.about") class=SectionLabel
+        column class=GroupCard padding="0"
+          row justify-content="space-between" align-items="center" min-height=44 padding="0 space.md" box-sizing="border-box" font="-exact-subheadline"
+            text "hbots" color="ink.muted"
+            text (about.ok ? about.version : t("settings.unknown")) testId="about-version"
+          row justify-content="space-between" align-items="center" min-height=44 padding="0 space.md" box-sizing="border-box" border-top="1px solid surface.line" font="-exact-subheadline"
+            text about.harness color="ink.muted"
+            text (about.connected ? t("settings.connected") : t("settings.disconnected")) color=(about.connected ? "-exact-label" : "-exact-system-red") testId="about-harness"
+          link class=SettingsRow href="https://github.com/Herklos/HBots/blob/main/CHANGELOG.md" target="_blank" border-top="1px solid surface.line" testId="about-changelog"
+            text t("settings.changelog") font-weight=500 flex=1
+            column color="ink.muted"
+              Glyph(name="chevron", size=18)
+      if session.passwordRequired
+        column class=GroupCard padding="0"
+          button class=SettingsRow appearance="none" press=logout justify-content="flex-start" color="-exact-system-red" testId="sign-out"
+            text t("settings.signOut") font-weight=500

@@ -1,0 +1,50 @@
+use Glyph from "../glyph.contract"
+use UsageView from "./settings.contract"
+use SectionLabel, Field from "../ui/controls.contract"
+use Prefs, initialsOf, botCountLabel, themeLabel from "../ui/root-types.contract"
+use Bot, UsageReport from "../ui/shapes.contract"
+use GroupCard, SettingsFoot from "../ui/sidebar.contract"
+// UserSettings: one settings domain, values injected from the root through SettingsScreen.
+component UserSettings
+  inject
+    bots: Bot[]
+    doEditName: action
+    doPickTheme: action
+    doSaveName: action
+    nameDraft: string
+    nameEditing: bool
+    pickPeriod: action
+    pickView: action
+    prefs: Prefs
+    report: UsageReport
+    reportFailed: bool
+    usagePeriod: string
+    usageView: string
+  view
+    column
+      text t("settings.you") class=SectionLabel
+      row class=GroupCard gap="space.lg" align-items="center" padding="space.lg" min-height=44
+        column width=56 height=56 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
+          if initialsOf(prefs.userName) != ""
+            text initialsOf(prefs.userName) font="-exact-title3" font-weight=600
+          else
+            Glyph(name="person", size=24)
+        column flex=1 gap="2px" min-width=0
+          input appearance="none" class=Field value=(nameEditing ? nameDraft : prefs.userName) input=doEditName change=doSaveName placeholder=t("settings.yourName") aria-label=t("settings.yourName") font="-exact-headline" testId="user-name"
+          text botCountLabel(bots.length, t("bots.one"), t("bots.many", n=bots.length)) color="ink.muted" font="-exact-footnote"
+    column
+      text t("settings.appearance") class=SectionLabel
+      column class=GroupCard padding="space.md"
+        row gap="space.sm" role="radiogroup" aria-label=t("settings.theme")
+          for t in ["system", "light", "dark"] key=t
+            button press=doPickTheme(t) role="radio" aria-checked=(prefs.theme == t) appearance="none" flex=1 padding="space.sm" border-radius="radius.md" testId=`theme-${t}` border=(prefs.theme == t ? "2px solid AccentColor" : "2px solid transparent") background-color="surface.canvas"
+              column gap="space.xs" align-items="center"
+                row width="100%" height=44 border-radius="radius.sm" overflow="hidden" border="1px solid surface.line"
+                  column flex=1 background-color=(t == "dark" ? "#17171b" : "#fcfcfd")
+                  column flex=1 background-color=(t == "light" ? "#fcfcfd" : t == "dark" ? "#17171b" : "#17171b")
+                text themeLabel(t, t("theme.system"), t("theme.dark"), t("theme.light")) font="-exact-footnote" font-weight=500
+    column
+      text t("panel.usage") class=SectionLabel
+      column class=GroupCard padding="0"
+        UsageView(report=report, down=reportFailed, period=usagePeriod, view=usageView, pickPeriod=pickPeriod, pickView=pickView, showBots=true)
+      text t("settings.usageNote") class=SettingsFoot

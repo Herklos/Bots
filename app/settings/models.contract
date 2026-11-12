@@ -1,0 +1,40 @@
+use ModelPicker from "./settings.contract"
+use SectionLabel from "../ui/controls.contract"
+use Prefs from "../ui/root-types.contract"
+use Provider from "../ui/shapes.contract"
+use GroupCard, SettingsTrack, SettingsTab, SettingsFoot from "../ui/sidebar.contract"
+// ModelSettings: one settings domain, values injected from the root through SettingsScreen.
+component ModelSettings
+  inject
+    doDefaultMode: action
+    doGroupAnswer: action
+    doMakeDefault: action
+    prefs: Prefs
+    prefsError: string
+    providers: Provider[]
+  view
+    column
+      text t("settings.defaultModel") class=SectionLabel
+      column class=GroupCard padding="space.sm"
+        if providers.length == 0
+          text t("settings.noProvider") color="ink.muted" font="-exact-subheadline" padding="space.sm" min-height=44
+        else
+          ModelPicker(providers=providers, instanceId=prefs.defaultInstance, model=prefs.defaultModel, effort=prefs.defaultEffort, prefix="default", pick=doMakeDefault)
+    column
+      text t("settings.defaultAccess") class=SectionLabel
+      column class=GroupCard padding="space.sm"
+        row class=SettingsTrack role="radiogroup" aria-label=t("settings.defaultAccess")
+          for mode in ["approval-required", "auto", "full-access"] key=mode
+            button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.defaultRuntimeMode == mode) press=doDefaultMode(mode) testId=`default-access-${mode}` background-color=(prefs.defaultRuntimeMode == mode ? "surface.card" : "transparent") color=(prefs.defaultRuntimeMode == mode ? "-exact-label" : "ink.muted")
+              text (mode == "approval-required" ? t("model.ask") : mode == "auto" ? t("model.auto") : t("model.fullAccess"))
+      text t("settings.defaultAccessNote") class=SettingsFoot
+    column
+      text t("settings.groupAnswer") class=SectionLabel
+      column class=GroupCard padding="space.sm"
+        row class=SettingsTrack role="radiogroup" aria-label=t("settings.groupAnswer")
+          for policy in ["last", "everyone", "chief"] key=policy
+            button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.groupAnswerPolicy == policy) press=doGroupAnswer(policy) testId=`group-answer-${policy}` background-color=(prefs.groupAnswerPolicy == policy ? "surface.card" : "transparent") color=(prefs.groupAnswerPolicy == policy ? "-exact-label" : "ink.muted")
+              text (policy == "last" ? t("group.policyLast") : policy == "everyone" ? t("group.policyEveryone") : t("group.policyChief"))
+      text t("settings.groupAnswerNote") class=SettingsFoot
+      if prefsError != ""
+        text prefsError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0"
