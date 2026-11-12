@@ -8,6 +8,10 @@ Run Bots on your own machine, give each one a workspace, and talk to them from t
 
 [Get started](#quick-start) · [Features](#features) · [How it works](#how-it-works) · [Development](DEV.md) · [Changelog](CHANGELOG.md)
 
+<br />
+
+<img src="docs/assets/readme-atlas.png" alt="hbots chat with Atlas, a research companion Bot" width="960" />
+
 </div>
 
 ## What is hbots?
