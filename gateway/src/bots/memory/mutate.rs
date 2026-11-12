@@ -1,5 +1,5 @@
 //! One transactional change to a memory file, a shared file, or one note.
-use super::evidence::check_owner_evidence;
+use super::evidence::{check_owner_evidence, is_accepted_quote, EvidenceKind, ACCEPTED_VIA};
 use super::facts::{
     category_label, check_fact, close_fact_range, format_fact, hash_fact, is_date, local_date,
     parse_fact, MEMORY_CHARS, MEMORY_LINES,
@@ -77,6 +77,7 @@ pub(crate) struct Mutation<'a> {
     pub user_root: Option<&'a Path>,
     /// Display name used when a rejected edit is recorded. Empty uses the slug.
     pub bot_name: &'a str,
+    pub evidence: EvidenceKind,
 }
 
 impl<'a> Mutation<'a> {
@@ -103,6 +104,7 @@ impl<'a> Mutation<'a> {
             valid_from: None,
             user_root: None,
             bot_name: "",
+            evidence: EvidenceKind::OwnerQuote,
         }
     }
 }
@@ -162,13 +164,24 @@ async fn apply(
     input: &Mutation<'_>,
     paths: &Paths,
 ) -> Result<MutateOk, MutateFail> {
-    if input.trusted_user {
-        if input.author != "user" {
-            return Err(invalid("A trusted memory action must be made by the user."));
+    match input.evidence {
+        EvidenceKind::Accepted => {
+            if !is_accepted_quote(input.source_quote) {
+                return Err(invalid(
+                    "An accepted suggestion needs evidence that the person accepted it.",
+                ));
+            }
         }
-    } else {
-        check_owner_evidence(input.source_text, input.source_quote)
-            .map_err(|err| invalid(err.message))?;
+        EvidenceKind::OwnerQuote => {
+            if input.trusted_user {
+                if input.author != "user" {
+                    return Err(invalid("A trusted memory action must be made by the user."));
+                }
+            } else {
+                check_owner_evidence(input.source_text, input.source_quote)
+                    .map_err(|err| invalid(err.message))?;
+            }
+        }
     }
     if input.author.trim().is_empty() {
         return Err(invalid("A memory write needs an author."));
@@ -467,5 +480,9 @@ fn provenance_of(input: &Mutation<'_>) -> Provenance {
         source_message_id: Some(input.source_message_id.to_string()),
         quote: Some(input.source_quote.to_string()),
         at: input.now.to_string(),
+        via: match input.evidence {
+            EvidenceKind::OwnerQuote => None,
+            EvidenceKind::Accepted => Some(ACCEPTED_VIA.to_string()),
+        },
     }
 }

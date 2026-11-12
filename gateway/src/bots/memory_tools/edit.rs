@@ -23,7 +23,7 @@ pub(super) fn defs(thread: &Value) -> Vec<Value> {
     vec![
         json!({
             "name": "memory_edit",
-            "description": "Save one lasting fact, decision or preference to this Bot's memory or the shared memory, or write a note. Only the user's own typed words count as evidence: put the exact phrase in sourceQuote. Never save passwords, keys, tokens or identity numbers; use the Vault. expectedRevision must be the revision from memory_read (or an empty string to create a new note). If memory changed, the tool returns a conflict with the current content; read it, merge and retry.",
+            "description": "Save one lasting fact, decision or preference to this Bot's memory or the shared memory, or write a note. Only the user's own typed words count as evidence: put the exact phrase in sourceQuote. If you have no words the person typed, use memory_suggest. Never save passwords, keys, tokens or identity numbers; use the Vault. expectedRevision must be the revision from memory_read (or an empty string to create a new note). If memory changed, the tool returns a conflict with the current content; read it, merge and retry.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -169,7 +169,10 @@ async fn write(d: &Deps<'_>, args: &Value, op: Op) -> Result<Value, String> {
     };
     let quote = args["sourceQuote"].as_str().unwrap_or("").trim();
     if quote.is_empty() {
-        return Err("Pass the user's exact words in sourceQuote.".into());
+        return Err(
+            "Pass the user's exact words in sourceQuote. Without them, propose the fact with memory_suggest."
+                .into(),
+        );
     }
     let messages = owner_messages(d.turn_items);
     let message = pick_message(&messages, args["sourceMessageId"].as_str())?;

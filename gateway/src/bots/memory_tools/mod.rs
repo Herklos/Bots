@@ -1,4 +1,4 @@
-//! Read-only memory and skills on the Bots' own tool server (`POST /mcp/bot`).
+//! Memory and skills on the Bots' own tool server (`POST /mcp/bot`).
 //!
 //! The caller is the Bot whose `mainThreadId` is `threadId`. A slug, path, or
 //! `parentSlug` in the arguments is ignored. A subagent (`role` `subagent`, or
@@ -17,6 +17,7 @@ use tokio::io::AsyncReadExt;
 
 mod edit;
 mod read;
+mod suggest;
 
 #[cfg(test)]
 mod tests;
@@ -26,11 +27,12 @@ pub(crate) const FILE_CAP: usize = 16 * 1024;
 
 const PARENT_MISSING: &str = "This subagent's parent folder is missing.";
 
-const NAMES: [&str; 5] = [
+const NAMES: [&str; 6] = [
     "memory_read",
     "memory_edit",
     "memory_forget",
     "memory_search",
+    "memory_suggest",
     "skills_read",
 ];
 
@@ -95,6 +97,7 @@ pub(crate) fn tool_defs() -> Vec<Value> {
     ]
     .into_iter()
     .chain(edit::defs(&thread))
+    .chain(suggest::defs(&thread))
     .collect()
 }
 
@@ -157,6 +160,7 @@ pub(crate) async fn dispatch(d: &Deps<'_>, name: &str, args: &Value) -> Result<V
         "memory_edit" => edit::edit(d, args).await,
         "memory_forget" => edit::forget(d, args).await,
         "memory_search" => edit::search(d, args).await,
+        "memory_suggest" => suggest::suggest(d, args).await,
         "skills_read" => read_skills(d, args).await,
         _ => Err(format!("Unknown tool {name}")),
     }
