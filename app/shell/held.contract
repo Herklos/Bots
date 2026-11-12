@@ -78,6 +78,7 @@ members Bots
       refresh shelf
     if onComputer
       refresh computer
+      refresh places
     if onBot and panelOpen and panelTab == "details"
       refresh models
       refresh routines

@@ -14,6 +14,7 @@ members Bots
   derive reportFailed = failed(report)
   derive shelfFailed = failed(shelf)
   derive computerFailed = failed(computer)
+  derive placesFailed = failed(places)
   derive subCreatedPending = pending(subCreated)
   derive createdPending = pending(created)
   derive subSavedPending = pending(subSaved)

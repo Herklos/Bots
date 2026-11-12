@@ -3,6 +3,41 @@ import { explain } from '../host/fixture.ts';
 import { noteLocale, say, localize, call, reply } from '../host/gateway.ts';
 import { frames } from '../host/session.ts';
 
+const placeChoice: Record<string, string> = {};
+
+const placeHidden = { ok: false, selected: '', localLabel: '', links: [] as { id: string; label: string; status: string; access: string; selectable: boolean }[], waiting: false, error: '' };
+
+function placeLinks(body: any) {
+  const rows = Array.isArray(body?.links) ? body.links : [];
+  return rows.map((link: any) => ({
+    id: String(link.id ?? ''),
+    label: String(link.label ?? ''),
+    status: String(link.status ?? ''),
+    access: String(link.access ?? ''),
+    selectable: link.selectable === true,
+  }));
+}
+
+function withUnknown(place: typeof placeHidden) {
+  if (place.selected === '' || place.links.some((link) => link.id === place.selected)) return place;
+  return {
+    ...place,
+    links: [...place.links, { id: place.selected, label: say('computer.placeUnknown'), status: '', access: '', selectable: false }],
+  };
+}
+
+function fixturePlace(slug: string) {
+  const selected = placeChoice[slug] ?? '';
+  return withUnknown({
+    ok: true,
+    selected,
+    localLabel: say('computer.this'),
+    links: [{ id: 'srv-west-1', label: 'Build server', status: 'reachable', access: 'approval-required', selectable: true }],
+    waiting: selected !== '',
+    error: '',
+  });
+}
+
 export const computerSources = {
   loadComputer: async ([slug, gate, locale, tab, view], store): Promise<Result<'loadComputer'>> => {
     noteLocale(locale);
@@ -103,4 +138,30 @@ export const computerSources = {
     if (!r.ok) return { ok: false, error: localize(r.error), text: '' };
     return { ok: true, error: '', text: typeof r.body.text === 'string' ? r.body.text : '' };
   },
-} satisfies Pick<Sources, 'loadComputer' | 'openComputer' | 'closeComputer' | 'computerControl' | 'computerInput'>;
+  loadComputerPlace: async ([slug, gate, locale], store): Promise<Result<'loadComputerPlace'>> => {
+    noteLocale(locale);
+    if (slug === '' || gate === '0' || gate === '') return placeHidden;
+    if (slug === 'frame' || slug === 'page' || slug === 'tabs') return fixturePlace(slug);
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/environment`);
+    if (!r.ok) throw new Error(r.error);
+    return withUnknown({
+      ok: r.body.ok === true,
+      selected: String(r.body.selected ?? ''),
+      localLabel: String(r.body.localLabel ?? ''),
+      links: placeLinks(r.body),
+      waiting: r.body.waiting === true,
+      error: String(r.body.error ?? ''),
+    });
+  },
+  setComputerPlace: async ([slug, id], store) => {
+    if (slug === 'frame' || slug === 'page' || slug === 'tabs') {
+      placeChoice[slug] = id;
+      return { ok: true, error: '' };
+    }
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/environment`, {
+      method: 'PUT', body: JSON.stringify({ id }),
+    });
+    if (!r.ok) return { ok: false, error: say('error.computerPlace') };
+    return { ok: true, error: '' };
+  },
+} satisfies Pick<Sources, 'loadComputer' | 'openComputer' | 'closeComputer' | 'computerControl' | 'computerInput' | 'loadComputerPlace' | 'setComputerPlace'>;

@@ -38,6 +38,7 @@ mod library_file_tests;
 mod memory_api;
 #[cfg(test)]
 mod memory_api_tests;
+mod place_api;
 #[cfg(test)]
 mod provider_limits_tests;
 #[cfg(test)]
@@ -70,6 +71,8 @@ pub(crate) use computer_api::*;
 pub(crate) use library_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use memory_api::*;
+#[allow(unused_imports, reason = "siblings and old paths use these names")]
+pub(crate) use place_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use rooms_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]

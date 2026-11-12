@@ -123,6 +123,36 @@ pub struct UserMessage {
     pub attachments: Vec<Value>,
 }
 
+/// One computer the person can pick. The broker itself is not a link.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ComputerLink {
+    pub id: String,
+    pub label: String,
+    pub status: String,
+    pub access: String,
+    pub selectable: bool,
+}
+
+/// This computer, plus the links T3 Code already has. `ok` is false when that list could not be read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ComputerCatalog {
+    pub ok: bool,
+    pub local_label: String,
+    pub broker_id: String,
+    pub links: Vec<ComputerLink>,
+}
+
+impl ComputerCatalog {
+    pub(crate) fn offline() -> Self {
+        Self {
+            ok: false,
+            local_label: String::new(),
+            broker_id: String::new(),
+            links: Vec::new(),
+        }
+    }
+}
+
 /// A short token the client chose, or a new id. The transcript row is `turn-item:message:` plus this.
 pub(crate) fn message_id(supplied: Option<&str>) -> String {
     let id = supplied.unwrap_or("").trim();

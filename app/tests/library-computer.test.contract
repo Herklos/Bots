@@ -44,6 +44,37 @@ test "one server tab shows its title once"
   expect tree missing "tab-only"
   expect tree has "computer-take"
   expect tree missing "computer-frame"
+test "a bot runs on this computer until a saved link can be placed"
+  size 340x740
+  at "/bot/page"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-computer"
+  clock data
+  expect tree has "computer-place"
+  expect text "computer-place-select" == ""
+  expect text "computer-place-note" == "Page runs on this computer."
+  expect tree missing "computer-place-empty"
+  expect text "computer-tab-title" == "Only"
+  expect tree missing "tab-only"
+  expect tree has "computer-take"
+  expect tree missing "computer-frame"
+  type "computer-place-select" "srv-west-1"
+  clock data
+  expect text "computer-place-note" == "Saved for Build server. Page still runs on this computer until T3 Code can place a Bot there."
+  type "computer-place-select" ""
+  clock data
+  expect text "computer-place-note" == "Page runs on this computer."
+test "the computer section speaks French"
+  locale "fr"
+  size 340x740
+  at "/bot/page"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-computer"
+  clock data
+  expect text "computer-place-label" == "Ordinateur"
+  expect text "computer-place-note" == "Page s’exécute sur cet ordinateur."
 test "tapping the page picture covers the screen until close"
   size 340x740
   at "/bot/frame"

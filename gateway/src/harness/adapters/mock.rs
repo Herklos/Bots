@@ -1,8 +1,8 @@
 //! In-memory harness for domain tests. Adapter tests that speak the wire still use `tests/mock-t3.ts`.
 use crate::harness::{
-    Approval, Approvals, Browser, BrowserTab, Frame, Harness, HarnessError, LaunchThread, Previews,
-    ProjectInfo, ProvisionedSend, Provisioning, Relay, Repos, Routines, ShellSnapshot,
-    ThreadSnapshot, Transcript, Turns, UserMessage,
+    Approval, Approvals, Browser, BrowserTab, ComputerCatalog, Frame, Harness, HarnessError,
+    LaunchThread, Previews, ProjectInfo, ProvisionedSend, Provisioning, Relay, Repos, Routines,
+    ShellSnapshot, ThreadSnapshot, Transcript, Turns, UserMessage,
 };
 use async_trait::async_trait;
 use axum::response::IntoResponse;
@@ -263,6 +263,15 @@ impl Provisioning for MockHarness {
             .unwrap_or_else(|err| err.into_inner())
             .clone()
             .ok_or_else(|| missing("providers"))
+    }
+
+    async fn computers(&self) -> Result<ComputerCatalog, HarnessError> {
+        Ok(ComputerCatalog {
+            ok: true,
+            local_label: "This computer".into(),
+            broker_id: String::new(),
+            links: Vec::new(),
+        })
     }
 }
 

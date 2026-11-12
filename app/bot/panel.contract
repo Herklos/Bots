@@ -7,6 +7,7 @@ use shapeNames, Avatar from "../face.contract"
 use Glyph from "../glyph.contract"
 use EditBotPage from "./edit.contract"
 use BotShelf, ScreenCard from "../computer/computer.contract"
+use ComputerPlace from "../computer/place.contract"
 component BotPanel
   props
     working: bool
@@ -86,6 +87,10 @@ component BotPanel
     subError: string
     childModels: ModelList
     childModelsDown: bool
+    places: ComputerPlace
+    placesFailed: bool
+    placeError: string
+    doPickComputer: action
   derive children = bots.filter(c => c.parentSlug == bot.slug)
   action tabKey(k: string, event: KeyboardEvent)
     if not event.isComposing and (k == "ArrowRight" or k == "ArrowLeft" or k == "Home" or k == "End")
@@ -280,3 +285,4 @@ component BotPanel
         column id="bot-tab-computer" role="tabpanel" aria-label=t("panel.computer") display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0
           scroll id="panel-computer-scroll" flex=1 min-height=0
             ScreenCard(name=bot.name, computer=computer, down=computerDown, showLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=live, drive=drive, take=take, release=release, picked=picked, pick=pick, openBrowser=openBrowser, opening=opening, openError=openError, closeBrowser=closeBrowser, closing=closing, closeError=closeError)
+            ComputerPlace(name=bot.name, place=places, down=placesFailed, error=placeError, pick=doPickComputer)
