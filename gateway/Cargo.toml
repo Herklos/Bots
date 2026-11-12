@@ -28,7 +28,7 @@ hostname = "0.4" # The hb_device heartbeat names this machine.
 jsonschema = { version = "=0.61.1", default-features = false }
 rand = "0.8"
 regex = "1" # Preview cleaning and the emoji check use Unicode-property regexes.
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 scrypt = { version = "0.11", default-features = false }
 rsa = { version = "0.9", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"] }

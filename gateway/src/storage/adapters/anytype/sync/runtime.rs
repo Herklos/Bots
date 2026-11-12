@@ -238,6 +238,21 @@ async fn run_loop(
         materials.space_id.clone(),
     )
     .ok();
+    let (notes_tx, mut notes_rx) = mpsc::unbounded_channel();
+    match AnytypeClient::new(&materials.host, &materials.key, &materials.space_id) {
+        Ok(feed_client) => {
+            super::feed::spawn(
+                feed_client,
+                super::feed::FeedSettings::production(),
+                notes_tx,
+            );
+        }
+        Err(error) => {
+            tracing::debug!("Anytype search stream was not started: {error:?}");
+            drop(notes_tx);
+        }
+    }
+    let mut stream_up = false;
     let mut last_heartbeat: i64 = 0;
     let mut backoff = Duration::from_secs(2);
     let mut want_import = false;
@@ -245,6 +260,9 @@ async fn run_loop(
         // Nudges and requests first: they are the reason this cycle runs early.
         for rel in nudges.drain() {
             engine.nudge(&rel);
+        }
+        while let Ok(note) = notes_rx.try_recv() {
+            let _ = super::feed::ingest(&mut engine, note, &mut stream_up);
         }
         while let Ok(request) = rx.try_recv() {
             if serve(&mut engine, request).await {
@@ -297,15 +315,23 @@ async fn run_loop(
                 | SyncState::ApiChanged
                 | SyncState::NotFound
         ) || outcome.is_err();
-        let wait = status::next_wait(offline, backoff, false);
-        tokio::select! {
-            _ = tokio::time::sleep(wait) => {}
-            Some(request) = rx.recv() => {
-                if serve(&mut engine, request).await {
-                    want_import = true;
+        let wait = super::feed::cycle_wait(offline, backoff, stream_up);
+        'hold: loop {
+            tokio::select! {
+                _ = tokio::time::sleep(wait) => break 'hold,
+                Some(request) = rx.recv() => {
+                    if serve(&mut engine, request).await {
+                        want_import = true;
+                    }
+                    break 'hold;
+                }
+                _ = nudges.notified() => break 'hold,
+                Some(note) = notes_rx.recv() => {
+                    if super::feed::ingest(&mut engine, note, &mut stream_up) {
+                        break 'hold;
+                    }
                 }
             }
-            _ = nudges.notified() => {}
         }
     }
 }

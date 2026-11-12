@@ -9,3 +9,4 @@ mod pairing;
 mod peer;
 mod schema;
 mod search;
+mod stream;

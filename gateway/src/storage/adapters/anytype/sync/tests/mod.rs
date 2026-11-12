@@ -23,5 +23,6 @@ mod pull_update;
 mod push_create;
 mod push_update;
 mod scan;
+mod stream;
 mod support;
 mod tombstone;

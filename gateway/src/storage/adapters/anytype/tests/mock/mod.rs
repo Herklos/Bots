@@ -9,6 +9,7 @@ mod routes_files;
 mod routes_types;
 mod search;
 mod state;
+mod stream;
 
 use state::MockState;
 use std::sync::{Arc, Mutex};
@@ -132,5 +133,34 @@ impl Mock {
             .lock()
             .expect("mock")
             .peer_write(id, &properties, tear)
+    }
+
+    /// `0` refuses every new search stream with 429. Open streams stay until dropped.
+    pub(crate) fn set_stream_cap(&self, cap: usize) {
+        self.state.lock().expect("mock").stream_cap = cap;
+    }
+
+    /// Closes every open search stream. The client sees a clean end and may reconnect.
+    pub(crate) fn drop_streams(&self) {
+        self.state.lock().expect("mock").drop_streams();
+    }
+
+    /// The id stays in search and on GET, but the stream snapshot and live feed omit it.
+    pub(crate) fn omit_from_stream(&self, id: &str) {
+        let mut state = self.state.lock().expect("mock");
+        state.stream_omit.insert(id.to_string());
+        state.announce(id);
+    }
+
+    pub(crate) fn get_count(&self) -> u64 {
+        self.state.lock().expect("mock").gets
+    }
+
+    pub(crate) fn reset_gets(&self) {
+        self.state.lock().expect("mock").gets = 0;
+    }
+
+    pub(crate) fn last_stream_body(&self) -> serde_json::Value {
+        self.state.lock().expect("mock").last_stream_body.clone()
     }
 }

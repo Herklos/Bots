@@ -38,6 +38,10 @@ pub(super) fn router(state: Shared) -> Router {
         )
         .route("/v2/spaces/{space}/search", post(search_space))
         .route(
+            "/v2/spaces/{space}/search/stream",
+            post(super::stream::search_stream),
+        )
+        .route(
             "/v2/spaces/{space}/types",
             get(list_types).post(create_type),
         )
@@ -76,7 +80,8 @@ async fn get_object(
     if let Some(response) = prelude(&state).await {
         return response;
     }
-    let mock = state.lock().expect("mock");
+    let mut mock = state.lock().expect("mock");
+    mock.gets += 1;
     match mock.document(&id) {
         Some(reply) => respond(reply),
         None => respond(missing_reply()),

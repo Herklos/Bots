@@ -3,9 +3,10 @@
 use super::super::client::AnytypeError;
 use super::apply::Outcome;
 use super::conflict::{self, ConflictState};
-use super::engine::{outbox_path, Engine};
+use super::engine::Engine;
 use super::error::{remote_note, SyncError};
 use super::outbox::{Item, Op};
+use super::paths::outbox_path;
 use super::scan::Scan;
 use super::status::{self, Phase, SyncState};
 use super::unix_ms;
