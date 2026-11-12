@@ -104,7 +104,8 @@ pub(crate) fn latest_preview(projection: &Value, names: &HashMap<String, String>
                 } else {
                     "assistant"
                 };
-                let text = preview_text(&text_of(&item["text"]));
+                let raw = text_of(&item["text"]);
+                let text = preview_text(&raw);
                 if !text.is_empty() {
                     return Some(with_id(
                         json!({ "kind": "text", "role": role, "text": text, "at": at }),
@@ -117,6 +118,13 @@ pub(crate) fn latest_preview(projection: &Value, names: &HashMap<String, String>
                 {
                     return Some(with_id(
                         json!({ "kind": "attachment", "role": role, "text": "Attachment", "at": at }),
+                        &item,
+                    ));
+                }
+                // An image-only reply has no words left once the mark is removed.
+                if IMAGE.is_match(&raw) {
+                    return Some(with_id(
+                        json!({ "kind": "text", "role": role, "text": "Image", "at": at }),
                         &item,
                     ));
                 }

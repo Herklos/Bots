@@ -105,6 +105,22 @@ pub(crate) async fn chat_view(s: &AppState, slug: &str, asked: Option<&str>) -> 
         Err(_) => json!([]),
     };
     out["pins"] = pins;
+    let root = listed
+        .iter()
+        .find(|bot| bot["slug"].as_str() == Some(slug))
+        .and_then(|bot| bot["workspaceRoot"].as_str())
+        .unwrap_or("");
+    // Library images are checked here, after the transcript is built. A cached
+    // check does no file IO, so the 500 ms poll stays cheap.
+    crate::chat::images::attach(
+        &mut out,
+        &s.images,
+        s.workspace.as_ref(),
+        slug,
+        root,
+        crate::chat::images::now_ms(),
+    )
+    .await;
     // The client has no clock it may read in its data code, so the gateway says what time it is.
     // The tag ignores this field: a body that only moves `now` is not a new transcript.
     out["now"] = json!(unix_now() * 1000);
