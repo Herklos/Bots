@@ -35,7 +35,7 @@ async fn connect(t3: &T3, thread: &str, tab: &str) -> Result<Ws, String> {
         base.to_string()
     };
     let mut url = url::Url::parse(&format!("{ws_base}/api/preview-stream/ws"))
-        .map_err(|_| "Couldn't open the browser stream.".to_string())?;
+        .map_err(|_e| "Couldn't open the browser stream.".to_string())?;
     url.query_pairs_mut()
         .append_pair("threadId", thread)
         .append_pair("tabId", tab)
@@ -46,9 +46,9 @@ async fn connect(t3: &T3, thread: &str, tab: &str) -> Result<Ws, String> {
     let mut req = url
         .as_str()
         .into_client_request()
-        .map_err(|_| "Couldn't open the browser stream.".to_string())?;
+        .map_err(|_e| "Couldn't open the browser stream.".to_string())?;
     let auth = HeaderValue::from_str(&format!("Bearer {}", t3.token))
-        .map_err(|_| "Couldn't open the browser stream.".to_string())?;
+        .map_err(|_e| "Couldn't open the browser stream.".to_string())?;
     req.headers_mut().insert("authorization", auth);
     match tokio_tungstenite::connect_async(req).await {
         Ok((ws, _)) => Ok(ws),
@@ -118,7 +118,7 @@ pub(crate) async fn take(t3: &T3, thread: &str, slug: &str, tab: &str) -> Result
         control_message("take").map_err(str::to_string)?.to_string(),
     ))
     .await
-    .map_err(|_| CLOSED.to_string())?;
+    .map_err(|_e| CLOSED.to_string())?;
     let mut frame = wait_ready(&mut ws).await?;
     if frame.is_empty() {
         // The first frame gives the page size.
@@ -150,7 +150,7 @@ pub(crate) async fn input(slug: &str, tab: &str, messages: &[Value]) -> Option<V
             held.ws
                 .send(Message::text(message.to_string()))
                 .await
-                .map_err(|_| CLOSED.to_string())?;
+                .map_err(|_e| CLOSED.to_string())?;
         }
         // A still page sends nothing new, so don't wait long for a picture.
         next_jpeg(&mut held.ws, Duration::from_millis(100)).await
