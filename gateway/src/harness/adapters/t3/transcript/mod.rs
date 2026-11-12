@@ -2,7 +2,9 @@ mod preview;
 mod project;
 mod usage;
 
-pub(crate) use usage::{tokens_from_projection, turn_token_line, turns_from_projection};
+pub(crate) use usage::{tokens_from_projection, turns_from_projection};
+#[cfg(test)]
+pub(crate) use usage::turn_token_line;
 
 pub(crate) use preview::latest_preview;
 #[cfg(test)]

@@ -4,7 +4,9 @@
 )]
 
 use super::T3;
-use crate::bots::computer::{control_message, edit_message, watch_message, Sessions};
+use crate::bots::computer::{control_message, edit_message, watch_message};
+#[cfg(test)]
+use crate::bots::computer::Sessions;
 use crate::vault::vault_tools::{server_tabs, Tab};
 use serde_json::{json, Value};
 use std::time::Duration;
