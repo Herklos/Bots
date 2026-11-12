@@ -138,7 +138,7 @@ Rules for `hb_file` (all from the design audit):
 - **Duplicates**: two `hb_file` objects with one `hb_path` can appear after a crash or a race. Keep the earliest `created_date`, merge into it, tombstone-archive the other (M5).
 - Exactly one `hb_meta` object. If several exist, use the earliest.
 
-Anytype limits the engine must respect: string 1 MiB, structured body 1 MiB, 128 properties, writes rate limited (429 on mutating routes only, documented sustained about 1/s, burst 60). Reads are not limited.
+Anytype limits the engine must respect (measured values from the M0 spike, see `docs/anytype-spike.md` S3 and S6): text properties round-trip byte exact beyond 1 MiB (tested 4 MiB), so the real write cap is the 10 MiB request body (413 `request_too_large`), not a property limit; 128 properties; writes rate limited at burst 60 then exactly 1 per second sustained, 429 with no `Retry-After` header. Reads are not limited.
 
 ## 5. Sync engine design
 
@@ -172,7 +172,7 @@ Why `bot.json` is denied in v1: it mixes shared fields with the T3 binding (`pro
 `engine.run_once()`:
 
 1. **Scan local.** Walk the allow-listed paths under `bots_root` (reuse the walker idea in `filesystem/copy.rs`). For each file take `(size, mtime_ns)`. If equal to the manifest's cached values, reuse `base_sha` as the current sha. Otherwise hash it. Skip a file modified within the last 1 s (a writer may be mid-write) and pick it up next cycle. Result: `LocalState = { rel -> Present{sha,size,mtime} | Absent }`.
-2. **List remote.** Search `hb_file` objects in the space with the `fields` projection `hb_path, hb_sha, hb_deleted, hb_device, hb_rev, last_modified_date, hb_size` (no content). Paginate with the walker. Result: `RemoteState = { rel -> Present{object_id, etag?, sha, modified} | Tombstone{...} | Absent }`. If the same `hb_path` appears twice, pick the earliest `created_date` as the object and schedule duplicate cleanup.
+2. **List remote.** Search `hb_file` objects in the space with the `fields` projection `hb_path, hb_sha, hb_deleted, hb_device, hb_rev, last_modified_date, hb_size` (no content). Paginate with the walker. Result: `RemoteState = { rel -> Present{object_id, etag?, sha, modified} | Tombstone{...} | Absent }`. If the same `hb_path` appears twice, pick the earliest `created_date` as the object and schedule duplicate cleanup. Measured in M0 (spike S9): `last_modified_date` is absent on objects never modified after create, and filtering on it only matches with day precision, so compare it client-side, never filter on it at second precision.
 3. **Decide per path** with the pure function `decide(base, local, remote) -> Action` (table below). Unit-test it exhaustively.
 4. **Apply** actions in a fixed order: pulls and local deletes first, then pushes, bounded per cycle (default 50 remote writes) so a first sync of a large tree is incremental.
 5. **Update manifest** after each acknowledged action, not at the end, so a crash resumes.
@@ -240,7 +240,7 @@ State machine stored in the manifest: `needs_import` → `importing` → `live`.
 | Failure | Behavior |
 |---|---|
 | Anytype not running at start | Gateway starts, serves the folder, engine state `offline`, retry with exponential backoff (2 s up to 60 s). Pending pushes stay in the outbox, which is capped (warn at 1,000 items, refuse new items at 10,000 and report) |
-| 429 | Honor `Retry-After`, halve the limiter rate, requeue |
+| 429 | No `Retry-After` header on this build (measured, M0 spike S6): halve the limiter rate, back off at least 1 s, requeue |
 | 409 `etag_mismatch` | Re-read and re-decide (5.5) |
 | 409 `object_archived` | Restore it if our change is newer than the archive, otherwise treat as a delete |
 | 404 or 410 on an object | Treat as purged: drop `object_id` and re-run `decide` (it becomes a create if the local file still exists) |
