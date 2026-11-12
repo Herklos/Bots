@@ -5,7 +5,7 @@ mod client;
 mod schema;
 #[allow(
     dead_code,
-    reason = "the network half of sync is a later milestone and nothing calls this yet"
+    reason = "M5 wires the engine into the gateway; until then only its tests call it"
 )]
 mod sync;
 #[cfg(test)]

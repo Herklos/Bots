@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::Path;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub(super) const SETTLE: Duration = Duration::from_secs(1);
 
@@ -32,6 +32,8 @@ pub(super) struct Scan {
     pub unsettled: BTreeSet<String>,
     pub hashed: BTreeSet<String>,
     pub reused: BTreeSet<String>,
+    /// The hash budget ran out. Callers must not treat a missing path as a delete.
+    pub truncated: bool,
 }
 
 pub(super) fn scan(
@@ -40,13 +42,25 @@ pub(super) fn scan(
     now: SystemTime,
     settle: Duration,
 ) -> io::Result<Scan> {
+    scan_budget(root, cache, now, settle, None)
+}
+
+pub(super) fn scan_budget(
+    root: &Path,
+    cache: &BTreeMap<String, Shortcut>,
+    now: SystemTime,
+    settle: Duration,
+    budget: Option<Duration>,
+) -> io::Result<Scan> {
     let mut out = Scan {
         files: BTreeMap::new(),
         unsettled: BTreeSet::new(),
         hashed: BTreeSet::new(),
         reused: BTreeSet::new(),
+        truncated: false,
     };
-    walk(root, "", cache, now, settle, &mut out)?;
+    let deadline = budget.map(|budget| Instant::now() + budget);
+    walk(root, "", cache, now, settle, deadline, &mut out)?;
     Ok(out)
 }
 
@@ -56,8 +70,13 @@ fn walk(
     cache: &BTreeMap<String, Shortcut>,
     now: SystemTime,
     settle: Duration,
+    deadline: Option<Instant>,
     out: &mut Scan,
 ) -> io::Result<()> {
+    if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+        out.truncated = true;
+        return Ok(());
+    }
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let Some(name) = entry.file_name().to_str().map(str::to_string) else {
@@ -79,7 +98,10 @@ fn walk(
         }
         if kind.is_dir() {
             if can_descend(&rel) {
-                walk(&path, &rel, cache, now, settle, out)?;
+                walk(&path, &rel, cache, now, settle, deadline, out)?;
+                if out.truncated {
+                    return Ok(());
+                }
             }
             continue;
         }

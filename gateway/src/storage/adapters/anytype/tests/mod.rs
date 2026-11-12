@@ -3,7 +3,7 @@ mod errors;
 mod files;
 mod idempotency;
 mod limiter;
-mod mock;
+pub(crate) mod mock;
 mod objects;
 mod pairing;
 mod peer;
