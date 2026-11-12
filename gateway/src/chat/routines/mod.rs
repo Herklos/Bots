@@ -12,9 +12,16 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 pub(crate) mod review;
+#[allow(
+    dead_code,
+    reason = "the webhook create route that calls this builder is a later phase"
+)]
+pub(crate) mod webhook;
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod webhook_tests;
 
 const HISTORY_LIMIT: usize = 50;
 
@@ -322,7 +329,7 @@ pub(crate) fn pending_routine_task(
 }
 
 pub(crate) fn task_row(task: &Value) -> Value {
-    json!({
+    let mut row = json!({
         "id": task["id"].as_str().unwrap_or(""),
         "title": task["title"].as_str().unwrap_or("Routine"),
         "enabled": task["enabled"] == true,
@@ -333,7 +340,12 @@ pub(crate) fn task_row(task: &Value) -> Value {
         "lastStatus": task["lastRunStatus"].as_str().unwrap_or("never"),
         "lastError": task["lastRunError"].as_str().unwrap_or(""),
         "blocked": task["blockedByPolicy"].is_string(),
-    })
+        "kind": webhook::kind_of(task),
+    });
+    if let Some(hook) = webhook::hook_summary(task) {
+        row["hook"] = hook;
+    }
+    row
 }
 
 fn api(err: HarnessError) -> ApiError {
