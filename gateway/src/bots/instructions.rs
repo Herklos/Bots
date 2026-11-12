@@ -1,0 +1,276 @@
+use super::*;
+
+pub(crate) const MANAGED_START: &str = "<!-- bot:managed:start -->";
+
+pub(crate) const MANAGED_END: &str = "<!-- bot:managed:end -->";
+
+/// Missing is an empty list. A file that is not JSON is an error, so the caller
+/// does not rewrite `.mcp.json` and drop the connectors it could not read.
+pub(crate) async fn read_connector_list(path: &Path) -> ApiResult<Vec<Value>> {
+    match tokio::fs::read_to_string(path).await {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(e.into()),
+        Ok(text) if text.trim().is_empty() => Ok(Vec::new()),
+        Ok(text) => {
+            #[allow(
+                clippy::map_err_ignore,
+                reason = "serde quotes connectors.json, which can hold a connector secret"
+            )]
+            let doc: Value = serde_json::from_str(&text)
+                .map_err(|_| ApiError::new(500, "connectors.json is not valid JSON"))?;
+            Ok(doc["connectors"].as_array().cloned().unwrap_or_default())
+        }
+    }
+}
+
+pub(crate) async fn write_if_missing(path: &Path, text: &str) -> std::io::Result<()> {
+    if !tokio::fs::try_exists(path).await.unwrap_or(false) {
+        if let Some(d) = path.parent() {
+            tokio::fs::create_dir_all(d).await?;
+        }
+        tokio::fs::write(path, text).await?;
+    }
+    Ok(())
+}
+
+/// The brief names T3 Code because that is the harness wired today. Other backends may be added.
+/// `parent` is the parent Bot record when this Bot is a subagent. `children` are that parent's
+/// subagents. A parent's prompt is its `prompt` field.
+pub(crate) fn render_agents_md(
+    bot: &Value,
+    root: &Path,
+    parent: Option<&Value>,
+    children: &[&Value],
+    memory: &MemorySnapshot,
+) -> String {
+    let name = bot["name"].as_str().unwrap_or("Bot");
+    let label = bot["label"]
+        .as_str()
+        .filter(|l| !l.is_empty())
+        .map(|l| format!(" ({l})"))
+        .unwrap_or_default();
+    let shared = root.join(".botapp").join("shared-memory.md");
+    let child = is_subagent(bot);
+    let parent_name = parent
+        .and_then(|p| p["name"].as_str())
+        .filter(|n| !n.is_empty())
+        .map(str::to_string)
+        .or_else(|| parent_slug_of(bot))
+        .unwrap_or_else(|| "its parent".into());
+    let goal = bot["goal"]
+        .as_str()
+        .map(|text| agent_context::prompt_section("Goal", text))
+        .unwrap_or_default();
+    let intro = if child {
+        format!("You are {name}, a subagent of {parent_name}. {parent_name} assigns your work.")
+    } else {
+        format!(
+            "You are {name}, a personal Bot. You run as a long-lived T3 Code thread; the person talks to you from the Bots app on their phone, desktop or browser."
+        )
+    };
+    let own_folders = if child {
+        "- Your own notes folder: `memory/`.\n- Your own skills folder: `skills/`.\n"
+    } else {
+        ""
+    };
+    let own_prompt = if child {
+        agent_context::prompt_section(
+            "Your prompt",
+            bot["subagent"]["prompt"].as_str().unwrap_or(""),
+        )
+    } else {
+        String::new()
+    };
+    let inherited = if child && bot["subagent"]["inheritParentPrompt"] == true {
+        agent_context::prompt_section(
+            "Parent prompt",
+            parent.and_then(|p| p["prompt"].as_str()).unwrap_or(""),
+        )
+    } else {
+        String::new()
+    };
+    let snapshot = agent_context::render_snapshot(memory);
+    let child_threads = agent_context::child_threads_section();
+    let instructions = if child {
+        String::new()
+    } else {
+        agent_context::prompt_section("Instructions", bot["prompt"].as_str().unwrap_or(""))
+    };
+    let subagents = if child {
+        String::new()
+    } else {
+        let mut lines = String::from("\n## Subagents\n\n");
+        if children.is_empty() {
+            lines.push_str("You have no lasting helpers yet.\n");
+        } else {
+            for child in children {
+                let child_name = child["name"].as_str().unwrap_or("Bot");
+                let child_slug = child["slug"].as_str().unwrap_or("");
+                lines.push_str(&format!("- {child_name} (`{child_slug}`)\n"));
+            }
+            lines.push('\n');
+        }
+        lines.push_str(
+            "To list lasting helpers, use `subagent_list`. Create one with `subagent_create` (its own folder, project, and main thread). Work that ends with this turn stays a T3 child thread, and is not a lasting Subagent.\n",
+        );
+        lines
+    };
+    format!(
+        "{MANAGED_START}\n# {name}{label}\n\n\
+{intro}\n{goal}\n\
+## Memory\n\n- Your notes: `memory/MEMORY.md`. Keep durable facts there, short and current.\n- Your work log: `memory/log.md`.\n{own_folders}- Facts shared by every Bot: {}.\n- Files you keep for the person: `library/`.\n{snapshot}{instructions}{own_prompt}{inherited}{child_threads}\n\
+## Tools\n\nThe `bot` MCP server gives you the Vault (`vault_list`) and the Projects board (`projects_*`). Never read the vault files on disk.\n\n\
+## Routines\n\nTo run something on a schedule, use your `schedule_task` tool. Weekdays count from 0 for Sunday to 6 for Saturday, and times are local. The person sees your routines in the app but can't change them there, so say what you set up.\n\n## Computer\n\nThe person can open or close your browser from the Computer panel. A message framed `[Computer]` means open a page (resume where you left off, or https://www.google.com) or close your browser tabs with your browser tools, without asking, and stay quiet in chat.\n\n## Other Bots\n\nTo message another Bot, use `t3_thread_send`. Say who you are and what you need.\n{subagents}\n## Writing\n\nAvoid Markdown tables. Prefer bullet lists.\n\n## Asking first\n\nAsk before anything that leaves this machine or can't be undone.\n{MANAGED_END}\n",
+        shared.display()
+    )
+}
+
+pub(crate) fn merge_managed(existing: &str, block: &str) -> String {
+    if existing.is_empty() {
+        return block.to_string();
+    }
+    match (existing.find(MANAGED_START), existing.find(MANAGED_END)) {
+        (Some(s), Some(e)) if e > s => format!(
+            "{}{}{}",
+            &existing[..s],
+            block.trim_end(),
+            &existing[e + MANAGED_END.len()..]
+        ),
+        _ => format!("{block}\n{existing}"),
+    }
+}
+
+impl Bots {
+    /// `.mcp.json`, `.codex/config.toml`, `.claude/settings.json` and the managed block of
+    /// `AGENTS.md` (with `CLAUDE.md` linked to it), so Claude and Codex find the Bot's tools.
+    /// Enabled connectors in `.bot/connectors.json` are kept. A broken file is left unread
+    /// and these harness files are not rewritten, so a save cannot drop them.
+    pub async fn write_instructions(&self, bot: &Value) -> ApiResult<()> {
+        let slug = bot["slug"].as_str().unwrap_or_default();
+        let dir = self.dir(slug)?;
+        let connectors = read_connector_list(&dir.join(".bot").join("connectors.json")).await?;
+        let mcp_path = dir.join(".mcp.json");
+        let existing = read_json(&mcp_path).await.unwrap_or_else(|| json!({}));
+        let mcp = crate::library::merge_mcp(&existing, &connectors, &self.mcp_url, &self.mcp_token);
+        crate::storage::write_atomic(
+            &mcp_path,
+            (serde_json::to_string_pretty(&mcp).unwrap_or_default() + "\n").as_bytes(),
+            Some(0o600),
+        )
+        .await?;
+        let toml = crate::library::codex_toml(&mcp);
+        crate::storage::write_atomic(
+            &dir.join(".codex").join("config.toml"),
+            toml.as_bytes(),
+            Some(0o600),
+        )
+        .await?;
+        let claude_settings = dir.join(".claude").join("settings.json");
+        let cs_existing = read_json(&claude_settings)
+            .await
+            .unwrap_or_else(|| json!({}));
+        let cs = crate::library::claude_settings(&cs_existing, &connectors);
+        write_json(&claude_settings, &cs).await?;
+
+        let agents = dir.join("AGENTS.md");
+        let existing_agents = tokio::fs::read_to_string(&agents).await.unwrap_or_default();
+        let family = self.load().await?;
+        let parent = parent_slug_of(bot).and_then(|slug| {
+            family
+                .iter()
+                .find(|other| other["slug"].as_str() == Some(slug.as_str()))
+        });
+        let children: Vec<&Value> = if is_subagent(bot) {
+            Vec::new()
+        } else {
+            let mut children: Vec<&Value> = family
+                .iter()
+                .filter(|other| parent_slug_of(other).as_deref() == Some(slug))
+                .collect();
+            children.sort_by(|a, b| {
+                a["slug"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .cmp(b["slug"].as_str().unwrap_or_default())
+            });
+            children
+        };
+        let memory = agent_context::read_snapshot(&self.root, bot, parent).await;
+        let block = render_agents_md(bot, &self.root, parent, &children, &memory);
+        let merged = merge_managed(&existing_agents, &block);
+        if merged != existing_agents {
+            crate::storage::write_atomic(&agents, merged.as_bytes(), None).await?;
+        }
+        #[cfg(unix)]
+        self.merge_claude_md(&dir, slug, &block).await?;
+        Ok(())
+    }
+
+    /// Load this Bot and rewrite its managed block, then the parent's list or the children.
+    /// `write_instructions` skips the file when the merged text is unchanged.
+    pub async fn refresh_agents(&self, slug: &str) -> ApiResult<()> {
+        let Some(bot) = self.get(slug).await? else {
+            return Ok(());
+        };
+        self.write_instructions(&bot).await?;
+        if is_subagent(&bot) {
+            if let Some(parent_slug) = parent_slug_of(&bot) {
+                if let Some(parent) = self.get(&parent_slug).await? {
+                    self.write_instructions(&parent).await?;
+                }
+            }
+        } else {
+            let family = self.load().await?;
+            let children: Vec<Value> = family
+                .into_iter()
+                .filter(|other| parent_slug_of(other).as_deref() == Some(slug))
+                .collect();
+            for child in children {
+                self.write_instructions(&child).await?;
+            }
+        }
+        Ok(())
+    }
+
+    /// `CLAUDE.md` is a symlink to `AGENTS.md` when it is absent. A regular file keeps its
+    /// own text and receives the same managed block, with one warning per Bot.
+    #[cfg(unix)]
+    pub(crate) async fn merge_claude_md(
+        &self,
+        dir: &Path,
+        slug: &str,
+        block: &str,
+    ) -> ApiResult<()> {
+        let claude = dir.join("CLAUDE.md");
+        match tokio::fs::symlink_metadata(&claude).await {
+            Err(_) => {
+                let _ = tokio::fs::symlink("AGENTS.md", &claude).await;
+                Ok(())
+            }
+            Ok(meta) if meta.file_type().is_symlink() => Ok(()),
+            Ok(meta) if meta.file_type().is_file() => {
+                self.warn_claude_file_once(slug);
+                let existing = tokio::fs::read_to_string(&claude).await.unwrap_or_default();
+                let merged = merge_managed(&existing, block);
+                if merged != existing {
+                    crate::storage::write_atomic(&claude, merged.as_bytes(), None).await?;
+                }
+                Ok(())
+            }
+            Ok(_) => Ok(()),
+        }
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn warn_claude_file_once(&self, slug: &str) {
+        let mut seen = self
+            .claude_file_warned
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        if seen.insert(slug.to_string()) {
+            tracing::warn!(
+                "CLAUDE.md for {slug} is a regular file; merging the managed block into it"
+            );
+        }
+    }
+}
