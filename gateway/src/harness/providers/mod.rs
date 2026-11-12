@@ -33,6 +33,7 @@ impl Snapshot {
             .as_array()
             .into_iter()
             .flatten()
+            .filter(|p| p["installed"] == true)
             .filter_map(limits::limits_of)
             .collect();
         Self {

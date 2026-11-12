@@ -85,13 +85,10 @@ async fn provider_limits_reuse_the_model_list_cache() {
     assert!(!leaks(&models));
 
     let bars = limits["providers"].as_array().unwrap();
-    assert_eq!(bars.len(), 2);
+    assert_eq!(bars.len(), 1);
     assert_eq!(bars[0]["instanceId"], "claude");
     assert_eq!(bars[0]["windows"][0]["usedPercent"], json!(62));
     assert_eq!(bars[0]["windows"][0]["resetsAt"], "2026-11-12T17:00:00Z");
-    assert_eq!(bars[1]["instanceId"], "cursor");
-    assert_eq!(bars[1]["state"], "not-installed");
-    assert_eq!(bars[1]["windows"], json!([]));
     assert!(!leaks(&limits));
     assert!(!leaks(&again));
 }
