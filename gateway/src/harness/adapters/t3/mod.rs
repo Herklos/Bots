@@ -19,8 +19,8 @@ pub(crate) use client::{proxy_http, proxy_ws, ws_base, T3Client, T3};
 
 use crate::harness::{
     Approvals as ApprovalsCap, Browser as BrowserCap, Harness, HarnessError,
-    Previews as PreviewsCap, Provisioning as ProvisioningCap, Relay, Routines as RoutinesCap,
-    Transcript as TranscriptCap, Turns as TurnsCap,
+    Previews as PreviewsCap, Provisioning as ProvisioningCap, Relay, Repos as ReposCap,
+    Routines as RoutinesCap, Transcript as TranscriptCap, Turns as TurnsCap,
 };
 use async_trait::async_trait;
 
@@ -61,14 +61,28 @@ impl Harness for T3 {
     fn relay(&self) -> Result<&dyn Relay, HarnessError> {
         Ok(self)
     }
+
+    // Not wired. Unsupported means this adapter sends no request.
+    fn repos(&self) -> Result<&dyn ReposCap, HarnessError> {
+        Err(HarnessError::unsupported("repository status"))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::T3;
     use crate::chat::approvals::{outbound, send};
-    use crate::harness::Harness;
+    use crate::harness::{Harness, HarnessError};
     use serde_json::{json, Value};
+
+    #[test]
+    fn repository_status_is_unsupported_and_sends_nothing() {
+        let t3 = T3::new("http://127.0.0.1:1".into(), "fixture-only".into());
+        let Err(err) = t3.repos() else {
+            panic!("repository status should be unsupported");
+        };
+        assert!(matches!(err, HarnessError::Unsupported(_)));
+    }
 
     fn bun() -> Option<std::path::PathBuf> {
         if let Some(path) = std::env::var_os("BUN") {

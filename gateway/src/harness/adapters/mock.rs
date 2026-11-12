@@ -1,8 +1,8 @@
 //! In-memory harness for domain tests. Adapter tests that speak the wire still use `tests/mock-t3.ts`.
 use crate::harness::{
     Approval, Approvals, Browser, BrowserTab, Frame, Harness, HarnessError, LaunchThread, Previews,
-    ProjectInfo, ProvisionedSend, Provisioning, Relay, Routines, ShellSnapshot, ThreadSnapshot,
-    Transcript, Turns, UserMessage,
+    ProjectInfo, ProvisionedSend, Provisioning, Relay, Repos, Routines, ShellSnapshot,
+    ThreadSnapshot, Transcript, Turns, UserMessage,
 };
 use async_trait::async_trait;
 use axum::response::IntoResponse;
@@ -24,6 +24,14 @@ pub(crate) struct MockHarness {
     pub busy: Vec<String>,
     typed: Mutex<HashMap<String, String>>,
     model_pushes: Mutex<Vec<ModelPush>>,
+    repo: Mutex<RepoAnswer>,
+}
+
+#[derive(Debug)]
+struct RepoAnswer {
+    is_repo: bool,
+    calls: u32,
+    cwd: String,
 }
 
 impl MockHarness {
@@ -33,7 +41,28 @@ impl MockHarness {
             busy: Vec::new(),
             typed: Mutex::new(HashMap::new()),
             model_pushes: Mutex::new(Vec::new()),
+            repo: Mutex::new(RepoAnswer {
+                is_repo: false,
+                calls: 0,
+                cwd: String::new(),
+            }),
         }
+    }
+
+    pub(crate) fn set_is_repo(&self, is_repo: bool) {
+        self.repo_answer().is_repo = is_repo;
+    }
+
+    pub(crate) fn repo_calls(&self) -> u32 {
+        self.repo_answer().calls
+    }
+
+    pub(crate) fn repo_cwd(&self) -> String {
+        self.repo_answer().cwd.clone()
+    }
+
+    fn repo_answer(&self) -> std::sync::MutexGuard<'_, RepoAnswer> {
+        self.repo.lock().unwrap_or_else(|err| err.into_inner())
     }
 
     pub(crate) fn model_pushes(&self) -> Vec<ModelPush> {
@@ -50,6 +79,16 @@ impl MockHarness {
             .get(tab)
             .cloned()
             .unwrap_or_default()
+    }
+}
+
+#[async_trait]
+impl Repos for MockHarness {
+    async fn is_repo(&self, cwd: &str) -> Result<bool, HarnessError> {
+        let mut answer = self.repo_answer();
+        answer.calls += 1;
+        answer.cwd = cwd.to_string();
+        Ok(answer.is_repo)
     }
 }
 
@@ -341,5 +380,9 @@ impl Harness for MockHarness {
 
     fn relay(&self) -> Result<&dyn Relay, HarnessError> {
         Err(missing("the T3 passthrough"))
+    }
+
+    fn repos(&self) -> Result<&dyn Repos, HarnessError> {
+        Ok(self)
     }
 }

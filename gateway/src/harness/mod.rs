@@ -199,6 +199,15 @@ pub trait Harness: std::fmt::Debug + Send + Sync {
     fn provisioning(&self) -> Result<&dyn Provisioning, HarnessError>;
     fn browser(&self) -> Result<&dyn Browser, HarnessError>;
     fn relay(&self) -> Result<&dyn Relay, HarnessError>;
+    /// Whether a folder is a repository. A runtime that cannot answer returns
+    /// [`HarnessError::Unsupported`] and sends no request.
+    fn repos(&self) -> Result<&dyn Repos, HarnessError>;
+}
+
+/// Whether a workspace folder is a repository. One question, no write.
+#[async_trait]
+pub trait Repos: Send + Sync {
+    async fn is_repo(&self, cwd: &str) -> Result<bool, HarnessError>;
 }
 
 pub(crate) fn connect(base_url: String, token: String) -> std::sync::Arc<dyn Harness> {

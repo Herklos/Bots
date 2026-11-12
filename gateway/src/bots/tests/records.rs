@@ -159,6 +159,7 @@ pub(crate) async fn skipping_the_new_fields_matches_todays_bot_record() {
     let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
     let ada = bots.create(&json!({ "name": "Ada" })).await.unwrap();
     assert!(ada.get("runtimeMode").is_none());
+    assert!(ada.get("code").is_none());
     assert!(ada.get("goal").is_none());
     assert!(ada.get("pendingRoutines").is_none());
     assert_eq!(ada["prompt"], "");

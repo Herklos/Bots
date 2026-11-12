@@ -67,6 +67,7 @@ pub(crate) fn app(state: Arc<AppState>) -> Router {
         .route("/api/bots/{slug}/routines/delete", post(bot_routine_delete))
         .route("/api/bots/{slug}/routines/run", post(bot_routine_run))
         .route("/api/bots/{slug}/lineage", get(lineage_get))
+        .route("/api/bots/{slug}/code", get(code_get))
         .route("/api/bots/{slug}/computer", get(computer_get))
         .route("/api/bots/{slug}/computer/open", post(computer_open))
         .route("/api/bots/{slug}/computer/close", post(computer_close))

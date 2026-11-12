@@ -143,6 +143,7 @@ async fn main() -> anyhow::Result<()> {
             mcp_token.clone(),
         ),
         images: chat::images::Resolver::new(),
+        code_signals: chat::code::SignalCache::default(),
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
         holds: chat::HeldReads::new(),

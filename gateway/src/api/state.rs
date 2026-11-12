@@ -30,6 +30,8 @@ pub struct AppState {
     pub library: crate::bots::library::Library,
     /// Checked library images named in Bot replies. A hit does no file IO.
     pub(crate) images: crate::chat::images::Resolver,
+    /// Repository facts for the code gate. One minute per Bot.
+    pub(crate) code_signals: crate::chat::code::SignalCache,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
     /// One held chat or group read at a time. Shutdown wakes it.
@@ -45,7 +47,7 @@ impl AppState {
         json!({
             "userName": "", "theme": "dark", "palette": "amoled", "accent": "bot", "timezone": "", "autoReview": true,
             "rules": { "alwaysAsk": [], "allowWithoutAsking": [] }, "sections": [], "defaultModel": null, "avatarDrawingModel": null,
-            "beta": { "projects": false },
+            "beta": { "projects": false, "code": false },
             "notifications": { "enabled": false, "sound": true, "preview": "full", "when": "any" },
             "groupAnswerPolicy": "last",
             "maxRuntimeMode": "full-access",
@@ -53,7 +55,7 @@ impl AppState {
     }
 
     /// Known notification fields from the file. Missing or invalid values stay at the defaults.
-    /// Unknown keys are dropped, the same way `beta` keeps only `projects`.
+    /// Unknown keys are dropped, the same way `beta` keeps only `projects` and `code`.
     pub(crate) fn notifications_view(saved: &Value) -> Value {
         let mut out = Self::settings_defaults()["notifications"].clone();
         let Some(given) = saved.get("notifications").and_then(|v| v.as_object()) else {
@@ -88,7 +90,10 @@ impl AppState {
             .await
             .unwrap_or_else(|| json!({}));
         let mut out = storage::merge(&Self::settings_defaults(), &saved);
-        out["beta"] = json!({ "projects": saved["beta"]["projects"] == true });
+        out["beta"] = json!({
+            "projects": saved["beta"]["projects"] == true,
+            "code": saved["beta"]["code"] == true,
+        });
         out["notifications"] = Self::notifications_view(&saved);
         out["groupAnswerPolicy"] = json!(group_answer_policy(&out).as_str());
         // Unknown or missing is full access, so the cap is off.
