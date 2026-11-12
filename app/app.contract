@@ -84,6 +84,8 @@ component Bots
     editChatQuery
     toggleChatSearch
     edit
+    editDraft
+    composerCaret
     pickFiles
     filesPicked
     dropPending

@@ -69,7 +69,13 @@ members Bots
     let next = v.slice(0, 8000)
     draftTexts = putText(draftTexts, dkey, next)
     noteDraft()
-    syncMention(next)
+    syncMention(next, next.length)
+
+  action editDraft(v: string, event: InputEvent)
+    let next = v.slice(0, 8000)
+    draftTexts = putText(draftTexts, dkey, next)
+    noteDraft()
+    syncMention(next, event.selectionStart)
 
   action pickFiles
     showPicker("chat-attach")
@@ -121,7 +127,7 @@ members Bots
     if mentionOn and mentionHits.length > 0 and (k == "ArrowDown" or k == "ArrowUp" or k == "Enter" or k == "Tab" or k == "Escape")
       preventDefault()
       if k == "Escape"
-        clearMention()
+        dismissMention()
       else if k == "ArrowDown"
         mentionIdx = mentionIdx + 1 >= mentionHits.length ? 0 : mentionIdx + 1
       else if k == "ArrowUp"

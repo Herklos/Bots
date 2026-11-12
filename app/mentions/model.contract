@@ -1,10 +1,19 @@
-use putText, wordChar, mentionReplace, filterMentions from "../ui/root-types.contract"
+use putText, mentionReplace, filterMentions from "../ui/root-types.contract"
+use activeMention, withMention from "./rules.contract"
 members Bots
   state mentionOn = false
 
   state mentionQ = ""
 
   state mentionIdx = 0
+
+  // Caret in the open composer. InputEvent.selectionStart on input and selectionchange.
+  state mentionCursor = 0
+
+  // Escape sticks until the draft text changes. The same characters do not reopen the menu.
+  state mentionDismissed = false
+
+  state mentionDismissedText = ""
 
   derive mentionHits = mentionOn ? filterMentions(mentionPool, mentionQ) : []
 
@@ -13,26 +22,43 @@ members Bots
     mentionQ = ""
     mentionIdx = 0
 
-  action syncMention(text: string)
-    let parts = text.split("@")
-    if parts.length < 2
+  action dismissMention
+    mentionDismissed = true
+    mentionDismissedText = roomId != "" ? roomText : draft
+    clearMention()
+
+  action syncMention(text: string, cursor: number)
+    let caret = cursor < 0 ? 0 : (cursor > text.length ? text.length : cursor)
+    mentionCursor = caret
+    if mentionDismissed and text == mentionDismissedText
       clearMention()
     else
-      match parts.at(parts.length - 1)
-        case some(q)
-          let head = parts.slice(0, parts.length - 1).join("@")
-          if q.includes(" ") or q.includes("\n") or q.includes("\t") or (head != "" and wordChar(head.slice(-1)))
+      mentionDismissed = false
+      mentionDismissedText = ""
+      match activeMention(text, caret, mentionPool)
+        case some(span)
+          let nextQ = span.query.toLowerCase()
+          let shown = filterMentions(mentionPool, nextQ)
+          if shown.length == 0
             clearMention()
           else
+            let same = mentionOn and mentionQ == nextQ
             mentionOn = true
-            mentionQ = q.toLowerCase()
-            mentionIdx = 0
+            mentionQ = nextQ
+            if not same or mentionIdx >= shown.length
+              mentionIdx = 0
         case none
           clearMention()
 
-  action editRoomText(v: string)
+  action editRoomText(v: string, event: InputEvent)
     roomText = v
-    syncMention(v)
+    syncMention(v, event.selectionStart)
+
+  action composerCaret(event: InputEvent)
+    if roomId != ""
+      syncMention(roomText, event.selectionStart)
+    else
+      syncMention(draft, event.selectionStart)
 
   action mention(m: string)
     roomText = `${roomText}${(roomText == "" or roomText.endsWith(" ")) ? "" : " "}@${m} `
@@ -42,12 +68,21 @@ members Bots
   action completeMention(slug: string)
     if mentionOn and slug != ""
       if roomId != ""
-        roomText = mentionReplace(roomText, mentionQ, slug)
+        let written = withMention(roomText, mentionCursor, slug)
+        let next = written.text == roomText ? mentionReplace(roomText, mentionQ, slug) : written.text
+        let caret = written.text == roomText ? next.length : written.cursor
+        roomText = next
+        mentionCursor = caret
         clearMention()
         focus("room-composer")
+        setSelectionRange("room-composer", caret, caret)
       else
-        let next = mentionReplace(draft, mentionQ, slug).slice(0, 8000)
+        let written = withMention(draft, mentionCursor, slug)
+        let next = (written.text == draft ? mentionReplace(draft, mentionQ, slug) : written.text).slice(0, 8000)
+        let caret = written.text == draft ? next.length : written.cursor
         draftTexts = putText(draftTexts, dkey, next)
         noteDraft()
+        mentionCursor = caret
         clearMention()
         focus("composer")
+        setSelectionRange("composer", caret, caret)

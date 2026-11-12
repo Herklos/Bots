@@ -27,6 +27,7 @@ component GroupScreen
     dropGroup: action
     editAnswer: action
     editRoomText: action
+    composerCaret: action
     groupBack: action
     mention: action
     moved: action
@@ -93,7 +94,7 @@ component GroupScreen
                   text `@${m.slug}` font="-exact-footnote" font-weight=500
           MentionMenu(hits=groupBag.mentionHits, picked=groupBag.mentionIdx, choose=completeMention)
           row align-items="flex-end" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
-            textarea id="room-composer" value=groupBag.roomText input=editRoomText key=roomKey outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(groupBag.room.title != "" ? t("chat.messageTo", name=groupBag.room.title) : t("chat.write")) aria-label=t("group.message") aria-expanded=(groupBag.mentionHits.length > 0) aria-controls="mention-menu" testId="room-composer" flex=1 min-width=0 padding="space.sm space.sm" border="none" background-color="transparent" color="-exact-label"
+            textarea id="room-composer" value=groupBag.roomText input=editRoomText selectionchange=composerCaret key=roomKey outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(groupBag.room.title != "" ? t("chat.messageTo", name=groupBag.room.title) : t("chat.write")) aria-label=t("group.message") aria-expanded=(groupBag.mentionHits.length > 0) aria-controls="mention-menu" testId="room-composer" flex=1 min-width=0 padding="space.sm space.sm" border="none" background-color="transparent" color="-exact-label"
             button class=SendControl appearance="none" press=postRoom disabled=(groupBag.roomText.trim() == "" or groupBag.roomSentPending) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="room-send"
               Glyph(name="send", size=18)
           text (groupBag.roomText.includes("@everyone") ? t("group.hintEveryone") : groupBag.roomText.includes("@") ? t("group.hintMention") : quietPolicyHint(groupBag.room.answerPolicyEffective, t("group.hintNoneLast"), t("group.hintNoneEveryone"), t("group.hintNoneChief", chief=memberCalled(groupBag.room.members, groupBag.room.chief)))) color="ink.muted" font="-exact-footnote" testId="room-hint" width="100%" min-width=0 overflow-wrap="anywhere"

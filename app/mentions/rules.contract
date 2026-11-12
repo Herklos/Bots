@@ -1,0 +1,63 @@
+use MentionHit from "../ui/shapes.contract"
+
+// One active `@` query. `start` is the index of `@`.
+shape MentionSpan
+  start: number
+  query: string
+
+// Draft after inserting a slug, and the caret just after `@slug `.
+shape MentionWrite
+  text: string
+  cursor: number
+
+// Letters, digits, `_`, `/`, and `@` continue a token, so `joe@mail` and `https://x/@y` are not mentions.
+fn mentionStopped(c: string): bool = c != "" and "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_/@".includes(c)
+
+// Whitespace, or a mark that can sit against an `@` in prose and markdown.
+fn mentionBoundaryChar(c: string): bool = c == " " or c == "\t" or c == "\n" or c == "\u000d" or c == "(" or c == "[" or c == "{" or c == "<" or c == "'" or c == "\"" or c == "“" or c == "`" or c == "*" or c == "~" or c == "."
+
+fn isMentionBoundary(text: string, at: number): bool = at >= 0 and at < text.length and text.slice(at, at + 1) == "@" and (at == 0 or (not mentionStopped(text.slice(at - 1, at)) and mentionBoundaryChar(text.slice(at - 1, at))))
+
+fn clampCursor(text: string, cursor: number): number = cursor < 0 ? 0 : (cursor > text.length ? text.length : cursor)
+
+fn lastIndexOf(text: string, ch: string): number = text.split(ch).length < 2 ? -1 : text.length - (match text.split(ch).at(-1) { case some(tail) => tail.length, case none => 0 }) - ch.length
+
+fn afterBreak(window: string): string = max(lastIndexOf(window, "\n"), lastIndexOf(window, "\u000d")) < 0 ? window : window.slice(max(lastIndexOf(window, "\n"), lastIndexOf(window, "\u000d")) + 1)
+
+fn windowStart(cursor: number): number = max(0, cursor - 33)
+
+// Index of the `@` walked back from the caret, at most 33 characters, stopping at a newline. -1 when there is none.
+fn atIndex(text: string, cursor: number): number = lastIndexOf(afterBreak(text.slice(windowStart(cursor), cursor)), "@") < 0 ? -1 : windowStart(cursor) + text.slice(windowStart(cursor), cursor).length - afterBreak(text.slice(windowStart(cursor), cursor)).length + lastIndexOf(afterBreak(text.slice(windowStart(cursor), cursor)), "@")
+
+fn tickCount(text: string): number = text.split("`").length - 1
+
+fn isFenceLine(line: string): bool = line.trim().startsWith("```") or line.trim().startsWith("~~~")
+
+fn priorLines(lines: string[]): string[] = lines.slice(0, lines.length - 1)
+
+fn fenceCount(lines: string[]): number = lines.filter(line => isFenceLine(line)).length
+
+fn lastFenceAt(lines: string[]): number = match range(lines.length).filter(i => match lines.at(i) { case some(line) => isFenceLine(line), case none => false }).at(-1) { case some(i) => i, case none => -1 }
+
+fn tailAfterFence(lines: string[]): string = lastFenceAt(lines) < 0 ? lines.join("\n") : lines.slice(lastFenceAt(lines) + 1).join("\n")
+
+// True when `at` sits in a fence or an inline code span that opened before it.
+// Fence lines toggle. Backticks after the latest fence line cover a span that runs across lines.
+fn insideCode(text: string, at: number): bool = fenceCount(priorLines(text.slice(0, max(at, 0)).split("\n"))) % 2 == 1 or tickCount(tailAfterFence(text.slice(0, max(at, 0)).split("\n"))) % 2 == 1
+
+fn spanAt(text: string, cursor: number, at: number): option<MentionSpan> = at < 0 or not isMentionBoundary(text, at) or insideCode(text, at) or text.slice(at + 1, cursor).length > 32 ? none : some(MentionSpan(start=at, query=text.slice(at + 1, cursor)))
+
+fn mentionQueryAt(text: string, cursor: number): option<MentionSpan> = spanAt(text, clampCursor(text, cursor), atIndex(text, clampCursor(text, cursor)))
+
+fn sameToken(h: MentionHit, q: string): bool = q == `${h.slug.toLowerCase()} ` or q == `${h.name.toLowerCase()} ` or q == `${h.name.toLowerCase().replaceAll(" ", "")} `
+
+fn longerPrefix(h: MentionHit, typed: string): bool = (h.slug.toLowerCase().length > typed.length and h.slug.toLowerCase().startsWith(typed)) or (h.name.toLowerCase().length > typed.length and h.name.toLowerCase().startsWith(typed)) or (h.name.toLowerCase().replaceAll(" ", "").length > typed.length and h.name.toLowerCase().replaceAll(" ", "").startsWith(typed))
+
+// A finished `@slug ` or `@name ` closes the menu, unless another hit can still grow (`Max` beside `Max Power`).
+fn mentionClosed(hits: MentionHit[], query: string): bool = hits.filter(h => sameToken(h, query.toLowerCase())).length > 0 and hits.filter(h => longerPrefix(h, query.toLowerCase())).length == 0
+
+fn activeMention(text: string, cursor: number, hits: MentionHit[]): option<MentionSpan> = match mentionQueryAt(text, cursor) { case some(span) => mentionClosed(hits, span.query) ? none : some(span), case none => none }
+
+fn collapsedSuffix(suffix: string): string = suffix.startsWith(" ") ? suffix.slice(1) : suffix
+
+fn withMention(draft: string, cursor: number, slug: string): MentionWrite = match mentionQueryAt(draft, clampCursor(draft, cursor)) { case some(span) => MentionWrite(text=`${draft.slice(0, span.start)}@${slug} ${collapsedSuffix(draft.slice(clampCursor(draft, cursor)))}`, cursor=span.start + slug.length + 2), case none => MentionWrite(text=draft, cursor=clampCursor(draft, cursor)) }

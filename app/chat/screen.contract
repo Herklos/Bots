@@ -23,6 +23,8 @@ component ChatScreen
     editChatQuery: action
     toggleChatSearch: action
     edit: action
+    editDraft: action
+    composerCaret: action
     pickFiles: action
     filesPicked: action
     dropPending: action
@@ -178,7 +180,7 @@ component ChatScreen
               button class=IconControl appearance="none" press=discardVoice aria-label=t("chat.discardClip") title=t("chat.discardClip") testId="voice-discard" width=36 height=36
                 Glyph(name="close", size=16)
             input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
-            textarea id="composer" value=chatBag.draft input=edit key=composerKey paste=pasted maxlength=8000 outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(chatBag.bots, chatBag.slug) != "" ? t("chat.messageTo", name=nameOf(chatBag.bots, chatBag.slug)) : t("chat.write")) aria-label=t("chat.message") aria-expanded=(chatBag.mentionHits.length > 0) aria-controls="mention-menu" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
+            textarea id="composer" value=chatBag.draft input=editDraft selectionchange=composerCaret key=composerKey paste=pasted maxlength=8000 outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(chatBag.bots, chatBag.slug) != "" ? t("chat.messageTo", name=nameOf(chatBag.bots, chatBag.slug)) : t("chat.write")) aria-label=t("chat.message") aria-expanded=(chatBag.mentionHits.length > 0) aria-controls="mention-menu" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
             if chatBag.voiceRecorder != ""
               button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label=t("chat.stopRecording") title=t("chat.stopRecording") testId="voice-record" background-color="-exact-system-red" color="ink.dark"
                 Glyph(name="stop", size=16)
