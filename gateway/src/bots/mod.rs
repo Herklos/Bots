@@ -266,6 +266,7 @@ pub(crate) mod icons; // Site icons cached under HBOTS_HOME/icons.
 pub(crate) mod image_tools; // image_show: copy a picture into this Bot's library/.
 pub(crate) mod library; // Files and records through the workspace adapter.
 pub(crate) mod lineage; // Subagents and delegated threads of one Bot.
+pub(crate) mod mcp_identity; // Which Bot is calling the gateway MCP server.
 pub(crate) mod memory; // Bot memory files through the workspace.
 pub(crate) mod memory_files; // Markdown read and revision-safe save for the person.
 pub(crate) mod memory_tools;

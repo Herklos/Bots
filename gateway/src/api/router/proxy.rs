@@ -55,6 +55,7 @@ pub(crate) async fn mcp_route(
     State(s): S,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
     method: Method,
+    uri: Uri,
     h: HeaderMap,
     body: Bytes,
 ) -> Response {
@@ -91,8 +92,9 @@ pub(crate) async fn mcp_route(
     };
     let batch = msg.is_array();
     let mut replies = Vec::new();
+    let slug = crate::bots::mcp_identity::bot_slug_from_query(uri.query());
     for m in msg.as_array().cloned().unwrap_or_else(|| vec![msg]) {
-        if let Some(r) = crate::platform::mcp::handle(&s, &m).await {
+        if let Some(r) = crate::platform::mcp::handle(&s, &m, slug.as_deref()).await {
             replies.push(r);
         }
     }

@@ -138,8 +138,13 @@ impl Bots {
         let connectors = read_connector_list(&dir.join(".bot").join("connectors.json")).await?;
         let mcp_path = dir.join(".mcp.json");
         let existing = read_json(&mcp_path).await.unwrap_or_else(|| json!({}));
-        let mcp =
-            crate::bots::library::merge_mcp(&existing, &connectors, &self.mcp_url, &self.mcp_token);
+        let mcp = crate::bots::library::merge_mcp(
+            &existing,
+            &connectors,
+            &self.mcp_url,
+            &self.mcp_token,
+            slug,
+        );
         crate::storage::write_atomic(
             &mcp_path,
             (serde_json::to_string_pretty(&mcp).unwrap_or_default() + "\n").as_bytes(),
