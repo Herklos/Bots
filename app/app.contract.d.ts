@@ -9,7 +9,7 @@
 //   computerInput: (args: [string, string, number, number, number, number, number, string, number, number]) => DriveReply
 //   copyStorage: (args: [string]) => Reply
 //   createBot: (args: [string, string, string, string]) => Made
-//   createGroup: (args: [string, string, string, string, string]) => Made
+//   createGroup: (args: [string, string, string, string, string, string]) => Made
 //   createSubagent: (args: [string, string, string, string, string, boolean]) => Reply
 //   deleteBot: (args: [string]) => Reply
 //   deleteGroup: (args: [string]) => Reply
@@ -600,7 +600,7 @@ export interface SourceMap {
   "computerInput": { args: [T1, T1, T41, T41, T41, T41, T41, T1, T41, T41]; result: T4 };
   "copyStorage": { args: [T1]; result: T2 };
   "createBot": { args: [T1, T1, T1, T1]; result: T36 };
-  "createGroup": { args: [T1, T1, T1, T1, T1]; result: T36 };
+  "createGroup": { args: [T1, T1, T1, T1, T1, T1]; result: T36 };
   "createSubagent": { args: [T1, T1, T1, T1, T1, T0]; result: T2 };
   "deleteBot": { args: [T1]; result: T2 };
   "deleteGroup": { args: [T1]; result: T2 };

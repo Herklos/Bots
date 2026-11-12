@@ -995,6 +995,9 @@ component Bots
   state groupName = ""
   state groupAbout = ""
   state groupMembers: string[] = []
+  // The new-Group walk: name, the member face, the answer policy, a kickoff, then review.
+  state groupStep = "name"
+  state groupPolicy = "last"
   state roomText = ""
   state mentionOn = false
   state mentionQ = ""
@@ -1695,16 +1698,40 @@ component Bots
     groupName = ""
     groupAbout = ""
     groupMembers = []
+    groupStep = "name"
+    groupPolicy = "last"
     nav = push(nav, "/new-group")
   action editGroupName(v: string)
     groupName = v
   action editGroupAbout(v: string)
     groupAbout = v
+  action pickGroupPolicy(p: string)
+    groupPolicy = p
   action toggleGroupMember(m: string)
     groupMembers = groupMembers.includes(m) ? groupMembers.filter(x => x != m) : groupMembers.concat([m])
+  action groupStepBack
+    if groupStep == "face"
+      groupStep = "name"
+    else if groupStep == "policy"
+      groupStep = "face"
+    else if groupStep == "kickoff"
+      groupStep = "policy"
+    else if groupStep == "review"
+      groupStep = "kickoff"
+  action groupStepNext
+    if groupStep == "name"
+      if groupName.trim() != ""
+        groupStep = "face"
+    else if groupStep == "face"
+      if groupMembers.length >= 2
+        groupStep = "policy"
+    else if groupStep == "policy"
+      groupStep = "kickoff"
+    else if groupStep == "kickoff"
+      groupStep = "review"
   action makeGroup
     if canMakeGroup
-      send groupMade = createGroup(groupName.trim(), groupAbout.trim(), "brand.default", "ball", groupMembers.join("\n"))
+      send groupMade = createGroup(groupName.trim(), groupAbout.trim(), "brand.default", "ball", groupMembers.join("\n"), groupPolicy)
   action afterGroupMade
     match groupMade
       case some(r)
@@ -2985,35 +3012,69 @@ component Bots
           else if e.name == "newGroup"
             column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="group-form" position="absolute" inset=0
               header class=PageHeader
-                button id="back" class=TextControl appearance="none" press=back testId="group-cancel"
-                  text t("common.cancel")
+                if groupStep == "name"
+                  button id="back" class=TextControl appearance="none" press=back testId="group-cancel"
+                    text t("common.cancel")
+                else
+                  button id="back" class=TextControl appearance="none" press=groupStepBack testId="group-back"
+                    text t("common.back")
                 text t("group.new") role="heading" aria-level=1 class=PageTitle flex=1
-                button buttonStyle="filled" press=makeGroup disabled=(not canMakeGroup) testId="group-create"
-                  text (pending(groupMade) ? t("common.creating") : t("group.create"))
+                if groupStep == "review"
+                  button buttonStyle="filled" press=makeGroup disabled=(not canMakeGroup) testId="group-create"
+                    text (pending(groupMade) ? t("common.creating") : t("group.create"))
+                else
+                  button buttonStyle="filled" press=groupStepNext disabled=((groupStep == "name" and groupName.trim() == "") or (groupStep == "face" and groupMembers.length < 2)) testId="group-next"
+                    text t("create.next")
               scroll id="group-form" flex=1 min-height=0
                 column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.lg" gap="space.lg"
-                  column align-items="center" gap="space.md"
-                    Faces(faces=pickedFaces(bots, groupMembers), size=72, tuck=-28)
-                    text (groupMembers.length == 0 ? t("group.pickFaces") : t("group.face")) color="ink.muted" font="-exact-footnote" text-align="center"
-                  column gap="space.sm"
-                    text t("common.name") font="-exact-subheadline" font-weight=600
-                    input appearance="none" class=Field value=groupName input=editGroupName submit=makeGroup placeholder=t("group.namePlaceholder") aria-label=t("group.name") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-name"
-                  column gap="space.sm"
-                    text t("common.description") font="-exact-subheadline" font-weight=600
-                    input appearance="none" class=Field value=groupAbout input=editGroupAbout placeholder=t("group.aboutPlaceholder") aria-label=t("common.description") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-about"
-                  column gap="space.sm"
-                    row align-items="baseline" gap="space.sm"
-                      text t("common.bots") font="-exact-subheadline" font-weight=600 flex=1
-                      text (groupMembers.length < 2 ? t("group.pickMore", n=groupMembers.length) : t("group.picked", n=groupMembers.length)) color="ink.muted" font="-exact-footnote" testId="group-count"
-                    column gap="space.xs"
-                      for b in pickableBots key=b.slug
-                        button appearance="none" press=toggleGroupMember(b.slug) role="checkbox" aria-checked=groupMembers.includes(b.slug) aria-label=b.name testId=`pick-bot-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border=(groupMembers.includes(b.slug) ? "2px solid AccentColor" : "2px solid surface.line") border-radius="radius.md" background-color="surface.card" color="-exact-label"
-                          row gap="space.md" align-items="center" width="100%"
-                            Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=36, still=true, presence="")
-                            text b.name font-weight=500 flex=1 min-width=0 text-align="left"
-                            column width=24 height=24 align-items="center" justify-content="center" border-radius="radius.full" background-color=(groupMembers.includes(b.slug) ? "AccentColor" : "transparent") border=(groupMembers.includes(b.slug) ? "none" : "2px solid surface.line") color="ink.dark"
-                              if groupMembers.includes(b.slug)
-                                Glyph(name="check", size=14)
+                  if groupStep == "face" or groupStep == "review"
+                    column align-items="center" gap="space.md" testId="group-face-preview"
+                      Faces(faces=pickedFaces(bots, groupMembers), size=72, tuck=-28)
+                      text (groupMembers.length == 0 ? t("group.pickFaces") : t("group.face")) color="ink.muted" font="-exact-footnote" text-align="center"
+                  if groupStep == "name"
+                    column gap="space.sm"
+                      text t("common.name") font="-exact-subheadline" font-weight=600 testId="step-group-name"
+                      input appearance="none" class=Field value=groupName input=editGroupName submit=groupStepNext placeholder=t("group.namePlaceholder") aria-label=t("group.name") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-name"
+                  else if groupStep == "face"
+                    column gap="space.sm"
+                      text t("group.stepFace") font="-exact-subheadline" font-weight=600 testId="step-group-face"
+                      row align-items="baseline" gap="space.sm"
+                        text t("common.bots") font="-exact-subheadline" font-weight=600 flex=1
+                        text (groupMembers.length < 2 ? t("group.pickMore", n=groupMembers.length) : t("group.picked", n=groupMembers.length)) color="ink.muted" font="-exact-footnote" testId="group-count"
+                      column gap="space.xs"
+                        for b in pickableBots key=b.slug
+                          button appearance="none" press=toggleGroupMember(b.slug) role="checkbox" aria-checked=groupMembers.includes(b.slug) aria-label=b.name testId=`pick-bot-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border=(groupMembers.includes(b.slug) ? "2px solid AccentColor" : "2px solid surface.line") border-radius="radius.md" background-color="surface.card" color="-exact-label"
+                            row gap="space.md" align-items="center" width="100%"
+                              Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=36, still=true, presence="")
+                              text b.name font-weight=500 flex=1 min-width=0 text-align="left"
+                              column width=24 height=24 align-items="center" justify-content="center" border-radius="radius.full" background-color=(groupMembers.includes(b.slug) ? "AccentColor" : "transparent") border=(groupMembers.includes(b.slug) ? "none" : "2px solid surface.line") color="ink.dark"
+                                if groupMembers.includes(b.slug)
+                                  Glyph(name="check", size=14)
+                  else if groupStep == "policy"
+                    column gap="space.sm" width="100%"
+                      text t("group.stepPolicy") font="-exact-subheadline" font-weight=600 testId="step-group-policy"
+                      button class=ChoiceRow appearance="none" press=pickGroupPolicy("last") role="radio" aria-checked=(groupPolicy == "last") testId="policy-last"
+                        column flex=1 gap="2px" min-width=0 align-items="flex-start"
+                          text t("group.policyLast") font-weight=600
+                          text t("group.policyLastAbout") color="ink.muted" font="-exact-footnote"
+                      button class=ChoiceRow appearance="none" press=pickGroupPolicy("everyone") role="radio" aria-checked=(groupPolicy == "everyone") testId="policy-everyone"
+                        column flex=1 gap="2px" min-width=0 align-items="flex-start"
+                          text t("group.policyEveryone") font-weight=600
+                          text t("group.policyEveryoneAbout") color="ink.muted" font="-exact-footnote"
+                      button class=ChoiceRow appearance="none" press=pickGroupPolicy("chief") role="radio" aria-checked=(groupPolicy == "chief") testId="policy-chief"
+                        column flex=1 gap="2px" min-width=0 align-items="flex-start"
+                          text t("group.policyChief") font-weight=600
+                          text t("group.policyChiefAbout") color="ink.muted" font="-exact-footnote"
+                  else if groupStep == "kickoff"
+                    column gap="space.sm"
+                      text t("group.stepKickoff") font="-exact-subheadline" font-weight=600 testId="step-group-kickoff"
+                      textarea appearance="none" class=Field value=groupAbout input=editGroupAbout placeholder=t("group.kickoffPlaceholder") aria-label=t("group.stepKickoff") rows=4 maxlength=2000 padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-about"
+                  else
+                    column gap="space.sm" testId="step-group-review"
+                      text t("create.review") font="-exact-subheadline" font-weight=600
+                      text groupName font-weight=600 testId="review-group-name"
+                      text (groupPolicy == "everyone" ? t("group.policyEveryone") : groupPolicy == "chief" ? t("group.policyChief") : t("group.policyLast")) testId="review-policy"
+                      text (groupAbout.trim() == "" ? t("group.noKickoff") : groupAbout) testId="review-kickoff"
                   if groupError != "" and not pending(groupMade)
                     text groupError color="-exact-system-red" testId="group-error"
           else
