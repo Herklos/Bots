@@ -19,6 +19,7 @@ anyhow = "1"
 async-trait = "0.1"
 axum = { version = "0.8", features = ["ws", "macros"] }
 base64 = "0.22"
+diffy = "0.4.2" # Line three-way merge. 0.5 needs rustc 1.85.
 dotenvy = "0.15"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 hex = "0.4"

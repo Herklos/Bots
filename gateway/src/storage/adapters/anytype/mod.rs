@@ -3,6 +3,11 @@
 
 mod client;
 mod schema;
+#[allow(
+    dead_code,
+    reason = "the network half of sync is a later milestone and nothing calls this yet"
+)]
+mod sync;
 #[cfg(test)]
 mod tests;
 
