@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.6
+
+This release adds an independent Bot runtime mode and a revision-safe API for editing memory files.
+
+### New features
+
+- Store `independent` as a Bot or default runtime mode. Independent Bots receive additional instructions on judgment and when to ask; the harness runs this mode with full access.
+- Read and save a Bot's `MEMORY.md` or the shared memory file through the memory API. Saves require the revision that was read, and Bot memory saves refresh its managed instructions.
+
+### Improvements
+
+- Add an app screenshot to the README.
+
 ## 0.3.5
 
 This release adds diagnostics and image tools, strengthens memory ownership, and improves browser control.
