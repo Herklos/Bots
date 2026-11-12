@@ -5,7 +5,11 @@ Two programs. They do not share a process.
 - `hbots` (`gateway/`) is the server. It keeps Bot folders, the Vault, settings, sessions, and the Bots' tool server. Each Bot's library (files, records, and connectors) is read and written through the workspace adapter. The old Projects board stays off. A VPS runs `hbots serve` alone. A desktop app can start that process as a child. A phone or a browser is the client only and uses `HBOTS_URL`. The client never scans the disk.
 - `app/` is the Exact client. The same source is the screen on the web, desktop, and mobile.
 
-The gateway speaks to a harness backend. T3 Code is the one implemented today (`gateway/src/harness/adapters/t3.rs`, `T3_URL`, `T3_TOKEN`). Another backend would be another module beside that one. This note does not add that module.
+The gateway talks to the agent runtime through the `Harness` trait in `gateway/src/harness/mod.rs`. `AppState.harness` is `Arc<dyn Harness>`. Startup builds that value from `T3_URL` and `T3_TOKEN`. T3 Code is the runtime hbots runs. `MockHarness` is for tests. A second production runtime is not built.
+
+`Harness` only groups capabilities. Each one is its own trait: transcript, turns, previews, routines, approvals, provisioning, browser, and relay (the `/t3` proxy). Domain code calls those traits. It does not name T3 RPCs. `gateway/src/harness/adapters/t3/` is the only place that does. `scripts/check-t3-boundary.sh` fails when one of those names appears anywhere else under `gateway/`. The folder map is [gateway layout](gateway-layout.md).
+
+A runtime that lacks a capability returns `HarnessError::Unsupported`, which the API reports as 501. A connection that cannot be opened, or a call the runtime rejected, is reported as 502 with the message the gateway already showed. Neutral values (`ThreadSnapshot`, `ShellSnapshot`, `UserMessage`, `Frame`, `BrowserTab`, and the provision and approval values) live in `gateway/src/harness/snapshot.rs`. The runtime's own projection stays in the adapter.
 
 ## Agent context
 

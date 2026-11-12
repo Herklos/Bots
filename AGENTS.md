@@ -83,14 +83,14 @@ Contract colour docs: `$EXACT_DIR/docs/contract-for-agents.md`.
 
 ## Gateway layout
 
-`gateway/src` is split by domain. Each domain folder holds its logic, one file per concern, and backend-specific code in dedicated files. Implementations of a backend live under that domain's `adapters/` folder.
+The map is [docs/gateway-layout.md](docs/gateway-layout.md). `gateway/src` is split by domain. Each domain folder holds its logic, one file per concern. Implementations of a backend live under that domain's `adapters/` folder.
 
 - `main.rs`: entry point only. `api/`: HTTP handlers and the router, one file per area.
 - `storage/`: `workspace.rs` is the trait the rest of the gateway uses. `settings/` is the saved choice, with `filesystem.rs` and `anytype.rs` for each backend. `adapters/` has `filesystem/`, `anytype/` and `memory`.
 - `harness/`: the agent runtime. `adapters/t3/` is the T3 Code client; `providers` lists its models.
 
 Domain code calls the harness. The T3 adapter is the only place that names T3 RPCs. `scripts/check-t3-boundary.sh` fails when one of those names shows up anywhere else under `gateway/`.
-- `bots/`, `chat/`, `projects/`, `vault/`, `network/`, `platform/`: the other domains. T3-specific code inside them sits in files named `t3.rs` or `browser.rs`.
+- `bots/`, `chat/`, `projects/`, `vault/`, `network/`, `platform/`: the other domains. They call the harness. They do not name T3 RPCs.
 
 **File length rule:** a `.rs` file is at most 500 lines, tests included. Move tests to a sibling `tests.rs` (or `tests/` with one file per topic), and split a large module into a folder with one file per concern. `scripts/check-rs-length.sh` enforces it in CI. Do not raise the limit or add an allowlist; split the file.
 
