@@ -222,34 +222,57 @@ pub(crate) fn check_child_update(
     Ok(())
 }
 
+pub(crate) fn at_limit_message(count: i64) -> String {
+    format!("This Bot already has {count} lasting helpers.")
+}
+
+/// True when `mode` is inside the parent's helper allowlist. A missing list allows every mode.
+pub(crate) fn runtime_allowed(parent: &Value, mode: &str) -> bool {
+    model::listed(&subagents_of(parent)["allowlist"]["runtimeModes"], mode)
+}
+
 fn gate(parent: &Value, existing: &[Value]) -> ApiResult<()> {
     let policy = resolved_subagents(parent);
     if policy["enabled"] != true {
         return Err(ApiError::new(409, HELPERS_OFF));
     }
     let max = policy["maxCount"].as_i64().unwrap_or(8);
+    let count = helper_count(parent, existing);
+    if count >= max {
+        return Err(ApiError::new(409, at_limit_message(count)));
+    }
+    Ok(())
+}
+
+pub(crate) fn helper_count(parent: &Value, existing: &[Value]) -> i64 {
     let parent_slug = parent["slug"].as_str().unwrap_or("");
-    let count = i64::try_from(
+    i64::try_from(
         existing
             .iter()
             .filter(|bot| parent_slug_of(bot).as_deref() == Some(parent_slug))
             .count(),
     )
-    .unwrap_or(i64::MAX);
-    if count >= max {
-        return Err(ApiError::new(
-            409,
-            format!("This Bot already has {count} lasting helpers."),
-        ));
-    }
-    Ok(())
+    .unwrap_or(i64::MAX)
 }
 
-fn resolved_subagents(parent: &Value) -> Value {
+/// The parent's lasting-helper policy, with missing keys filled from the product defaults.
+pub(crate) fn subagents_of(parent: &Value) -> Value {
     overlay(
         &default_subagents(),
         parent.get("subagents").unwrap_or(&Value::Null),
     )
+}
+
+/// The parent's one-off child-thread policy, with missing keys filled from the product defaults.
+pub(crate) fn child_threads_of(parent: &Value) -> Value {
+    overlay(
+        &default_child_threads(),
+        parent.get("childThreads").unwrap_or(&Value::Null),
+    )
+}
+
+fn resolved_subagents(parent: &Value) -> Value {
+    subagents_of(parent)
 }
 
 fn overlay(default: &Value, stored: &Value) -> Value {

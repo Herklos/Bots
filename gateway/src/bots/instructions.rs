@@ -81,7 +81,7 @@ pub(crate) fn render_agents_md(
         String::new()
     };
     let snapshot = crate::bots::agent_context::render_snapshot(memory);
-    let child_threads = crate::bots::agent_context::child_threads_section();
+    let child_threads = crate::bots::helpers_prompt::child_threads_section_for(bot);
     let instructions = if child {
         String::new()
     } else {
@@ -90,25 +90,7 @@ pub(crate) fn render_agents_md(
             bot["prompt"].as_str().unwrap_or(""),
         )
     };
-    let subagents = if child {
-        String::new()
-    } else {
-        let mut lines = String::from("\n## Subagents\n\n");
-        if children.is_empty() {
-            lines.push_str("You have no lasting helpers yet.\n");
-        } else {
-            for child in children {
-                let child_name = child["name"].as_str().unwrap_or("Bot");
-                let child_slug = child["slug"].as_str().unwrap_or("");
-                lines.push_str(&format!("- {child_name} (`{child_slug}`)\n"));
-            }
-            lines.push('\n');
-        }
-        lines.push_str(
-            "To list lasting helpers, use `subagent_list`. Create one with `subagent_create` (its own folder, project, and main thread). Work that ends with this turn stays a T3 child thread, and is not a lasting Subagent.\n",
-        );
-        lines
-    };
+    let subagents = crate::bots::helpers_prompt::subagents_section(bot, children);
     let independent = crate::bots::prompt_policy::stored_independent(bot);
     let other_bots = crate::bots::prompt_policy::other_bots_blurb(independent);
     let policy = crate::bots::prompt_policy::policy_section(independent, rules);
