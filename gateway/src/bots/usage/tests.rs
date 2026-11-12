@@ -1,4 +1,7 @@
 use super::*;
+use crate::harness::t3::transcript::{
+    tokens_from_projection, turn_token_line, turns_from_projection,
+};
 
 #[test]
 fn dates_are_utc_days() {

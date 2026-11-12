@@ -15,14 +15,10 @@ use crate::{
     vault::{self, Vault},
     AppState,
 };
-use futures_util::{SinkExt, StreamExt};
 use serde_json::{json, Map, Value};
 use std::{
     path::{Path, PathBuf},
     time::{Duration, SystemTime},
-};
-use tokio_tungstenite::tungstenite::{
-    client::IntoClientRequest, http::HeaderValue, Error as WsError, Message,
 };
 
 mod browser;

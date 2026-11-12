@@ -319,7 +319,7 @@ pub(crate) fn with_tokens(mut transcript: Value, projection: &Value) -> Value {
         for message in messages.iter_mut() {
             let id = message["id"].as_str().unwrap_or("");
             message["tokens"] =
-                crate::bots::usage::turn_token_line(projection, id).unwrap_or(Value::Null);
+                super::usage::turn_token_line(projection, id).unwrap_or(Value::Null);
         }
     }
     transcript["partial"] = json!(projection_partial(projection));

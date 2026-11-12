@@ -1,4 +1,8 @@
 use super::*;
+use crate::harness::t3::stream::{
+    hold_if_ready, preview_stream_url, tabs_for_screen, WatchSize, CANNOT_OPERATE, CARD_MAX_HEIGHT,
+    CARD_MAX_WIDTH, CARD_QUALITY, VIEW_MAX_HEIGHT, VIEW_MAX_WIDTH, VIEW_QUALITY,
+};
 
 #[test]
 fn control_can_operate_false_is_that_error_and_a_take_is_not_held() {

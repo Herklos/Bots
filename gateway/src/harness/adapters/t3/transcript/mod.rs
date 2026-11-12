@@ -1,5 +1,8 @@
 mod preview;
 mod project;
+mod usage;
+
+pub(crate) use usage::{tokens_from_projection, turn_token_line, turns_from_projection};
 
 pub(crate) use preview::latest_preview;
 #[cfg(test)]
@@ -77,8 +80,31 @@ async fn read_shell_with(
     })
 }
 
+pub(crate) fn facts_in(
+    snapshot: &Value,
+) -> std::collections::HashMap<String, crate::bots::roster::Fact> {
+    snapshot
+        .get("threads")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|thread| {
+            let id = thread["id"].as_str()?.to_string();
+            let working = crate::platform::release::thread_is_busy(thread)
+                || thread["activeRunId"].is_string();
+            Some((
+                id,
+                crate::bots::roster::Fact {
+                    stamp: thread["updatedAt"].as_str().unwrap_or("").to_string(),
+                    working,
+                },
+            ))
+        })
+        .collect()
+}
+
 fn shell_threads(snapshot: &Value) -> Vec<ShellThread> {
-    let facts = crate::bots::roster::facts_in(snapshot);
+    let facts = facts_in(snapshot);
     ["threads", "archivedThreads"]
         .into_iter()
         .flat_map(|key| {

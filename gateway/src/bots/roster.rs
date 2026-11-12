@@ -56,27 +56,6 @@ async fn read(s: &AppState) -> anyhow::Result<HashMap<String, Fact>> {
         .collect())
 }
 
-pub(crate) fn facts_in(snapshot: &Value) -> HashMap<String, Fact> {
-    snapshot
-        .get("threads")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(|t| {
-            let id = t["id"].as_str()?.to_string();
-            let working =
-                crate::platform::release::thread_is_busy(t) || t["activeRunId"].is_string();
-            Some((
-                id,
-                Fact {
-                    stamp: t["updatedAt"].as_str().unwrap_or("").to_string(),
-                    working,
-                },
-            ))
-        })
-        .collect()
-}
-
 /// A Bot has something new when its latest message is the Bot's own, and newer than the last
 /// time the person had its chat open. A hidden Bot never shows one.
 pub(crate) fn is_unread(bot: &Value, preview: &Value) -> bool {
@@ -217,7 +196,8 @@ mod tests {
         live["id"] = json!("busy");
         live["activeRunId"] = json!("run-1");
         idle["activeRunId"] = Value::Null;
-        let facts = facts_in(&json!({ "threads": [idle.clone(), live] }));
+        let facts =
+            crate::harness::t3::transcript::facts_in(&json!({ "threads": [idle.clone(), live] }));
         let id = idle["id"].as_str().unwrap();
         assert!(!facts[id].working);
         assert_eq!(facts[id].stamp, idle["updatedAt"].as_str().unwrap());

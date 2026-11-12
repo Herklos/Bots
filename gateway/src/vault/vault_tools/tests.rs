@@ -1,5 +1,6 @@
 use super::*;
 use crate::harness::adapters::mock::MockHarness;
+use crate::harness::t3::fill::{step, Stage, Step};
 
 fn bots() -> Vec<Value> {
     vec![json!({ "mainThreadId": "thread-main", "slug": "main", "name": "Main" })]

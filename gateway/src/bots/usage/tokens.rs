@@ -1,5 +1,3 @@
-use super::*;
-
 /// Token totals T3 reported on a thread projection. Cache figures are separate
 /// from input and output, because T3 counts them that way.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
@@ -11,73 +9,7 @@ pub(crate) struct TokenTotals {
     pub cache_write: u64,
 }
 
-/// Sum `providerTurns[].turnTokenUsage`. A turn with no usage object means this
-/// T3 did not report tokens. `unavailable` and local-command turns are seen, and not added.
-pub(crate) fn tokens_from_projection(projection: &Value) -> (TokenTotals, bool) {
-    let mut totals = TokenTotals::default();
-    let mut known = false;
-    let Some(turns) = projection.get("providerTurns").and_then(Value::as_array) else {
-        return (totals, false);
-    };
-    for turn in turns {
-        let Some(usage) = turn.get("turnTokenUsage").filter(|u| u.is_object()) else {
-            continue;
-        };
-        known = true;
-        if usage.get("usageStatus").and_then(Value::as_str) == Some("unavailable")
-            || usage.get("localCommand") == Some(&Value::Bool(true))
-        {
-            continue;
-        }
-        totals.turns += 1;
-        totals.input += count_u64(&usage["inputTokens"]);
-        totals.output += count_u64(&usage["outputTokens"]);
-        totals.cached += count_u64(&usage["cachedInputTokens"]);
-        totals.cache_write += count_u64(&usage["cacheCreationTokens"]);
-    }
-    (totals, known)
-}
-
-/// One turn's token line, only when that turn and the message already share an id.
-/// Cache stays separate from input and output. Unavailable turns and local commands contribute nothing.
-pub(crate) fn turn_token_line(projection: &Value, message_id: &str) -> Option<Value> {
-    if message_id.is_empty() {
-        return None;
-    }
-    let turns = projection.get("providerTurns")?.as_array()?;
-    for turn in turns {
-        if !shares_message(turn, message_id) {
-            continue;
-        }
-        let usage = turn.get("turnTokenUsage").filter(|item| item.is_object())?;
-        if usage.get("usageStatus").and_then(Value::as_str) == Some("unavailable")
-            || usage.get("localCommand") == Some(&Value::Bool(true))
-        {
-            return None;
-        }
-        let input = count_u64(&usage["inputTokens"]);
-        let cached = count_u64(&usage["cachedInputTokens"]);
-        return Some(json!({
-            "inputTokens": input,
-            "outputTokens": count_u64(&usage["outputTokens"]),
-            "cachedInputTokens": cached,
-            "cacheCreationTokens": count_u64(&usage["cacheCreationTokens"]),
-        }));
-    }
-    None
-}
-
-pub(crate) fn shares_message(turn: &Value, message_id: &str) -> bool {
-    [
-        turn.get("messageId"),
-        turn.get("assistantMessageId"),
-        turn.get("id"),
-    ]
-    .into_iter()
-    .any(|value| value.and_then(Value::as_str) == Some(message_id))
-}
-
-// ---------- the report: tokens by period, day and model ----------
+// The projection readers live with the T3 transcript adapter.
 
 /// One finished provider turn on a Bot's thread.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -119,32 +51,4 @@ pub(crate) fn parse_iso_ms(text: &str) -> Option<i64> {
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     let days = era * 146_097 + doe - 719_468;
     Some(((days * 24 + hh) * 60 + mm) * 60_000 + ss * 1000 + millis)
-}
-
-/// The finished turns of a thread projection that reported tokens. A turn is dated when it
-/// completed, or started if it never did.
-pub(crate) fn turns_from_projection(projection: &Value) -> Vec<Turn> {
-    projection["providerTurns"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|t| {
-            let usage = t.get("turnTokenUsage").filter(|u| u.is_object())?;
-            if usage["usageStatus"] == "unavailable" || usage["localCommand"] == true {
-                return None;
-            }
-            let at = t["completedAt"]
-                .as_str()
-                .or(t["startedAt"].as_str())
-                .and_then(parse_iso_ms)?;
-            Some(Turn {
-                at_ms: at,
-                model: t["model"].as_str().unwrap_or("").to_string(),
-                input: count_u64(&usage["inputTokens"]),
-                output: count_u64(&usage["outputTokens"]),
-                cached: count_u64(&usage["cachedInputTokens"]),
-                cache_write: count_u64(&usage["cacheCreationTokens"]),
-            })
-        })
-        .collect()
 }
