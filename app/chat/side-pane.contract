@@ -50,7 +50,8 @@ component SidePane
       else
         row align-items="center" gap="space.sm" padding="space.sm space.md" min-height=44 box-sizing="border-box" border-bottom="1px solid surface.line" testId="side-header"
           column flex=1 min-width=0 gap="0"
-            text t("chat.side") font="-exact-subheadline" font-weight=600 testId="side-title"
+            row align-items="center" aria-label=t("chat.side") title=t("chat.side") testId="side-title"
+              Glyph(name="chat", size=18)
             text (sideBag.working ? t("status.working") : t("status.done")) color="ink.muted" font="-exact-footnote" testId="side-status"
           button class=TextControl appearance="none" press=mergeSideChat disabled=(not sideBag.canMerge) aria-label=t("chat.side.merge", name=sideBag.name) title=(sideBag.canMerge ? t("chat.side.merge", name=sideBag.name) : t("chat.side.nothing")) testId="side-merge" min-height=44 padding="0 space.sm"
             text t("chat.side.merge", name=sideBag.name) font="-exact-footnote"
