@@ -261,3 +261,17 @@ members Bots
         case some(f)
           send attached = uploadAttachment(slug, f, "", "", hostTime.locale)
         case none
+
+  state activitySlug = ""
+
+  state activityId = ""
+
+  state activityChild = ""
+
+  state activityLane = ""
+
+  action pickActivity(nextSlug: string, nextId: string, nextChild: string, nextLane: string)
+    activitySlug = nextSlug
+    activityId = nextId
+    activityChild = nextChild
+    activityLane = nextLane

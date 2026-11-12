@@ -23,6 +23,10 @@ pub(crate) fn paint_slice(view: &Value) -> Value {
     if let Some(renders) = view.get("renders") {
         slice["renders"] = renders.clone();
     }
+    // Tool-call rows are not messages. Quiet omits the key, so a quiet tag stays put.
+    if let Some(activity) = view.get("activity") {
+        slice["activity"] = activity.clone();
+    }
     slice
 }
 

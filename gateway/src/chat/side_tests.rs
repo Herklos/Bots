@@ -194,25 +194,25 @@ async fn an_unknown_side_is_not_the_parent_thread() {
     let state = settings_state_with(dir.path(), harness(&mock));
     let slug = ada(&state).await;
 
-    let unknown = chat_view(&state, &slug, None, Some("nope"))
+    let unknown = chat_view(&state, &slug, None, Some("nope"), None)
         .await
         .unwrap_err();
     assert_eq!(unknown.status, StatusCode::BAD_REQUEST);
     assert_eq!(unknown.message, NOT_A_SIDE);
 
-    let as_child = chat_view(&state, &slug, Some("side-1"), None)
+    let as_child = chat_view(&state, &slug, Some("side-1"), None, None)
         .await
         .unwrap_err();
     assert_eq!(as_child.status, StatusCode::BAD_REQUEST);
     assert_eq!(as_child.message, "That thread stays on the other machine.");
 
-    let both = chat_view(&state, &slug, Some("side-1"), Some("side-1"))
+    let both = chat_view(&state, &slug, Some("side-1"), Some("side-1"), None)
         .await
         .unwrap_err();
     assert_eq!(both.status, StatusCode::BAD_REQUEST);
     assert_eq!(both.message, BOTH_LANES);
 
-    let view = chat_view(&state, &slug, None, Some("side-1"))
+    let view = chat_view(&state, &slug, None, Some("side-1"), None)
         .await
         .unwrap();
     assert_eq!(view["threadId"], "side-1");

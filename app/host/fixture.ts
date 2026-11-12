@@ -61,6 +61,14 @@ export let fixtureGroupAnswer = '';
 export function setFixtureGroupAnswer(value: string) {
   fixtureGroupAnswer = value;
 }
+export let fixtureActivity = '';
+export function setFixtureActivity(value: string) {
+  fixtureActivity = value;
+}
+export let fixtureFinalOnly = '';
+export function setFixtureFinalOnly(value: string) {
+  fixtureFinalOnly = value;
+}
 // The default approval the contract runner saves when the gateway is down.
 export let fixtureDefaultMode = '';
 export function setFixtureDefaultMode(value: string) {
@@ -208,6 +216,7 @@ export function fixtureChat(child: string) {
       { ...blank, id: 'e1', kind: 'event', mine: false, text: 'Created routine', title: 'Morning', head: true, tail: true, variant: 'routine-created' },
       { ...blank, id: 'e2', kind: 'event', mine: false, text: 'Messaged', botName: 'Inbox', botSlug: 'inbox', botShape: 'hex', botColor: 'brand.pink', head: true, tail: true, variant: 'sent' },
       { ...blank, id: 'e-limit', kind: 'event', mine: false, text: 'Claude is at 95% until 5:00 PM', key: 'claudeAgent', placeholder: 'sonnet', head: true, tail: true, variant: 'provider-near-limit' },
+      { ...blank, id: 'act1', kind: 'activity', mine: false, text: '', title: 'toolu\u001fRead\u001ffailed\u001f', head: true, tail: true, variant: 'failed', key: '1\u001f0\u001f0\u001f0\u001f0\u001f0\u001f1', placeholder: '' },
     ],
   };
 }

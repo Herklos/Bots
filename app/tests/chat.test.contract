@@ -1,5 +1,17 @@
 locale "en-US"
 
+test "a tool call sits beside the chat and opens on tap or Enter"
+  at "/bot/fixture"
+  clock data
+  expect tree has "activity-act1"
+  expect tree missing "message-act1"
+  expect tree missing "activity-call-toolu"
+  tap "activity-act1"
+  expect tree has "activity-call-toolu"
+  tap "activity-act1"
+  expect tree missing "activity-call-toolu"
+  key "activity-act1" "Enter"
+  expect tree has "activity-call-toolu"
 test "a tool line is a chip with the translated verb, not a message bubble"
   at "/bot/fixture"
   clock data

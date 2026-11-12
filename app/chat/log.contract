@@ -3,6 +3,7 @@ use botMentions, roomMentions from "../ui/root-types.contract"
 use Bot, Row, Pin, RoomMember from "../ui/shapes.contract"
 use ChoiceButton, TextControl, Field from "../ui/controls.contract"
 use ChatMessage from "./message.contract"
+use ActivityRow, ActivityDetail from "./activity.contract"
 use MentionText from "./mention-text.contract"
 use Face, Avatar from "../face.contract"
 use WorkingDots from "../bot/first.contract"
@@ -17,6 +18,10 @@ component ChatLog
     bots: Bot[]
     members: RoomMember[]
     slug: string
+    child: string
+    lane: string
+    activity: ActivityDetail
+    pickActivity: action
     pins: Pin[]
     workers: RoomMember[]
     hover: bool
@@ -89,6 +94,8 @@ component ChatLog
                         text t("common.retry")
                 else
                   MentionText(text=m.text, hits=mentions, onMine=true, testId="", ring="none", tail=true, opacity=0.6, maxWidth="82%")
+            else if m.kind == "activity"
+              ActivityRow(id=m.id, status=m.variant, counts=m.key, calls=m.title, showDetail=(m.placeholder == "detail"), slug=slug, child=child, lane=lane, activity=activity, pick=pickActivity)
             else if m.kind == "request"
               row padding="space.sm space.lg"
                 column gap="space.sm" padding="space.md space.lg" border-radius="radius.lg" background-color="surface.bubble" flex=1 max-width="32rem" testId=`request-${m.id}`

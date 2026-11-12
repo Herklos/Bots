@@ -117,6 +117,8 @@ shape Prefs
   maxRuntimeMode: string
   codeBeta: bool
   sections: Section[]
+  activityLevel: string
+  finalOnly: bool
 
 shape Diagnostics
   ok: bool
@@ -231,6 +233,8 @@ fn putText(rows: string[], key: string, value: string): string[] = key == "" ? r
 fn putVoice(rows: string[], key: string, hold: string, id: string, preview: string, seconds: number): string[] = key == "" ? rows : ((hold == "" and id == "") ? dropKey(rows, key) : dropKey(rows, key).concat([`${key}\u001f${hold}\u001f${id}\u001f${preview}\u001f${seconds}`]))
 
 fn fieldAt(pack: string, n: number): string = match pack.split("\u001f").at(n) { case some(s) => s, case none => "" }
+
+fn activityCount(pack: string, n: number): number = match parseNumber(fieldAt(pack, n)) { case some(v) => v, case none => 0 }
 
 fn voiceNumber(pack: string): number = match parseNumber(fieldAt(pack, 3)) { case some(n) => n, case none => 0 }
 

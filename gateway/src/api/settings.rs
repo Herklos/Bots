@@ -43,6 +43,18 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
             ));
         }
     }
+    if let Some(level) = patch.get("activityLevel") {
+        if !crate::harness::t3::transcript::ActivityLevel::known(level.as_str()) {
+            return Err(ApiError::bad_request(
+                "activityLevel must be quiet, problems, summary, or detail",
+            ));
+        }
+    }
+    if let Some(flag) = patch.get("finalOnly") {
+        if !flag.is_boolean() {
+            return Err(ApiError::bad_request("finalOnly must be true or false"));
+        }
+    }
     if let Some(mode) = patch.get("defaultRuntimeMode") {
         require_stored_runtime_mode("defaultRuntimeMode", mode)?;
     }

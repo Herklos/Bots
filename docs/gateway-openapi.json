@@ -165,6 +165,18 @@
                   "maxRuntimeMode": {
                     "type": "string"
                   },
+                  "activityLevel": {
+                    "type": "string",
+                    "enum": [
+                      "quiet",
+                      "problems",
+                      "summary",
+                      "detail"
+                    ]
+                  },
+                  "finalOnly": {
+                    "type": "boolean"
+                  },
                   "autoReview": {
                     "type": "boolean"
                   },
@@ -931,6 +943,14 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "activity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "x-hbots-permission": "read",
@@ -1057,6 +1077,101 @@
             }
           }
         }
+      }
+    },
+    "/api/bots/{slug}/chat/activity/{id}": {
+      "get": {
+        "operationId": "hbots_read_activity",
+        "summary": "GET /api/bots/{slug}/chat/activity/{id}",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "child",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "x-hbots-permission": "read",
+        "responses": {
+          "200": {
+            "description": "Original gateway operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "input": {
+                      "type": "string"
+                    },
+                    "output": {
+                      "type": "string"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "input",
+                    "output",
+                    "truncated"
+                  ],
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Gateway error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "applicationSession": []
+          }
+        ]
       }
     },
     "/api/bots/{slug}/side": {

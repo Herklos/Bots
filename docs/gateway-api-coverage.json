@@ -93,6 +93,13 @@
       "classification": "generated"
     },
     {
+      "path": "/api/bots/{slug}/chat/activity/{id}",
+      "method": "GET",
+      "tool": "hbots_read_activity",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
       "path": "/api/bots/{slug}/side",
       "method": "GET",
       "tool": "hbots_list_side",

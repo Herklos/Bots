@@ -68,6 +68,7 @@ pub(crate) async fn chat_view(
     slug: &str,
     child: Option<&str>,
     side: Option<&str>,
+    activity: Option<&str>,
 ) -> ApiResult<Value> {
     let (child, side) = crate::chat::side::lane_ids(child, side)?;
     let thread = resolve_chat_thread(s, slug, child, side).await?;
@@ -100,6 +101,19 @@ pub(crate) async fn chat_view(
         }
     }
     let mut out = snapshot.transcript_for(&peers);
+    let settings = s.settings().await;
+    let level = if crate::harness::t3::transcript::ActivityLevel::known(activity) {
+        crate::harness::t3::transcript::ActivityLevel::parse(activity)
+    } else {
+        crate::harness::t3::transcript::ActivityLevel::parse(settings["activityLevel"].as_str())
+    };
+    // Quiet adds no key. Louder levels add rows beside events, never inside messages.
+    crate::harness::t3::transcript::apply_activity(
+        &mut out,
+        &crate::harness::t3::transcript::visible_items(snapshot.body()),
+        level,
+        settings["finalOnly"] == true,
+    );
     out["threadId"] = json!(thread);
     out["readOnly"] = json!(read_only);
     out["hidden"] = json!(hidden);
@@ -127,7 +141,6 @@ pub(crate) async fn chat_view(
     // The main chat shows a provider-limit warning. A child or side chat does not.
     if on_main && s.providers.has_notices(slug) {
         if let Some(bot) = listed.iter().find(|bot| bot["slug"].as_str() == Some(slug)) {
-            let settings = s.settings().await;
             let default = settings.get("defaultModel").cloned().unwrap_or(Value::Null);
             let running = crate::bots::provider_switch::running_model(&bot["model"], &default);
             let instance = running["instanceId"].as_str().unwrap_or("");
@@ -151,8 +164,9 @@ pub(crate) async fn read_chat(
 ) -> ApiResult<Response> {
     let child = q.get("child").map(String::as_str);
     let side = q.get("side").map(String::as_str);
+    let activity = q.get("activity").map(String::as_str);
     let (child, side) = crate::chat::side::lane_ids(child, side)?;
-    let view = chat_view(&s, &slug, child, side).await?;
+    let view = chat_view(&s, &slug, child, side, activity).await?;
     let tag = chat::transcript_tag(&view);
     let seen = headers
         .get(header::IF_NONE_MATCH)
@@ -160,8 +174,11 @@ pub(crate) async fn read_chat(
     if !chat::none_match(seen, &tag) {
         return Ok(with_etag(&tag, view, true));
     }
+    let shown = activity
+        .filter(|level| crate::harness::t3::transcript::ActivityLevel::known(Some(level)))
+        .unwrap_or("");
     let key = format!(
-        "chat\n{slug}\n{}\n{}",
+        "chat\n{slug}\n{}\n{}\n{shown}",
         side.map(|_| "side")
             .unwrap_or(child.map(|_| "child").unwrap_or("")),
         side.or(child).unwrap_or("")
@@ -173,8 +190,17 @@ pub(crate) async fn read_chat(
             let slug = slug.clone();
             let child = child.map(str::to_string);
             let side = side.map(str::to_string);
+            let activity = activity.map(str::to_string);
             async move {
-                match chat_view(&s, &slug, child.as_deref(), side.as_deref()).await {
+                match chat_view(
+                    &s,
+                    &slug,
+                    child.as_deref(),
+                    side.as_deref(),
+                    activity.as_deref(),
+                )
+                .await
+                {
                     Ok(next) => {
                         let next_tag = chat::transcript_tag(&next);
                         Some((next, next_tag))

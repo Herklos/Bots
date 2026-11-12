@@ -55,7 +55,8 @@ impl Operation {
     }
     pub(super) fn query_schema(&self) -> Value {
         let names: &[&str] = match self.name.as_str() {
-            "hbots_read_chat" => &["child"],
+            "hbots_read_chat" => &["child", "activity"],
+            "hbots_read_activity" => &["child", "side"],
             "hbots_library_file" => &["path", "download"],
             "hbots_vault_get" => &["reveal"],
             "hbots_export" => &["type"],

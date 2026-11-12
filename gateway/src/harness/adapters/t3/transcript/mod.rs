@@ -1,7 +1,12 @@
+mod activity;
 mod preview;
 mod project;
 mod renders;
 mod usage;
+
+#[cfg(test)]
+#[path = "activity_tests.rs"]
+mod activity_tests;
 
 #[cfg(test)]
 #[path = "renders_tests.rs"]
@@ -11,6 +16,7 @@ mod renders_tests;
 pub(crate) use usage::turn_token_line;
 pub(crate) use usage::{tokens_from_projection, turns_from_projection};
 
+pub(crate) use activity::{apply_activity, call_detail, Level as ActivityLevel};
 pub(crate) use preview::latest_preview;
 #[cfg(test)]
 pub(crate) use preview::preview_text;
@@ -20,7 +26,7 @@ pub(crate) use project::message_id;
 pub(crate) use project::{child_send, provider_failure};
 pub(crate) use project::{
     command_with, group_transcript, latest_run_id, runtime_mode, send_command, transcript,
-    transcript_for, turn_items, with_tokens,
+    transcript_for, turn_items, visible_items, with_tokens,
 };
 
 pub(crate) const SHELL: &str = "orchestration.subscribeShell";

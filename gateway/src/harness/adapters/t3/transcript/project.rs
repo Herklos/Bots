@@ -10,6 +10,12 @@ const LIVE: &[&str] = &[
     "starting",
 ];
 
+/// A turn item the transcript still treats as in progress.
+pub(crate) fn live_item(item: &Value) -> bool {
+    let status = item["status"].as_str().unwrap_or("");
+    LIVE.contains(&status) || item["streaming"] == true
+}
+
 /// The last segment of a tool name: `mcp__t3-code__schedule_task` is `schedule_task`.
 pub(crate) fn tool_of(item: &Value) -> &str {
     let raw = item["toolName"].as_str().unwrap_or("");
@@ -232,6 +238,11 @@ pub(crate) fn turn_items(projection: &Value) -> Vec<Value> {
         .unwrap_or_default()
 }
 
+/// Turn items a one-to-one transcript keeps, oldest first.
+pub(crate) fn visible_items(projection: &Value) -> Vec<Value> {
+    without_group_turns(turn_items(projection))
+}
+
 /// The bubbles and cards of a thread projection, oldest first.
 pub(crate) fn transcript(projection: &Value) -> Value {
     transcript_for(projection, &Peers::new())
@@ -240,11 +251,7 @@ pub(crate) fn transcript(projection: &Value) -> Value {
 /// Like [`transcript`], with the lines between messages (`events`) and each message's files.
 /// `ordinal` orders messages and events together.
 pub(crate) fn transcript_for(projection: &Value, peers: &Peers) -> Value {
-    project_turns(
-        &without_group_turns(turn_items(projection)),
-        peers,
-        projection,
-    )
+    project_turns(&visible_items(projection), peers, projection)
 }
 
 /// The same shape as [`transcript`], for a thread that is itself the group.
@@ -267,7 +274,7 @@ pub(crate) fn project_turns(items: &[Value], peers: &Peers, projection: &Value) 
         };
         let kind = item["type"].as_str().unwrap_or("");
         let status = item["status"].as_str().unwrap_or("");
-        let live = LIVE.contains(&status) || item["streaming"] == true;
+        let live = live_item(&item);
         let ordinal = item["ordinal"]
             .as_i64()
             .unwrap_or_else(|| i64::try_from(index).unwrap_or(i64::MAX));

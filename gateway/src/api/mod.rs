@@ -26,6 +26,9 @@ use std::{
 use crate::*;
 
 mod access_api;
+mod activity_api;
+#[cfg(test)]
+mod activity_api_tests;
 mod bots_api;
 mod chat_api;
 mod code_api;
@@ -67,6 +70,8 @@ mod vault_api;
 
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use access_api::*;
+#[allow(unused_imports, reason = "siblings and old paths use these names")]
+pub(crate) use activity_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use bots_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]

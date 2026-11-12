@@ -283,6 +283,14 @@ members Bots
     if not pending(prefsSaved)
       send prefsSaved = setGroupAnswerPolicy(policy)
 
+  action doActivityLevel(level: string)
+    if not pending(prefsSaved)
+      send prefsSaved = setActivityLevel(level)
+
+  action doFinalOnly(flag: string)
+    if not pending(prefsSaved)
+      send prefsSaved = setFinalOnly(flag)
+
   action doMakeDefault(instanceId: string, model: string, effort: string)
     if not pending(defaultSaved)
       send defaultSaved = setDefaultModel(instanceId, model, effort)
