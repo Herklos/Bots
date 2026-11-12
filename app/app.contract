@@ -92,6 +92,7 @@ component Bots
     pull
     togglePlus
     doPickModel
+    doRefreshLimits
     toEnd
     moved
     editChatQuery
@@ -277,7 +278,7 @@ component Bots
           if e.name == "inbox"
             Inbox(route=e.id)
           else if e.name == "chat"
-            ChatScreen(route=e.id)
+            ChatScreen(route=e.id, doSwitchLimit=doSwitchLimit)
           else if e.name == "group"
             GroupScreen(route=e.id)
           else if e.name == "settings"

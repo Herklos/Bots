@@ -195,6 +195,7 @@ export function fixtureChat(child: string) {
       ...fixtureSent.map((m) => row({ id: transcriptRowId(m.id), mine: true, text: m.text })),
       { ...blank, id: 'e1', kind: 'event', mine: false, text: 'Created routine', title: 'Morning', head: true, tail: true, variant: 'routine-created' },
       { ...blank, id: 'e2', kind: 'event', mine: false, text: 'Messaged', botName: 'Inbox', botSlug: 'inbox', botShape: 'hex', botColor: 'brand.pink', head: true, tail: true, variant: 'sent' },
+      { ...blank, id: 'e-limit', kind: 'event', mine: false, text: 'Claude is at 95% until 5:00 PM', key: 'claudeAgent', placeholder: 'sonnet', head: true, tail: true, variant: 'provider-near-limit' },
     ],
   };
 }

@@ -96,6 +96,7 @@ pub(crate) fn application_routes() -> (
     );
     route!("/api/providers", get(providers_get));
     route!("/api/providers/limits", get(providers_limits));
+    route!("/api/providers/refresh", post(providers_refresh));
     route!("/api/suggestions", get(suggestions_get));
     route!("/api/bots/{slug}/model", get(model_get).put(model_put));
     route!("/api/bots/{slug}/usage", get(bot_usage));

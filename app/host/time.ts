@@ -53,3 +53,14 @@ export function setLastNow(now: number) {
 export function hostNow(): number {
   return lastNow;
 }
+
+// When a provider limit window resets, in the host locale. Same day is a clock time.
+export function resetWhen(at: unknown, now: number, locale: string): string {
+  if (typeof at !== 'string' || at === '' || !(now > 0)) return '';
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return '';
+  const loc = locale.toLowerCase().startsWith('fr') ? 'fr-FR' : 'en-US';
+  const time = d.toLocaleTimeString(loc, { hour: 'numeric', minute: '2-digit' });
+  if (dayStart(d.getTime()) === dayStart(now)) return time;
+  return `${d.toLocaleDateString(loc, { month: 'short', day: 'numeric' })} ${time}`;
+}

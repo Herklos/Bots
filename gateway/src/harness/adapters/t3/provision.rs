@@ -157,6 +157,17 @@ impl Provisioning for T3 {
             .await
             .map_err(HarnessError::failed)
     }
+
+    async fn refresh_providers(&self) -> Result<(), HarnessError> {
+        // The harness refreshes usage, then the providers module reads `server.getConfig` again.
+        self.rpc()
+            .await
+            .map_err(HarnessError::unavailable)?
+            .call("server.refreshProviders", json!({}))
+            .await
+            .map_err(HarnessError::failed)?;
+        Ok(())
+    }
 }
 
 /// Provider rows for `hbots doctor`. Same `server.getConfig` read as [`Provisioning::provider_config`].

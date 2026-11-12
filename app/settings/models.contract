@@ -1,4 +1,5 @@
 use ModelPicker from "./settings.contract"
+use ProviderLimits, LimitList from "./limits.contract"
 use SectionLabel from "../ui/controls.contract"
 use Prefs from "../ui/root-types.contract"
 use Provider from "../ui/shapes.contract"
@@ -12,14 +13,21 @@ component ModelSettings
     prefs: Prefs
     prefsError: string
     providers: Provider[]
+    limits: LimitList
+    limitCooling: bool
+    limitError: string
+    doRefreshLimits: action
   view
+    column
+      text t("limits.title") class=SectionLabel
+      ProviderLimits(limits=limits, cooling=limitCooling, error=limitError, refresh=doRefreshLimits)
     column
       text t("settings.defaultModel") class=SectionLabel
       column class=GroupCard padding="space.sm"
         if providers.length == 0
           text t("settings.noProvider") color="ink.muted" font="-exact-subheadline" padding="space.sm" min-height=44
         else
-          ModelPicker(providers=providers, instanceId=prefs.defaultInstance, model=prefs.defaultModel, effort=prefs.defaultEffort, prefix="default", pick=doMakeDefault)
+          ModelPicker(providers=providers, instanceId=prefs.defaultInstance, model=prefs.defaultModel, effort=prefs.defaultEffort, prefix="default", pick=doMakeDefault, limits=limits.providers, focus="")
     column
       text t("settings.defaultAccess") class=SectionLabel
       column class=GroupCard padding="space.sm"

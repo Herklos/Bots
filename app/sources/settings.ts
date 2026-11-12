@@ -1,6 +1,7 @@
 import type { Sources, Result } from '../app.contract.d.ts';
 import { fixtureDefaultMode, fixtureGroupAnswer, setFixtureDefaultMode, setFixtureGroupAnswer, savedEffort } from '../host/fixture.ts';
-import { REACH_GATEWAY, say, localize, call, read, setNoticeHost, hostNotice, reply, systemChecked, setSystemChecked } from '../host/gateway.ts';
+import { fetchLimits, refreshLimitBars } from '../host/limits.ts';
+import { REACH_GATEWAY, say, localize, call, read, noteLocale, setNoticeHost, hostNotice, reply, systemChecked, setSystemChecked } from '../host/gateway.ts';
 import { forgetSections, offlineSections, readSections, rememberSections, sectionsFromRows } from '../host/sections.ts';
 import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, postUnread } from '../host/notices.ts';
 
@@ -174,6 +175,11 @@ export const settingsSources = {
     return { ok: b.reachable === true && b.spaceFound === true, error: '', space: typeof b.space === 'string' ? b.space : '', spaceFound: b.spaceFound === true, shared: b.shared === true, schemaReady: b.schemaReady === true };
   },
   prepareAnytype: async (_args, store) => reply(await call(store, '/api/storage/anytype/setup', { method: 'POST', body: JSON.stringify({ dryRun: false }) })),
+  loadLimits: async ([gate, locale], store) => {
+    noteLocale(locale);
+    return fetchLimits(gate, store, locale);
+  },
+  refreshLimits: async (_args, store) => refreshLimitBars(store),
   loadProviders: async (_args, store): Promise<Result<'loadProviders'>> => {
     const p = await call(store, '/api/providers');
     return (p.ok && Array.isArray(p.body.providers) ? p.body.providers : []).map((x: any) => ({
@@ -238,4 +244,4 @@ export const settingsSources = {
   setDefaultModel: async ([instanceId, model, effort], store) => reply(await call(store, '/api/settings', {
     method: 'PUT', body: JSON.stringify({ defaultModel: { instanceId, model, ...(effort !== '' ? { effort } : {}) } }),
   })),
-} satisfies Pick<Sources, 'loadManagementMcp' | 'setManagementMcp' | 'createManagementMcpCredential' | 'revokeManagementMcpCredential' | 'enableNotifications' | 'loadPrefs' | 'saveSections' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'setDefaultModel'>;
+} satisfies Pick<Sources, 'loadManagementMcp' | 'setManagementMcp' | 'createManagementMcpCredential' | 'revokeManagementMcpCredential' | 'enableNotifications' | 'loadPrefs' | 'saveSections' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadLimits' | 'refreshLimits' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'setDefaultModel'>;

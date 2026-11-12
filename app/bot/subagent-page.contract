@@ -2,6 +2,7 @@ use pickerColours, faceColor from "../ui/fns.contract"
 use Bot, ModelList from "../ui/shapes.contract"
 use ToggleControl, SwatchControl, SectionLabel, Field, PrimaryButton, IconControl from "../ui/controls.contract"
 use ModelPage from "../settings/settings.contract"
+use ProviderLimit from "../settings/limits.contract"
 use shapeNames, Avatar from "../face.contract"
 use Glyph from "../glyph.contract"
 
@@ -29,6 +30,8 @@ component SubagentPage
     childModelsDown: bool
     pickModel: action
     modelError: string
+    limits: ProviderLimit[]
+    limitFocus: string
   view
     column gap="space.lg" padding="space.sm space.lg space.xl" testId="subagent-page"
       column gap="space.sm"
@@ -59,7 +62,7 @@ component SubagentPage
       if subSlug != ""
         text t("panel.model") class=SectionLabel
         for c in children.filter(c => c.slug == subSlug) key=c.slug
-          ModelPage(models=childModels, down=childModelsDown, bot=c, pick=pickModel, error=modelError)
+          ModelPage(models=childModels, down=childModelsDown, bot=c, pick=pickModel, error=modelError, limits=limits, limitFocus=limitFocus)
       if subError != ""
         text subError color="-exact-system-red" testId="subagent-error"
       if subSlug == ""

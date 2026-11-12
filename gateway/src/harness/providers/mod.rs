@@ -4,12 +4,16 @@
 //! The model list and the limit bars are two views of one 30-second cache.
 use crate::harness::Harness;
 use serde_json::{json, Value};
+use std::path::PathBuf;
 use std::{
     sync::Mutex,
     time::{Duration, Instant},
 };
 
 mod limits;
+pub(crate) mod notices;
+
+const REFRESH_WAIT: Duration = Duration::from_secs(60);
 
 const KEEP: Duration = Duration::from_secs(30);
 
@@ -40,13 +44,25 @@ impl Snapshot {
     }
 }
 
-/// The provider list, read from T3 at most every 30 seconds.
+/// The provider list, read from T3 at most every 30 seconds, plus the limit-notice book.
 #[derive(Debug, Default)]
 pub struct Providers {
     cached: Mutex<Option<Snapshot>>,
+    /// When a provider refresh last ran. A second one inside a minute does not call the harness.
+    refreshed: Mutex<Option<Instant>>,
+    notices: notices::Book,
 }
 
 impl Providers {
+    /// Load saved limit notices. Tests keep [`Default`], which holds them in memory only.
+    pub fn open(path: PathBuf) -> Self {
+        Self {
+            cached: Mutex::new(None),
+            refreshed: Mutex::new(None),
+            notices: notices::Book::open(path),
+        }
+    }
+
     async fn snapshot(&self, harness: &dyn Harness) -> anyhow::Result<Snapshot> {
         if let Some(hit) = self.cached.lock().ok().and_then(|guard| guard.clone()) {
             if hit.fetched.elapsed() < KEEP {
@@ -74,6 +90,62 @@ impl Providers {
     pub async fn limits(&self, harness: &dyn Harness) -> anyhow::Result<Value> {
         let shot = self.snapshot(harness).await?;
         Ok(json!({ "providers": shot.limits, "at": shot.at }))
+    }
+
+    /// Ask the harness to refresh provider limits, then drop the 30-second cache and re-read.
+    /// A second call within a minute returns the cached list with `cooling: true` and does not
+    /// call the harness again.
+    pub async fn refresh(&self, harness: &dyn Harness) -> anyhow::Result<Value> {
+        let cooling = self.cooling();
+        if !cooling {
+            harness
+                .provisioning()
+                .map_err(|err| anyhow::anyhow!(err.to_string()))?
+                .refresh_providers()
+                .await
+                .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+            self.clear_cache();
+            self.mark_refreshed();
+        }
+        let mut body = self.limits(harness).await?;
+        body["cooling"] = json!(cooling);
+        Ok(body)
+    }
+
+    pub fn attach_notices(&self, view: &mut Value, slug: &str, instance: &str) {
+        self.notices.attach_to(view, slug, instance);
+    }
+
+    /// True when this Bot has a saved limit warning. The chat skips the settings read otherwise.
+    pub fn has_notices(&self, slug: &str) -> bool {
+        self.notices.has_slug(slug)
+    }
+
+    pub async fn sync_notices(
+        &self,
+        bots: &[Value],
+        default_model: &Value,
+        limits: &[Value],
+        models: &Value,
+        now: &str,
+    ) {
+        let uses = notices::bot_uses(bots, default_model);
+        self.notices.sync(&uses, limits, models, now).await;
+    }
+
+    fn cooling(&self) -> bool {
+        self.refreshed
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .is_some_and(|at| at.elapsed() < REFRESH_WAIT)
+    }
+
+    fn mark_refreshed(&self) {
+        *self.refreshed.lock().unwrap_or_else(|err| err.into_inner()) = Some(Instant::now());
+    }
+
+    fn clear_cache(&self) {
+        *self.cached.lock().unwrap_or_else(|err| err.into_inner()) = None;
     }
 }
 

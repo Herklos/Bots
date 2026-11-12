@@ -1,5 +1,6 @@
 use Reply, Sent, SystemStatus, PageState, Attached, PointerFacts from "../ui/root-types.contract"
 use Bot, Row, Chat, RoomMember, MentionHit, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer from "../ui/shapes.contract"
+use ProviderLimit from "../settings/limits.contract"
 
 shape ChatBag
   system: SystemStatus
@@ -90,3 +91,5 @@ shape ChatBag
   childModelsFailed: bool
   linkDraft: bool
   linkLocal: bool
+  limits: ProviderLimit[]
+  limitFocus: string

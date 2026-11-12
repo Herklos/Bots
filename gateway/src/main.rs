@@ -126,7 +126,9 @@ async fn main() -> anyhow::Result<()> {
         projects: projects::Projects::new(app_dir.join("projects.json")),
         threads: crate::chat::thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
         roster: crate::bots::roster::Roster::default(),
-        providers: crate::harness::providers::Providers::default(),
+        providers: crate::harness::providers::Providers::open(
+            cfg.bots_root.join(".botapp").join("limit-notices.json"),
+        ),
         rooms: crate::chat::rooms::Rooms::new(app_dir.join("groups.json")),
         room_working: Mutex::new(crate::chat::rooms::WorkingBook::default()),
         routine_history: crate::chat::routines::RoutineHistory::new(
@@ -170,6 +172,7 @@ async fn main() -> anyhow::Result<()> {
     }
     crate::bots::provisioner::start(state.clone());
     crate::bots::agent_context::start(state.clone());
+    crate::harness::providers::notices::start(state.clone());
     crate::chat::routines::review::watch::start(state.clone());
     crate::platform::release::start(state.clone()).await;
 

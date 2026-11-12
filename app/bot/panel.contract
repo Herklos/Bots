@@ -3,6 +3,7 @@ use PanelRow from "../ui/panel.contract"
 use Bot, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer from "../ui/shapes.contract"
 use PageTitle, QuietButton, TextControl, IconControl, ConversationLink, SectionLabel, Chip, IconTile, Segment from "../ui/controls.contract"
 use ModelPage, UsageView from "../settings/settings.contract"
+use ProviderLimit from "../settings/limits.contract"
 use Avatar from "../face.contract"
 use Glyph from "../glyph.contract"
 use EditBotPage from "./edit.contract"
@@ -37,6 +38,8 @@ component BotPanel
     modelsDown: bool
     pickModel: action
     modelError: string
+    limits: ProviderLimit[]
+    limitFocus: string
     routines: RoutineList
     routinesDown: bool
     lineage: Lineage
@@ -141,7 +144,7 @@ component BotPanel
             Glyph(name="settings", size=20)
       if page == "model"
         scroll flex=1 min-height=0
-          ModelPage(models=models, down=modelsDown, bot=bot, pick=pickModel, error=modelError)
+          ModelPage(models=models, down=modelsDown, bot=bot, pick=pickModel, error=modelError, limits=limits, limitFocus=limitFocus)
       else if page == "usage"
         scroll flex=1 min-height=0
           UsageView(report=report, down=reportDown, period=period, view=usageView, pickPeriod=pickPeriod, pickView=pickView, showBots=false)
@@ -150,7 +153,7 @@ component BotPanel
           EditBotPage(bot=bot, error=error, rename=rename, recolour=recolour, reshape=reshape, pin=pin, hide=hide, mute=mute, makeMain=makeMain, drop=drop, savePrompt=savePrompt)
       else if page == "subagent"
         scroll flex=1 min-height=0
-          SubagentPage(children=children, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=createSub, saveSub=saveSub, dropChild=dropChild, creating=creating, saving=saving, subError=subError, childModels=childModels, childModelsDown=childModelsDown, pickModel=pickModel, modelError=modelError)
+          SubagentPage(children=children, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=createSub, saveSub=saveSub, dropChild=dropChild, creating=creating, saving=saving, subError=subError, childModels=childModels, childModelsDown=childModelsDown, pickModel=pickModel, modelError=modelError, limits=limits, limitFocus=limitFocus)
       else if page == "helpers"
         scroll flex=1 min-height=0
           HelpersPage(subagent=bot.subagent, providers=models.providers, modelsDown=modelsDown)

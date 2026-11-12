@@ -1,0 +1,13 @@
+use Row from "../ui/shapes.contract"
+
+// The warning sentence stays on the event chip. This is only the Switch model button.
+component LimitSwitch
+  props
+    rows: Row[]
+    slug: string
+    press: action
+  view
+    column width="100%" max-width="44rem" align-self="center" box-sizing="border-box" padding="0 space.lg" gap="space.xs"
+      for m in rows.filter(r => r.variant == "provider-near-limit" and r.key != "" and r.placeholder != "") key=m.id
+        button appearance="none" press=press(slug, m.key, m.placeholder) testId="limit-switch" min-height=44
+          text t("limits.switch")

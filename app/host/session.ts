@@ -118,7 +118,8 @@ export function chatRows(slug: string, body: any, now: number, reactions: Record
     if (item._t === 'event') {
       const reset = typeof item.failure?.resetAt === 'string' ? item.failure.resetAt : '';
       const resetAt = reset !== '' && Number.isFinite(Date.parse(reset)) ? clock(new Date(reset)) : '';
-      rows.push({ ...blank, ...peer(item.bot), id: String(item.id), kind: 'event', mine: false, text: String(item.text ?? ''), title: String(item.title ?? ''), head: true, tail: true, variant: String(item.kind ?? ''), ...(resetAt !== '' ? { resetAt } : {}) });
+      const near = String(item.kind ?? '') === 'provider-near-limit';
+      rows.push({ ...blank, ...peer(item.bot), id: String(item.id), kind: 'event', mine: false, text: String(item.text ?? ''), title: String(item.title ?? ''), head: true, tail: true, variant: String(item.kind ?? ''), ...(resetAt !== '' ? { resetAt } : {}), ...(near ? { key: String(item.alternativeInstance ?? ''), placeholder: String(item.alternativeModel ?? '') } : {}) });
       prev = null;
       continue;
     }

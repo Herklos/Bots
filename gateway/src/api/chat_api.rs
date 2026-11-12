@@ -124,6 +124,16 @@ pub(crate) async fn chat_view(
         crate::chat::images::now_ms(),
     )
     .await;
+    // The main chat shows a provider-limit warning. A child or side chat does not.
+    if on_main && s.providers.has_notices(slug) {
+        if let Some(bot) = listed.iter().find(|bot| bot["slug"].as_str() == Some(slug)) {
+            let settings = s.settings().await;
+            let default = settings.get("defaultModel").cloned().unwrap_or(Value::Null);
+            let running = crate::bots::provider_switch::running_model(&bot["model"], &default);
+            let instance = running["instanceId"].as_str().unwrap_or("");
+            s.providers.attach_notices(&mut out, slug, instance);
+        }
+    }
     // The client has no clock it may read in its data code, so the gateway says what time it is.
     // The tag ignores this field: a body that only moves `now` is not a new transcript.
     out["now"] = json!(unix_now() * 1000);

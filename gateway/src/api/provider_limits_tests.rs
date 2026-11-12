@@ -105,3 +105,22 @@ async fn provider_limits_report_a_failed_read() {
     assert_eq!(err.status, StatusCode::BAD_GATEWAY);
     assert!(err.message.contains("provider limits"));
 }
+
+#[tokio::test]
+async fn provider_refresh_is_rate_limited_without_sleep() {
+    let dir = tempfile::tempdir().unwrap();
+    let mock = Arc::new(MockHarness::new());
+    mock.set_provider_config(config());
+    let state = settings_state_with(dir.path(), Some(Arc::clone(&mock) as Arc<dyn Harness>));
+
+    let Json(first) = providers_refresh(State(state.clone())).await.unwrap();
+    let Json(second) = providers_refresh(State(state)).await.unwrap();
+
+    assert_eq!(mock.provider_refresh_calls(), 1);
+    assert_eq!(mock.provider_config_reads(), 1);
+    assert_eq!(first["cooling"], json!(false));
+    assert_eq!(second["cooling"], json!(true));
+    assert_eq!(second["providers"][0]["instanceId"], "claude");
+    assert!(!leaks(&first));
+    assert!(!leaks(&second));
+}

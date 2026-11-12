@@ -1,0 +1,76 @@
+use GroupCard from "../ui/sidebar.contract"
+
+shape LimitWindow
+  id: string
+  label: string
+  usedPercent: number
+  percent: string
+  resetLabel: string
+
+shape ProviderLimit
+  instanceId: string
+  label: string
+  state: string
+  note: string
+  hint: string
+  windows: LimitWindow[]
+
+shape LimitList
+  providers: ProviderLimit[]
+  sample: bool
+  error: string
+  at: string
+
+shape LimitReply
+  ok: bool
+  error: string
+  cooling: bool
+
+fn limitColor(percent: number): string = percent >= 95 ? "brand.red" : percent >= 80 ? "brand.amber" : "brand.default"
+
+fn limitHint(limits: ProviderLimit[], id: string): string = match first(limits.filter(p => p.instanceId == id)) { case some(p) => p.hint, case none => "" }
+
+component ProviderLimits
+  props
+    limits: LimitList
+    cooling: bool
+    error: string
+    refresh: action
+  view
+    column gap="space.sm" testId="provider-limits"
+      if limits.sample
+        text t("limits.sample") color="ink.muted" font="-exact-footnote" testId="limits-sample"
+      if limits.providers.length == 0
+        text t("limits.empty") color="ink.muted" font="-exact-subheadline" testId="limits-empty"
+      for p in limits.providers key=p.instanceId
+        column class=GroupCard padding="space.sm" gap="space.sm" testId=`limit-card-${p.instanceId}`
+          text p.label font-weight=600
+          if p.state == "signed-out"
+            text t("limits.signedOut") color="ink.muted" font="-exact-footnote" testId=`limit-state-${p.instanceId}`
+          else if p.state == "not-installed"
+            text t("limits.notInstalled") color="ink.muted" font="-exact-footnote" testId=`limit-state-${p.instanceId}`
+          else if p.state == "unavailable"
+            text t("limits.unavailable") color="ink.muted" font="-exact-footnote" testId=`limit-state-${p.instanceId}`
+          else if p.windows.length == 0
+            text t("limits.quiet") color="ink.muted" font="-exact-footnote" testId=`limit-quiet-${p.instanceId}`
+          for w in p.windows key=w.id
+            column gap="2px"
+              row width="100%" height=8 border-radius="radius.full" background-color="surface.line" overflow="hidden" role="img" aria-label=t("limits.used", label=w.label, percent=w.percent) testId=`limit-fill-${w.id}`
+                column height="100%" width=`${w.percent}%` background-color=limitColor(w.usedPercent)
+              row gap="space.sm" align-items="center"
+                text t("limits.used", label=w.label, percent=w.percent) color="ink.muted" font="-exact-footnote" testId=`limit-used-${w.id}`
+                if w.usedPercent >= 95
+                  text t("limits.almost") color="brand.red" font="-exact-footnote" testId=`limit-level-${w.id}`
+                else if w.usedPercent >= 80
+                  text t("limits.nearLimit") color="brand.amber" font="-exact-footnote" testId=`limit-level-${w.id}`
+              if w.resetLabel != ""
+                text t("limits.resets", time=w.resetLabel) color="ink.faint" font="-exact-footnote"
+          if p.note != ""
+            text p.note color="ink.muted" font="-exact-footnote" testId=`limit-note-${p.instanceId}`
+      row
+        button appearance="none" press=refresh disabled=cooling testId="limits-refresh" min-height=44
+          text (cooling ? t("limits.cooling") : t("limits.refresh"))
+      if error != ""
+        text error color="-exact-system-red" font="-exact-footnote" testId="limits-error"
+      else if limits.error != ""
+        text limits.error color="-exact-system-red" font="-exact-footnote" testId="limits-error"
