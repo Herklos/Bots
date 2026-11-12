@@ -1,6 +1,6 @@
 use super::*;
 
-/// The avatar palette as `app/app.ts` maps it: a stored name, its hex, or a token, to a token.
+/// The avatar palette as `app/host/palette.ts` maps it: a stored name, its hex, or a token, to a token.
 pub fn ts_region() -> String {
     let t = tokens();
     let mut s = String::from("const BRAND: Record<string, string> = {\n");

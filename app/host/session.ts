@@ -2,7 +2,8 @@ import { DAYS, MONTHS, clock, dayStart, isGroupLeak, when } from './time.ts';
 import type { MessagePart } from './markdown.ts';
 import { FILE_EMPTY, FILE_READ, FILE_TOO_BIG, localize } from './gateway.ts';
 import type { Result, Storage } from '../app.contract.d.ts';
-import { API, fill } from '../app.ts';
+import { API } from './config.ts';
+import { fill } from './palette.ts';
 import { call, read } from './gateway.ts';
 import { marksOf, quoteOf, splitTables, tokenText } from './markdown.ts';
 

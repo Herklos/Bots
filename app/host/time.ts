@@ -1,4 +1,4 @@
-import { fill } from '../app.ts';
+import { fill } from './palette.ts';
 
 export const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 export const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -44,3 +44,12 @@ export function stackFaces(members: unknown, directory: any[], workingSlugs: str
   });
 }
 export const initials = (name: string): string => name.trim().split(/\s+/).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join('') || '?';
+
+// The gateway's clock, remembered from the bot list and read by routines and usage.
+let lastNow = 0;
+export function setLastNow(now: number) {
+  if (now > 0) lastNow = now;
+}
+export function hostNow(): number {
+  return lastNow;
+}

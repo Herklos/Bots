@@ -1,5 +1,6 @@
 import { DAYS, MONTHS, clock, dayStart } from './time.ts';
-import { API, fill } from '../app.ts';
+import { API } from './config.ts';
+import { fill } from './palette.ts';
 import { say } from './gateway.ts';
 import { when } from './time.ts';
 

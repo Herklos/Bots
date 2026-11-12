@@ -50,7 +50,7 @@ pub(crate) async fn static_files(State(s): S, uri: Uri, req: Request) -> Respons
     if !target.is_file() {
         return (StatusCode::NOT_FOUND, WEB_APP_MISSING).into_response();
     }
-    // The web build is made with a placeholder gateway address (see app/app.ts); serve it with the
+    // The web build is made with a placeholder gateway address (see app/host/config.ts); serve it with the
     // address this request came in on, so one build works wherever the gateway is reached.
     if target
         .extension()
@@ -79,7 +79,7 @@ pub(crate) async fn static_files(State(s): S, uri: Uri, req: Request) -> Respons
     }
 }
 
-/// What the built web app uses for the gateway's address until it is served (see `app/app.ts`).
+/// What the built web app uses for the gateway's address until it is served (see `app/host/config.ts`).
 pub(crate) const ORIGIN_PLACEHOLDER: &str = "http://hbots-origin.invalid";
 
 /// `index.html` is missing from `STATIC_DIR`. `cargo run` does not build the Exact web app.

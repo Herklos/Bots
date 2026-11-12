@@ -2,7 +2,7 @@ import { unsupported } from './notices.ts';
 import { notificationStatus } from '@exact/notifications';
 import en from '../strings/en.json' with { type: 'json' };
 import fr from '../strings/fr.json' with { type: 'json' };
-import { API } from '../app.ts';
+import { API } from './config.ts';
 
 export type Answered = { ok: true; body: any } | { ok: false; error: string };
 
