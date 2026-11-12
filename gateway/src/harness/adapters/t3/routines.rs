@@ -1,3 +1,8 @@
+//! Tags, from `packages/contracts/src/rpc.ts` (`WS_METHODS`, the `scheduledTasks*` entries):
+//! `scheduledTasks.subscribe`, `scheduledTasks.upsert`, `scheduledTasks.setEnabled`,
+//! `scheduledTasks.delete`, `scheduledTasks.runNow`. `subscribe` is a stream; its first
+//! item is `{ tasks }`. This read takes that chunk and interrupts the subscription.
+//! There is no `scheduledTasks.listRuns`.
 use super::T3;
 use crate::harness::{HarnessError, Routines};
 use async_trait::async_trait;
