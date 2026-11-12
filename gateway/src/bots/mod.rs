@@ -1,6 +1,8 @@
 //! Bots on disk: `bots/<slug>/.bot/bot.json` per Bot, the main-Bot
 //! choice in `bots/.botapp/main-bot.json`, deleted Bots under `bots/.botapp/trash`.
 
+use crate::storage::workspace::Workspace;
+use crate::storage::LocalDisk;
 use crate::{
     bots::agent_context::MemorySnapshot,
     platform::error::{ApiError, ApiResult},
@@ -10,6 +12,7 @@ use crate::{
 use serde_json::{json, Map, Value};
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 mod instructions;
@@ -30,6 +33,8 @@ pub struct Bots {
     pub root: PathBuf,
     pub mcp_url: String,
     pub mcp_token: String,
+    /// Same workspace as [`crate::api::state::AppState::workspace`] in the running gateway.
+    ws: Arc<dyn Workspace>,
     lock: Mutex<()>,
     /// Slugs already warned because `CLAUDE.md` is a real file, not a symlink.
     claude_file_warned: std::sync::Mutex<HashSet<String>>,
@@ -37,10 +42,22 @@ pub struct Bots {
 
 impl Bots {
     pub fn new(root: PathBuf, mcp_url: String, mcp_token: String) -> Self {
+        let ws = Arc::new(LocalDisk::new(root.clone()));
+        Self::with_workspace(root, mcp_url, mcp_token, ws)
+    }
+
+    /// `ws` is the process workspace. Create and the memory tools share it.
+    pub fn with_workspace(
+        root: PathBuf,
+        mcp_url: String,
+        mcp_token: String,
+        ws: Arc<dyn Workspace>,
+    ) -> Self {
         Self {
             root,
             mcp_url,
             mcp_token,
+            ws,
             lock: Mutex::new(()),
             claude_file_warned: std::sync::Mutex::new(HashSet::new()),
         }
@@ -234,6 +251,7 @@ pub(crate) mod face_icon; // The Bot face written into the workspace for the thr
 pub(crate) mod icons; // Site icons cached under HBOTS_HOME/icons.
 pub(crate) mod library; // Files and records through the workspace adapter.
 pub(crate) mod lineage; // Subagents and delegated threads of one Bot.
+pub(crate) mod memory; // Bot memory files through the workspace.
 pub(crate) mod memory_tools;
 pub(crate) mod provisioner;
 pub(crate) mod roster; // What an inbox row needs: preview, working, unread.

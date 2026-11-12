@@ -121,10 +121,11 @@ fn state(dir: &Path, exposure: Exposure) -> Arc<AppState> {
     Arc::new(AppState {
         auth: Auth::load(&app_dir, String::new(), vec![]).unwrap(),
         harness: crate::harness::connect(cfg.t3_url.clone(), cfg.t3_token.clone()),
-        bots: Bots::new(
+        bots: Bots::with_workspace(
             cfg.bots_root.clone(),
             cfg.bot_mcp_url.clone(),
             "fixture-only".into(),
+            Arc::clone(&workspace),
         ),
         vault: Vault::new(cfg.vault_file.clone(), cfg.vault_key_file.clone()),
         projects: Projects::new(app_dir.join("projects.json")),
@@ -138,6 +139,7 @@ fn state(dir: &Path, exposure: Exposure) -> Arc<AppState> {
         ),
         icons: crate::bots::icons::Icons::new(dir.join("icons")),
         usage: crate::bots::usage::Usage::new(app_dir.join("usage.json")),
+        memory: crate::bots::memory::MemoryStore::new(Arc::clone(&workspace)),
         workspace: Arc::clone(&workspace),
         library: crate::bots::library::Library::new(
             workspace,

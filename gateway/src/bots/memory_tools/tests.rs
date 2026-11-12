@@ -1,4 +1,7 @@
 use super::*;
+use crate::bots::memory::{skill_file_name, MemoryStore};
+use crate::storage::LocalDisk;
+use std::sync::Arc;
 
 fn bot(slug: &str, thread: &str, role: &str, parent: Option<&str>, hide: bool) -> Value {
     json!({
@@ -47,8 +50,9 @@ async fn a_bot_reads_its_own_memory_and_skills() {
     );
     write(&root.join("ada/skills/open.md"), "turn the key");
     let roster = vec![bot("ada", "thread-ada", "bot", None, false)];
+    let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
     let deps = Deps {
-        root,
+        memory: &store,
         roster: &roster,
     };
     let args = json!({ "threadId": "thread-ada" });
@@ -79,8 +83,9 @@ async fn a_subagent_reads_its_parents_memory_and_skills() {
         bot("ada", "thread-ada", "bot", None, false),
         bot("ada-jr", "thread-jr", "subagent", Some("ada"), true),
     ];
+    let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
     let deps = Deps {
-        root,
+        memory: &store,
         roster: &roster,
     };
     let args = json!({ "threadId": "thread-jr", "slug": "ada", "parentSlug": "nope" });
@@ -104,8 +109,9 @@ async fn hide_from_sidebar_also_reads_the_parent() {
     write(&root.join("ada/memory/log.md"), "from the parent");
     write(&root.join("ada-jr/memory/log.md"), "from the child");
     let roster = vec![bot("ada-jr", "thread-jr", "bot", Some("ada"), true)];
+    let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
     let deps = Deps {
-        root,
+        memory: &store,
         roster: &roster,
     };
     let memory = dispatch(&deps, "memory_read", &json!({ "threadId": "thread-jr" }))
@@ -129,8 +135,9 @@ async fn a_normal_bot_cannot_read_another_bots_files() {
         bot("ada", "thread-ada", "bot", Some("bea"), false),
         bot("bea", "thread-bea", "bot", None, false),
     ];
+    let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
     let deps = Deps {
-        root,
+        memory: &store,
         roster: &roster,
     };
     let memory = dispatch(
@@ -163,8 +170,9 @@ async fn a_forged_slug_is_ignored() {
     write(&root.join("ada/memory/MEMORY.md"), "only-ada");
     write(&root.join("bea/memory/MEMORY.md"), "only-bea");
     let roster = vec![bot("ada", "thread-ada", "bot", None, false)];
+    let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
     let deps = Deps {
-        root,
+        memory: &store,
         roster: &roster,
     };
     let memory = dispatch(
@@ -195,8 +203,9 @@ async fn a_missing_parent_is_an_error() {
         Some("missing"),
         true,
     )];
+    let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
     let deps = Deps {
-        root,
+        memory: &store,
         roster: &roster,
     };
     let err = dispatch(&deps, "memory_read", &json!({ "threadId": "thread-jr" }))
@@ -226,8 +235,9 @@ async fn a_parent_slug_that_escapes_is_an_error() {
         Some("../outside"),
         false,
     )];
+    let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
     let deps = Deps {
-        root,
+        memory: &store,
         roster: &roster,
     };
     let err = dispatch(&deps, "memory_read", &json!({ "threadId": "thread-jr" }))
@@ -245,8 +255,9 @@ async fn files_are_capped() {
     write(&root.join("ada/memory/MEMORY.md"), &huge);
     write(&root.join("ada/skills/big.md"), &huge);
     let roster = vec![bot("ada", "thread-ada", "bot", None, false)];
+    let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
     let deps = Deps {
-        root,
+        memory: &store,
         roster: &roster,
     };
     let args = json!({ "threadId": "thread-ada" });
@@ -283,8 +294,9 @@ async fn a_symlink_is_not_followed() {
     .unwrap();
     write(&root.join("ada/skills/real.md"), "ada-skill");
     let roster = vec![bot("ada", "thread-ada", "bot", None, false)];
+    let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
     let deps = Deps {
-        root,
+        memory: &store,
         roster: &roster,
     };
     let args = json!({ "threadId": "thread-ada" });
@@ -294,5 +306,27 @@ async fn a_symlink_is_not_followed() {
     let skills = dispatch(&deps, "skills_read", &args).await.unwrap();
     assert_eq!(skills["skills"].as_array().unwrap().len(), 1);
     assert_eq!(skills["skills"][0]["name"], "real.md");
+    assert!(!skills.to_string().contains("bea-skill"));
+}
+
+#[tokio::test]
+async fn a_symlink_bot_folder_is_not_followed() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    write(&root.join("bea/memory/MEMORY.md"), "bea-secret");
+    write(&root.join("bea/skills/hidden.md"), "bea-skill");
+    std::os::unix::fs::symlink(root.join("bea"), root.join("ada")).unwrap();
+    let roster = vec![bot("ada", "thread-ada", "bot", None, false)];
+    let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
+    let deps = Deps {
+        memory: &store,
+        roster: &roster,
+    };
+    let args = json!({ "threadId": "thread-ada" });
+    let memory = dispatch(&deps, "memory_read", &args).await.unwrap();
+    assert_eq!(memory["memory"]["MEMORY.md"]["text"], "");
+    assert!(!memory.to_string().contains("bea-secret"));
+    let skills = dispatch(&deps, "skills_read", &args).await.unwrap();
+    assert!(skills["skills"].as_array().unwrap().is_empty());
     assert!(!skills.to_string().contains("bea-skill"));
 }
