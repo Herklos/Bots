@@ -174,6 +174,10 @@ pub(super) fn unsupported(message: impl Into<String>) -> MutateFail {
     code("unsupported", message)
 }
 
+pub(crate) fn refusal(which: &'static str, message: impl Into<String>) -> MutateFail {
+    code(which, message)
+}
+
 pub(super) fn conflict(message: &str, revision: &str, content: &str) -> MutateFail {
     MutateFail::Code(Coded {
         code: "conflict",

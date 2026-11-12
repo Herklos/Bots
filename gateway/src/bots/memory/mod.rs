@@ -33,6 +33,9 @@ mod tests;
 )]
 mod user;
 #[cfg(test)]
+#[path = "user_guard_tests.rs"]
+mod user_guard_tests;
+#[cfg(test)]
 #[path = "user_tests.rs"]
 mod user_tests;
 
@@ -327,7 +330,7 @@ pub(crate) use evidence::{
 pub(crate) use facts::{FACT_CHARS, FULL_NOTE_CHARS, MEMORY_CHARS, NOTE_CHARS};
 pub(crate) use mutate::{mutate, Coded, MutateFail, MutateOk, Mutation, Op, Scope};
 pub(crate) use search::{document, list_notes, read_note, search as search_memory, Hit, NoteInfo};
-pub(crate) use user::{snapshot_user, user_memory_path};
+pub(crate) use user::{snapshot_user, user_memory_path, verify_user_facts};
 
 fn cap_prefix(bytes: &[u8], cap: usize) -> (String, bool) {
     if bytes.len() <= cap {

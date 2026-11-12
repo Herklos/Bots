@@ -7,8 +7,10 @@ use super::facts::{
 use super::state::{self, MemoryState, Provenance, Temporal};
 use super::MemoryStore;
 use std::io;
+use std::path::Path;
 
 mod store;
+mod user_rules;
 
 use store::{
     cap, commit, conflict, duplicate, invalid, not_found, paths_for, unsupported, write_note,
@@ -71,6 +73,10 @@ pub(crate) struct Mutation<'a> {
     pub description: Option<&'a str>,
     pub content: Option<&'a str>,
     pub valid_from: Option<&'a str>,
+    /// Bots root for the person-owned fact file. Absent in stores that have no user file.
+    pub user_root: Option<&'a Path>,
+    /// Display name used when a rejected edit is recorded. Empty uses the slug.
+    pub bot_name: &'a str,
 }
 
 impl<'a> Mutation<'a> {
@@ -95,6 +101,8 @@ impl<'a> Mutation<'a> {
             description: None,
             content: None,
             valid_from: None,
+            user_root: None,
+            bot_name: "",
         }
     }
 }
@@ -164,6 +172,9 @@ async fn apply(
     }
     if input.author.trim().is_empty() {
         return Err(invalid("A memory write needs an author."));
+    }
+    if let Some(err) = user_rules::bot_user_refusal(input).await? {
+        return Err(err);
     }
     let category = checked_category(input.category)?;
     if input.op == Op::Note && input.scope == Scope::Shared {

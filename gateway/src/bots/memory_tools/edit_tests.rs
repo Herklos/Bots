@@ -47,6 +47,7 @@ async fn a_subagent_writes_only_its_own_store() {
         roster: &roster,
         turn_items: &turn,
         refreshed: Some(&refreshed),
+        bots_root: None,
     };
     let revision = document(&store, &MemoryStore::bot_memory("ada-jr"), 6_000)
         .await
@@ -122,6 +123,7 @@ async fn a_forged_slug_is_ignored_and_a_conflict_does_not_refresh() {
         roster: &roster,
         turn_items: &turn,
         refreshed: Some(&refreshed),
+        bots_root: None,
     };
     let revision = document(&store, &MemoryStore::bot_memory("ada"), 6_000)
         .await
@@ -175,6 +177,7 @@ async fn extended_read_returns_revision_notes_and_a_topic() {
         roster: &roster,
         turn_items: &turn,
         refreshed: None,
+        bots_root: None,
     };
     dispatch(
         &writing,

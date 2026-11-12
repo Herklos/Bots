@@ -1,5 +1,5 @@
 //! `memory_edit`, `memory_forget`, and `memory_search`.
-use super::{scope, Deps};
+use super::{caller, scope, Deps};
 use crate::bots::memory::{
     check_owner_evidence, generic_attachment_quote, mutate, owner_messages, pick_message,
     search_memory, Coded, Hit, MutateFail, MutateOk, Mutation, Op, Scope,
@@ -186,7 +186,10 @@ async fn write(d: &Deps<'_>, args: &Value, op: Op) -> Result<Value, String> {
     mutation.source_message_id = &message_id;
     mutation.source_quote = quote;
     mutation.source_text = &source_text;
+    let label = bot_label(d, args, &slug);
     mutation.now = &now;
+    mutation.user_root = d.bots_root;
+    mutation.bot_name = &label;
     mutation.restore = args["restore"] == true;
     mutation.fact = args["fact"].as_str();
     mutation.old = args["old"].as_str();
@@ -209,6 +212,16 @@ async fn write(d: &Deps<'_>, args: &Value, op: Op) -> Result<Value, String> {
         Err(MutateFail::Code(coded)) => Err(fail_json(&coded)),
         Err(MutateFail::Io(err)) => Err(err.to_string()),
     }
+}
+
+fn bot_label(d: &Deps<'_>, args: &Value, slug: &str) -> String {
+    caller(d.roster, args)
+        .ok()
+        .and_then(|bot| bot["name"].as_str())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| slug.to_string())
 }
 
 fn write_scope(args: &Value) -> Result<Scope, String> {

@@ -4,7 +4,7 @@
 //! so this file is the channel a Bot's prompt and memory use.
 
 use crate::bots::memory_tools::Folder;
-use crate::bots::{is_subagent, valid_slug, MANAGED_END, MANAGED_START};
+use crate::bots::{is_subagent, MANAGED_END, MANAGED_START};
 use crate::platform::error::{ApiError, ApiResult};
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -13,6 +13,9 @@ use std::time::{Duration, UNIX_EPOCH};
 
 #[cfg(test)]
 mod tests;
+
+mod poll;
+pub(crate) use poll::start;
 
 pub(crate) const PROMPT_MAX: usize = 16 * 1024;
 
@@ -216,52 +219,6 @@ pub(crate) fn changed(prev: &FileWatch, now: &FileWatch) -> Vec<String> {
         }
     }
     out.into_iter().collect()
-}
-
-pub(crate) fn start(state: std::sync::Arc<crate::AppState>) {
-    tokio::spawn(async move {
-        let mut prev = scan(&state).await;
-        loop {
-            tokio::time::sleep(POLL_EVERY).await;
-            let now = scan(&state).await;
-            let dirty = changed(&prev, &now);
-            prev = now;
-            for slug in dirty {
-                if let Err(e) = state.bots.refresh_agents(&slug).await {
-                    tracing::warn!("refreshing memory for {slug}: {}", e.message);
-                }
-            }
-        }
-    });
-}
-
-async fn scan(state: &crate::AppState) -> FileWatch {
-    let bots = state.bots.list().await.unwrap_or_else(|e| {
-        tracing::warn!("listing Bots for the memory poller: {}", e.message);
-        Vec::new()
-    });
-    let mut watch = FileWatch {
-        shared: stamp_file(&state.cfg.bots_root.join(".botapp").join("shared-memory.md")).await,
-        bots: Vec::with_capacity(bots.len()),
-    };
-    for bot in bots {
-        let Some(slug) = bot["slug"].as_str().filter(|slug| valid_slug(slug)) else {
-            continue;
-        };
-        let dir = state.cfg.bots_root.join(slug);
-        watch.bots.push(BotFiles {
-            slug: slug.to_string(),
-            user: stamp_file(&crate::bots::memory::user_memory_path(
-                &state.cfg.bots_root,
-                slug,
-            ))
-            .await,
-            memory: stamp_file(&dir.join("memory").join("MEMORY.md")).await,
-            log: stamp_file(&dir.join("memory").join("log.md")).await,
-            inherit_parent: inherit_parent(&bot),
-        });
-    }
-    watch
 }
 
 fn inherit_parent(bot: &Value) -> Option<String> {
