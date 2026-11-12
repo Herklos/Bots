@@ -52,6 +52,7 @@ component GroupPanel
     page: string
     room: Room
     bots: Bot[]
+    defaultPolicy: string
     closePanel: action
     openEdit: action
     goRoot: action
@@ -127,7 +128,7 @@ component GroupPanel
               column role="radiogroup" aria-label=t("group.stepPolicy") gap="space.xs"
                 for policy in ["default", "last", "everyone", "chief"] key=policy
                   button class=ChoiceRow appearance="none" press=patch("answerPolicy", policy) role="radio" aria-checked=(room.answerPolicy == policy) testId=`group-policy-${policy}` background-color=(room.answerPolicy == policy ? "surface.raised" : "transparent")
-                    text (policy == "default" ? t("group.policyDefaultNamed", policy=(room.answerPolicyEffective == "everyone" ? t("group.policyEveryone") : room.answerPolicyEffective == "chief" ? t("group.policyChief") : t("group.policyLast"))) : policy == "last" ? t("group.policyLast") : policy == "everyone" ? t("group.policyEveryone") : t("group.policyChief"))
+                    text (policy == "default" ? t("group.policyDefaultNamed", policy=(defaultPolicy == "everyone" ? t("group.policyEveryone") : defaultPolicy == "chief" ? t("group.policyChief") : t("group.policyLast"))) : policy == "last" ? t("group.policyLast") : policy == "everyone" ? t("group.policyEveryone") : t("group.policyChief"))
             if room.answerPolicyEffective == "chief"
               ChiefList(bots=bots, slugs=room.members.map(m => m.slug), selected=chiefSlug, pick=chooseChief)
             column gap="space.sm"

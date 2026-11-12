@@ -1,0 +1,53 @@
+locale "en-US"
+
+test "a group's default answer policy follows Settings, not its override"
+  size 1200x800
+  at "/group/fixture"
+  clock data
+  tap "group-toggle"
+  tap "group-edit"
+  clock data
+  expect text "group-policy-default" == "Default (Last speaker)"
+  tap "group-policy-chief"
+  clock data
+  expect state room.answerPolicy == "chief"
+  expect text "group-policy-default" == "Default (Last speaker)"
+  tap "group-panel-back"
+  tap "group-panel-close"
+  tap "open-settings"
+  clock data
+  tap "settings-domain-models"
+  tap "group-answer-everyone"
+  clock data
+  type "app" "/group/fixture"
+  clock data
+  tap "group-toggle"
+  tap "group-edit"
+  clock data
+  expect state room.answerPolicy == "chief"
+  expect text "group-policy-default" == "Default (Everyone)"
+  tap "group-policy-last"
+  clock data
+  expect state room.answerPolicy == "last"
+  expect text "group-policy-default" == "Default (Everyone)"
+  tap "group-policy-default"
+  clock data
+  expect state room.answerPolicy == "default"
+  expect text "group-policy-default" == "Default (Everyone)"
+  tap "group-panel-back"
+  tap "group-panel-close"
+  tap "open-settings"
+  clock data
+  tap "settings-domain-models"
+  tap "group-answer-chief"
+  clock data
+  type "app" "/group/fixture"
+  clock data
+  tap "group-toggle"
+  tap "group-edit"
+  clock data
+  expect text "group-policy-default" == "Default (A chief)"
+  tap "group-policy-everyone"
+  clock data
+  expect state room.answerPolicy == "everyone"
+  expect text "group-policy-default" == "Default (A chief)"

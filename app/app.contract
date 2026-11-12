@@ -485,7 +485,7 @@ component Bots
                     button class=SendControl appearance="none" press=postRoom disabled=(roomText.trim() == "" or pending(roomSent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="room-send"
                       Glyph(name="send", size=18)
                   text (roomText.includes("@everyone") ? t("group.hintEveryone") : roomText.includes("@") ? t("group.hintMention") : quietPolicyHint(room.answerPolicyEffective, t("group.hintNoneLast"), t("group.hintNoneEveryone"), t("group.hintNoneChief", chief=memberCalled(room.members, room.chief)))) color="ink.muted" font="-exact-footnote" testId="room-hint" width="100%" min-width=0 overflow-wrap="anywhere"
-              GroupPanel(shown=groupPanel, wide=wide, page=groupPage, room=room, bots=bots, closePanel=toggleGroupPanel, openEdit=openGroupEdit, goRoot=groupBack, openAdd=openGroupAdd, closeAdd=closeGroupAdd, patch=patchGroup, removeMember=removeGroupMember, addMember=addGroupMember, drop=dropGroup, error=groupSaveError)
+              GroupPanel(shown=groupPanel, wide=wide, page=groupPage, room=room, bots=bots, defaultPolicy=prefs.groupAnswerPolicy, closePanel=toggleGroupPanel, openEdit=openGroupEdit, goRoot=groupBack, openAdd=openGroupAdd, closeAdd=closeGroupAdd, patch=patchGroup, removeMember=removeGroupMember, addMember=addGroupMember, drop=dropGroup, error=groupSaveError)
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
               header class=PageHeader

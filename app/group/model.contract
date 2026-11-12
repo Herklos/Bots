@@ -145,6 +145,7 @@ members Bots
     groupPage = "root"
 
   action openGroupEdit
+    refresh prefs
     groupPage = "edit"
 
   action groupBack
