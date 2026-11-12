@@ -8,7 +8,7 @@ mod client;
 mod previews;
 mod provision;
 mod routines;
-mod transcript;
+pub(crate) mod transcript;
 mod turns;
 
 pub(crate) use client::{proxy_http, proxy_ws, ws_base, T3Client, T3};

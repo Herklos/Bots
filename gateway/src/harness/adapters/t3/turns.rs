@@ -7,7 +7,7 @@ use serde_json::json;
 impl Turns for T3 {
     async fn send_user(&self, message: &UserMessage) -> Result<(), HarnessError> {
         let rpc = self.rpc().await.map_err(HarnessError::unavailable)?;
-        let command = crate::chat::command_with(
+        let command = crate::harness::t3::transcript::command_with(
             &message.thread_id,
             &message.text,
             &message.attachments,

@@ -15,7 +15,8 @@ pub(crate) fn dispatch_commands(dispatches: &[Dispatch]) -> Vec<Value> {
     dispatches
         .iter()
         .map(|item| {
-            let mut command = crate::chat::send_command(&item.thread_id, &item.text, &[]);
+            let mut command =
+                crate::harness::t3::transcript::send_command(&item.thread_id, &item.text, &[]);
             command["commandId"] = json!(item.message_id);
             command["messageId"] = json!(item.message_id);
             command

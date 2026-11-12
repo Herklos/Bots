@@ -1,3 +1,16 @@
+mod preview;
+mod project;
+
+pub(crate) use preview::latest_preview;
+#[cfg(test)]
+pub(crate) use preview::preview_text;
+#[cfg(test)]
+pub(crate) use project::{child_send, provider_failure};
+pub(crate) use project::{
+    child_send_with, command_with, group_transcript, message_id, send_command, transcript,
+    transcript_for, with_tokens,
+};
+
 use super::T3;
 use crate::harness::{HarnessError, ShellSnapshot, ShellThread, ThreadSnapshot, Transcript};
 use async_trait::async_trait;

@@ -18,7 +18,6 @@ use tokio::sync::Notify;
 
 mod hold;
 mod prompts;
-mod t3;
 #[cfg(test)]
 mod tests;
 
@@ -26,17 +25,6 @@ mod tests;
 pub(crate) use hold::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use prompts::*;
-#[allow(unused_imports, reason = "siblings and old paths use these names")]
-pub(crate) use t3::*;
-
-const LIVE: &[&str] = &[
-    "running",
-    "in_progress",
-    "pending",
-    "queued",
-    "streaming",
-    "starting",
-];
 
 /// Bots by main thread: `{slug, name, color, shape}`. It turns a thread id in a tool call or a
 /// sender into the Bot the person knows.
