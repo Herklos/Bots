@@ -58,6 +58,56 @@ fn origin_comes_from_the_request() {
     );
 }
 
+#[tokio::test]
+async fn html_library_file_is_sandboxed_and_a_png_is_not() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = settings_state(dir.path());
+    let bot = dir.path().join("bots/ada/.bot");
+    std::fs::create_dir_all(&bot).unwrap();
+    std::fs::write(bot.join("bot.json"), r#"{"name":"Ada"}"#).unwrap();
+    let library = dir.path().join("bots/ada/library");
+    std::fs::create_dir_all(&library).unwrap();
+    std::fs::write(library.join("page.html"), b"<script>alert(1)</script>").unwrap();
+    std::fs::write(library.join("shot.png"), b"\x89PNG not really").unwrap();
+
+    let html = library_file(
+        State(state.clone()),
+        Path("ada".into()),
+        Query(HashMap::from([("path".into(), "library/page.html".into())])),
+    )
+    .await
+    .unwrap();
+    assert_eq!(html.status(), StatusCode::OK);
+    assert_eq!(
+        html.headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok()),
+        Some("text/html; charset=utf-8")
+    );
+    assert_eq!(
+        html.headers()
+            .get(header::CONTENT_SECURITY_POLICY)
+            .and_then(|v| v.to_str().ok()),
+        Some("sandbox")
+    );
+
+    let png = library_file(
+        State(state),
+        Path("ada".into()),
+        Query(HashMap::from([("path".into(), "library/shot.png".into())])),
+    )
+    .await
+    .unwrap();
+    assert_eq!(png.status(), StatusCode::OK);
+    assert_eq!(
+        png.headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok()),
+        Some("image/png")
+    );
+    assert!(png.headers().get(header::CONTENT_SECURITY_POLICY).is_none());
+}
+
 #[test]
 fn library_mime_ignores_extension_case() {
     assert_eq!(library_mime("page.HTML"), "text/html; charset=utf-8");
