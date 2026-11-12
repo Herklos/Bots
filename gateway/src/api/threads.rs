@@ -108,11 +108,37 @@ pub(crate) async fn respond_request(
     let thread =
         resolve_chat_thread(&s, &slug, body["child"].as_str(), body["side"].as_str()).await?;
     let kind = body["kind"].as_str().unwrap_or("");
-    let outbound = crate::chat::approvals::outbound(kind, &thread, &id, &body)
+    let attachments = question_files(&s, &slug, &thread, &id, &body).await?;
+    let outbound = crate::chat::approvals::outbound(kind, &thread, &id, &body, attachments)
         .map_err(ApiError::bad_request)?;
     Ok(Json(
         crate::chat::approvals::send(s.harness.approvals().map_err(|err| err.api())?, outbound)
             .await?,
+    ))
+}
+
+async fn question_files(
+    s: &AppState,
+    slug: &str,
+    thread: &str,
+    request_id: &str,
+    body: &Value,
+) -> ApiResult<Option<Value>> {
+    let Some(listed) = crate::chat::answer_files::listed(body)? else {
+        return Ok(None);
+    };
+    let snapshot = s
+        .harness
+        .transcript()
+        .map_err(|err| err.api())?
+        .read(thread)
+        .await
+        .map_err(|err| err.api())?;
+    let transcript = snapshot.transcript();
+    let request = crate::chat::answer_files::open_question(&transcript, request_id)
+        .map_err(ApiError::bad_request)?;
+    Ok(Some(
+        crate::chat::answer_files::records(&s.cfg.bots_root, slug, listed, request).await?,
     ))
 }
 

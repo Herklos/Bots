@@ -165,6 +165,7 @@ mod tests {
             "thread-1",
             "req-2",
             &json!({ "decision": "decline", "feedback": "Use an explicit path." }),
+            None,
         )
         .unwrap();
         let approvals = t3.approvals().expect("approvals");
@@ -174,6 +175,7 @@ mod tests {
             "thread-1",
             "turn-9",
             &json!({ "secret": "hunter2" }),
+            None,
         )
         .unwrap();
         send(approvals, secret).await.expect("secret");

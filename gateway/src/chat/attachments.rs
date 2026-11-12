@@ -19,8 +19,8 @@ use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde_json::{json, Value};
 use std::{path::PathBuf, sync::Arc};
 
-const MAX_BYTES: usize = 8 << 20;
-const MAX_FILES: usize = 8;
+pub(crate) const MAX_BYTES: usize = 8 << 20;
+pub(crate) const MAX_FILES: usize = 8;
 
 pub(crate) async fn list(
     State(s): State<Arc<AppState>>,

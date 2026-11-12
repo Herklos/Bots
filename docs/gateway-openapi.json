@@ -1689,6 +1689,10 @@
                   "answers": {
                     "description": "Harness question answers keyed by question ID.",
                     "x-hbots-dynamic": true
+                  },
+                  "attachmentsByQuestionId": {
+                    "description": "Uploaded file ids keyed by question id. Each id comes from the attachment route.",
+                    "x-hbots-dynamic": true
                   }
                 },
                 "required": [

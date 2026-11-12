@@ -138,6 +138,12 @@ impl Operation {
                         "answers",
                         dynamic("Harness question answers keyed by question ID."),
                     ),
+                    (
+                        "attachmentsByQuestionId",
+                        dynamic(
+                            "Uploaded file ids keyed by question id. Each id comes from the attachment route.",
+                        ),
+                    ),
                 ],
                 &["kind"],
             ),
