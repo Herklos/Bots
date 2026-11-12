@@ -1,0 +1,46 @@
+{
+ "_note": "W0.1 Phase 0 spike: scheduledTasks.upsert with schedule {\"type\": \"webhook\"} against the T3 build installed by `hbots up` (t v0.1.9-nightly.20261110.4452), 2026-11-12. Accepted; the reply carries webhook.path (hook token redacted), webhook.url null (no T3 Connect), hasSecret false. Task deleted afterwards.",
+ "task": {
+  "id": "scheduled-task:e8bbe91d-9db9-4e49-96b6-adee08c02581",
+  "title": "Phase 0 spike webhook",
+  "prompt": "A webhook arrived. Reply with one short sentence only.",
+  "enabled": true,
+  "schedule": {
+   "type": "webhook",
+   "signature": null,
+   "maxDeliveryAgeMinutes": null
+  },
+  "projectId": "580de739-e22a-491a-b6ad-088583e2b7bc",
+  "threadId": "86083684-4051-41d6-8f29-76b9516081da",
+  "threadMode": "continue",
+  "workspaceStrategy": {
+   "type": "root"
+  },
+  "modelSelection": {
+   "instanceId": "claudeAgent",
+   "model": "claude-haiku-5-5",
+   "options": [
+    {
+     "id": "effort",
+     "value": "medium"
+    }
+   ]
+  },
+  "runtimeMode": "approval-required",
+  "interactionMode": "default",
+  "createdBy": "user",
+  "creationSource": "web",
+  "createdAt": "2026-11-12T20:18:17.420Z",
+  "updatedAt": "2026-11-12T20:18:17.420Z",
+  "nextRunAt": null,
+  "lastRunAt": null,
+  "lastRunStatus": "never",
+  "lastRunError": null,
+  "runCount": 0,
+  "webhook": {
+   "path": "/api/hooks/scheduled-task%3Ae8bbe91d-9db9-4e49-96b6-adee08c02581/<redacted-token>",
+   "url": null,
+   "hasSecret": false
+  }
+ }
+}
