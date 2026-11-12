@@ -88,7 +88,7 @@ pub(crate) fn new_webhook_routine(
     }))
 }
 
-pub(super) fn kind_of(task: &Value) -> &'static str {
+pub(crate) fn kind_of(task: &Value) -> &'static str {
     match task["schedule"]["type"].as_str() {
         Some("webhook") => "webhook",
         _ => "schedule",

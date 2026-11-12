@@ -40,6 +40,10 @@ fn activityVerb(label: string, ran: string, edited: string, searched: string, op
 
 fn activityBody(text: string, image: string, file: string): string = text == "image" ? image : text == "file" ? file : text
 
+fn outcomeWord(id: string, accepted: string, filtered: string, duplicate: string, rejected: string, dispatchFailed: string, coalesced: string, disabled: string, rateLimited: string, expired: string, queueFull: string): string = id == "accepted" ? accepted : id == "filtered" ? filtered : id == "duplicate" ? duplicate : id == "rejected_signature" ? rejected : id == "dispatch_failed" ? dispatchFailed : id == "coalesced" ? coalesced : id == "disabled" ? disabled : id == "rate_limited" ? rateLimited : id == "expired" ? expired : id == "queue_full" ? queueFull : id
+
+fn hookNote(source: string, stable: bool, local: string, tunnel: string, stays: string): string = source == "local" ? local : stable ? stays : tunnel
+
 // The open chat is clear. A hidden Bot keeps the mark until that chat is the open one.
 fn showUnread(unread: bool, open: bool, hidden: bool): bool = unread and not open and (hidden or not hidden)
 

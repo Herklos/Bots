@@ -244,6 +244,39 @@ export function fixtureChat(child: string) {
   };
 }
 
+export const FIXTURE_HOOK_URL = 'https://hooks.example/hooks/scheduled-task%3Ahook/tok-fixture';
+export const FIXTURE_HOOK_ROTATED = 'https://hooks.example/hooks/scheduled-task%3Ahook/tok-fixture-2';
+
+export function fixtureRoutineTasks() {
+  return [
+    { id: 'morning', title: 'Morning note', paused: false, schedule: 'Every day at 08:00', next: '', failed: false, kind: 'schedule', outcome: '' },
+    { id: 'hook', title: 'GitHub', paused: false, schedule: 'When a webhook arrives', next: '', failed: false, kind: 'webhook', outcome: 'accepted' },
+  ];
+}
+
+export function fixtureDeliveries() {
+  return [
+    { id: 'del-new', receivedAt: '2026-11-12T20:21:16.707Z', method: 'POST', bodyBytes: 16, outcome: 'accepted' },
+    { id: 'del-filtered', receivedAt: '2026-11-12T20:20:00.000Z', method: 'POST', bodyBytes: 8, outcome: 'filtered' },
+    { id: 'del-dup', receivedAt: '2026-11-12T20:19:00.000Z', method: 'POST', bodyBytes: 8, outcome: 'duplicate' },
+    { id: 'del-sig', receivedAt: '2026-11-12T20:18:00.000Z', method: 'POST', bodyBytes: 8, outcome: 'rejected_signature' },
+    { id: 'del-full', receivedAt: '2026-11-12T20:17:00.000Z', method: 'POST', bodyBytes: 8, outcome: 'queue_full' },
+  ];
+}
+
+export function fixtureDelivery(id: string) {
+  if (id !== 'del-new') return null;
+  return {
+    id,
+    receivedAt: '2026-11-12T20:21:16.707Z',
+    outcome: 'accepted',
+    renderedPrompt: 'A webhook arrived.',
+    body: '{"ping":true}',
+    bodyTruncated: true,
+    headers: { authorization: '[hidden]', cookie: '[hidden]', 'x-hub-signature-256': '[hidden]', 'x-custom-header': 'FooBar' },
+  };
+}
+
 export function explain(error: string, what: string): string {
   const e = error.toLowerCase();
   if (e.includes('reach the gateway')) return loadSentence(what);

@@ -68,13 +68,16 @@ pub(crate) async fn bot_routines(State(s): S, Path(slug): Path<String>) -> ApiRe
             "error": "This Bot is still getting set up.",
         })));
     };
-    let listed = crate::chat::routines::list(routines(&s)?)
+    let routines = routines(&s)?;
+    let listed = crate::chat::routines::list(routines)
         .await
         .map_err(|e| ApiError::new(502, format!("T3 didn't list routines: {}", e.message)))?;
-    let tasks: Vec<Value> = crate::chat::routines::tasks_for_thread(&listed, thread)
+    let mut tasks: Vec<Value> = crate::chat::routines::tasks_for_thread(&listed, thread)
         .iter()
         .map(crate::chat::routines::task_row)
         .collect();
+    // The chip reads the newest delivery. A failed read leaves it blank.
+    crate::chat::routines::inspect::attach_outcomes(routines, &mut tasks).await;
     Ok(Json(json!({ "ok": true, "tasks": tasks, "error": "" })))
 }
 
@@ -102,18 +105,97 @@ pub(crate) async fn bot_routine_save(
     ))
 }
 
-pub(crate) async fn owned_routine(s: &AppState, slug: &str, id: &str) -> ApiResult<()> {
+pub(crate) async fn owned_task(s: &AppState, slug: &str, id: &str) -> ApiResult<Value> {
     let bot = require_bot(s, slug).await?;
     let thread = bot["mainThreadId"].as_str().unwrap_or("");
+    if thread.is_empty() {
+        return Err(ApiError::not_found("That routine is not on this Bot."));
+    }
     let listed = crate::chat::routines::list(routines(s)?).await?;
-    if crate::chat::routines::tasks_for_thread(&listed, thread)
-        .iter()
-        .any(|t| t["id"] == id)
-    {
+    crate::chat::routines::tasks_for_thread(&listed, thread)
+        .into_iter()
+        .find(|task| task["id"] == id)
+        .ok_or_else(|| ApiError::not_found("That routine is not on this Bot."))
+}
+
+pub(crate) async fn owned_routine(s: &AppState, slug: &str, id: &str) -> ApiResult<()> {
+    owned_task(s, slug, id).await.map(|_| ())
+}
+
+fn require_webhook(task: &Value) -> ApiResult<()> {
+    if crate::chat::routines::webhook::kind_of(task) == "webhook" {
         Ok(())
     } else {
-        Err(ApiError::not_found("That routine is not on this Bot."))
+        Err(ApiError::bad_request("That routine is not a webhook."))
     }
+}
+
+fn delivery_miss(err: crate::harness::HarnessError) -> ApiError {
+    if let crate::harness::HarnessError::Failed(msg) = &err {
+        if msg.to_ascii_lowercase().contains("not found") {
+            return ApiError::not_found("That delivery is not on this webhook.");
+        }
+    }
+    err.api()
+}
+
+async fn hook_json(s: &AppState, task: &Value) -> Json<Value> {
+    let settings = s.settings().await;
+    Json(crate::chat::routines::inspect::hook_view(
+        task, &settings, &s.remote,
+    ))
+}
+
+pub(crate) async fn bot_hook(
+    State(s): S,
+    Path((slug, id)): Path<(String, String)>,
+) -> ApiResult<Json<Value>> {
+    let task = owned_task(&s, &slug, &id).await?;
+    require_webhook(&task)?;
+    Ok(hook_json(&s, &task).await)
+}
+
+pub(crate) async fn bot_rotate(
+    State(s): S,
+    Path((slug, id)): Path<(String, String)>,
+) -> ApiResult<Json<Value>> {
+    let task = owned_task(&s, &slug, &id).await?;
+    require_webhook(&task)?;
+    let rotated = routines(&s)?
+        .rotate_webhook_token(&id)
+        .await
+        .map_err(crate::harness::HarnessError::api)?;
+    let fresh = owned_task(&s, &slug, &id).await?;
+    let task = crate::chat::routines::inspect::task_after_rotate(fresh, &rotated);
+    Ok(hook_json(&s, &task).await)
+}
+
+pub(crate) async fn bot_deliveries(
+    State(s): S,
+    Path((slug, id)): Path<(String, String)>,
+) -> ApiResult<Json<Value>> {
+    let task = owned_task(&s, &slug, &id).await?;
+    require_webhook(&task)?;
+    let listed = routines(&s)?
+        .list_deliveries(&id)
+        .await
+        .map_err(crate::harness::HarnessError::api)?;
+    Ok(Json(crate::chat::routines::inspect::delivery_list(&listed)))
+}
+
+pub(crate) async fn bot_delivery(
+    State(s): S,
+    Path((slug, id, delivery_id)): Path<(String, String, String)>,
+) -> ApiResult<Json<Value>> {
+    let task = owned_task(&s, &slug, &id).await?;
+    require_webhook(&task)?;
+    let got = routines(&s)?
+        .get_delivery(&id, &delivery_id)
+        .await
+        .map_err(delivery_miss)?;
+    Ok(Json(crate::chat::routines::inspect::delivery_detail(
+        &task, &got,
+    )))
 }
 
 pub(crate) async fn bot_routine_enabled(

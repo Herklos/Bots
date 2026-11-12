@@ -11,6 +11,7 @@ import { computerSources } from './sources/computer.ts';
 import { memorySources } from './sources/memory.ts';
 import { promptLinkSources } from './sources/prompt-link.ts';
 import { codeSources } from './sources/code.ts';
+import { webhookSources } from './sources/webhook.ts';
 
 const HBOTS_URL = import.meta.env.HBOTS_URL ?? 'http://hbots-origin.invalid';
 setGatewayUrl(HBOTS_URL);
@@ -31,5 +32,6 @@ const sources: Sources = {
   ...memorySources,
   ...promptLinkSources,
   ...codeSources,
+  ...webhookSources,
 };
 export const answer: Answer = (source, args, store, storage, native) => sources[source](args, store, storage, native);

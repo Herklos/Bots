@@ -5209,6 +5209,423 @@
       }
     },
     {
+      "name": "hbots_bot_hook",
+      "description": "GET /api/bots/{slug}/routines/{id}/hook. Required permission: read. Supply API parameters in path/query and the JSON request in body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string",
+                "minLength": 1
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "slug",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "query": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 299
+              },
+              "body": {
+                "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                "x-hbots-dynamic": true
+              }
+            },
+            "required": [
+              "status",
+              "body"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "details": {
+                    "description": "Original structured gateway error details when available.",
+                    "x-hbots-dynamic": true
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hbots_bot_rotate",
+      "description": "POST /api/bots/{slug}/routines/{id}/rotate. Required permission: write. Supply API parameters in path/query and the JSON request in body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string",
+                "minLength": 1
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "slug",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "query": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 299
+              },
+              "body": {
+                "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                "x-hbots-dynamic": true
+              }
+            },
+            "required": [
+              "status",
+              "body"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "details": {
+                    "description": "Original structured gateway error details when available.",
+                    "x-hbots-dynamic": true
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hbots_bot_deliveries",
+      "description": "GET /api/bots/{slug}/routines/{id}/deliveries. Required permission: read. Supply API parameters in path/query and the JSON request in body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string",
+                "minLength": 1
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "slug",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "query": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 299
+              },
+              "body": {
+                "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                "x-hbots-dynamic": true
+              }
+            },
+            "required": [
+              "status",
+              "body"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "details": {
+                    "description": "Original structured gateway error details when available.",
+                    "x-hbots-dynamic": true
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hbots_bot_delivery",
+      "description": "GET /api/bots/{slug}/routines/{id}/deliveries/{delivery_id}. Required permission: read. Supply API parameters in path/query and the JSON request in body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string",
+                "minLength": 1
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "delivery_id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "slug",
+              "id",
+              "delivery_id"
+            ],
+            "additionalProperties": false
+          },
+          "query": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 299
+              },
+              "body": {
+                "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                "x-hbots-dynamic": true
+              }
+            },
+            "required": [
+              "status",
+              "body"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "details": {
+                    "description": "Original structured gateway error details when available.",
+                    "x-hbots-dynamic": true
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
+        "openWorldHint": true
+      }
+    },
+    {
       "name": "hbots_lineage_get",
       "description": "GET /api/bots/{slug}/lineage. Required permission: read. Supply API parameters in path/query and the JSON request in body.",
       "inputSchema": {

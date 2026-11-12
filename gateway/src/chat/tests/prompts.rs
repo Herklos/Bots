@@ -162,3 +162,24 @@ pub(crate) fn an_unknown_failure_class_is_other() {
     assert_eq!(event["failure"]["kind"], "other");
     assert!(provider_failure(&json!({ "type": "user_message" })).is_none());
 }
+
+#[test]
+pub(crate) fn a_webhook_delivery_stays_in_the_transcript_without_a_ran_line() {
+    let item = json!({
+        "id": "turn-item:message:scheduled-task-message%3Ascheduled-task%3A1%3Awebhook%3Adelivery%3Aabc",
+        "type": "user_message",
+        "status": "completed",
+        "text": "A webhook arrived.",
+        "messageId": "scheduled-task-message:scheduled-task:1:webhook:delivery:abc",
+        "scheduledTaskId": "scheduled-task:1",
+    });
+    let projected = transcript_for(&json!({ "turnItems": [item.clone()] }), &Peers::new());
+    assert!(projected["events"].as_array().unwrap().is_empty());
+    assert_eq!(projected["messages"][0]["text"], "A webhook arrived.");
+    assert_eq!(projected["messages"][0]["hidden"], true);
+    let preview = crate::harness::t3::transcript::latest_preview(
+        &json!({ "turnItems": [item] }),
+        &std::collections::HashMap::new(),
+    );
+    assert_eq!(preview.unwrap()["text"], "A webhook arrived.");
+}

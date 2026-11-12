@@ -1,6 +1,6 @@
 import type { Sources, Result } from '../app.contract.d.ts';
 import { API } from '../host/config.ts';
-import { fixtureModelList, rememberFixtureModel, explain } from '../host/fixture.ts';
+import { fixtureModelList, rememberFixtureModel, explain, fixtureRoutineTasks } from '../host/fixture.ts';
 import { noteLocale, say, call, read, reply } from '../host/gateway.ts';
 import { prettyModel, nextLabel, emptyReport, usageReport } from '../host/report.ts';
 import { hostNow } from '../host/time.ts';
@@ -54,6 +54,7 @@ export const librarySources = {
   loadRoutines: async ([slug, gate, locale], store): Promise<Result<'loadRoutines'>> => {
     noteLocale(locale);
     if (slug === '' || gate !== '1') return { ok: true, tasks: [], error: '' };
+    if (slug === 'fixture') return { ok: true, tasks: fixtureRoutineTasks(), error: '' };
     const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/routines`);
     if (!r.ok) {
       if (r.error.includes('no conversation') || r.error.includes('getting set up')) {
@@ -66,14 +67,19 @@ export const librarySources = {
     return {
       ok: true,
       error: String(r.body.error ?? ''),
-      tasks: tasks.map((t: any) => ({
-        id: String(t.id ?? ''),
-        title: String(t.title ?? ''),
-        paused: t.paused === true,
-        schedule: String(t.schedule ?? ''),
-        next: t.paused === true ? 'Paused' : nextLabel(t.nextRunAt, now),
-        failed: t.lastStatus === 'failed',
-      })),
+      tasks: tasks.map((t: any) => {
+        const kind = t.kind === 'webhook' ? 'webhook' : 'schedule';
+        return {
+          id: String(t.id ?? ''),
+          title: String(t.title ?? ''),
+          paused: t.paused === true,
+          schedule: String(t.schedule ?? ''),
+          next: kind === 'webhook' ? '' : t.paused === true ? 'Paused' : nextLabel(t.nextRunAt, now),
+          failed: kind !== 'webhook' && t.lastStatus === 'failed',
+          kind,
+          outcome: kind === 'webhook' ? String(t.hook?.lastOutcome ?? '') : '',
+        };
+      }),
     };
   },
   loadLineage: async ([slug, gate, locale], store): Promise<Result<'loadLineage'>> => {

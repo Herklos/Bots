@@ -90,6 +90,18 @@ pub(crate) fn provider_failure(item: &Value) -> Option<Value> {
     }))
 }
 
+/// A webhook delivery is the user message T3 posts for one hook POST.
+/// `messageId` carries `:webhook:`; the item id carries the same segment percent-encoded.
+/// Schedule runs have neither, so they still become "Routine ran".
+fn webhook_delivery(item: &Value) -> bool {
+    if item["type"].as_str() != Some("user_message") || !item["scheduledTaskId"].is_string() {
+        return false;
+    }
+    let message = item["messageId"].as_str().unwrap_or("");
+    let id = item["id"].as_str().unwrap_or("");
+    message.contains(":webhook:") || id.contains(":webhook:") || id.contains("%3Awebhook%3A")
+}
+
 /// A line the transcript shows between messages: who the Bot messaged, who messaged it, a
 /// routine made or run, a one-off child thread started, or a provider failure that stopped.
 /// A retry that finished (`status` completed) stays quiet. Anything else in a turn is not for the person.
@@ -127,6 +139,7 @@ pub(crate) fn event_for(item: &Value, peers: &Peers, ordinal: i64) -> Option<Val
                 _ => None,
             }
         }
+        "user_message" if webhook_delivery(item) => None,
         "user_message" if item["senderThreadId"].is_string() => line(
             "from",
             "Message from",
@@ -289,12 +302,17 @@ pub(crate) fn project_turns(items: &[Value], peers: &Peers, projection: &Value) 
                     continue;
                 }
                 let sender = peer(peers, &item["senderThreadId"]);
-                messages.push(json!({
+                let mut message = json!({
                     "id": item["id"], "role": if kind == "user_message" { "user" } else { "bot" }, "text": text,
                     "files": files_of(&attachments), "attachments": attachments, "ordinal": ordinal,
                     "from": sender,
                     "at": item["startedAt"].as_str().or(item["updatedAt"].as_str()).unwrap_or(""), "streaming": live,
-                }));
+                });
+                // Hide the bubble. Leave the item so Library and previews still read the text.
+                if webhook_delivery(&item) {
+                    message["hidden"] = json!(true);
+                }
+                messages.push(message);
             }
             "approval_request" | "user_input_request" | "secret_request"
                 if live || status == "awaiting_response" || status == "waiting" =>

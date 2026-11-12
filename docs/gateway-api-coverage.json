@@ -303,6 +303,34 @@
       "classification": "generated"
     },
     {
+      "path": "/api/bots/{slug}/routines/{id}/hook",
+      "method": "GET",
+      "tool": "hbots_bot_hook",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/routines/{id}/rotate",
+      "method": "POST",
+      "tool": "hbots_bot_rotate",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/routines/{id}/deliveries",
+      "method": "GET",
+      "tool": "hbots_bot_deliveries",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/routines/{id}/deliveries/{delivery_id}",
+      "method": "GET",
+      "tool": "hbots_bot_delivery",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
       "path": "/api/bots/{slug}/lineage",
       "method": "GET",
       "tool": "hbots_lineage_get",

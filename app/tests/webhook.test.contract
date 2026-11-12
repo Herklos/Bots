@@ -1,0 +1,47 @@
+locale "en-US"
+
+test "a webhook routine shows its URL and the last deliveries"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  clock data
+  expect tree has "routine-hook"
+  expect tree has "routine-morning"
+  expect text "schedule-hook" == "When a webhook arrives"
+  expect text "outcome-hook" == "Accepted"
+  expect tree missing "copy-morning"
+  expect tree missing "rotate-morning"
+  expect tree missing "deliveries-morning"
+  tap "copy-hook"
+  clock data
+  expect text "hook-url" == "https://hooks.example/hooks/scheduled-task%3Ahook/tok-fixture"
+  expect text "hook-note" == "This address stays until you rotate it."
+  tap "rotate-hook"
+  expect tree has "rotate-confirm-hook"
+  tap "rotate-cancel-hook"
+  tap "rotate-hook"
+  tap "rotate-confirm-hook"
+  clock data
+  expect text "hook-url" == "https://hooks.example/hooks/scheduled-task%3Ahook/tok-fixture-2"
+  tap "deliveries-hook"
+  clock data
+  expect text "panel-page-title" == "Deliveries"
+  expect tree has "delivery-del-new"
+  expect text "chip-del-new" == "Accepted"
+  expect text "chip-del-filtered" == "Filtered"
+  expect text "chip-del-dup" == "Duplicate"
+  expect text "chip-del-sig" == "Bad signature"
+  expect text "chip-del-full" == "Queue full"
+  tap "delivery-del-new"
+  clock data
+  expect text "delivery-prompt" == "A webhook arrived."
+  expect text "delivery-body" == "{\"ping\":true}"
+  expect tree has "delivery-truncated"
+  expect text "header-authorization" == "[hidden]"
+  expect text "header-cookie" == "[hidden]"
+  expect text "header-x-hub-signature-256" == "[hidden]"
+  expect text "header-x-custom-header" == "FooBar"
+  tap "panel-back"
+  expect tree missing "delivery-prompt"
+  expect tree has "delivery-del-new"
