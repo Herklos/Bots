@@ -31,9 +31,15 @@ fn names_are_served_here() {
     for name in NAMES {
         assert!(names.contains(&name), "{name} is listed");
     }
-    let described = tool_defs()
-        .iter()
-        .all(|t| t["description"].as_str().unwrap().contains("16384"));
+    let described = tool_defs().iter().all(|tool| {
+        let name = tool["name"].as_str().unwrap();
+        let text = tool["description"].as_str().unwrap();
+        if name == "memory_read" || name == "skills_read" {
+            text.contains("16384")
+        } else {
+            true
+        }
+    });
     assert!(described);
     assert!(skill_file_name("Open.MD"));
     assert!(!skill_file_name(".md"));
@@ -51,10 +57,7 @@ async fn a_bot_reads_its_own_memory_and_skills() {
     write(&root.join("ada/skills/open.md"), "turn the key");
     let roster = vec![bot("ada", "thread-ada", "bot", None, false)];
     let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
-    let deps = Deps {
-        memory: &store,
-        roster: &roster,
-    };
+    let deps = Deps::reading(&store, &roster);
     let args = json!({ "threadId": "thread-ada" });
     let memory = dispatch(&deps, "memory_read", &args).await.unwrap();
     assert_eq!(
@@ -84,10 +87,7 @@ async fn a_subagent_reads_its_parents_memory_and_skills() {
         bot("ada-jr", "thread-jr", "subagent", Some("ada"), true),
     ];
     let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
-    let deps = Deps {
-        memory: &store,
-        roster: &roster,
-    };
+    let deps = Deps::reading(&store, &roster);
     let args = json!({ "threadId": "thread-jr", "slug": "ada", "parentSlug": "nope" });
     let memory = dispatch(&deps, "memory_read", &args).await.unwrap();
     assert_eq!(memory["memory"]["MEMORY.md"]["text"], "child fact");
@@ -110,10 +110,7 @@ async fn hide_from_sidebar_also_reads_the_parent() {
     write(&root.join("ada-jr/memory/log.md"), "from the child");
     let roster = vec![bot("ada-jr", "thread-jr", "bot", Some("ada"), true)];
     let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
-    let deps = Deps {
-        memory: &store,
-        roster: &roster,
-    };
+    let deps = Deps::reading(&store, &roster);
     let memory = dispatch(&deps, "memory_read", &json!({ "threadId": "thread-jr" }))
         .await
         .unwrap();
@@ -136,10 +133,7 @@ async fn a_normal_bot_cannot_read_another_bots_files() {
         bot("bea", "thread-bea", "bot", None, false),
     ];
     let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
-    let deps = Deps {
-        memory: &store,
-        roster: &roster,
-    };
+    let deps = Deps::reading(&store, &roster);
     let memory = dispatch(
         &deps,
         "memory_read",
@@ -171,10 +165,7 @@ async fn a_forged_slug_is_ignored() {
     write(&root.join("bea/memory/MEMORY.md"), "only-bea");
     let roster = vec![bot("ada", "thread-ada", "bot", None, false)];
     let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
-    let deps = Deps {
-        memory: &store,
-        roster: &roster,
-    };
+    let deps = Deps::reading(&store, &roster);
     let memory = dispatch(
         &deps,
         "memory_read",
@@ -204,10 +195,7 @@ async fn a_missing_parent_is_an_error() {
         true,
     )];
     let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
-    let deps = Deps {
-        memory: &store,
-        roster: &roster,
-    };
+    let deps = Deps::reading(&store, &roster);
     let err = dispatch(&deps, "memory_read", &json!({ "threadId": "thread-jr" }))
         .await
         .unwrap_err();
@@ -236,10 +224,7 @@ async fn a_parent_slug_that_escapes_is_an_error() {
         false,
     )];
     let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
-    let deps = Deps {
-        memory: &store,
-        roster: &roster,
-    };
+    let deps = Deps::reading(&store, &roster);
     let err = dispatch(&deps, "memory_read", &json!({ "threadId": "thread-jr" }))
         .await
         .unwrap_err();
@@ -256,10 +241,7 @@ async fn files_are_capped() {
     write(&root.join("ada/skills/big.md"), &huge);
     let roster = vec![bot("ada", "thread-ada", "bot", None, false)];
     let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
-    let deps = Deps {
-        memory: &store,
-        roster: &roster,
-    };
+    let deps = Deps::reading(&store, &roster);
     let args = json!({ "threadId": "thread-ada" });
     let memory = dispatch(&deps, "memory_read", &args).await.unwrap();
     let text = memory["memory"]["MEMORY.md"]["text"].as_str().unwrap();
@@ -295,10 +277,7 @@ async fn a_symlink_is_not_followed() {
     write(&root.join("ada/skills/real.md"), "ada-skill");
     let roster = vec![bot("ada", "thread-ada", "bot", None, false)];
     let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
-    let deps = Deps {
-        memory: &store,
-        roster: &roster,
-    };
+    let deps = Deps::reading(&store, &roster);
     let args = json!({ "threadId": "thread-ada" });
     let memory = dispatch(&deps, "memory_read", &args).await.unwrap();
     assert_eq!(memory["memory"]["MEMORY.md"]["text"], "");
@@ -318,10 +297,7 @@ async fn a_symlink_bot_folder_is_not_followed() {
     std::os::unix::fs::symlink(root.join("bea"), root.join("ada")).unwrap();
     let roster = vec![bot("ada", "thread-ada", "bot", None, false)];
     let store = MemoryStore::new(Arc::new(LocalDisk::new(root.to_path_buf())));
-    let deps = Deps {
-        memory: &store,
-        roster: &roster,
-    };
+    let deps = Deps::reading(&store, &roster);
     let args = json!({ "threadId": "thread-ada" });
     let memory = dispatch(&deps, "memory_read", &args).await.unwrap();
     assert_eq!(memory["memory"]["MEMORY.md"]["text"], "");

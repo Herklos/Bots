@@ -14,7 +14,8 @@ pub(crate) use project::message_id;
 #[cfg(test)]
 pub(crate) use project::{child_send, provider_failure};
 pub(crate) use project::{
-    command_with, group_transcript, send_command, transcript, transcript_for, with_tokens,
+    command_with, group_transcript, send_command, transcript, transcript_for, turn_items,
+    with_tokens,
 };
 
 pub(crate) const SHELL: &str = "orchestration.subscribeShell";
