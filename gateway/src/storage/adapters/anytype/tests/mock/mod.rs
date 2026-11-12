@@ -14,70 +14,100 @@ use std::time::Duration;
 
 type Shared = Arc<Mutex<MockState>>;
 
-pub(super) struct Mock {
+pub(crate) struct Mock {
     pub url: String,
     state: Shared,
+    shutdown: Option<tokio::sync::oneshot::Sender<()>>,
+}
+
+impl Clone for Mock {
+    fn clone(&self) -> Self {
+        Self {
+            url: self.url.clone(),
+            state: Arc::clone(&self.state),
+            shutdown: None,
+        }
+    }
 }
 
 impl Mock {
-    pub(super) async fn start() -> Self {
+    pub(crate) async fn start() -> Self {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        Self::from_listener(listener)
+    }
+
+    /// Serves on an already-bound listener so a test can refuse the port, then bind it again.
+    pub(crate) fn from_listener(listener: tokio::net::TcpListener) -> Self {
         let state = Arc::new(Mutex::new(MockState::new()));
         let app = routes::router(Arc::clone(&state));
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
+        let (shutdown, done) = tokio::sync::oneshot::channel();
         tokio::spawn(async move {
-            axum::serve(listener, app).await.unwrap();
+            let _ = axum::serve(listener, app)
+                .with_graceful_shutdown(async move {
+                    let _ = done.await;
+                })
+                .await;
         });
         Self {
             url: format!("http://{address}"),
             state,
+            shutdown: Some(shutdown),
         }
     }
 
-    pub(super) fn set_not_granted(&self, on: bool) {
+    /// Stops accepting. The port can be bound again after this returns.
+    pub(crate) async fn shutdown(&mut self) {
+        if let Some(shutdown) = self.shutdown.take() {
+            let _ = shutdown.send(());
+        }
+        tokio::time::sleep(Duration::from_millis(30)).await;
+    }
+
+    pub(crate) fn set_not_granted(&self, on: bool) {
         self.state.lock().expect("mock").not_granted = on;
     }
 
-    pub(super) fn set_malformed(&self, on: bool) {
+    pub(crate) fn set_malformed(&self, on: bool) {
         self.state.lock().expect("mock").malformed = on;
     }
 
-    pub(super) fn set_etag_mismatch(&self, on: bool) {
+    pub(crate) fn set_etag_mismatch(&self, on: bool) {
         self.state.lock().expect("mock").etag_mismatch = on;
     }
 
-    pub(super) fn set_archived_writes(&self, on: bool) {
+    pub(crate) fn set_archived_writes(&self, on: bool) {
         self.state.lock().expect("mock").archived_writes = on;
     }
 
-    pub(super) fn set_status(&self, status: Option<u16>) {
+    pub(crate) fn set_status(&self, status: Option<u16>) {
         self.state.lock().expect("mock").status_override = status;
     }
 
     /// `retry_after_secs == 0` omits `Retry-After`, matching the live 429.
-    pub(super) fn set_rate_limit(&self, times: u32, retry_after_secs: u64) {
+    pub(crate) fn set_rate_limit(&self, times: u32, retry_after_secs: u64) {
         let mut state = self.state.lock().expect("mock");
         state.rate_limits_left = times;
         state.retry_after_secs = retry_after_secs;
     }
 
-    pub(super) fn set_delay(&self, delay: Duration) {
+    pub(crate) fn set_delay(&self, delay: Duration) {
         self.state.lock().expect("mock").delay = delay;
     }
 
-    pub(super) fn object_count(&self) -> usize {
+    pub(crate) fn object_count(&self) -> usize {
         self.state.lock().expect("mock").objects.len()
     }
 
-    pub(super) fn type_count(&self) -> usize {
+    pub(crate) fn type_count(&self) -> usize {
         self.state.lock().expect("mock").types.len()
     }
 
-    pub(super) fn seed_objects(&self, count: usize) {
+    pub(crate) fn seed_objects(&self, count: usize) {
         self.state.lock().expect("mock").seed_objects(count);
     }
 
-    pub(super) fn rewrite_key(&self, from: &str, to: &str) {
+    pub(crate) fn rewrite_key(&self, from: &str, to: &str) {
         self.state
             .lock()
             .expect("mock")
@@ -85,17 +115,17 @@ impl Mock {
             .insert(from.to_string(), to.to_string());
     }
 
-    pub(super) fn seed_types(&self, count: usize) {
+    pub(crate) fn seed_types(&self, count: usize) {
         self.state.lock().expect("mock").seed_types(count);
     }
 
-    pub(super) fn seed_named(&self, name: &str, type_key: &str) {
+    pub(crate) fn seed_named(&self, name: &str, type_key: &str) {
         let mut state = self.state.lock().expect("mock");
         let body = serde_json::json!({ "name": name, "type": type_key });
         state.create_object(&body);
     }
 
-    pub(super) fn peer_write(&self, id: &str, properties: serde_json::Value, tear: bool) -> bool {
+    pub(crate) fn peer_write(&self, id: &str, properties: serde_json::Value, tear: bool) -> bool {
         self.state
             .lock()
             .expect("mock")

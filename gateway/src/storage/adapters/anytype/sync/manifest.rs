@@ -48,6 +48,21 @@ pub(super) struct Entry {
     pub extra: BTreeMap<String, Value>,
 }
 
+impl Entry {
+    pub(super) fn empty() -> Self {
+        Self {
+            base_sha: None,
+            object_id: None,
+            remote_etag: None,
+            remote_modified: None,
+            local_mtime_ns: None,
+            local_size: None,
+            tombstone: false,
+            extra: BTreeMap::new(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Manifest {
     pub version: u32,

@@ -108,6 +108,27 @@ impl Outbox {
         self.items.len() != before
     }
 
+    /// Drops every pending write for `path`. A finished path must not replay an older body.
+    pub(super) fn ack_path(&mut self, path: &str) -> usize {
+        let before = self.items.len();
+        self.items.retain(|item| item.path != path);
+        before - self.items.len()
+    }
+
+    pub(super) fn defer(&mut self, id: &str, next_at: i64) {
+        if let Some(item) = self.items.iter_mut().find(|item| item.id == id) {
+            item.attempts = item.attempts.saturating_add(1);
+            item.next_at = next_at;
+        }
+    }
+
+    pub(super) fn id_for_key(&self, key: &str) -> Option<String> {
+        self.items
+            .iter()
+            .find(|item| item.idem_key == key)
+            .map(|item| item.id.clone())
+    }
+
     pub(super) async fn save(&self, path: &Path) -> Result<(), OutboxError> {
         let mut body = String::new();
         for item in &self.items {
