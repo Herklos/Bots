@@ -68,6 +68,8 @@ pub(super) struct SyncStatus {
     pub phase: Phase,
     pub state: SyncState,
     pub outbox: usize,
+    /// True at 1,000 pending writes, and still true when the queue refuses more.
+    pub outbox_warn: bool,
     pub conflicts: usize,
     pub duplicates: usize,
     pub retry_in: Duration,
@@ -81,6 +83,7 @@ impl SyncStatus {
             phase,
             state: SyncState::from_phase(phase),
             outbox: 0,
+            outbox_warn: false,
             conflicts: 0,
             duplicates: 0,
             retry_in: Duration::ZERO,

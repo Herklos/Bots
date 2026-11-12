@@ -20,7 +20,11 @@ pub(super) async fn create(ctx: &mut Ctx<'_>, job: &Job) -> Result<Outcome, Sync
         return Ok(Outcome::Failed(format!("{} has no local bytes", job.rel)));
     };
     let sha = sha256_hex(bytes);
-    let item = queue(ctx, &job.rel, Op::Create, &sha)?;
+    let item = match queue(ctx, &job.rel, Op::Create, &sha) {
+        Ok(item) => item,
+        Err(QueueFail::Full) => return Ok(Outcome::Failed("outbox full".into())),
+        Err(QueueFail::Error(error)) => return Err(error),
+    };
     ctx.outbox.save(&outbox_path(ctx)).await?;
     if !hook::gate(ctx.hook, Step::BeforeRemoteCall, &job.rel) {
         return Ok(Outcome::Stopped);
@@ -47,7 +51,11 @@ pub(super) async fn update(
         sha256_hex(&bytes)
     };
     let op = if deleted { Op::Tombstone } else { Op::Update };
-    let item = queue(ctx, &job.rel, op, &sha)?;
+    let item = match queue(ctx, &job.rel, op, &sha) {
+        Ok(item) => item,
+        Err(QueueFail::Full) => return Ok(Outcome::Failed("outbox full".into())),
+        Err(QueueFail::Error(error)) => return Err(error),
+    };
     ctx.outbox.save(&outbox_path(ctx)).await?;
     if !hook::gate(ctx.hook, Step::BeforeRemoteCall, &job.rel) {
         return Ok(Outcome::Stopped);
@@ -318,7 +326,18 @@ async fn finish(
     Ok(outcome)
 }
 
-fn queue(ctx: &mut Ctx<'_>, rel: &str, op: Op, sha: &str) -> Result<Item, SyncError> {
+enum QueueFail {
+    Full,
+    Error(SyncError),
+}
+
+impl From<SyncError> for QueueFail {
+    fn from(error: SyncError) -> Self {
+        Self::Error(error)
+    }
+}
+
+fn queue(ctx: &mut Ctx<'_>, rel: &str, op: Op, sha: &str) -> Result<Item, QueueFail> {
     let item = Item::new(
         uuid::Uuid::new_v4().to_string(),
         rel,
@@ -328,14 +347,17 @@ fn queue(ctx: &mut Ctx<'_>, rel: &str, op: Op, sha: &str) -> Result<Item, SyncEr
     );
     let key = item.idem_key.clone();
     if let Err(error) = ctx.outbox.push(item) {
-        return Err(error.into());
+        return Err(match error {
+            outbox::OutboxError::Full => QueueFail::Full,
+            other => QueueFail::Error(other.into()),
+        });
     }
     ctx.outbox
         .items()
         .iter()
         .find(|item| item.idem_key == key)
         .cloned()
-        .ok_or_else(|| SyncError::Conflict("outbox lost the item just queued".into()))
+        .ok_or_else(|| SyncError::Conflict("outbox lost the item just queued".into()).into())
 }
 
 fn pause_or(ctx: &mut Ctx<'_>, id: &str, error: AnytypeError) -> Outcome {

@@ -1,6 +1,6 @@
 # Anytype as a storage backend: plan
 
-Status: plan only, nothing implemented (2026-11-11, third revision). Sources: the gateway code, the Anytype developer docs, the OpenAPI spec served by the local Anytype (`/v2/docs/openapi.json`, API 2025-11-08, pre-release v2), the `anytype-cli` README, and live probes in the `Test-AnyBot` space. The property level type catalog is in [anytype-schema.md](anytype-schema.md).
+Status: tier A file sync is implemented (M0–M7, 2026-11-12). Choosing Anytype in Settings syncs memory, skills, library files, attachments, and shared memory. Typed stores, the markdown codec, and multi-instance validation are not built. This file is still the design record. The property level type catalog is in [anytype-schema.md](anytype-schema.md). Sources: the gateway code, the Anytype developer docs, the OpenAPI spec served by the local Anytype (`/v2/docs/openapi.json`, API 2025-11-08, pre-release v2), the `anytype-cli` README, and live probes in the `Test-AnyBot` space.
 
 Probe leftovers in `Test-AnyBot`, because the API cannot purge them: one chat (`hbprobe-log`), one discussion and one page (`hbprobe2-doc`) in the Bin, and the deleted types `hbprobe` and `hbprobe_2` with their properties (restorable in the app only).
 
@@ -402,7 +402,22 @@ CLI: `hbots storage status | set`, `hbots anytype setup | status | doctor | impo
 
 ## Observability
 
-`hbots anytype status` and `/api/sync/status` report state, outbox depth and age, last push and pull, stream health and reconnects, limiter state and 429 count, manifest size, open conflicts, history ring size and per peer lag. The gateway logs one line per sync decision at debug level (path, decision, shas) and never logs content or keys. A `sync.log` ring file under `.botapp/` helps support.
+`hbots anytype status` and `/api/sync/status` report state, outbox depth and age, last push and pull, stream health and reconnects, limiter state and 429 count, manifest size, open conflicts, history ring size and per peer lag. The gateway logs one line per sync decision at debug level (path, decision, shas) and never logs content or keys. A `sync.log` ring file under `~/.hbots/sync/` keeps the same lines for support.
+
+## Local sync state
+
+`~/.hbots/sync/` is machine-local state for the Anytype engine. It sits next to `storage.json` and `anytype-key`, outside the Bots folder (`HBOTS_ROOT`, default `~/.hbots/bots`). Copying the Bots folder does not copy it. An older gateway ignores the directory and keeps working in file system mode. Filesystem mode does not read it. The files are mode 0600 where the process creates them, and they hold no API key and no file bytes:
+
+| File | What it is |
+|---|---|
+| `manifest.json` | Version 1. One entry per path: base sha, object id, remote etag and modified time, local size and mtime, tombstone flag |
+| `device-id` | This gateway's stable id |
+| `outbox.jsonl` | Writes waiting for Anytype. A warning at 1,000 items; new items are refused at 10,000 |
+| `conflicts.json` | Open conflicts, and the sidecar path beside the file |
+| `history/` | Per-path revisions. The last 20, or 14 days, whichever keeps more |
+| `sync.log` | A small ring of decision lines (`path`, `decision`, shas). No content, no keys |
+
+The API key stays in `~/.hbots/anytype-key` (or in `HBOTS_ANYTYPE_KEY` / `HBOTS_ANYTYPE_KEY_FILE`). It is not written under `sync/`.
 
 ## Test strategy
 

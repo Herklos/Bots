@@ -128,6 +128,16 @@ impl Mock {
         state.create_object(&body);
     }
 
+    /// Backdate or move `last_modified_date` without a write. Garbage collection reads it.
+    pub(crate) fn set_last_modified(&self, id: &str, stamp: &str) -> bool {
+        let mut state = self.state.lock().expect("mock");
+        let Some(object) = state.objects.get_mut(id) else {
+            return false;
+        };
+        object.last_modified = Some(stamp.to_string());
+        true
+    }
+
     pub(crate) fn peer_write(&self, id: &str, properties: serde_json::Value, tear: bool) -> bool {
         self.state
             .lock()

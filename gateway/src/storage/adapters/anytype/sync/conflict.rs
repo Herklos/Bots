@@ -69,6 +69,21 @@ impl Conflicts {
             .count()
     }
 
+    pub(super) fn note_object(&mut self, path: &str, object_id: &str) -> bool {
+        let Some(existing) = self
+            .items
+            .iter_mut()
+            .find(|item| item.path == path && item.state == ConflictState::Open)
+        else {
+            return false;
+        };
+        if existing.object_id.as_deref() == Some(object_id) {
+            return false;
+        }
+        existing.object_id = Some(object_id.to_string());
+        true
+    }
+
     pub(super) fn open_for(&self, path: &str) -> bool {
         self.items
             .iter()

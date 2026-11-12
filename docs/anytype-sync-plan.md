@@ -1,6 +1,6 @@
 # Anytype sync: implementation plan for an agent
 
-Status: ready to implement (2026-11-12). Written against the code at commit `495be9a`.
+Status: M0–M7 are implemented (2026-11-12). This file stays the record of how the engine was built. Written against the code at commit `495be9a`.
 
 This file is the executable slice of [anytype-backend.md](anytype-backend.md) (the design, audit and decisions) and [anytype-schema.md](anytype-schema.md) (the type catalog). Read both first, then this one. Where this file and the design disagree, this file wins, because it was checked against the current code. Section "Differences from the design" lists each one.
 

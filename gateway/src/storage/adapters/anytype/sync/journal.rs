@@ -5,7 +5,7 @@ use super::apply::Outcome;
 use super::conflict::{self, ConflictState};
 use super::engine::Engine;
 use super::error::{remote_note, SyncError};
-use super::outbox::{Item, Op};
+use super::outbox::{Item, Op, OutboxError, Push};
 use super::paths::outbox_path;
 use super::scan::Scan;
 use super::status::{self, Phase, SyncState};
@@ -73,7 +73,7 @@ impl Engine {
                 &present.sha,
                 &device,
             );
-            let _ = self.outbox.push(item);
+            self.enqueue(item);
         }
         if scan.truncated {
             return;
@@ -103,7 +103,24 @@ impl Engine {
                 &sha,
                 &device,
             );
-            let _ = self.outbox.push(item);
+            self.enqueue(item);
+        }
+    }
+
+    fn enqueue(&mut self, item: Item) {
+        match self.outbox.push(item) {
+            Ok(Push::Queued { warn: true }) => {
+                if self.status.last_error.is_none() {
+                    self.status.last_error = Some("outbox is large".into());
+                }
+            }
+            Ok(Push::Queued { warn: false } | Push::Replay) => {}
+            Err(OutboxError::Full) => {
+                self.status.last_error = Some("outbox full".into());
+            }
+            Err(OutboxError::Corrupt(_) | OutboxError::Io(_)) => {
+                self.status.last_error = Some("outbox could not be saved".into());
+            }
         }
     }
 
@@ -112,28 +129,41 @@ impl Engine {
         listing: &super::remote::Listing,
     ) -> Result<(), SyncError> {
         let mut changed = false;
-        let known: Vec<(String, String)> = listing
+        let known: Vec<(String, String, String)> = listing
             .conflicts
             .iter()
-            .map(|(path, conflict)| (path.clone(), conflict.state.clone()))
+            .map(|(path, conflict)| {
+                (
+                    path.clone(),
+                    conflict.object_id.clone(),
+                    conflict.state.clone(),
+                )
+            })
             .collect();
-        for (path, state) in known {
+        for (path, object_id, state) in known {
             match conflict::state_of(&state) {
                 ConflictState::Open => {
-                    if !self.conflicts.open_for(&path) {
-                        let record = conflict::record_for(&path, None, "", "", "");
+                    if self.conflicts.open_for(&path) {
+                        changed |= self.conflicts.note_object(&path, &object_id);
+                    } else {
+                        let record = conflict::record_for(&path, Some(object_id), "", "", "");
                         self.conflicts.insert(record);
+                        super::log::decision(
+                            &self.config.sync_dir,
+                            &path,
+                            "conflict-open",
+                            None,
+                            None,
+                            None,
+                        );
                         changed = true;
                     }
                 }
-                ConflictState::Resolved | ConflictState::Dismissed => {
-                    if let Some(record) = self.conflicts.remove_path(&path) {
-                        if !record.sidecar.is_empty() {
-                            let _ =
-                                std::fs::remove_file(self.config.bots_root.join(&record.sidecar));
-                        }
-                        changed = true;
-                    }
+                ConflictState::Resolved => {
+                    changed |= self.clear_remote_conflict(&path, "conflict-resolved");
+                }
+                ConflictState::Dismissed => {
+                    changed |= self.clear_remote_conflict(&path, "conflict-dismissed");
                 }
             }
         }
@@ -142,7 +172,26 @@ impl Engine {
                 .save(&conflict::conflicts_path(&self.config.sync_dir))
                 .await?;
         }
+        self.housekeep(listing).await?;
         Ok(())
+    }
+
+    fn clear_remote_conflict(&mut self, path: &str, decision: &str) -> bool {
+        let Some(record) = self.conflicts.remove_path(path) else {
+            return false;
+        };
+        if !record.sidecar.is_empty() {
+            let _ = std::fs::remove_file(self.config.bots_root.join(&record.sidecar));
+        }
+        super::log::decision(
+            &self.config.sync_dir,
+            path,
+            decision,
+            None,
+            Some(record.local_sha.as_str()).filter(|sha| !sha.is_empty()),
+            Some(record.remote_sha.as_str()).filter(|sha| !sha.is_empty()),
+        );
+        true
     }
 
     pub(super) fn note(&mut self, outcome: &Outcome, from_list: bool) {

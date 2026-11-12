@@ -10,13 +10,8 @@ async fn duplicate_hb_path_keeps_the_earliest_object() {
     assert_eq!(world.mock.object_count(), 2);
     world.rig.until_quiet().await;
     assert_eq!(world.read(path).unwrap(), b"earliest\n");
-    assert_eq!(world.mock.object_count(), 2);
-    assert!(world.rig.engine.status().duplicates >= 1);
     let rows = files_with_path(&world.mock.url, path).await;
-    let mut bodies = Vec::new();
-    for row in &rows {
-        bodies.push(remote_body(&world.mock.url, row).await);
-    }
-    assert!(bodies.iter().any(|body| body == b"earliest\n"));
-    assert!(bodies.iter().any(|body| body == b"later\n"));
+    assert_eq!(rows.len(), 1, "the later object is archived");
+    assert_eq!(remote_body(&world.mock.url, &rows[0]).await, b"earliest\n");
+    assert_eq!(world.rig.engine.status().duplicates, 0);
 }

@@ -33,6 +33,19 @@ pub(super) fn revisions(root: &Path, rel: &str) -> io::Result<Vec<Revision>> {
     read_revisions(&dir)
 }
 
+pub(super) fn prune_tree(root: &Path, now: SystemTime) -> io::Result<()> {
+    if !root.exists() {
+        return Ok(());
+    }
+    for entry in std::fs::read_dir(root)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            prune_dir(&path, now)?;
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn prune(root: &Path, rel: &str, now: SystemTime) -> io::Result<()> {
     let dir = directory(root, rel);
     if !dir.exists() {
