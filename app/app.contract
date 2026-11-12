@@ -1172,6 +1172,8 @@ component Bots
   derive canMakeGroup = groupName.trim() != "" and groupMembers.length >= 2 and not pending(groupMade)
   derive roomError = match roomSent { case some(r) => r.error, case none => "" }
   derive roomId = match stack(nav).filter(e => e.name == "group").at(-1) { case some(e) => e.params.id, case none => "" }
+  // The sidebar follows the latest conversation on the route, a chat or a group, never both.
+  derive convoName = match stack(nav).filter(e => e.name == "chat" or e.name == "group").at(-1) { case some(e) => e.name, case none => "" }
   derive workingMembers = room.members.filter(m => m.working)
   derive workerKey = workingMembers.map(m => m.slug).join(",")
   derive paintedWorkers = workingMembers.length > 0 ? workingMembers : room.members.filter(m => heldSlugs.filter(s => s == m.slug).length > 0)
@@ -1434,7 +1436,7 @@ component Bots
     panelTab = "details"
     panelPage = "root"
     panelOpen = true
-    nav = go(nav, path("chat", bslug))
+    nav = wide and (top(nav).name == "chat" or top(nav).name == "group") ? replace(nav, path("chat", bslug)) : go(nav, path("chat", bslug))
 
   action postNotices
     send noted = noteUnread(page.visibilityState, page.hasFocus, notice.available, notice.state, prefs.noticeEnabled, prefs.noticeEnabledMissing, prefs.noticeSound, prefs.noticePreview, prefs.noticeWhen, slug, roomId)
@@ -1473,8 +1475,8 @@ component Bots
       password = ""
   action logout
     send signedOut = signOut()
-  // A wide window shows the list beside the open chat. Opening another Bot
-  // replaces that chat, so the conversation swaps instead of stacking.
+  // A wide window shows the list beside the open conversation. Switching chats
+  // or groups replaces that route, so the conversation swaps instead of stacking.
   action open(url: string)
     writeDrafts()
     computerEnlarged = false
@@ -1484,7 +1486,9 @@ component Bots
     panelPage = "root"
     computerTab = ""
     rowMenu = ""
-    nav = top(nav).name == "chat" and url.startsWith("/bot/") ? replace(nav, url) : go(nav, url)
+    let conversation = url.startsWith("/bot/") or url.startsWith("/group/")
+    let onConversation = top(nav).name == "chat" or top(nav).name == "group"
+    nav = wide and conversation and onConversation ? replace(nav, url) : go(nav, url)
   action back
     writeDrafts()
     computerEnlarged = false
@@ -2440,14 +2444,14 @@ component Bots
                 if tiles.length > 0
                   row gap="space.xs" padding="space.sm" testId="bot-tiles"
                     for b in tiles key=b.slug
-                      link class=TileLink href=path("chat", b.slug) testId=`bot-${b.slug}` aria-label=b.name width=84 flex-shrink=0 background-color=(slug == b.slug ? "surface.raised" : "transparent")
+                      link class=TileLink href=path("chat", b.slug) testId=`bot-${b.slug}` aria-label=b.name width=84 flex-shrink=0 background-color=(convoName == "chat" and slug == b.slug ? "surface.raised" : "transparent")
                         column align-items="center" gap="space.xs" width="100%" min-width=0 max-width="100%"
                           Avatar(shape=b.shape, color=faceColor(b.color), state=(b.ready ? (b.working ? "working" : "idle") : "asleep"), size=64, still=(not b.working), presence=(b.unread ? "unread" : b.working ? "online" : ""))
                           text b.name font="-exact-footnote" font-weight=600 max-width="100%" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" text-align="center"
                 scroll id="bots-list" flex=1 min-height=0
                   column padding="0 space.sm" gap="2px"
                     for c in convos key=c.key
-                      InboxRow(row=c, bots=bots, current=(c.kind == "group" ? roomId == c.id : slug == c.id), menuOpen=(rowMenu == c.key), openMenu=openRowMenu, closeMenu=closeRowMenu, pin=doPin, hide=doHide, mute=doMute, muteGroup=doMuteGroup, makeMain=doMain, editBot=editBotFromRow, editGroup=editGroupFromRow)
+                      InboxRow(row=c, bots=bots, current=(c.kind == "group" ? (convoName == "group" and roomId == c.id) : (convoName == "chat" and slug == c.id)), menuOpen=(rowMenu == c.key), openMenu=openRowMenu, closeMenu=closeRowMenu, pin=doPin, hide=doHide, mute=doMute, muteGroup=doMuteGroup, makeMain=doMain, editBot=editBotFromRow, editGroup=editGroupFromRow)
                     if hiddenBots.length > 0
                       button class=ConversationLink appearance="none" press=toggleHidden aria-expanded=hiddenOpen testId="hidden-toggle"
                         row gap="space.sm" align-items="center" flex=1 min-width=0
@@ -2460,7 +2464,7 @@ component Bots
                             row gap="space.md" align-items="center" flex=1 min-width=0
                               Avatar(shape=b.shape, color=faceColor(b.color), state="asleep", size=32, still=true, presence="")
                               text b.name flex=1 color="ink.muted"
-                              if showUnread(b.unread, slug == b.slug, b.hidden)
+                              if showUnread(b.unread, convoName == "chat" and slug == b.slug, b.hidden)
                                 column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${b.slug}`
               if wide
                 column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
@@ -3238,7 +3242,9 @@ component InboxRow
       editBot(row.id)
   view
     column
-      link class=ConversationLink href=(row.kind == "group" ? path("group", row.id) : path("chat", row.id)) contextmenu=openFromSecondary testId=(row.kind == "group" ? `group-${row.id}` : `bot-${row.id}`) background-color=(current ? "surface.raised" : "transparent")
+      link class=ConversationLink href=(row.kind == "group" ? path("group", row.id) : path("chat", row.id)) contextmenu=openFromSecondary testId=(row.kind == "group" ? `group-${row.id}` : `bot-${row.id}`) aria-current=(current ? "page" : "false") background-color=(current ? "surface.raised" : "transparent")
+        if current
+          column width=0 height=0 overflow="hidden" testId=(row.kind == "group" ? `open-group-${row.id}` : `open-bot-${row.id}`)
         row gap="space.md" align-items="center" flex=1 min-width=0
           if row.kind == "group"
             Faces(faces=row.faces, size=44, tuck=-18)
