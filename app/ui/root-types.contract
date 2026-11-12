@@ -264,9 +264,6 @@ fn holdWorking(rows: Row[], hold: bool): Row[] = (hold or rows.filter(r => r.id 
 
 fn withPending(rows: Row[], id: string, text: string, failed: bool): Row[] = text == "" or id == "" or knownSent(rows, id) ? rows : rows.concat([pendingRow(id, text, failed)])
 
-// True when the last character can continue a word, so `joe@mail` is not a mention.
-fn wordChar(c: string): bool = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".includes(c)
-
 fn mentionReplace(text: string, q: string, slug: string): string = `${text.slice(0, text.length - q.length)}${slug} `
 
 fn botMentions(bots: Bot[]): MentionHit[] = bots.filter(b => not b.hideFromSidebar).map(b => MentionHit(slug=b.slug, name=b.name, color=b.color, shape=b.shape))
