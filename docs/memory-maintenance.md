@@ -2,7 +2,9 @@
 
 ## Context injection
 
-Injection reads `memory/MEMORY.md`, `memory/log.md`, and `.botapp/shared-memory.md` through `gateway/src/agent_context.rs`, because `memory.rs` does not exist yet. The text is the managed block of `AGENTS.md`. Threads that are not a Bot's are not touched, and an ephemeral child thread inherits nothing unless it starts in that folder. See `docs/architecture.md`.
+Injection reads `memory/MEMORY.md`, `memory/log.md`, and `.botapp/shared-memory.md` through `gateway/src/bots/agent_context/mod.rs`. The text is the managed block of `AGENTS.md`. Threads that are not a Bot's are not touched, and an ephemeral child thread inherits nothing unless it starts in that folder. See `docs/architecture.md`.
+
+Claude reads `CLAUDE.md` when a session starts (a symlink to `AGENTS.md` on Unix). After that, `.bot/hooks/agents-md.sh` keeps the open thread current. `SessionStart` (`startup|resume|clear|compact`) records a checksum and prints nothing. `UserPromptSubmit` prints nothing the first time it sees a session, and on a later change prints `AGENTS.md changed. Re-read AGENTS.md.` The checksum ignores `<memory-log …>…</memory-log>`, so a log-only snapshot does not print. State is `$CLAUDE_PROJECT_DIR/.bot/hook-state/<session_id>`; files older than seven days are removed on `start`. Codex has no hook. The script is Unix-only. There is still a window between the `CLAUDE.md` read and the hook. See `docs/context-injection-plan.md`.
 
 | Field | Value |
 |---|---|

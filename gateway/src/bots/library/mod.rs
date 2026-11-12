@@ -9,11 +9,14 @@ use base64::Engine;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
+mod agents_hook;
 mod connectors;
 mod kinds;
 #[cfg(test)]
 mod tests;
 
+#[allow(unused_imports, reason = "siblings and old paths use these names")]
+pub(crate) use agents_hook::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use connectors::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]

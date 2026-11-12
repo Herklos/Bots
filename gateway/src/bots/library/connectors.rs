@@ -86,34 +86,8 @@ pub(crate) fn claude_settings(existing: &Value, connectors: &[Value]) -> Value {
         .filter(|n| *n != "bot")
         .collect();
     cs["disabledMcpjsonServers"] = json!(disabled);
-    add_agents_md_hook(&mut cs);
+    install_agents_md_hooks(&mut cs);
     cs
-}
-
-/// Claude reads `CLAUDE.md` once, when a session starts. This `UserPromptSubmit` hook prints
-/// `AGENTS.md` into the turn whenever it changed since this session last saw it, so an open
-/// thread picks up the 20 second memory snapshot. The first turn only records the hash.
-pub(crate) const AGENTS_MD_HOOK: &str = r#"f="$CLAUDE_PROJECT_DIR/AGENTS.md"; [ -f "$f" ] || exit 0; sid=$(sed -n 's/.*"session_id" *: *"\([^"]*\)".*/\1/p' | head -n 1); [ -n "$sid" ] || exit 0; seen="${TMPDIR:-/tmp}/hbots-agents-$sid"; h=$(shasum "$f" | cut -d' ' -f1); old=$(cat "$seen" 2>/dev/null); printf %s "$h" > "$seen"; if [ -n "$old" ] && [ "$old" != "$h" ]; then echo "AGENTS.md changed. These are your current instructions:"; cat "$f"; fi"#;
-
-pub(crate) fn add_agents_md_hook(cs: &mut Value) {
-    let mut entries = match cs["hooks"]["UserPromptSubmit"].as_array() {
-        Some(list) => list.clone(),
-        None => Vec::new(),
-    };
-    let has_hook = entries.iter().any(|entry| {
-        entry["hooks"].as_array().is_some_and(|hooks| {
-            hooks
-                .iter()
-                .any(|h| h["command"].as_str() == Some(AGENTS_MD_HOOK))
-        })
-    });
-    if !has_hook {
-        entries.push(json!({ "hooks": [{ "type": "command", "command": AGENTS_MD_HOOK }] }));
-    }
-    if !cs["hooks"].is_object() {
-        cs["hooks"] = json!({});
-    }
-    cs["hooks"]["UserPromptSubmit"] = json!(entries);
 }
 
 pub(crate) fn codex_toml(mcp: &Value) -> String {
@@ -245,6 +219,16 @@ impl Library {
         };
         let mcp = merge_mcp(&existing, connectors, &self.mcp_url, &self.mcp_token);
         let claude = claude_settings(&claude_existing, connectors);
+        #[cfg(unix)]
+        {
+            let hook_rel = format!("{slug}/.bot/hooks/agents-md.sh");
+            let current = self.ws.read(&hook_rel).await.unwrap_or_default();
+            if current != AGENTS_MD_SCRIPT.as_bytes() {
+                self.ws
+                    .write(&hook_rel, AGENTS_MD_SCRIPT.as_bytes(), Some(0o755))
+                    .await?;
+            }
+        }
         let toml = codex_toml(&mcp);
         let mcp_text = serde_json::to_string_pretty(&mcp).unwrap_or_else(|_| "{}".into()) + "\n";
         let claude_text =
