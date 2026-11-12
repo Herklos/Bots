@@ -1,26 +1,23 @@
 //! The `hbots` command line: set up, run, check and update the gateway.
 //! `hbots serve` (and no command at all, as before) returns to `main`, which starts the gateway.
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Result};
 use serde_json::json;
 use std::{
     cmp::Ordering,
     collections::HashMap,
     io::{IsTerminal, Write},
-    path::{Path, PathBuf},
+    path::Path,
     time::Duration,
 };
 
 mod env;
-mod t3;
 #[cfg(test)]
 mod tests;
 mod update;
 
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use env::*;
-#[allow(unused_imports, reason = "siblings and old paths use these names")]
-pub(crate) use t3::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use update::*;
 
@@ -72,7 +69,7 @@ pub(crate) async fn run(args: &[String]) -> Option<i32> {
             );
             Ok(())
         }
-        "up" => up(&flags).await,
+        "up" => crate::harness::t3::setup::up(&flags).await,
         "status" => status(&flags),
         "update" => update(&flags, &rest).await,
         "rollback" => rollback(),

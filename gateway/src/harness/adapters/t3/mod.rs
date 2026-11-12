@@ -10,6 +10,7 @@ pub(crate) mod hold;
 mod previews;
 mod provision;
 mod routines;
+pub(crate) mod setup;
 pub(crate) mod stream;
 pub(crate) mod transcript;
 mod turns;
