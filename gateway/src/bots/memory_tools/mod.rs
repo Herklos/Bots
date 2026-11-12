@@ -9,6 +9,7 @@
 //! Each file is capped at [`FILE_CAP`] bytes. A missing file is an empty string.
 //! A missing parent folder is a tool error.
 
+use crate::bots::memory::{MemoryScopeError, MemoryStore};
 use crate::{bots::valid_slug, AppState};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
@@ -24,9 +25,9 @@ const PARENT_MISSING: &str = "This subagent's parent folder is missing.";
 
 const NAMES: [&str; 2] = ["memory_read", "skills_read"];
 
-/// What the tools need, passed in so tests can supply a temp directory.
+/// What the tools need. Tests pass a store on a temp folder.
 pub(crate) struct Deps<'a> {
-    pub root: &'a Path,
+    pub memory: &'a MemoryStore,
     pub roster: &'a [Value],
 }
 
@@ -71,7 +72,7 @@ pub(crate) async fn call(state: &AppState, name: &str, args: &Value) -> Result<V
     let roster = state.bots.list().await.map_err(|e| e.message)?;
     dispatch(
         &Deps {
-            root: &state.cfg.bots_root,
+            memory: &state.memory,
             roster: &roster,
         },
         name,
@@ -148,40 +149,6 @@ fn file_value(text: String, truncated: bool) -> Value {
     json!({ "text": text, "truncated": truncated })
 }
 
-/// Read `rel` under `bot_dir`. A missing file, a directory, or a symlink is empty.
-pub(crate) async fn read_rel(bot_dir: &Path, rel: &[&str]) -> Result<Value, String> {
-    let mut path = bot_dir.to_path_buf();
-    for part in rel {
-        if part.is_empty()
-            || *part == "."
-            || *part == ".."
-            || part.contains('/')
-            || part.contains('\\')
-        {
-            return Ok(empty_file());
-        }
-        path.push(part);
-        match tokio::fs::symlink_metadata(&path).await {
-            Ok(meta) if meta.file_type().is_symlink() => return Ok(empty_file()),
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(empty_file()),
-            Err(e) => return Err(e.to_string()),
-        }
-    }
-    let meta = tokio::fs::symlink_metadata(&path)
-        .await
-        .map_err(|e| e.to_string())?;
-    if !meta.file_type().is_file() {
-        return Ok(empty_file());
-    }
-    let (text, truncated) = read_default(&path).await?;
-    Ok(file_value(text, truncated))
-}
-
-async fn read_default(path: &Path) -> Result<(String, bool), String> {
-    read_capped(path, FILE_CAP).await
-}
-
 /// Read at most `cap` bytes from the start. A split UTF-8 character is dropped.
 pub(crate) async fn read_capped(path: &Path, cap: usize) -> Result<(String, bool), String> {
     let file = tokio::fs::File::open(path)
@@ -239,109 +206,85 @@ fn trim_partial_char_end(buf: &mut Vec<u8>) {
     }
 }
 
-fn skill_file_name(name: &str) -> bool {
-    Path::new(name)
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("md"))
-        && name.len() > ".md".len()
-        && !name.contains('/')
-        && !name.contains('\\')
-        && !name.contains('\0')
-        && name != "."
-        && name != ".."
-}
-
-async fn skills_in(bot_dir: &Path) -> Result<Vec<Value>, String> {
-    let skills_dir = bot_dir.join("skills");
-    let meta = match tokio::fs::symlink_metadata(&skills_dir).await {
-        Ok(meta) => meta,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(e) => return Err(e.to_string()),
-    };
-    if !meta.file_type().is_dir() {
-        return Ok(Vec::new());
+async fn memory_of(memory: &MemoryStore, slug: &str) -> Result<Value, String> {
+    if !present(memory, slug).await? {
+        return Ok(json!({
+            "MEMORY.md": empty_file(),
+            "log.md": empty_file(),
+        }));
     }
-    let mut names = Vec::new();
-    let mut entries = tokio::fs::read_dir(&skills_dir)
+    let (memory_text, memory_truncated) = memory
+        .read_capped(&MemoryStore::bot_memory(slug), FILE_CAP)
         .await
         .map_err(|e| e.to_string())?;
-    while let Some(entry) = entries.next_entry().await.map_err(|e| e.to_string())? {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if skill_file_name(&name) {
-            names.push(name);
-        }
-    }
-    names.sort();
-    let mut out = Vec::with_capacity(names.len());
-    for name in names {
-        let path = skills_dir.join(&name);
-        let meta = match tokio::fs::symlink_metadata(&path).await {
-            Ok(meta) => meta,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(e.to_string()),
-        };
-        if !meta.file_type().is_file() {
-            continue;
-        }
-        let (text, truncated) = read_default(&path).await?;
-        out.push(json!({ "name": name, "text": text, "truncated": truncated }));
-    }
-    Ok(out)
-}
-
-async fn memory_of(bot_dir: &Path) -> Result<Value, String> {
+    let (log_text, log_truncated) = memory
+        .read_capped(&MemoryStore::bot_log(slug), FILE_CAP)
+        .await
+        .map_err(|e| e.to_string())?;
     Ok(json!({
-        "MEMORY.md": read_rel(bot_dir, &["memory", "MEMORY.md"]).await?,
-        "log.md": read_rel(bot_dir, &["memory", "log.md"]).await?,
+        "MEMORY.md": file_value(memory_text, memory_truncated),
+        "log.md": file_value(log_text, log_truncated),
     }))
 }
 
-async fn scope(d: &Deps<'_>, args: &Value) -> Result<(PathBuf, Option<PathBuf>), String> {
+async fn skills_of(memory: &MemoryStore, slug: &str) -> Result<Vec<Value>, String> {
+    if !present(memory, slug).await? {
+        return Ok(Vec::new());
+    }
+    let files = memory
+        .skills(slug, FILE_CAP)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(files
+        .into_iter()
+        .map(|skill| {
+            json!({
+                "name": skill.name,
+                "text": skill.text,
+                "truncated": skill.truncated,
+            })
+        })
+        .collect())
+}
+
+async fn present(memory: &MemoryStore, slug: &str) -> Result<bool, String> {
+    match memory.require_bot_dir(slug).await {
+        Ok(()) => Ok(true),
+        Err(MemoryScopeError::Absent) => Ok(false),
+        Err(MemoryScopeError::Failed(message)) => Err(message),
+    }
+}
+
+async fn scope(d: &Deps<'_>, args: &Value) -> Result<(String, Option<String>), String> {
     let bot = caller(d.roster, args)?;
-    let slug = bot["slug"].as_str().unwrap_or_default();
-    let own = match folder(d.root, slug).await? {
-        Folder::Ready(dir) => dir,
-        Folder::Absent => PathBuf::new(),
-    };
+    let slug = bot["slug"].as_str().unwrap_or_default().to_string();
     let parent = if is_subagent(bot) {
         let parent_slug = parent_slug(bot).ok_or(PARENT_MISSING)?;
-        match folder(d.root, parent_slug).await? {
-            Folder::Ready(dir) => Some(dir),
-            Folder::Absent => return Err(PARENT_MISSING.to_string()),
+        if present(d.memory, parent_slug).await? {
+            Some(parent_slug.to_string())
+        } else {
+            return Err(PARENT_MISSING.to_string());
         }
     } else {
         None
     };
-    Ok((own, parent))
+    Ok((slug, parent))
 }
 
 async fn read_memory(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
     let (own, parent) = scope(d, args).await?;
-    let memory = if own.as_os_str().is_empty() {
-        json!({
-            "MEMORY.md": empty_file(),
-            "log.md": empty_file(),
-        })
-    } else {
-        memory_of(&own).await?
-    };
-    let mut result = json!({ "memory": memory });
+    let mut result = json!({ "memory": memory_of(d.memory, &own).await? });
     if let Some(parent) = parent {
-        result["parent"] = json!({ "memory": memory_of(&parent).await? });
+        result["parent"] = json!({ "memory": memory_of(d.memory, &parent).await? });
     }
     Ok(result)
 }
 
 async fn read_skills(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
     let (own, parent) = scope(d, args).await?;
-    let skills = if own.as_os_str().is_empty() {
-        Vec::new()
-    } else {
-        skills_in(&own).await?
-    };
-    let mut result = json!({ "skills": skills });
+    let mut result = json!({ "skills": skills_of(d.memory, &own).await? });
     if let Some(parent) = parent {
-        result["parent"] = json!({ "skills": skills_in(&parent).await? });
+        result["parent"] = json!({ "skills": skills_of(d.memory, &parent).await? });
     }
     Ok(result)
 }

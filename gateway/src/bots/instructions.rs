@@ -23,16 +23,6 @@ pub(crate) async fn read_connector_list(path: &Path) -> ApiResult<Vec<Value>> {
     }
 }
 
-pub(crate) async fn write_if_missing(path: &Path, text: &str) -> std::io::Result<()> {
-    if !tokio::fs::try_exists(path).await.unwrap_or(false) {
-        if let Some(d) = path.parent() {
-            tokio::fs::create_dir_all(d).await?;
-        }
-        tokio::fs::write(path, text).await?;
-    }
-    Ok(())
-}
-
 /// The brief names T3 Code because that is the harness wired today. Other backends may be added.
 /// `parent` is the parent Bot record when this Bot is a subagent. `children` are that parent's
 /// subagents. A parent's prompt is its `prompt` field.

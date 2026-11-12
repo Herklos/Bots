@@ -249,28 +249,13 @@ impl Bots {
         };
         let base = slugify(&name);
         let (mut slug, mut n) = (base.clone(), 2);
-        while tokio::fs::try_exists(self.root.join(&slug))
-            .await
-            .unwrap_or(false)
-        {
+        let store = crate::bots::memory::MemoryStore::new(std::sync::Arc::clone(&self.ws));
+        while store.exists(&slug).await.unwrap_or(false) {
             slug = format!("{base}-{n}");
             n += 1;
         }
-        let dir = self.dir(&slug)?;
-        tokio::fs::create_dir_all(dir.join("memory")).await?;
-        tokio::fs::create_dir_all(dir.join("library")).await?;
-        tokio::fs::create_dir_all(dir.join("skills")).await?;
-        write_if_missing(
-            &dir.join("memory").join("MEMORY.md"),
-            &format!("# {name} memory\n\n"),
-        )
-        .await?;
-        write_if_missing(&dir.join("memory").join("log.md"), "# Work log\n\n").await?;
-        write_if_missing(
-            &self.root.join(".botapp").join("shared-memory.md"),
-            "# Shared facts (all Bots)\n\n",
-        )
-        .await?;
+        self.dir(&slug)?;
+        store.bootstrap(&slug, &name).await?;
         let default_color = hbots_design::tokens().avatar.default.as_str();
         let shape = if let Some(shape) = input["shape"].as_str().and_then(shape_name) {
             shape

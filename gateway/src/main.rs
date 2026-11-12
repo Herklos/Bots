@@ -116,10 +116,11 @@ async fn main() -> anyhow::Result<()> {
             cfg.allowed_origins.clone(),
         )?,
         harness: crate::harness::connect(cfg.t3_url.clone(), cfg.t3_token.clone()),
-        bots: bots::Bots::new(
+        bots: bots::Bots::with_workspace(
             cfg.bots_root.clone(),
             cfg.bot_mcp_url.clone(),
             mcp_token.clone(),
+            Arc::clone(&workspace),
         ),
         vault: vault::Vault::new(cfg.vault_file.clone(), cfg.vault_key_file.clone()),
         projects: projects::Projects::new(app_dir.join("projects.json")),
@@ -134,6 +135,7 @@ async fn main() -> anyhow::Result<()> {
         system: crate::platform::release::System::new(cfg.data_root.clone(), app_dir.clone()),
         icons: crate::bots::icons::Icons::new(cfg.data_root.join("icons")),
         usage: crate::bots::usage::Usage::new(app_dir.join("usage.json")),
+        memory: crate::bots::memory::MemoryStore::new(Arc::clone(&workspace)),
         workspace: Arc::clone(&workspace),
         library: crate::bots::library::Library::new(
             workspace,
