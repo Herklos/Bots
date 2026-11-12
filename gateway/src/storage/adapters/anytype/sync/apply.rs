@@ -4,6 +4,7 @@
 use super::super::client::AnytypeClient;
 use super::conflict::{self, ConflictState};
 use super::decide::Action;
+use super::echo::EchoBook;
 use super::error::SyncError;
 use super::history;
 use super::hook::{self, Step};
@@ -45,6 +46,7 @@ pub(super) struct Ctx<'a> {
     pub outbox: &'a mut Outbox,
     pub conflicts: &'a mut super::conflict::Conflicts,
     pub hook: &'a mut dyn hook::Hook,
+    pub echo: &'a mut EchoBook,
 }
 
 #[derive(Debug)]

@@ -36,6 +36,7 @@ impl MockState {
         };
         let type_key = object.type_key.clone();
         self.objects.insert(id.clone(), object);
+        self.announce(&id);
         Reply {
             status: 201,
             body: json!({"id": id, "type": type_key, "etag": etag}),
@@ -87,6 +88,7 @@ impl MockState {
         draft.last_modified = Some(modified);
         let type_key = draft.type_key.clone();
         self.objects.insert(id.to_string(), draft);
+        self.announce(id);
         let mut response = json!({"id": id, "type": type_key, "etag": etag});
         if let Some(created) = created {
             response["created_blocks"] = Value::Object(created);
@@ -116,6 +118,7 @@ impl MockState {
             object.archived = true;
             object.last_modified = Some(modified);
         }
+        self.announce(id);
         Reply {
             status: 200,
             body: json!({
@@ -138,6 +141,7 @@ impl MockState {
         let Some(object) = self.objects.remove(id) else {
             return missing();
         };
+        self.announce(&object.id);
         Reply {
             status: 200,
             body: json!({"id": object.id, "type": object.type_key}),
@@ -160,6 +164,7 @@ impl MockState {
             object.archived = false;
             object.last_modified = Some(modified);
         }
+        self.announce(id);
         Reply {
             status: 200,
             body: json!({"id": object_id, "type": type_key}),
@@ -178,30 +183,33 @@ impl MockState {
         }
         let etag = self.next_etag();
         let modified = self.touch();
-        let Some(object) = self.objects.get_mut(id) else {
-            return false;
-        };
-        if !object.properties.is_object() {
-            object.properties = json!({});
-        }
-        let old_sha = object.properties.get("hb_sha").cloned();
-        if let Some(props) = object.properties.as_object_mut() {
-            for (key, value) in incoming {
-                props.insert(key.clone(), value.clone());
+        {
+            let Some(object) = self.objects.get_mut(id) else {
+                return false;
+            };
+            if !object.properties.is_object() {
+                object.properties = json!({});
             }
-            if tear {
-                match old_sha {
-                    Some(sha) => {
-                        props.insert("hb_sha".to_string(), sha);
-                    }
-                    None => {
-                        props.remove("hb_sha");
+            let old_sha = object.properties.get("hb_sha").cloned();
+            if let Some(props) = object.properties.as_object_mut() {
+                for (key, value) in incoming {
+                    props.insert(key.clone(), value.clone());
+                }
+                if tear {
+                    match old_sha {
+                        Some(sha) => {
+                            props.insert("hb_sha".to_string(), sha);
+                        }
+                        None => {
+                            props.remove("hb_sha");
+                        }
                     }
                 }
             }
+            object.etag = etag;
+            object.last_modified = Some(modified);
         }
-        object.etag = etag;
-        object.last_modified = Some(modified);
+        self.announce(id);
         true
     }
 

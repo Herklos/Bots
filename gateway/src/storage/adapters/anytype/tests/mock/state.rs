@@ -3,8 +3,15 @@
 use super::objects::Block;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
+
+/// A mutation the search-stream subscribers should notice. `gen` orders it against a snapshot.
+#[derive(Clone)]
+pub(super) enum Live {
+    Changed { id: String, gen: u64 },
+    DropAll,
+}
 
 #[derive(Clone)]
 pub(super) struct Object {
@@ -57,6 +64,13 @@ pub(super) struct MockState {
     pub retry_after_secs: u64,
     pub delay: Duration,
     pub rewrites: BTreeMap<String, String>,
+    pub stream_cap: usize,
+    pub stream_open: usize,
+    pub stream_omit: BTreeSet<String>,
+    pub gets: u64,
+    pub last_stream_body: Value,
+    pub gen: u64,
+    pub live: tokio::sync::broadcast::Sender<Live>,
 }
 
 impl MockState {
@@ -79,7 +93,26 @@ impl MockState {
             retry_after_secs: 0,
             delay: Duration::ZERO,
             rewrites: BTreeMap::new(),
+            stream_cap: 8,
+            stream_open: 0,
+            stream_omit: BTreeSet::new(),
+            gets: 0,
+            last_stream_body: Value::Null,
+            gen: 0,
+            live: tokio::sync::broadcast::channel(64).0,
         }
+    }
+
+    pub(super) fn announce(&mut self, id: &str) {
+        self.gen = self.gen.saturating_add(1);
+        let _ = self.live.send(Live::Changed {
+            id: id.to_string(),
+            gen: self.gen,
+        });
+    }
+
+    pub(super) fn drop_streams(&mut self) {
+        let _ = self.live.send(Live::DropAll);
     }
 
     pub(super) fn seed_objects(&mut self, count: usize) {

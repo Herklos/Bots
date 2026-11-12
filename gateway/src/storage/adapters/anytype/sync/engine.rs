@@ -4,16 +4,18 @@
 use super::super::client::AnytypeClient;
 use super::apply::{self, Ctx, Job, Keep, Outcome};
 use super::conflict;
+use super::echo::EchoBook;
 use super::error::{remote_note, SyncError};
 use super::hook::{self, Hook};
 use super::manifest::{self, Identity, Loaded, Manifest};
 use super::outbox::Outbox;
+use super::paths::{device_path, manifest_path, outbox_path};
 use super::plan::{self, Planned};
 use super::remote;
 use super::scan::{self, Scan, Shortcut};
 use super::status::{Phase, Preview, SyncState, SyncStatus};
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
 
 #[derive(Debug, Clone)]
@@ -82,6 +84,7 @@ pub(super) struct Engine {
     pub(super) backoff: Duration,
     pub(super) nudged: BTreeSet<String>,
     pub(super) duplicates: usize,
+    pub(super) echo: EchoBook,
 }
 
 impl std::fmt::Debug for Engine {
@@ -135,6 +138,7 @@ impl Engine {
             backoff: Duration::from_secs(2),
             nudged: BTreeSet::new(),
             duplicates: 0,
+            echo: EchoBook::default(),
         })
     }
 
@@ -275,6 +279,7 @@ impl Engine {
             outbox: &mut self.outbox,
             conflicts: &mut self.conflicts,
             hook: &mut *self.hook,
+            echo: &mut self.echo,
         }
     }
 
@@ -485,16 +490,4 @@ fn load_device(config: &Config) -> String {
         return config.device_id.clone();
     }
     uuid::Uuid::new_v4().to_string()
-}
-
-pub(super) fn manifest_path(dir: &Path) -> PathBuf {
-    dir.join("manifest.json")
-}
-
-pub(super) fn outbox_path(dir: &Path) -> PathBuf {
-    dir.join("outbox.jsonl")
-}
-
-fn device_path(dir: &Path) -> PathBuf {
-    dir.join("device-id")
 }

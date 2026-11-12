@@ -30,6 +30,15 @@ pub(super) fn shared_client() -> Result<reqwest::Client, AnytypeError> {
         .map_err(|_error| AnytypeError::Unreachable)
 }
 
+/// A search stream has no total deadline. Connect still fails fast, and the reader
+/// treats a missed heartbeat as a dead stream.
+pub(super) fn streaming_client() -> Result<reqwest::Client, AnytypeError> {
+    reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|_error| AnytypeError::Unreachable)
+}
+
 pub(super) fn legacy_unreachable(_error: reqwest::Error) -> ApiError {
     ApiError::new(
         502,
@@ -228,7 +237,7 @@ fn header_etag(headers: &HeaderMap) -> Option<String> {
     }
 }
 
-fn retry_after(headers: &HeaderMap) -> Duration {
+pub(super) fn retry_after(headers: &HeaderMap) -> Duration {
     headers
         .get(RETRY_AFTER)
         .and_then(|value| value.to_str().ok())

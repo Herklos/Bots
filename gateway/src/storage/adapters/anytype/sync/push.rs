@@ -311,7 +311,11 @@ async fn finish(
     }
     let rev = rev_of(ctx, &job.rel);
     entry.extra.insert("hb_rev".to_string(), Value::from(rev));
-    commit(ctx, &job.rel, entry, bytes, true).await
+    let outcome = commit(ctx, &job.rel, entry, bytes, true).await?;
+    if matches!(outcome, Outcome::Applied) && !tombstone {
+        ctx.echo.remember(&job.rel, sha);
+    }
+    Ok(outcome)
 }
 
 fn queue(ctx: &mut Ctx<'_>, rel: &str, op: Op, sha: &str) -> Result<Item, SyncError> {

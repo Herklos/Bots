@@ -19,10 +19,12 @@ mod pairing;
 mod schema;
 mod search;
 mod status;
+mod stream;
 
 pub(crate) use error::AnytypeError;
 pub(crate) use pairing::{confirm_pairing, start_pairing};
 pub(crate) use status::{open_client, status};
+pub(super) use stream::{FileStream, StreamEvent};
 
 use limiter::Limiter;
 
@@ -35,6 +37,8 @@ pub(crate) struct AnytypeClient {
     key: String,
     space_id: String,
     http: reqwest::Client,
+    /// No total timeout. A search stream stays open, and a missed heartbeat closes it.
+    stream_http: reqwest::Client,
     limiter: Limiter,
 }
 
@@ -70,6 +74,7 @@ impl AnytypeClient {
             key: key.into(),
             space_id: space_id.into(),
             http: http::shared_client()?,
+            stream_http: http::streaming_client()?,
             limiter: Limiter::new(rate, burst),
         })
     }
