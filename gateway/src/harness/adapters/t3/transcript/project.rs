@@ -341,17 +341,9 @@ pub(crate) fn command_with(thread: &str, text: &str, attachments: &[Value], id: 
 }
 
 /// A short token the client chose, or a new id. The transcript row is `turn-item:message:` plus this.
+#[cfg(test)]
 pub(crate) fn message_id(supplied: Option<&str>) -> String {
-    let id = supplied.unwrap_or("").trim();
-    if (1..=80).contains(&id.len())
-        && id
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
-    {
-        id.to_string()
-    } else {
-        uuid::Uuid::new_v4().to_string()
-    }
+    crate::harness::message_id(supplied)
 }
 
 /// A send aimed at a child. The command is built only after the child resolves, so a remote
@@ -374,6 +366,7 @@ pub(crate) fn child_send(
     )
 }
 
+#[cfg(test)]
 pub(crate) fn child_send_with(
     rows: &[Value],
     parent: &str,

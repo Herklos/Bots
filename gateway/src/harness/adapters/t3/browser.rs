@@ -71,6 +71,14 @@ impl Browser for T3 {
         })
     }
 
+    async fn held_input(&self, slug: &str, tab_id: &str, messages: &[Value]) -> Option<Vec<u8>> {
+        super::hold::input(slug, tab_id, messages).await
+    }
+
+    async fn release(&self, slug: &str) -> bool {
+        super::hold::release(slug).await
+    }
+
     async fn edit(
         &self,
         thread_id: &str,
@@ -106,6 +114,10 @@ impl Browser for T3 {
 impl Relay for T3 {
     fn http_base(&self) -> &str {
         &self.base_url
+    }
+
+    fn ws_base(&self) -> String {
+        super::ws_base(&self.base_url)
     }
 
     async fn proxy_http(
