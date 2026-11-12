@@ -602,6 +602,7 @@ shape Room
   members: RoomMember[]
   messages: RoomMessage[]
   notifications: bool
+  answerPolicy: string
 
 // One @ completion row above the composer.
 shape MentionHit
@@ -650,6 +651,7 @@ shape Prefs
   noticePreview: string
   noticeWhen: string
   noticeEnabledMissing: bool
+  groupAnswerPolicy: string
 
 // The host page, as the poster reads it. `hidden` or an unfocused window is background.
 shape PageState
@@ -2242,6 +2244,9 @@ component Bots
   action doDefaultMode(mode: string)
     if not pending(prefsSaved)
       send prefsSaved = setDefaultMode(mode)
+  action doGroupAnswer(policy: string)
+    if not pending(prefsSaved)
+      send prefsSaved = setGroupAnswerPolicy(policy)
   action doMakeDefault(instanceId: string, model: string, effort: string)
     if not pending(defaultSaved)
       send defaultSaved = setDefaultModel(instanceId, model, effort)
@@ -2832,6 +2837,14 @@ component Bots
                             button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.defaultRuntimeMode == mode) press=doDefaultMode(mode) testId=`default-access-${mode}` background-color=(prefs.defaultRuntimeMode == mode ? "surface.card" : "transparent") color=(prefs.defaultRuntimeMode == mode ? "-exact-label" : "ink.muted")
                               text (mode == "approval-required" ? t("model.ask") : mode == "auto" ? t("model.auto") : t("model.fullAccess"))
                       text t("settings.defaultAccessNote") class=SettingsFoot
+                    column
+                      text t("settings.groupAnswer") class=SectionLabel
+                      column class=GroupCard padding="space.sm"
+                        row class=SettingsTrack role="radiogroup" aria-label=t("settings.groupAnswer")
+                          for policy in ["last", "everyone", "chief"] key=policy
+                            button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.groupAnswerPolicy == policy) press=doGroupAnswer(policy) testId=`group-answer-${policy}` background-color=(prefs.groupAnswerPolicy == policy ? "surface.card" : "transparent") color=(prefs.groupAnswerPolicy == policy ? "-exact-label" : "ink.muted")
+                              text (policy == "last" ? t("group.policyLast") : policy == "everyone" ? t("group.policyEveryone") : t("group.policyChief"))
+                      text t("settings.groupAnswerNote") class=SettingsFoot
                       if prefsError != ""
                         text prefsError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0"
                   else if settingsDomain == "access"
@@ -3737,6 +3750,12 @@ component GroupPanel
             column gap="space.sm"
               text t("common.description") class=SectionLabel
               input appearance="none" class=Field value=about input=editAbout change=patch("description") placeholder=t("group.aboutPlaceholderShort") aria-label=t("common.description") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-edit-about"
+            column gap="space.sm"
+              text t("group.stepPolicy") class=SectionLabel
+              column role="radiogroup" aria-label=t("group.stepPolicy") gap="space.xs"
+                for policy in ["default", "last", "everyone", "chief"] key=policy
+                  button class=ChoiceRow appearance="none" press=patch("answerPolicy", policy) role="radio" aria-checked=(room.answerPolicy == policy) testId=`group-policy-${policy}` background-color=(room.answerPolicy == policy ? "surface.raised" : "transparent")
+                    text (policy == "default" ? t("group.policyDefault") : policy == "last" ? t("group.policyLast") : policy == "everyone" ? t("group.policyEveryone") : t("group.policyChief"))
             column gap="space.sm"
               row align-items="center" gap="space.sm"
                 text t("common.bots") class=SectionLabel flex=1

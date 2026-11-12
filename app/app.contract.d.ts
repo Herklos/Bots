@@ -65,6 +65,7 @@
 //   setBotNotifications: (args: [string, boolean]) => Reply
 //   setDefaultMode: (args: [string]) => Reply
 //   setDefaultModel: (args: [string, string, string]) => Reply
+//   setGroupAnswerPolicy: (args: [string]) => Reply
 //   setModel: (args: [string, string, string, string, string]) => Reply
 //   setNetwork: (args: [string]) => Reply
 //   setNotifications: (args: [string, boolean, string, string]) => Reply
@@ -592,7 +593,7 @@ type T228 = { "offsetX": T41; "offsetY": T41; "deltaX": T41; "deltaY": T41; "del
 type T229 = { "target": T1; "relatedTarget": T86; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "closeComputer" | "computerControl" | "computerInput" | "copyStorage" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "noteUnread" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "closeComputer" | "computerControl" | "computerInput" | "copyStorage" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "noteUnread" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setGroupAnswerPolicy" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "closeComputer": { args: [T1]; result: T2 };
@@ -656,6 +657,7 @@ export interface SourceMap {
   "setBotNotifications": { args: [T1, T0]; result: T2 };
   "setDefaultMode": { args: [T1]; result: T2 };
   "setDefaultModel": { args: [T1, T1, T1]; result: T2 };
+  "setGroupAnswerPolicy": { args: [T1]; result: T2 };
   "setModel": { args: [T1, T1, T1, T1, T1]; result: T2 };
   "setNetwork": { args: [T1]; result: T2 };
   "setNotifications": { args: [T1, T0, T1, T1]; result: T2 };
