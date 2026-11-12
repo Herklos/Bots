@@ -26,7 +26,7 @@ members Bots
 
   resource system = loadSystem(systemGate) as shape SystemStatus else empty()
 
-  resource prefs = loadPrefs() as shape Prefs else empty()
+  resource prefs = loadPrefs(slug) as shape Prefs else empty()
 
   resource notice = loadNotice() as shape NoticeState else empty()
 

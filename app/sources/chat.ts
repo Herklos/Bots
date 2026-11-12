@@ -36,6 +36,7 @@ export const chatSources = {
     }
     if (slug === 'quiet') return quietChatView();
     if (slug === 'fixture') return fixtureChat(thread);
+    if (slug === 'fixture-order') return blankChat('fixture-order');
     if (slug === 'bea') return blankChat('bea');
     if (slug === 'tabs') return blankChat('tabs');
     if (slug === 'frame') return blankChat('frame');
@@ -132,7 +133,7 @@ export const chatSources = {
     return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/stop`, { method: 'POST', body: JSON.stringify(body) }));
   },
   loadSideChats: async ([slug], store): Promise<Result<'loadSideChats'>> => {
-    if (slug === '' || FIXTURE_SLUG(slug)) {
+    if (slug === '' || FIXTURE_SLUG(slug) || slug === 'fixture-order') {
       return slug === 'fixture' ? { chats: [{ id: 'side-fixture', title: 'Side chat' }] } : { chats: [] };
     }
     const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/side`);

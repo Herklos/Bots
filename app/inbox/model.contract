@@ -1,4 +1,5 @@
-use holdWorking, withPending from "../ui/root-types.contract"
+use Reply, holdWorking, withPending from "../ui/root-types.contract"
+use arranged, encodeSections, homeId, itemOf, nextItems, rewrite, sectionById, sectionFrom, withChats from "./order.contract"
 members Bots
   state botQuery = ""
 
@@ -65,3 +66,64 @@ members Bots
     open(path("group", id))
     groupPanel = true
     groupPage = "edit"
+
+  // Encoded sections shown until the save is the one prefs just loaded.
+  state sectionHold: string[] = []
+
+  mutation sectionsSaved as shape Reply refreshes prefs then afterSections
+
+  derive liveSections = sectionHold.length > 0 ? sectionHold.map(row => sectionFrom(row)) : prefs.sections
+
+  derive orderedConvos = arranged(convos, liveSections, query)
+
+  derive sectionHomes = orderedConvos.map(c => homeId(liveSections, itemOf(c)))
+
+  // One string the menu test reads back after a save and a reload.
+  derive sectionOrder = liveSections.filter(s => s.id != "hidden").map(s => s.items.join(",")).join("|")
+
+  task releaseSections when sectionHold.length > 0 and sectionHold.join("\u001e") == encodeSections(prefs.sections).join("\u001e")
+    after(1, clearSectionHold)
+
+  action clearSectionHold
+    sectionHold = []
+
+  action afterSections
+    match sectionsSaved
+      case some(r)
+        if not r.ok
+          sectionHold = []
+          toast = t("error.section")
+      case none
+        sectionHold = sectionHold
+
+  // Move up or down stays inside the section and switches that section to manual.
+  action moveRow(key: string, dir: number)
+    rowMenu = ""
+    if query != "" or pending(sectionsSaved)
+      sectionHold = sectionHold
+    else
+      let rows = orderedConvos
+      let at = rows.map(c => c.key).indexOf(key)
+      let to = at + dir
+      if at < 0 or to < 0 or to >= rows.length
+        sectionHold = sectionHold
+      else
+        match rows.at(at)
+          case none
+            sectionHold = sectionHold
+          case some(current)
+            match rows.at(to)
+              case none
+                sectionHold = sectionHold
+              case some(other)
+                let id = homeId(liveSections, itemOf(current))
+                if id != homeId(liveSections, itemOf(other))
+                  sectionHold = sectionHold
+                else
+                  let base = id == "chats" ? withChats(liveSections) : liveSections
+                  let stored = sectionById(base, id)
+                  let visible = rows.filter(c => homeId(liveSections, itemOf(c)) == id).map(c => itemOf(c))
+                  let items = nextItems(stored, visible, itemOf(current), itemOf(other))
+                  let encoded = encodeSections(rewrite(base, id, items, "manual"))
+                  sectionHold = encoded
+                  send sectionsSaved = saveSections(encoded)

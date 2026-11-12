@@ -22,6 +22,12 @@ export const botSources = {
         { slug: 'quiet', name: 'Quiet', label: '', initials: 'Q', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt('quiet', ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get('quiet')) },
       ];
     }
+    if (focus === 'fixture-order') {
+      return [
+        { slug: 'ada', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt('ada', ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get('ada')) },
+        { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt('bea', ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get('bea')) },
+      ];
+    }
     if (focus === 'fixture' || focus === 'bea' || focus === 'fixture-crowd' || focus === 'fixture-pick') {
       return [
         { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt('fixture', ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get('fixture')) },

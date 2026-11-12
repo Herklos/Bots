@@ -67,6 +67,7 @@ component Bots
     toggleHidden
     openRowMenu
     closeRowMenu
+    moveRow
     editBotFromRow
     editGroupFromRow
     retry

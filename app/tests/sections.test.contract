@@ -1,0 +1,26 @@
+locale "en-US"
+
+test "moving a chat from the menu saves the section order"
+  size 1200x800
+  at "/bot/fixture-order"
+  clock +600
+  clock data
+  expect state sectionOrder == "bot:bea,bot:ada"
+  expect tree has "at-0-bot-bea"
+  expect tree has "at-1-bot-ada"
+  expect tree missing "at-0-bot-ada"
+  tap "bot-bea" contextmenu
+  expect tree has "menu-down-bea"
+  expect text "menu-down-bea" == "Move down"
+  expect disabled "menu-up-bea"
+  tap "menu-down-bea"
+  clock data
+  expect tree missing "row-menu"
+  expect tree has "at-0-bot-ada"
+  expect tree has "at-1-bot-bea"
+  expect state sectionOrder == "bot:ada,bot:bea"
+  reload
+  clock data
+  expect tree has "at-0-bot-ada"
+  expect tree has "at-1-bot-bea"
+  expect state sectionOrder == "bot:ada,bot:bea"
