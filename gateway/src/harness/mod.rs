@@ -4,6 +4,7 @@
 //! lacks one returns [`HarnessError::Unsupported`] instead of a pretend success.
 //! `adapters` holds the implementations. T3 Code is the one the gateway runs.
 
+pub(crate) mod code;
 mod error;
 mod forks;
 mod search;
@@ -15,6 +16,7 @@ pub(crate) mod providers;
 pub(crate) use forks::{ForkPoint, ForkRequest, Forks, MergeRequest, SideChatRef};
 
 pub(crate) use adapters::t3;
+pub(crate) use code::{public_url, LinkedChange, PullRow, RepoFile, RepoStatus, FILE_CAP, PR_CAP};
 pub(crate) use error::HarnessError;
 pub(crate) use search::{ThreadHit, ThreadSearch};
 pub(crate) use snapshot::{
@@ -220,15 +222,20 @@ pub trait Harness: std::fmt::Debug + Send + Sync {
     fn provisioning(&self) -> Result<&dyn Provisioning, HarnessError>;
     fn browser(&self) -> Result<&dyn Browser, HarnessError>;
     fn relay(&self) -> Result<&dyn Relay, HarnessError>;
-    /// Whether a folder is a repository. A runtime that cannot answer returns
+    /// Repository status and pull requests. A runtime that cannot answer returns
     /// [`HarnessError::Unsupported`] and sends no request.
     fn repos(&self) -> Result<&dyn Repos, HarnessError>;
 }
 
-/// Whether a workspace folder is a repository. One question, no write.
+/// Read-only repository questions. No writes.
 #[async_trait]
 pub trait Repos: Send + Sync {
+    /// Whether `cwd` is a repository. This must not refresh the remote.
     async fn is_repo(&self, cwd: &str) -> Result<bool, HarnessError>;
+    /// Full status. `remote` asks the runtime to refresh ahead, behind and the linked pull request.
+    async fn status(&self, cwd: &str, remote: bool) -> Result<RepoStatus, HarnessError>;
+    /// Open pull requests for one project, at most [`PR_CAP`].
+    async fn pull_requests(&self, project_id: &str) -> Result<Vec<PullRow>, HarnessError>;
 }
 
 pub(crate) fn connect(base_url: String, token: String) -> std::sync::Arc<dyn Harness> {

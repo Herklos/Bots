@@ -1,6 +1,7 @@
 use Reply, Sent, SystemStatus, PageState, Attached, PointerFacts from "../ui/root-types.contract"
 use Bot, Row, Chat, RoomMember, MentionHit, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer from "../ui/shapes.contract"
 use ProviderLimit from "../settings/limits.contract"
+use CodeView from "../bot/code.contract"
 
 shape ChatBag
   system: SystemStatus
@@ -97,3 +98,5 @@ shape ChatBag
   switchFrom: string
   switchTo: string
   modelSavedPending: bool
+  codeOn: bool
+  code: CodeView

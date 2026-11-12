@@ -63,6 +63,13 @@ struct RepoAnswer {
     is_repo: bool,
     calls: u32,
     cwd: String,
+    status_calls: u32,
+    pr_calls: u32,
+    last_remote: bool,
+    status_fault: Option<String>,
+    pr_fault: Option<String>,
+    prepared: Option<crate::harness::RepoStatus>,
+    prs: Vec<crate::harness::PullRow>,
 }
 
 impl MockHarness {
@@ -82,6 +89,13 @@ impl MockHarness {
                 is_repo: false,
                 calls: 0,
                 cwd: String::new(),
+                status_calls: 0,
+                pr_calls: 0,
+                last_remote: false,
+                status_fault: None,
+                pr_fault: None,
+                prepared: None,
+                prs: Vec::new(),
             }),
             provider_config: Mutex::new(None),
             provider_config_reads: AtomicUsize::new(0),
@@ -106,22 +120,6 @@ impl MockHarness {
     pub(crate) fn approvals(&self) -> Vec<Approval> {
         self.approvals.lock().unwrap().clone()
     }
-    pub(crate) fn set_is_repo(&self, is_repo: bool) {
-        self.repo_answer().is_repo = is_repo;
-    }
-
-    pub(crate) fn repo_calls(&self) -> u32 {
-        self.repo_answer().calls
-    }
-
-    pub(crate) fn repo_cwd(&self) -> String {
-        self.repo_answer().cwd.clone()
-    }
-
-    fn repo_answer(&self) -> std::sync::MutexGuard<'_, RepoAnswer> {
-        self.repo.lock().unwrap_or_else(|err| err.into_inner())
-    }
-
     pub(crate) fn set_provider_config(&self, config: Value) {
         *self
             .provider_config
@@ -158,15 +156,8 @@ impl MockHarness {
     }
 }
 
-#[async_trait]
-impl Repos for MockHarness {
-    async fn is_repo(&self, cwd: &str) -> Result<bool, HarnessError> {
-        let mut answer = self.repo_answer();
-        answer.calls += 1;
-        answer.cwd = cwd.to_string();
-        Ok(answer.is_repo)
-    }
-}
+#[path = "mock_repo.rs"]
+mod repo;
 
 fn missing(what: &'static str) -> HarnessError {
     HarnessError::unsupported(what)

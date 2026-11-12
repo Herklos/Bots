@@ -56,6 +56,7 @@ export const settingsSources = {
       noticeEnabledMissing: note.enabled === null,
       groupAnswerPolicy: fixtureGroupAnswer !== '' ? fixtureGroupAnswer : (body.groupAnswerPolicy === 'everyone' || body.groupAnswerPolicy === 'chief' ? body.groupAnswerPolicy : 'last'),
       maxRuntimeMode: fixtureMaxMode !== '' ? fixtureMaxMode : (storedCap(String(body.maxRuntimeMode ?? '')) ? String(body.maxRuntimeMode) : 'full-access'),
+      codeBeta: body.beta?.code === true,
       sections: offline ? (held ?? []) : readSections(body.sections),
     };
   },

@@ -9,6 +9,7 @@ import { librarySources } from './sources/library.ts';
 import { computerSources } from './sources/computer.ts';
 import { memorySources } from './sources/memory.ts';
 import { promptLinkSources } from './sources/prompt-link.ts';
+import { codeSources } from './sources/code.ts';
 
 const HBOTS_URL = import.meta.env.HBOTS_URL ?? 'http://hbots-origin.invalid';
 setGatewayUrl(HBOTS_URL);
@@ -27,5 +28,6 @@ const sources: Sources = {
   ...computerSources,
   ...memorySources,
   ...promptLinkSources,
+  ...codeSources,
 };
 export const answer: Answer = (source, args, store, storage, native) => sources[source](args, store, storage, native);

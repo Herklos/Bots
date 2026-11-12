@@ -12,6 +12,7 @@ pub(crate) mod hold;
 mod previews;
 mod provision;
 mod proxy;
+mod repos;
 mod routines;
 mod search;
 pub(crate) mod setup;
@@ -80,9 +81,8 @@ impl Harness for T3 {
         Ok(self)
     }
 
-    // Not wired. Unsupported means this adapter sends no request.
     fn repos(&self) -> Result<&dyn ReposCap, HarnessError> {
-        Err(HarnessError::unsupported("repository status"))
+        Ok(self)
     }
 }
 
@@ -90,16 +90,13 @@ impl Harness for T3 {
 mod tests {
     use super::T3;
     use crate::chat::approvals::{outbound, send};
-    use crate::harness::{Harness, HarnessError};
+    use crate::harness::Harness;
     use serde_json::{json, Value};
 
     #[test]
-    fn repository_status_is_unsupported_and_sends_nothing() {
+    fn repository_reads_are_wired_without_sending() {
         let t3 = T3::new("http://127.0.0.1:1".into(), "fixture-only".into());
-        let Err(err) = t3.repos() else {
-            panic!("repository status should be unsupported");
-        };
-        assert!(matches!(err, HarnessError::Unsupported(_)));
+        assert!(t3.repos().is_ok());
     }
 
     fn bun() -> Option<std::path::PathBuf> {

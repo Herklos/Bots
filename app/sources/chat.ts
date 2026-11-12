@@ -42,6 +42,7 @@ export const chatSources = {
     if (slug === 'tabs') return blankChat('tabs');
     if (slug === 'frame') return blankChat('frame');
     if (slug === 'page') return blankChat('page');
+    if (slug === 'code' || slug === 'code-empty' || slug === 'code-down' || slug === 'code-remote') return blankChat(slug);
     const query = lane === 'side' && thread !== ''
       ? `?side=${encodeURIComponent(thread)}`
       : lane === 'child' && thread !== ''

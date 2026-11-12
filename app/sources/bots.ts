@@ -11,6 +11,11 @@ export const botSources = {
     // Reserved slugs for the contract runner, which has no gateway. A real inbox still fetches.
     // `bea` is the second fixture Bot, so a draft test can open her and come back without a gateway.
     // `fixture-pick` is Ada's roster with no Bot of that slug, so a prompt link can ask the person to choose.
+    if (focus === 'code' || focus === 'code-empty' || focus === 'code-down' || focus === 'code-remote') {
+      return [
+        { slug: focus, name: 'Code', label: '', initials: 'C', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt(focus, ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get(focus)) },
+      ];
+    }
     if (focus === 'tabs' || focus === 'frame' || focus === 'page') {
       const slug = focus;
       const name = focus === 'frame' ? 'Frame' : focus === 'tabs' ? 'Tabs' : 'Page';

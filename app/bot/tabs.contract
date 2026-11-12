@@ -1,0 +1,26 @@
+use Segment from "../ui/controls.contract"
+
+// The Bot panel's tabs. `names` is the list that is actually shown, so Code is absent
+// until this Bot is doing code work. Arrow keys move through that list.
+component PanelTabs
+  props
+    tab: string
+    names: string[]
+    pickTab: action
+  action tabKey(k: string, event: KeyboardEvent)
+    if not event.isComposing and (k == "ArrowRight" or k == "ArrowLeft" or k == "Home" or k == "End")
+      preventDefault()
+      let at = names.indexOf(tab)
+      let last = names.length - 1
+      let to = k == "Home" ? 0 : k == "End" ? last : k == "ArrowRight" ? (at >= last ? 0 : at + 1) : (at <= 0 ? last : at - 1)
+      match names.at(to)
+        case some(next)
+          pickTab(next)
+          focus(`panel-tab-${next}`)
+        case none
+          pickTab(tab)
+  view
+    row role="tablist" appearance="none" background-color="surface.canvas" aria-label=t("panel.sidebar") width="100%" box-sizing="border-box" padding="space.xs space.md space.md" gap="space.xs"
+      for name in names key=name
+        button id=`panel-tab-${name}` key=tabKey tabindex=(tab == name ? 0 : -1) class=Segment appearance="none" role="tab" aria-selected=(tab == name) aria-controls=`bot-tab-${name}` press=pickTab(name) min-height=36 padding="space.xs space.sm" flex=1 min-width=0 testId=`panel-tab-${name}` background-color=(tab == name ? "surface.raised" : "transparent") color=(tab == name ? "-exact-label" : "ink.muted")
+          text (name == "details" ? t("panel.details") : name == "library" ? t("panel.library") : name == "computer" ? t("panel.computer") : t("panel.code")) font="-exact-subheadline" overflow="hidden" text-overflow="ellipsis" white-space="nowrap"

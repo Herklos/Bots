@@ -1,0 +1,100 @@
+use SectionLabel from "../ui/controls.contract"
+use ConversationLink from "../ui/controls.contract"
+
+shape CodeFile
+  path: string
+  insertions: number
+  deletions: number
+
+shape CodePr
+  number: number
+  title: string
+  url: string
+  draft: bool
+  checks: string
+  review: string
+  updated: string
+
+// Read-only repository state. `error` is "", "offline", "signed-out", "rate-limited" or "no-remote".
+// `loaded` is false until the Code tab has asked for the repository.
+shape CodeView
+  enabled: bool
+  signal: bool
+  loaded: bool
+  error: string
+  branch: string
+  defaultBranch: bool
+  ahead: number
+  behind: number
+  hasRemote: bool
+  provider: string
+  baseUrl: string
+  insertions: number
+  deletions: number
+  fileTotal: number
+  files: CodeFile[]
+  linkedNumber: number
+  linkedTitle: string
+  linkedUrl: string
+  prs: CodePr[]
+
+component CodeTab
+  props
+    view: CodeView
+  view
+    column gap="space.sm" width="100%" box-sizing="border-box" padding="0 space.lg space.xl" testId="code-tab"
+      if view.error == "offline" or view.error == "signed-out" or view.error == "rate-limited"
+        text (view.error == "offline" ? t("code.offline") : view.error == "signed-out" ? t("code.signedOut") : t("code.rateLimited")) color="-exact-system-red" testId="code-error"
+      else if not view.loaded
+        text t("code.reading") color="ink.muted" testId="code-reading"
+      else if view.branch == "" and view.files.length == 0 and view.prs.length == 0
+        text t("code.empty") color="ink.muted" testId="code-empty"
+      else
+        column gap="2px" testId="code-repo"
+          text t("code.branch") class=SectionLabel
+          text view.branch font-weight=600 testId="code-branch"
+          if view.defaultBranch
+            text t("code.defaultBranch") color="ink.muted" font="-exact-footnote" testId="code-default"
+          if view.provider != ""
+            text view.provider color="ink.muted" font="-exact-footnote" testId="code-provider"
+          if view.baseUrl != ""
+            text view.baseUrl color="ink.muted" font="-exact-footnote" testId="code-base"
+          if view.hasRemote
+            text t("code.ahead", n=view.ahead) color="ink.muted" font="-exact-footnote" testId="code-ahead"
+            text t("code.behind", n=view.behind) color="ink.muted" font="-exact-footnote" testId="code-behind"
+          if view.error == "no-remote"
+            text t("code.noRemote") color="-exact-system-red" testId="code-error"
+          if view.linkedNumber > 0
+            text view.linkedTitle testId="code-linked"
+          text t("code.changes") class=SectionLabel
+          text t("code.diff", add=view.insertions, del=view.deletions) color="ink.muted" font="-exact-footnote" testId="code-diff"
+          if view.files.length == 0
+            text t("code.noChanges") color="ink.muted" font="-exact-footnote" testId="code-no-changes"
+          else
+            column gap="2px"
+              for file in view.files key=file.path
+                row gap="space.sm" align-items="center" padding="space.xs 0" testId=`code-file-${file.path}`
+                  text file.path flex=1 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                  text t("code.diff", add=file.insertions, del=file.deletions) color="ink.muted" font="-exact-footnote"
+            if view.fileTotal > view.files.length
+              text t("code.moreFiles", n=(view.fileTotal - view.files.length)) color="ink.muted" font="-exact-footnote" testId="code-more-files"
+          text t("code.pulls") class=SectionLabel
+          if view.prs.length == 0
+            text t("code.noPulls") color="ink.muted" font="-exact-footnote" testId="code-pr-empty"
+          else
+            column gap="space.sm"
+              for pr in view.prs key=`pr-${pr.number}`
+                column gap="2px" testId=`code-pr-${pr.number}`
+                  if pr.url != ""
+                    link class=ConversationLink href=pr.url testId=`code-pr-link-${pr.number}`
+                      text pr.title font-weight=600
+                  else
+                    text pr.title font-weight=600
+                  row gap="space.sm"
+                    text `#${pr.number}` color="ink.muted" font="-exact-footnote"
+                    if pr.draft
+                      text t("code.draft") color="ink.muted" font="-exact-footnote"
+                    if pr.checks == "passing" or pr.checks == "failing" or pr.checks == "pending"
+                      text (pr.checks == "passing" ? t("code.checksPassing") : pr.checks == "failing" ? t("code.checksFailing") : t("code.checksPending")) color=(pr.checks == "failing" ? "-exact-system-red" : "ink.muted") font="-exact-footnote" testId=`code-checks-${pr.number}`
+                    if pr.review == "approved" or pr.review == "changes-requested" or pr.review == "review-required"
+                      text (pr.review == "approved" ? t("code.reviewApproved") : pr.review == "changes-requested" ? t("code.reviewChanges") : t("code.reviewRequired")) color="ink.muted" font="-exact-footnote"

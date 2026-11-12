@@ -32,6 +32,8 @@ pub struct AppState {
     pub(crate) images: crate::chat::images::Resolver,
     /// Repository facts for the code gate. One minute per Bot.
     pub(crate) code_signals: crate::chat::code::SignalCache,
+    /// Status and pull-request reads for an open Code tab.
+    pub(crate) code_reads: crate::chat::code::ReadCache,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
     /// One held chat or group read at a time. Shutdown wakes it.

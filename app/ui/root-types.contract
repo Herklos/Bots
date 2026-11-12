@@ -115,6 +115,7 @@ shape Prefs
   noticeEnabledMissing: bool
   groupAnswerPolicy: string
   maxRuntimeMode: string
+  codeBeta: bool
   sections: Section[]
 
 shape Diagnostics
