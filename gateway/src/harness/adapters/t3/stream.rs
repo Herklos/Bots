@@ -1,7 +1,18 @@
-use super::*;
+#![allow(
+    clippy::map_err_ignore,
+    reason = "a socket error can include the stream address; the person sees a fixed sentence"
+)]
+
+use super::T3;
+#[cfg(test)]
+use crate::bots::computer::Sessions;
+use crate::bots::computer::{control_message, edit_message, watch_message};
+use crate::vault::vault_tools::{server_tabs, Tab};
+use serde_json::{json, Value};
+use std::time::Duration;
 
 /// Tabs the watch screen may show. Other runtimes are left out.
-pub fn tabs_for_screen(list: &Value) -> Vec<Value> {
+pub(crate) fn tabs_for_screen(list: &Value) -> Vec<Value> {
     server_tabs(list)
         .into_iter()
         .map(|Tab { tab_id, url }| {
@@ -37,13 +48,13 @@ pub(crate) const VIEW_QUALITY: &str = "80";
 
 /// Which preview size a watch should ask for. A held page does not open a second socket.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WatchSize {
+pub(crate) enum WatchSize {
     Card,
     Large,
 }
 
 /// One JPEG from the preview stream, without taking control.
-pub async fn one_frame(
+pub(crate) async fn one_frame(
     t3: &T3,
     thread: &str,
     tab_id: &str,
@@ -53,7 +64,7 @@ pub async fn one_frame(
     read_one_jpeg(&mut ws).await
 }
 
-pub async fn send_control(
+pub(crate) async fn send_control(
     t3: &T3,
     thread: &str,
     tab_id: &str,
@@ -65,14 +76,14 @@ pub async fn send_control(
 
 /// What one interactive turn returns: the next JPEG, and clipboard text after copy/cut.
 #[derive(Default)]
-pub struct Driven {
+pub(crate) struct Driven {
     pub image: Vec<u8>,
     pub clipboard: String,
 }
 
 /// Input on the held page. The messages are the click, scroll, text, or key, not a new take.
 /// Take runs on this same socket first, so the page stays owned for the turn.
-pub async fn send_input(
+pub(crate) async fn send_input(
     t3: &T3,
     thread: &str,
     tab_id: &str,
@@ -88,7 +99,7 @@ pub async fn send_input(
 }
 
 /// Copy or cut on the held page. Waits for T3's clipboard event on the same socket.
-pub async fn send_edit(
+pub(crate) async fn send_edit(
     t3: &T3,
     thread: &str,
     tab_id: &str,

@@ -110,7 +110,7 @@ pub(crate) async fn computer_control(
             .take(&thread, &slug, tab)
             .await
             .map_err(|err| err.to_string()),
-        "release" if crate::bots::computer::hold::release(&slug).await => Ok(Vec::new()),
+        "release" if crate::harness::t3::hold::release(&slug).await => Ok(Vec::new()),
         _ => browser
             .control(&thread, tab, action)
             .await
@@ -146,7 +146,7 @@ pub(crate) async fn held_input(
     tab: &str,
     messages: &[Value],
 ) -> Result<crate::harness::Frame, String> {
-    match crate::bots::computer::hold::input(slug, tab, messages).await {
+    match crate::harness::t3::hold::input(slug, tab, messages).await {
         Some(image) => Ok(crate::harness::Frame {
             bytes: image,
             clipboard: String::new(),

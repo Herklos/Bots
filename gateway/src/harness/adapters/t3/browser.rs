@@ -15,7 +15,7 @@ impl Browser for T3 {
             .call("preview.list", json!({ "threadId": thread_id }))
             .await
             .map_err(HarnessError::failed)?;
-        Ok(crate::bots::computer::tabs_for_screen(&listed))
+        Ok(super::stream::tabs_for_screen(&listed))
     }
 
     async fn frame(
@@ -25,11 +25,11 @@ impl Browser for T3 {
         large: bool,
     ) -> Result<Vec<u8>, HarnessError> {
         let size = if large {
-            crate::bots::computer::WatchSize::Large
+            super::stream::WatchSize::Large
         } else {
-            crate::bots::computer::WatchSize::Card
+            super::stream::WatchSize::Card
         };
-        crate::bots::computer::one_frame(self, thread_id, tab_id, size)
+        super::stream::one_frame(self, thread_id, tab_id, size)
             .await
             .map_err(failed)
     }
@@ -40,7 +40,7 @@ impl Browser for T3 {
         slug: &str,
         tab_id: &str,
     ) -> Result<Vec<u8>, HarnessError> {
-        crate::bots::computer::hold::take(self, thread_id, slug, tab_id)
+        super::hold::take(self, thread_id, slug, tab_id)
             .await
             .map_err(failed)
     }
@@ -51,7 +51,7 @@ impl Browser for T3 {
         tab_id: &str,
         action: &str,
     ) -> Result<Vec<u8>, HarnessError> {
-        crate::bots::computer::send_control(self, thread_id, tab_id, action)
+        super::stream::send_control(self, thread_id, tab_id, action)
             .await
             .map_err(failed)
     }
@@ -62,7 +62,7 @@ impl Browser for T3 {
         tab_id: &str,
         messages: &[Value],
     ) -> Result<crate::harness::Frame, HarnessError> {
-        let driven = crate::bots::computer::send_input(self, thread_id, tab_id, messages)
+        let driven = super::stream::send_input(self, thread_id, tab_id, messages)
             .await
             .map_err(failed)?;
         Ok(crate::harness::Frame {
@@ -77,7 +77,7 @@ impl Browser for T3 {
         tab_id: &str,
         kind: &str,
     ) -> Result<crate::harness::Frame, HarnessError> {
-        let driven = crate::bots::computer::send_edit(self, thread_id, tab_id, kind)
+        let driven = super::stream::send_edit(self, thread_id, tab_id, kind)
             .await
             .map_err(failed)?;
         Ok(crate::harness::Frame {
@@ -87,7 +87,7 @@ impl Browser for T3 {
     }
 
     async fn tabs(&self, thread_id: &str) -> Result<Vec<crate::harness::BrowserTab>, String> {
-        Ok(crate::vault::vault_tools::list_tabs(self, thread_id)
+        Ok(super::fill::list_tabs(self, thread_id)
             .await?
             .into_iter()
             .map(|tab| crate::harness::BrowserTab {
@@ -98,7 +98,7 @@ impl Browser for T3 {
     }
 
     async fn type_text(&self, thread_id: &str, tab_id: &str, text: &str) -> Result<(), String> {
-        crate::vault::vault_tools::type_into_tab(self, thread_id, tab_id, text).await
+        super::fill::type_into_tab(self, thread_id, tab_id, text).await
     }
 }
 

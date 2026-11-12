@@ -42,11 +42,11 @@ impl ThreadSnapshot {
     }
 
     pub(crate) fn token_totals(&self) -> (crate::bots::usage::TokenTotals, bool) {
-        crate::bots::usage::tokens_from_projection(&self.body)
+        crate::harness::t3::transcript::tokens_from_projection(&self.body)
     }
 
     pub(crate) fn turns(&self) -> Vec<crate::bots::usage::Turn> {
-        crate::bots::usage::turns_from_projection(&self.body)
+        crate::harness::t3::transcript::turns_from_projection(&self.body)
     }
 
     pub(crate) fn active_run_id(&self) -> Option<String> {

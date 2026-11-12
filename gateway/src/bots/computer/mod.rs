@@ -1,21 +1,14 @@
 //! The Bot's computer: T3's headless browser. Watching is read-only.
 //! Take control is a separate action and is released when the person leaves it.
 
-use crate::harness::t3::T3;
-use crate::vault::vault_tools::{server_tabs, Tab};
 use serde_json::{json, Value};
-use std::time::Duration;
 
-pub(crate) mod hold;
 mod messages;
-mod stream;
 #[cfg(test)]
 mod tests;
 
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use messages::*;
-#[allow(unused_imports, reason = "siblings and old paths use these names")]
-pub(crate) use stream::*;
 
 /// One held browser per Bot. Release drops it. A click does not open one.
 /// `image` is the last JPEG from that interactive session, so a later watch
