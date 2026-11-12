@@ -126,11 +126,11 @@ fn library_mime_ignores_extension_case() {
     assert_eq!(library_mime("notes.TXT"), "application/octet-stream");
 }
 
-pub(super) fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
+pub(crate) fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
     settings_state_with(dir, None)
 }
 
-pub(super) fn settings_state_with(
+pub(crate) fn settings_state_with(
     dir: &std::path::Path,
     harness: Option<Arc<dyn crate::harness::Harness>>,
 ) -> Arc<AppState> {

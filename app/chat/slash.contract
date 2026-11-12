@@ -1,0 +1,16 @@
+component SlashMenu
+  props
+    open: bool
+    picked: number
+    accept: action
+  view
+    if open
+      column id="slash-menu" role="listbox" aria-label=t("chat.side") position="absolute" left=0 right=0 bottom="100%" margin-bottom="space.xs" z-index=12 box-sizing="border-box" padding="space.xs" gap="2px" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" box-shadow="0 8px 24px rgba(0,0,0,0.18)" testId="slash-menu"
+        button appearance="none" role="option" aria-selected=(picked == 0) press=accept("side") testId="slash-side" width="100%" box-sizing="border-box" min-height=40 padding="space.xs space.sm" border-radius="radius.sm" border="none" background-color=(picked == 0 ? "surface.soft" : "transparent") color="-exact-label"
+          column flex=1 min-width=0 align-items="flex-start" gap="0"
+            text "/side" font="-exact-footnote" font-weight=600
+            text t("chat.side.hint") font="-exact-caption2" color="ink.muted"
+        button appearance="none" role="option" aria-selected=(picked == 1) press=accept("btw") testId="slash-btw" width="100%" box-sizing="border-box" min-height=40 padding="space.xs space.sm" border-radius="radius.sm" border="none" background-color=(picked == 1 ? "surface.soft" : "transparent") color="-exact-label"
+          column flex=1 min-width=0 align-items="flex-start" gap="0"
+            text "/btw" font="-exact-footnote" font-weight=600
+            text t("chat.side.same") font="-exact-caption2" color="ink.muted"

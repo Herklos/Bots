@@ -1,0 +1,235 @@
+use Reply, Sent, SideOpen, withPending, knownSent, convoKey, putText, dropKey, entryId, hasFileId, hasVoiceId, fieldAt, voiceNumber, putVoice, nameOf from "../ui/root-types.contract"
+use Row, Pin, Bot from "../ui/shapes.contract"
+
+shape SideBag
+  rows: Row[]
+  working: bool
+  draft: string
+  canSend: bool
+  pending: string[]
+  attachError: string
+  attachedPending: bool
+  sentPending: bool
+  replyTo: string
+  replyQuote: string
+  voicePreview: string
+  voiceError: string
+  voiceHold: string
+  voiceId: string
+  recording: bool
+  voiceSentPending: bool
+  answerText: string
+  answerError: string
+  answering: bool
+  canMerge: bool
+  name: string
+  bots: Bot[]
+  slug: string
+  pins: Pin[]
+  hover: bool
+  reactFor: string
+  messageMenu: string
+  copiedMenu: string
+  empty: bool
+  failed: bool
+  loading: bool
+
+members Bots
+  state sideThread = ""
+  state sideText = ""
+  state sideFailedText = ""
+  state sideSentId = ""
+  state sideReplyTo = ""
+  state sideReplyQuote = ""
+  state sideAnswerText = ""
+  state slashDismissed = false
+  state slashIdx = 0
+  state attachKey = ""
+  mutation sideOpened as shape SideOpen refreshes sideList, sideChat then afterSideOpen
+  mutation sideMerged as shape Reply refreshes chat, sideList then afterSideMerge
+  mutation sideSent as shape Sent refreshes sideChat then afterSideSend
+  mutation sideAnswered as shape Reply refreshes sideChat then afterSideAnswer
+  mutation sideStopped as shape Reply refreshes sideChat
+  mutation sideVoiced as shape Reply refreshes sideChat then afterSideVoice
+  mutation sidePinned as shape Reply refreshes sideChat
+  derive sideDraftKey = sideThread == "" ? "" : convoKey(slug, `side:${sideThread}`)
+  derive sideDraft = match first(draftTexts.filter(d => d.startsWith(`${sideDraftKey}\u001f`))) { case some(d) => d.slice(sideDraftKey.length + 1).slice(0, 8000), case none => "" }
+  derive sidePendingFiles = sideDraftKey == "" ? [] : draftFiles.filter(f => f.startsWith(`${sideDraftKey}\u001f`)).map(f => f.slice(sideDraftKey.length + 1))
+  derive sideCanSend = sideDraft.trim() != "" or sidePendingFiles.length > 0
+  derive newestSide = sideThread != "" ? "" : match sideList.chats.at(-1) { case some(c) => c.id, case none => "" }
+  derive sideTrim = draft.trim()
+  derive sideCommand = onBot and childThread == "" and (sideTrim == "/side" or sideTrim.startsWith("/side ") or sideTrim.startsWith("/side\n") or sideTrim == "/btw" or sideTrim.startsWith("/btw ") or sideTrim.startsWith("/btw\n"))
+  derive sideBody = sideTrim == "/side" or sideTrim == "/btw" ? "" : (sideTrim.startsWith("/side ") or sideTrim.startsWith("/side\n") ? sideTrim.slice(6).trim() : (sideTrim.startsWith("/btw ") or sideTrim.startsWith("/btw\n") ? sideTrim.slice(5).trim() : ""))
+  derive slashHead = match sideTrim.split(" ").at(0) { case some(word) => match word.split("\n").at(0) { case some(head) => head, case none => "" }, case none => "" }
+  derive slashRest = sideTrim.split(" ").slice(1).join(" ").trim()
+  derive slashOpen = onBot and childThread == "" and mentionHits.length == 0 and not slashDismissed and slashHead.startsWith("/")
+  derive sideOffer = onBot and childThread == "" and sideThread == "" and (chat.rows.filter(r => r.kind == "message" and r.mine).length > 0 or sideList.chats.length > 0)
+  derive sideSendError = match sideSent { case some(r) => r.error, case none => "" }
+  derive sidePendingText = pending(sideSent) and sideText != "" ? sideText : (sideFailedText != "" and not pending(sideSent) ? sideFailedText : "")
+  derive sidePendingFailed = sideFailedText != "" and not pending(sideSent)
+  derive sideShown = withPending(sideChat.rows, sideSentId, sidePendingText, sidePendingFailed)
+  derive sideCanMerge = sideThread != "" and not sideChat.working and not pending(sideMerged) and sideChat.rows.filter(r => r.kind == "message" and not r.mine).length > 0
+  derive sideAnswerError = match sideAnswered { case some(r) => r.error, case none => "" }
+  derive sideVoicePack = match first(draftVoices.filter(v => v.startsWith(`${sideDraftKey}\u001f`))) { case some(v) => v.slice(sideDraftKey.length + 1), case none => "" }
+  derive parentAttachError = attachKey == "" or attachKey == dkey ? attachError : ""
+  derive parentRecording = voiceRecorder != "" and voiceKey == dkey
+  derive sideAttachError = attachKey == sideDraftKey and sideDraftKey != "" ? attachError : ""
+  derive sideName = nameOf(bots, slug)
+  derive sideBag = SideBag(rows=sideShown, working=sideChat.working, draft=sideDraft, canSend=sideCanSend, pending=sidePendingFiles, attachError=sideAttachError, attachedPending=pending(attached), sentPending=pending(sideSent), replyTo=sideReplyTo, replyQuote=sideReplyQuote, voicePreview=fieldAt(sideVoicePack, 2), voiceError=(voiceKey == sideDraftKey ? voiceError : ""), voiceHold=fieldAt(sideVoicePack, 0), voiceId=fieldAt(sideVoicePack, 1), recording=(voiceRecorder != "" and voiceKey == sideDraftKey), voiceSentPending=pending(sideVoiced), answerText=sideAnswerText, answerError=sideAnswerError, answering=pending(sideAnswered), canMerge=sideCanMerge, name=sideName, bots=bots, slug=slug, pins=sideChat.pins, hover=(pointerFacts.hover == "hover"), reactFor=reactFor, messageMenu=messageMenu, copiedMenu=copiedMenu, empty=(sideShown.length == 0 and not sideChat.working and sidePendingText == ""), failed=failed(sideChat), loading=(pending(sideChat) and sideChat.rows.length == 0))
+  action openSideChat(text: string)
+    if onBot and childThread == "" and not pending(sideOpened)
+      send sideOpened = openSide(slug, text)
+  action afterSideOpen
+    match sideOpened
+      case some(r)
+        if r.ok and r.threadId != ""
+          sideThread = r.threadId
+          slashDismissed = false
+          if sideCommand
+            edit("")
+          focus("side-composer")
+        else
+          toast = r.error != "" ? r.error : t("chat.side.failed")
+      case none
+        toast = toast
+  action reopenSide
+    if newestSide != ""
+      sideThread = newestSide
+      focus("side-composer")
+  action closeSide
+    writeDrafts()
+    sideThread = ""
+  action mergeSideChat
+    if sideCanMerge and not pending(sideMerged)
+      send sideMerged = mergeSide(slug, sideThread)
+  action afterSideMerge
+    match sideMerged
+      case some(r)
+        if r.ok
+          sideThread = ""
+          toast = t("chat.side.broughtBack")
+        else
+          toast = r.error != "" ? r.error : t("chat.side.nothing")
+      case none
+        toast = toast
+  action editSide(v: string)
+    draftTexts = putText(draftTexts, sideDraftKey, v.slice(0, 8000))
+    noteDraft()
+  action sideCaret(event: InputEvent)
+    let at = event.selectionStart
+    if at < 0
+      sideThread = sideThread
+  action postSide
+    if sideCanSend and not pending(sideSent)
+      let id = `m-${sendTick + 1}`
+      sendTick = sendTick + 1
+      sideSentId = id
+      sideText = sideDraft.trim()
+      sideFailedText = ""
+      send sideSent = sendMessage(slug, sideDraft.trim(), sidePendingFiles.join("\n"), sideThread, sideReplyTo, sideReplyQuote, id, "side")
+      editSide("")
+      writeDrafts()
+    focus("side-composer")
+  action afterSideSend
+    if sideSendError == ""
+      draftFiles = dropKey(draftFiles, sideDraftKey)
+      noteDraft()
+      writeDrafts()
+      if knownSent(sideChat.rows, sideSentId)
+        sideText = ""
+      sideReplyTo = ""
+      sideReplyQuote = ""
+    else
+      sideFailedText = sideText
+  action retrySide
+    if sideFailedText != "" and not pending(sideSent)
+      let id = `m-${sendTick + 1}`
+      sendTick = sendTick + 1
+      sideSentId = id
+      let again = sideFailedText
+      sideText = again
+      sideFailedText = ""
+      send sideSent = sendMessage(slug, again, "", sideThread, sideReplyTo, sideReplyQuote, id, "side")
+  action stopSide
+    send sideStopped = stopRun(slug, sideThread, "side")
+  action sideAnswer(rid: string, kind: string, key: string, value: string)
+    if not pending(sideAnswered)
+      send sideAnswered = respondRequest(slug, rid, kind, key, value, sideThread, "side")
+  action editSideAnswer(v: string)
+    sideAnswerText = v
+  action afterSideAnswer
+    sideAnswerText = ""
+  action sidePasted(e: ClipboardEvent)
+    attachKey = sideDraftKey
+    if slug != "" and sideDraftKey != "" and not pending(attached) and sidePendingFiles.length < 8 and e.files.length > 0
+      preventDefault()
+      match e.files.at(0)
+        case some(f)
+          send attached = uploadAttachment(slug, f, "", "", hostTime.locale)
+        case none
+  action pickSideFiles
+    attachKey = sideDraftKey
+    showPicker("side-attach")
+  action dropSidePending(entry: string)
+    let id = entryId(entry)
+    let next = draftFiles.filter(f => f != `${sideDraftKey}\u001f${entry}`)
+    draftFiles = next
+    noteDraft()
+    if id != "" and not hasFileId(next, id) and not hasVoiceId(draftVoices, id) and slug != "fixture" and slug != ""
+      send voiceDropped = dropVoice(slug, id)
+  action sideHoldVoice
+    beginVoice(sideDraftKey)
+  action sendSideVoice
+    if fieldAt(sideVoicePack, 1) != "" and not pending(sideVoiced)
+      send sideVoiced = sendVoice(slug, voiceNumber(sideVoicePack), fieldAt(sideVoicePack, 1), sideThread, "side")
+  action afterSideVoice
+    match sideVoiced
+      case some(r)
+        if r.ok
+          draftVoices = putVoice(draftVoices, sideDraftKey, "", "", "", 0)
+          noteDraft()
+        else
+          toast = r.error
+      case none
+        toast = toast
+  action discardSideVoice
+    if fieldAt(sideVoicePack, 1) != ""
+      let id = fieldAt(sideVoicePack, 1)
+      let nextVoices = putVoice(draftVoices, sideDraftKey, "", "", "", 0)
+      draftVoices = nextVoices
+      noteDraft()
+      if not hasFileId(draftFiles, id) and not hasVoiceId(nextVoices, id) and slug != "fixture" and slug != ""
+        send voiceDropped = dropVoice(slug, id)
+  action startSideReply(id: string, text: string)
+    sideReplyTo = id
+    sideReplyQuote = text.slice(0, 500)
+  action cancelSideReply
+    sideReplyTo = ""
+    sideReplyQuote = ""
+  action pinSide(id: string, text: string)
+    if sideChat.threadId != "" and not pending(sidePinned)
+      send sidePinned = pinMessage(slug, sideChat.threadId, id, text)
+  action reactSide(item: string, emoji: string)
+    reactFor = ""
+    if sideChat.threadId != ""
+      send reacted = reactTo(slug, item, emoji, sideChat.threadId)
+  action sideComposerKey(k: string, event: KeyboardEvent)
+    if k == "Enter" and not event.shiftKey and not event.isComposing
+      preventDefault()
+      if not event.repeat
+        postSide()
+  action sideKey(k: string, event: KeyboardEvent)
+    if k == "Escape"
+      preventDefault()
+      slashDismissed = true
+    else if k == "ArrowDown" or k == "ArrowUp"
+      preventDefault()
+      slashIdx = k == "ArrowDown" ? (slashIdx + 1 >= 2 ? 0 : slashIdx + 1) : (slashIdx <= 0 ? 1 : slashIdx - 1)
+    else if k == "Enter" and not event.shiftKey and not event.isComposing and not event.repeat
+      preventDefault()
+      openSideChat(sideCommand ? sideBody : slashRest)
+    else if k == "Tab" or k == "Enter"
+      preventDefault()
+  action acceptSlash(cmd: string)
+    if cmd == "side" or cmd == "btw"
+      openSideChat(sideCommand ? sideBody : slashRest)

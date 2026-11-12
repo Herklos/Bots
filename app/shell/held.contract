@@ -21,7 +21,7 @@ members Bots
   resource bots = loadBots(slug != "" ? slug : roomId) as shape Bot[] else empty()
   resource page = exactPage() as shape PageState
   resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId) as shape Convo[] else empty()
-  resource chat = loadChat(slug, childThread) as shape Chat else empty()
+  resource chat = loadChat(slug, childThread, (childThread != "" ? "child" : "")) as shape Chat else empty()
   resource room = loadRoom(roomId) as shape Room else empty()
   resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
   resource providers = loadProviders() as shape Provider[] else empty()
@@ -63,6 +63,8 @@ members Bots
       refresh convos
     if top(nav).name == "chat"
       refresh chat
+      if sideThread != ""
+        refresh sideChat
       if openUnread and not pending(seen)
         send seen = markSeen(slug)
     if top(nav).name == "group"

@@ -5,10 +5,13 @@
 //! `adapters` holds the implementations. T3 Code is the one the gateway runs.
 
 mod error;
+mod forks;
 mod snapshot;
 
 pub(crate) mod adapters;
 pub(crate) mod providers;
+
+pub(crate) use forks::{ForkPoint, ForkRequest, Forks, MergeRequest, SideChatRef};
 
 pub(crate) use adapters::t3;
 pub(crate) use error::HarnessError;
@@ -202,6 +205,7 @@ pub trait Harness: std::fmt::Debug + Send + Sync {
     async fn connected(&self) -> bool;
     fn transcript(&self) -> Result<&dyn Transcript, HarnessError>;
     fn turns(&self) -> Result<&dyn Turns, HarnessError>;
+    fn forks(&self) -> Result<&dyn Forks, HarnessError>;
     fn previews(&self) -> Result<&dyn Previews, HarnessError>;
     fn routines(&self) -> Result<&dyn Routines, HarnessError>;
     fn approvals(&self) -> Result<&dyn Approvals, HarnessError>;

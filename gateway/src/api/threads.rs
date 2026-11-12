@@ -105,7 +105,8 @@ pub(crate) async fn respond_request(
 ) -> ApiResult<Json<Value>> {
     require_json(&h)?;
     let body = parse(&body)?;
-    let thread = resolve_chat_thread(&s, &slug, body["child"].as_str()).await?;
+    let thread =
+        resolve_chat_thread(&s, &slug, body["child"].as_str(), body["side"].as_str()).await?;
     let kind = body["kind"].as_str().unwrap_or("");
     let outbound = crate::chat::approvals::outbound(kind, &thread, &id, &body)
         .map_err(ApiError::bad_request)?;

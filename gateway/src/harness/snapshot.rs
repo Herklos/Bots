@@ -61,6 +61,21 @@ impl ThreadSnapshot {
             .map(str::to_string)
     }
 
+    /// The projection body. The adapter reads transfers and lineage from it.
+    pub(crate) fn body(&self) -> &Value {
+        &self.body
+    }
+
+    /// A launch mode copied onto a fork. Anything else is absent.
+    pub(crate) fn runtime_mode(&self) -> Option<String> {
+        crate::harness::t3::transcript::runtime_mode(&self.body)
+    }
+
+    /// The last run on the projection, preferring `runs` in order.
+    pub(crate) fn latest_run_id(&self) -> Option<String> {
+        crate::harness::t3::transcript::latest_run_id(&self.body)
+    }
+
     pub(crate) fn preview(&self, names: &HashMap<String, String>) -> Option<Value> {
         crate::harness::t3::transcript::latest_preview(&self.body, names)
     }

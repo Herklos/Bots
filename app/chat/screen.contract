@@ -1,11 +1,12 @@
 use EmptyState from "exact:content"
 use shapeOf, colorOf, faceColor from "../ui/fns.contract"
 use Bot, Row, Chat, RoomMember, MentionHit, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer from "../ui/shapes.contract"
-use Reply, Sent, SystemStatus, PageState, Attached, PointerFacts, nameOf, attachmentName from "../ui/root-types.contract"
+use Reply, Sent, SystemStatus, PageState, Attached, PointerFacts, nameOf from "../ui/root-types.contract"
 use Screen, PageTitle, HeroTitle, PageHeader, TextControl, IconControl from "../ui/controls.contract"
-use HeaderToggle, SendControl, StopControl, SearchField from "../ui/sidebar.contract"
+use HeaderToggle, SearchField from "../ui/sidebar.contract"
 use ChatLog from "./log.contract"
-use MentionMenu from "./mention.contract"
+use Composer from "./composer.contract"
+use SidePane from "./side-pane.contract"
 use Face from "../face.contract"
 use Glyph from "../glyph.contract"
 use BotPanel from "../bot/panel.contract"
@@ -91,6 +92,16 @@ component ChatScreen
     placeError: string
     doPickComputer: action
     pull: action
+    sideOffer: bool
+    sideThread: string
+    newestSide: string
+    openSideChat: action
+    reopenSide: action
+    slashOpen: bool
+    slashIdx: number
+    acceptSlash: action
+    parentAttachError: string
+    parentRecording: bool
   view
     column class=Screen navigationKey=`${route}` navigationScroll="transcript" drop=filesDropped position="absolute" inset=0 padding-right=((chatBag.wide and chatBag.panelOpen) ? "20rem" : "0px")
       if chatBag.messageMenu != ""
@@ -105,6 +116,12 @@ component ChatScreen
               Face(shape=shapeOf(chatBag.bots, chatBag.slug), color=faceColor(colorOf(chatBag.bots, chatBag.slug)), state=(chatBag.chat.working ? "working" : "idle"), size=28, still=true)
           text nameOf(chatBag.bots, chatBag.slug) role="heading" aria-level=1 class=PageTitle overflow-wrap="anywhere" testId="chat-title" min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
         column flex=1
+        if sideOffer and newestSide != ""
+          button class=TextControl appearance="none" press=reopenSide aria-label=t("chat.side") title=t("chat.side") testId="side-reopen" min-height=36 padding="0 space.sm"
+            text t("chat.side") font="-exact-footnote"
+        else if sideOffer
+          button class=TextControl appearance="none" press=openSideChat("") aria-label=t("chat.side") title=t("chat.side") testId="side-open" min-height=36 padding="0 space.sm"
+            text t("chat.side") font="-exact-footnote"
         button class=IconControl appearance="none" press=toggleChatSearch aria-label=t("chat.search") title=t("chat.search") testId="chat-search-open" width=36 height=36
           Glyph(name=(chatBag.chatSearching ? "close" : "search"), size=18)
       if chatBag.childThread != ""
@@ -114,87 +131,46 @@ component ChatScreen
               Glyph(name="chevron", size=16)
             text (nameOf(chatBag.bots, chatBag.slug) != "" ? t("chat.backToNamed", name=nameOf(chatBag.bots, chatBag.slug)) : t("chat.backToChat")) font="-exact-subheadline" font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
           text (chatBag.chat.readOnly ? t("status.done") : chatBag.chat.working ? t("status.working") : t("status.done")) color="ink.muted" font="-exact-footnote" flex-shrink=0 testId="child-strip-status"
-      if chatBag.chatFailed
-        EmptyState(symbol="symbol:alert", title=t("error.chatTitle"), message=t("error.chatHint"))
-          button press=pull testId="retry-chat"
-            text t("common.tryAgain")
-      else if chatBag.chatPending and chatBag.chat.rows.length == 0
-        column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" aria-busy=true
-          Face(shape=shapeOf(chatBag.bots, chatBag.slug), color=faceColor(colorOf(chatBag.bots, chatBag.slug)), state="working", size=44, still=false)
-          text t("chat.loading") color="ink.muted"
-      else if chatBag.chat.rows.length == 0 and not chatBag.chat.working and chatBag.pendingText == ""
-        column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="empty-chat"
-          Face(shape=shapeOf(chatBag.bots, chatBag.slug), color=faceColor(colorOf(chatBag.bots, chatBag.slug)), state="idle", size=72, still=false)
-          text nameOf(chatBag.bots, chatBag.slug) class=HeroTitle
-          text t("chat.emptyBody") color="ink.muted" text-align="center"
-          column gap="space.sm" width="100%" max-width="24rem" margin-top="space.lg"
-            button press=edit(t("chat.starter.planSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-plan"
-              text t("chat.starter.plan")
-            button press=edit(t("chat.starter.ideaSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-idea"
-              text t("chat.starter.idea")
-            button press=edit(t("chat.starter.helpSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-help"
-              text t("chat.starter.help")
+      if sideThread != "" and not chatBag.wide
+        SidePane(header=false)
       else
-        column flex=1 min-height=0 justify-content="flex-end" position="relative" z-index=(chatBag.messageMenu != "" ? 21 : 0) pointer-events=(chatBag.messageMenu != "" ? "none" : "auto")
-          if chatBag.chatSearching
-            input type="search" class=SearchField value=chatBag.messageQuery input=editChatQuery placeholder=t("chat.search") aria-label=t("chat.search") testId="chat-search" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="0 space.lg space.xs"
-          if chatBag.chatSearching and chatBag.searchNote != ""
-            text chatBag.searchNote color="ink.muted" font="-exact-footnote" testId="search-note" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
-          if chatBag.away
-            button class=IconControl appearance="none" press=toEnd aria-label=t("chat.jump") title=t("chat.jumpShort") testId="to-end" position="absolute" left="50%" translate="-50% 0" bottom=8 z-index=1 width=32 height=32 border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line"
-              Glyph(name="arrow-down", size=16)
-          for p in chatBag.chat.pins key=p.id
-            text p.text color="ink.muted" font="-exact-footnote" testId=`pin-${p.id}` width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
-          ChatLog(rows=chatBag.shownRows, inRoom=false, logId="transcript", logTestId=(chatBag.childThread != "" ? "child-transcript" : "transcript"), bots=chatBag.bots, slug=chatBag.slug, pins=chatBag.chat.pins, workers=chatBag.paintedWorkers, hover=(chatBag.pointerFacts.hover == "hover"), reactFor=chatBag.reactFor, messageMenu=chatBag.messageMenu, copiedMenu=chatBag.copiedMenu, answerText=chatBag.answerText, answerError=chatBag.answerError, answering=chatBag.answeredPending, react=doReact, openPicker=openReact, reply=startReply, pin=doPinMessage, openMenu=openMessageMenu, closeMenu=closeMessageMenu, noteCopied=noteCopied, answer=answer, editAnswer=editAnswer, retry=retry, scrolled=moved)
-      if chatBag.attachError != "" and not chatBag.attachedPending
-        text chatBag.attachError color="-exact-system-red" padding="0 space.lg" testId="attach-error"
-      if chatBag.pendingAttaches.length > 0
-        row gap="space.sm" flex-wrap="wrap" padding="0 space.lg space.xs" align-self="center" width="100%" max-width="44rem" box-sizing="border-box" testId="pending-files"
-          for entry in chatBag.pendingAttaches key=entry
-            row gap="space.xs" align-items="center" padding="4px 6px 4px space.sm" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" max-width="100%" box-sizing="border-box"
-              column color="ink.muted"
-                Glyph(name="attach", size=14)
-              text attachmentName(entry, t("chat.attachment")) font="-exact-footnote" color="-exact-label" overflow-wrap="anywhere" flex=1 min-width=0
-              button class=IconControl appearance="none" press=dropPending(entry) aria-label=t("chat.removeNamed", name=attachmentName(entry, t("chat.attachment"))) title=t("chat.removeAttachment") testId="pending-file" width=28 height=28
-                Glyph(name="close", size=14)
-      if chatBag.chat.readOnly
-        text t("chat.readOnly") color="ink.muted" padding="space.md space.lg space.xl" testId="child-readonly"
-      else
-        column width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.xs" position="relative"
-          if chatBag.replyTo != ""
-            row gap="space.sm" align-items="center" padding="space.xs space.sm" border-radius="radius.md" background-color="surface.raised" border="1px solid surface.line" testId="reply-bar"
-              text chatBag.replyQuote font="-exact-footnote" color="ink.muted" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="reply-quote"
-              button class=TextControl appearance="none" press=cancelReply aria-label=t("chat.cancelReply") testId="reply-cancel" min-height=44 padding="0 space.sm"
-                text t("common.cancel")
-          if chatBag.voicePreview != ""
-            audio chatBag.voicePreview controls=true testId="voice-preview"
-          if chatBag.voiceError != ""
-            text chatBag.voiceError color="-exact-system-red" font="-exact-footnote" testId="voice-error"
-          MentionMenu(hits=chatBag.mentionHits, picked=chatBag.mentionIdx, choose=completeMention)
-          row align-items="flex-end" width="100%" box-sizing="border-box" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
-            button class=IconControl press=pickFiles disabled=(chatBag.slug == "" or chatBag.attachedPending or chatBag.pendingAttaches.length >= 8) appearance="none" aria-label=t("chat.attach") title=t("chat.attach") testId="attach" width=36 height=36 border-radius="radius.full" background-color="surface.raised"
-              Glyph(name="add", size=18)
-            if chatBag.voiceHold != ""
-              text chatBag.voiceHold font="-exact-footnote" color="ink.muted" testId="voice-hold"
-            if chatBag.voiceId != ""
-              button class=IconControl appearance="none" press=discardVoice aria-label=t("chat.discardClip") title=t("chat.discardClip") testId="voice-discard" width=36 height=36
-                Glyph(name="close", size=16)
-            input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
-            textarea id="composer" value=chatBag.draft input=editDraft selectionchange=composerCaret key=composerKey paste=pasted maxlength=8000 outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(chatBag.bots, chatBag.slug) != "" ? t("chat.messageTo", name=nameOf(chatBag.bots, chatBag.slug)) : t("chat.write")) aria-label=t("chat.message") aria-expanded=(chatBag.mentionHits.length > 0) aria-controls="mention-menu" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
-            if chatBag.voiceRecorder != ""
-              button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label=t("chat.stopRecording") title=t("chat.stopRecording") testId="voice-record" background-color="-exact-system-red" color="ink.dark"
-                Glyph(name="stop", size=16)
-            else if chatBag.voiceId != ""
-              button class=SendControl appearance="none" press=sendHeldVoice disabled=chatBag.voiceSentPending margin="2px 0" aria-label=t("chat.sendVoice") title=t("chat.sendVoice") testId="voice-send"
-                Glyph(name="send", size=18)
-            else if chatBag.chat.working and not chatBag.canSend
-              button class=StopControl appearance="none" press=stop margin="2px 0" aria-label=t("common.stop") testId="stop"
-                Glyph(name="stop", size=16)
-            else if not chatBag.canSend
-              button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label=t("chat.record") title=t("chat.record") testId="voice-record" background-color="-exact-label" color="surface.canvas"
-                Glyph(name="mic", size=18)
+        row flex=1 min-height=0 width="100%"
+          column flex=1 min-width=0 min-height=0
+            if chatBag.chatFailed
+              EmptyState(symbol="symbol:alert", title=t("error.chatTitle"), message=t("error.chatHint"))
+                button press=pull testId="retry-chat"
+                  text t("common.tryAgain")
+            else if chatBag.chatPending and chatBag.chat.rows.length == 0
+              column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" aria-busy=true
+                Face(shape=shapeOf(chatBag.bots, chatBag.slug), color=faceColor(colorOf(chatBag.bots, chatBag.slug)), state="working", size=44, still=false)
+                text t("chat.loading") color="ink.muted"
+            else if chatBag.chat.rows.length == 0 and not chatBag.chat.working and chatBag.pendingText == ""
+              column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="empty-chat"
+                Face(shape=shapeOf(chatBag.bots, chatBag.slug), color=faceColor(colorOf(chatBag.bots, chatBag.slug)), state="idle", size=72, still=false)
+                text nameOf(chatBag.bots, chatBag.slug) class=HeroTitle
+                text t("chat.emptyBody") color="ink.muted" text-align="center"
+                column gap="space.sm" width="100%" max-width="24rem" margin-top="space.lg"
+                  button press=edit(t("chat.starter.planSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-plan"
+                    text t("chat.starter.plan")
+                  button press=edit(t("chat.starter.ideaSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-idea"
+                    text t("chat.starter.idea")
+                  button press=edit(t("chat.starter.helpSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-help"
+                    text t("chat.starter.help")
             else
-              button class=SendControl appearance="none" press=post disabled=(not chatBag.canSend or chatBag.sentPending) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="send"
-                Glyph(name="send", size=18)
+              column flex=1 min-height=0 justify-content="flex-end" position="relative" z-index=(chatBag.messageMenu != "" ? 21 : 0) pointer-events=(chatBag.messageMenu != "" ? "none" : "auto")
+                if chatBag.chatSearching
+                  input type="search" class=SearchField value=chatBag.messageQuery input=editChatQuery placeholder=t("chat.search") aria-label=t("chat.search") testId="chat-search" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="0 space.lg space.xs"
+                if chatBag.chatSearching and chatBag.searchNote != ""
+                  text chatBag.searchNote color="ink.muted" font="-exact-footnote" testId="search-note" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
+                if chatBag.away
+                  button class=IconControl appearance="none" press=toEnd aria-label=t("chat.jump") title=t("chat.jumpShort") testId="to-end" position="absolute" left="50%" translate="-50% 0" bottom=8 z-index=1 width=32 height=32 border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line"
+                    Glyph(name="arrow-down", size=16)
+                for p in chatBag.chat.pins key=p.id
+                  text p.text color="ink.muted" font="-exact-footnote" testId=`pin-${p.id}` width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
+              ChatLog(rows=chatBag.shownRows, inRoom=false, logId="transcript", logTestId=(chatBag.childThread != "" ? "child-transcript" : "transcript"), bots=chatBag.bots, slug=chatBag.slug, pins=chatBag.chat.pins, workers=chatBag.paintedWorkers, hover=(chatBag.pointerFacts.hover == "hover"), reactFor=chatBag.reactFor, messageMenu=chatBag.messageMenu, copiedMenu=chatBag.copiedMenu, answerText=chatBag.answerText, answerError=chatBag.answerError, answering=chatBag.answeredPending, react=doReact, openPicker=openReact, reply=startReply, pin=doPinMessage, openMenu=openMessageMenu, closeMenu=closeMessageMenu, noteCopied=noteCopied, answer=answer, editAnswer=editAnswer, retry=retry, scrolled=moved)
+          Composer(draft=chatBag.draft, edit=editDraft, post=post, onKey=composerKey, onCaret=composerCaret, stop=stop, working=chatBag.chat.working, canSend=chatBag.canSend, sentPending=chatBag.sentPending, pending=chatBag.pendingAttaches, attachError=parentAttachError, attachedPending=chatBag.attachedPending, dropPending=dropPending, pickFiles=pickFiles, filesPicked=filesPicked, fileInputId="chat-attach", placeholder=(nameOf(chatBag.bots, chatBag.slug) != "" ? t("chat.messageTo", name=nameOf(chatBag.bots, chatBag.slug)) : t("chat.write")), composerId="composer", replyTo=chatBag.replyTo, replyQuote=chatBag.replyQuote, cancelReply=cancelReply, voicePreview=chatBag.voicePreview, voiceError=chatBag.voiceError, voiceHold=chatBag.voiceHold, voiceId=chatBag.voiceId, recording=parentRecording, holdVoice=holdVoice, sendVoice=sendHeldVoice, discardVoice=discardVoice, voiceSentPending=chatBag.voiceSentPending, mentionHits=chatBag.mentionHits, mentionIdx=chatBag.mentionIdx, completeMention=completeMention, slashOpen=slashOpen, slashIdx=slashIdx, acceptSlash=acceptSlash, pasted=pasted, readOnly=chatBag.chat.readOnly)
+          if sideThread != "" and chatBag.wide
+            column flex=1 min-width=0 min-height=0 border-left="1px solid surface.line"
+              SidePane(header=true)
       for b in chatBag.bots.filter(x => x.slug == chatBag.slug) key=b.slug
         BotPanel(working=chatBag.chat.working, shown=chatBag.panelOpen, tab=chatBag.panelTab, page=chatBag.panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=chatBag.wide, bot=b, bots=chatBag.bots, error=chatBag.botError, rename=doRename, savePrompt=doSavePrompt, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, mute=doMute, makeMain=doMain, drop=doDropBot, models=chatBag.models, modelsDown=chatBag.modelsFailed, pickModel=doPickModel, modelError=chatBag.modelError, routines=chatBag.routines, routinesDown=chatBag.routinesFailed, lineage=chatBag.lineage, lineageDown=chatBag.lineageFailed, report=chatBag.report, reportDown=chatBag.reportFailed, period=chatBag.usagePeriod, usageView=chatBag.usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=chatBag.shelf, shelfDown=chatBag.shelfFailed, computer=chatBag.computer, computerDown=chatBag.computerFailed, showComputerLarge=showComputerLarge, heldTab=chatBag.heldTab, controlError=chatBag.controlError, driveError=chatBag.driveError, live=chatBag.holding, drive=doDrive, take=doTake, release=doRelease, picked=chatBag.computerTab, pick=pickComputerTab, openBrowser=doOpenBrowser, opening=chatBag.openingBrowser, openError=chatBag.openError, closeBrowser=doCloseBrowser, closing=chatBag.closingBrowser, closeError=chatBag.closeError, subSlug=chatBag.subSlug, subName=chatBag.subName, subShape=chatBag.subShape, subColor=chatBag.subColor, subPrompt=chatBag.subPrompt, subInherit=chatBag.subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=chatBag.subCreatedPending, saving=chatBag.subSavedPending, subError=(chatBag.subSlug == "" ? chatBag.subError : (chatBag.subSaveError != "" ? chatBag.subSaveError : chatBag.childRemoveError)), childModels=chatBag.childModels, childModelsDown=chatBag.childModelsFailed, places=places, placesFailed=placesFailed, placeError=placeError, doPickComputer=doPickComputer)

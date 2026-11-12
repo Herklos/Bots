@@ -29,10 +29,14 @@ pub(crate) async fn parent_rows(s: &AppState, parent: &str) -> ApiResult<Vec<Val
 pub(crate) async fn resolve_chat_thread(
     s: &AppState,
     slug: &str,
-    asked: Option<&str>,
+    child: Option<&str>,
+    side: Option<&str>,
 ) -> ApiResult<String> {
+    let (child, side) = crate::chat::side::lane_ids(child, side)?;
     let parent = main_thread(s, slug).await?;
-    let child = asked.map(str::trim).filter(|id| !id.is_empty());
+    if let Some(id) = side {
+        return crate::chat::side::require_side(s.harness.as_ref(), &parent, id).await;
+    }
     if child.is_none() {
         return Ok(parent);
     }
@@ -59,18 +63,17 @@ pub(crate) fn with_etag(tag: &str, body: Value, send_body: bool) -> Response {
         .into_response()
 }
 
-pub(crate) async fn chat_view(s: &AppState, slug: &str, asked: Option<&str>) -> ApiResult<Value> {
-    let parent = main_thread(s, slug).await?;
+pub(crate) async fn chat_view(
+    s: &AppState,
+    slug: &str,
+    child: Option<&str>,
+    side: Option<&str>,
+) -> ApiResult<Value> {
+    let (child, side) = crate::chat::side::lane_ids(child, side)?;
+    let thread = resolve_chat_thread(s, slug, child, side).await?;
+    let on_main = child.is_none() && side.is_none();
     let transcript = s.harness.transcript().map_err(|err| err.api())?;
-    let (thread, read_only) = if let Some(child) = asked {
-        let parent_snapshot = transcript.read(&parent).await.map_err(|err| err.api())?;
-        let id = crate::bots::lineage::thread_for(&parent_snapshot.lineage(), &parent, Some(child))
-            .map_err(ApiError::bad_request)?;
-        // A resolved local child is the thread the person is in, and they can send on it.
-        (id, false)
-    } else {
-        (parent, false)
-    };
+    let read_only = false;
     let snapshot = transcript.read(&thread).await.map_err(|err| err.api())?;
     let listed = s.bots.list().await?;
     let hidden = listed
@@ -87,7 +90,7 @@ pub(crate) async fn chat_view(s: &AppState, slug: &str, asked: Option<&str>) -> 
         .collect();
     // Opening the Bot's own chat advances last-read to the message id the inbox stored.
     // A child thread is not that chat, and a visible Bot keeps the roster's own mark.
-    if asked.is_none() && hidden {
+    if on_main && hidden {
         if let Ok(meta) = s.threads.get(Some(&thread)).await {
             let stored = meta["lastRead"].as_str().unwrap_or("");
             let latest = meta["latest"].as_str().unwrap_or("");
@@ -133,12 +136,10 @@ pub(crate) async fn read_chat(
     Query(q): Query<HashMap<String, String>>,
     headers: HeaderMap,
 ) -> ApiResult<Response> {
-    let asked = q
-        .get("child")
-        .map(String::as_str)
-        .map(str::trim)
-        .filter(|id| !id.is_empty());
-    let view = chat_view(&s, &slug, asked).await?;
+    let child = q.get("child").map(String::as_str);
+    let side = q.get("side").map(String::as_str);
+    let (child, side) = crate::chat::side::lane_ids(child, side)?;
+    let view = chat_view(&s, &slug, child, side).await?;
     let tag = chat::transcript_tag(&view);
     let seen = headers
         .get(header::IF_NONE_MATCH)
@@ -146,15 +147,21 @@ pub(crate) async fn read_chat(
     if !chat::none_match(seen, &tag) {
         return Ok(with_etag(&tag, view, true));
     }
-    let key = format!("chat\n{slug}\n{}", asked.unwrap_or(""));
+    let key = format!(
+        "chat\n{slug}\n{}\n{}",
+        side.map(|_| "side")
+            .unwrap_or(child.map(|_| "child").unwrap_or("")),
+        side.or(child).unwrap_or("")
+    );
     let outcome = s
         .holds
         .hold_until_change(&key, &tag, chat::LOOK_EVERY, chat::HOLD_FOR, || {
             let s = s.clone();
             let slug = slug.clone();
-            let asked = asked.map(str::to_string);
+            let child = child.map(str::to_string);
+            let side = side.map(str::to_string);
             async move {
-                match chat_view(&s, &slug, asked.as_deref()).await {
+                match chat_view(&s, &slug, child.as_deref(), side.as_deref()).await {
                     Ok(next) => {
                         let next_tag = chat::transcript_tag(&next);
                         Some((next, next_tag))
@@ -189,14 +196,11 @@ pub(crate) async fn send_chat(
     if text.is_empty() && files.is_empty() {
         return Err(ApiError::bad_request("Write a message first."));
     }
-    let asked = body["child"]
-        .as_str()
-        .map(str::trim)
-        .filter(|id| !id.is_empty());
     // Resolve before any reply is stored or any command is dispatched. A refused child
-    // builds no command, so the parent thread is not written.
+    // or side id builds no command, so the parent thread is not written.
     let message_id = crate::harness::message_id(body["messageId"].as_str());
-    let thread = resolve_chat_thread(&s, &slug, asked).await?;
+    let thread =
+        resolve_chat_thread(&s, &slug, body["child"].as_str(), body["side"].as_str()).await?;
     let bot = require_bot(&s, &slug).await?;
     crate::bots::provisioner::limit_existing_thread(&s, &bot, &thread)
         .await
@@ -240,7 +244,8 @@ pub(crate) async fn send_voice(
         .and_then(Value::as_f64)
         .filter(|n| n.is_finite())
         .ok_or_else(|| ApiError::bad_request("invalid duration"))?;
-    let thread = resolve_chat_thread(&s, &slug, body["child"].as_str()).await?;
+    let thread =
+        resolve_chat_thread(&s, &slug, body["child"].as_str(), body["side"].as_str()).await?;
     let attachment_id = body["attachmentId"]
         .as_str()
         .map(str::trim)
@@ -334,7 +339,8 @@ pub(crate) async fn stop_chat(
 ) -> ApiResult<Json<Value>> {
     require_json(&h)?;
     let body = parse(&body)?;
-    let thread = resolve_chat_thread(&s, &slug, body["child"].as_str()).await?;
+    let thread =
+        resolve_chat_thread(&s, &slug, body["child"].as_str(), body["side"].as_str()).await?;
     let snapshot = s
         .harness
         .transcript()

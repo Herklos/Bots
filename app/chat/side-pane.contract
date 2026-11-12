@@ -1,0 +1,67 @@
+use SideBag from "./side.contract"
+use ChatLog from "./log.contract"
+use Composer from "./composer.contract"
+use IconControl, TextControl from "../ui/controls.contract"
+use Glyph from "../glyph.contract"
+component SidePane
+  props
+    header: bool
+  inject
+    sideBag: SideBag
+    closeSide: action
+    mergeSideChat: action
+    postSide: action
+    editSide: action
+    sideComposerKey: action
+    sideCaret: action
+    stopSide: action
+    pickSideFiles: action
+    filesPicked: action
+    dropSidePending: action
+    sideHoldVoice: action
+    sendSideVoice: action
+    discardSideVoice: action
+    startSideReply: action
+    cancelSideReply: action
+    sideAnswer: action
+    editSideAnswer: action
+    retrySide: action
+    pinSide: action
+    reactSide: action
+    openReact: action
+    openMessageMenu: action
+    closeMessageMenu: action
+    noteCopied: action
+    moved: action
+    sidePasted: action
+  view
+    column flex=1 min-width=0 min-height=0 background-color="surface.canvas" testId="side-pane"
+      if not header
+        row align-items="center" gap="space.sm" padding="space.xs space.md" min-height=44 box-sizing="border-box" background-color="surface.raised" border-bottom="1px solid surface.line" testId="side-strip"
+          button class=TextControl appearance="none" press=closeSide display="flex" align-items="center" aria-label=t("chat.side.back", name=sideBag.name) testId="side-back" min-height=44 padding="0 space.sm" color="AccentColor" flex=1 min-width=0
+            column color="AccentColor" rotate="180deg" flex-shrink=0
+              Glyph(name="chevron", size=16)
+            text t("chat.side.back", name=sideBag.name) font="-exact-subheadline" font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+          button class=TextControl appearance="none" press=mergeSideChat disabled=(not sideBag.canMerge) aria-label=t("chat.side.merge", name=sideBag.name) title=(sideBag.canMerge ? t("chat.side.merge", name=sideBag.name) : t("chat.side.nothing")) testId="side-merge" min-height=44 padding="0 space.sm" flex-shrink=0
+            text t("chat.side.merge", name=sideBag.name) font="-exact-footnote"
+          button class=IconControl appearance="none" press=closeSide aria-label=t("chat.side.close") title=t("chat.side.close") testId="side-close" width=44 height=44
+            Glyph(name="close", size=16)
+      else
+        row align-items="center" gap="space.sm" padding="space.sm space.md" min-height=44 box-sizing="border-box" border-bottom="1px solid surface.line" testId="side-header"
+          column flex=1 min-width=0 gap="0"
+            text t("chat.side") font="-exact-subheadline" font-weight=600 testId="side-title"
+            text (sideBag.working ? t("status.working") : t("status.done")) color="ink.muted" font="-exact-footnote" testId="side-status"
+          button class=TextControl appearance="none" press=mergeSideChat disabled=(not sideBag.canMerge) aria-label=t("chat.side.merge", name=sideBag.name) title=(sideBag.canMerge ? t("chat.side.merge", name=sideBag.name) : t("chat.side.nothing")) testId="side-merge" min-height=44 padding="0 space.sm"
+            text t("chat.side.merge", name=sideBag.name) font="-exact-footnote"
+          button class=IconControl appearance="none" press=closeSide aria-label=t("chat.side.close") title=t("chat.side.close") testId="side-close" width=44 height=44
+            Glyph(name="close", size=16)
+      if sideBag.failed
+        text t("chat.side.failed") color="ink.muted" padding="space.lg" testId="side-failed"
+      else if sideBag.loading
+        text t("chat.loading") color="ink.muted" padding="space.lg" testId="side-loading"
+      else if sideBag.empty
+        column flex=1 align-items="center" justify-content="center" padding="space.xl" testId="side-empty"
+          text t("chat.side.empty") color="ink.muted" text-align="center"
+      else
+        ChatLog(rows=sideBag.rows, inRoom=false, logId="side-transcript", logTestId="side-transcript", bots=sideBag.bots, slug=sideBag.slug, pins=sideBag.pins, workers=[], hover=sideBag.hover, reactFor=sideBag.reactFor, messageMenu=sideBag.messageMenu, copiedMenu=sideBag.copiedMenu, answerText=sideBag.answerText, answerError=sideBag.answerError, answering=sideBag.answering, react=reactSide, openPicker=openReact, reply=startSideReply, pin=pinSide, openMenu=openMessageMenu, closeMenu=closeMessageMenu, noteCopied=noteCopied, answer=sideAnswer, editAnswer=editSideAnswer, retry=retrySide, scrolled=moved)
+      Composer(draft=sideBag.draft, edit=editSide, post=postSide, onKey=sideComposerKey, onCaret=sideCaret, stop=stopSide, working=sideBag.working, canSend=sideBag.canSend, sentPending=sideBag.sentPending, pending=sideBag.pending, attachError=sideBag.attachError, attachedPending=sideBag.attachedPending, dropPending=dropSidePending, pickFiles=pickSideFiles, filesPicked=filesPicked, fileInputId="side-attach", placeholder=t("chat.write"), composerId="side-composer", replyTo=sideBag.replyTo, replyQuote=sideBag.replyQuote, cancelReply=cancelSideReply, voicePreview=sideBag.voicePreview, voiceError=sideBag.voiceError, voiceHold=sideBag.voiceHold, voiceId=sideBag.voiceId, recording=sideBag.recording, holdVoice=sideHoldVoice, sendVoice=sendSideVoice, discardVoice=discardSideVoice, voiceSentPending=sideBag.voiceSentPending, mentionHits=[], mentionIdx=0, completeMention=editSide, slashOpen=false, slashIdx=0, acceptSlash=editSide, pasted=sidePasted, readOnly=false)

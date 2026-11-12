@@ -2,10 +2,10 @@ use knownSent from "../ui/root-types.contract"
 members Bots
   state toast = ""
 
-  task poll when page.visibilityState == "visible" and not pending(sent) and not pending(answered) and not pending(stopped)
+  task poll when page.visibilityState == "visible" and not pending(sent) and not pending(answered) and not pending(stopped) and not pending(sideSent) and not pending(sideOpened) and not pending(sideVoiced)
     every(1500, pull)
 
-  task pollHidden when page.visibilityState != "visible" and not pending(sent) and not pending(answered) and not pending(stopped)
+  task pollHidden when page.visibilityState != "visible" and not pending(sent) and not pending(answered) and not pending(stopped) and not pending(sideSent) and not pending(sideOpened) and not pending(sideVoiced)
     every(10000, pull)
 
   task adoptSent when lastText != "" and not pending(sent) and knownSent(chat.rows, sentId)
@@ -68,6 +68,7 @@ members Bots
     wantOpen = false
     wantClose = false
     childThread = ""
+    sideThread = ""
     panelPage = "root"
     computerTab = ""
     rowMenu = ""
@@ -78,7 +79,9 @@ members Bots
   action back
     writeDrafts()
     computerEnlarged = false
-    if childThread != ""
+    if sideThread != ""
+      sideThread = ""
+    else if childThread != ""
       childThread = ""
     else
       nav = back(nav)
@@ -89,4 +92,5 @@ members Bots
 
   action openChild(threadId: string)
     writeDrafts()
+    sideThread = ""
     childThread = threadId
