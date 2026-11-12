@@ -1,0 +1,84 @@
+use putText from "../ui/root-types.contract"
+
+shape PromptLink
+  bot: string
+  prompt: string
+  present: bool
+  bad: bool
+
+shape PageOrigin
+  origin: string
+  local: bool
+
+members Bots
+  // Held until a Bot is open. The banner stays on that draft until the person sends.
+  state linkHold = ""
+  state linkBanner = ""
+  state linkFocus = ""
+  state seenLink = ""
+
+  resource openedLink = readPromptLink(top(nav).url) as shape PromptLink else empty()
+  resource pageOrigin = loadPageOrigin() as shape PageOrigin else empty()
+
+  derive linkUrl = top(nav).url
+  derive linkQuery = searchParam(top(nav), "prompt")
+  derive linkDraft = linkBanner != "" and linkBanner == dkey
+
+  // The sign-in screen leaves the address alone. This runs once the session is known and open.
+  task takePromptLink when not pending(session) and not locked and openedLink.present and not pending(openedLink) and not pending(bots) and seenLink != linkUrl
+    after(1, applyPromptLink)
+
+  // Navigation commits first. The next tick writes the draft onto the Bot that opened.
+  task placeHeld when linkHold != "" and slug != ""
+    after(1, placeHeldDraft)
+
+  task focusLinked when linkBanner != "" and linkBanner == slug and linkFocus != linkBanner and top(nav).name == "chat"
+    after(1, focusLinkedComposer)
+
+  task focusPicker when linkFocus == "picker" and searching and top(nav).name == "inbox"
+    after(1, focusBotSearch)
+
+  action applyPromptLink
+    seenLink = linkUrl
+    let named = openedLink.bot
+    let known = named != "" and not botsFailed and bots.filter(b => b.slug == named).length > 0
+    linkBanner = ""
+    if openedLink.bad or openedLink.prompt == ""
+      linkHold = ""
+      searching = false
+      if known
+        open(path("chat", named))
+      else
+        nav = replace(nav, path("inbox"))
+    else if known
+      linkHold = openedLink.prompt
+      linkFocus = ""
+      searching = false
+      open(path("chat", named))
+    else
+      linkHold = openedLink.prompt
+      searching = true
+      linkFocus = "picker"
+
+  action placeHeldDraft
+    if linkHold != "" and slug != ""
+      draftTexts = putText(draftTexts, slug, linkHold)
+      noteDraft()
+      linkBanner = slug
+      linkHold = ""
+      linkFocus = ""
+      searching = false
+
+  action focusLinkedComposer
+    linkFocus = linkBanner
+    focus("composer")
+
+  action focusBotSearch
+    linkFocus = ""
+    focus("bot-search")
+
+  action copyPromptLink(bot: string, text: string)
+    if bot != "" and text.trim() != ""
+      let origin = pageOrigin.origin.endsWith("/") ? pageOrigin.origin.slice(0, pageOrigin.origin.length - 1) : pageOrigin.origin
+      copyText(`${origin}/?bot=${encodeURIComponent(bot)}&prompt=${encodeURIComponent(text.slice(0, 8000))}`)
+      toast = pageOrigin.local ? t("chat.linkLocal") : t("chat.linkCopied")

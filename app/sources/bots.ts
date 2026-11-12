@@ -9,6 +9,7 @@ export const botSources = {
   loadBots: async ([focus], store): Promise<Result<'loadBots'>> => {
     // Reserved slugs for the contract runner, which has no gateway. A real inbox still fetches.
     // `bea` is the second fixture Bot, so a draft test can open her and come back without a gateway.
+    // `fixture-pick` is Ada's roster with no Bot of that slug, so a prompt link can ask the person to choose.
     if (focus === 'tabs' || focus === 'frame' || focus === 'page') {
       const slug = focus;
       const name = focus === 'frame' ? 'Frame' : focus === 'tabs' ? 'Tabs' : 'Page';
@@ -21,7 +22,7 @@ export const botSources = {
         { slug: 'quiet', name: 'Quiet', label: '', initials: 'Q', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt('quiet', ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get('quiet')) },
       ];
     }
-    if (focus === 'fixture' || focus === 'bea' || focus === 'fixture-crowd') {
+    if (focus === 'fixture' || focus === 'bea' || focus === 'fixture-crowd' || focus === 'fixture-pick') {
       return [
         { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt('fixture', ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get('fixture')) },
         { slug: 'ada-junior-1', name: 'Ada junior 1', label: '', initials: 'AJ', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: 'fixture', hideFromSidebar: true, subagent: true, prompt: fixturePrompt('ada-junior-1', 'Look things up.'), inheritParentPrompt: true, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get('ada-junior-1')) },

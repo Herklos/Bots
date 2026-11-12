@@ -16,7 +16,7 @@ export const groupSources = {
         { kind: 'bot', key: 'bot-tabs', id: 'tabs', name: 'Tabs', color: fill('brand.default'), shape: 'ball', faces: [], line: 'Ready to chat', time: '', at: '', unread: false, working: false, ready: true, notifications: wantsNotice(fixtureBotNotify.get('tabs')) },
       ];
     }
-    if (focus === 'fixture' || focus === 'bea' || room === 'fixture') {
+    if (focus === 'fixture' || focus === 'bea' || room === 'fixture' || focus === 'fixture-pick') {
       return [
         { kind: 'bot', key: 'bot-fixture', id: 'fixture', name: 'Ada', color: fill('brand.default'), shape: 'ball', faces: [], line: 'Ready to chat', time: '', at: '', unread: true, working: false, ready: true, notifications: wantsNotice(fixtureBotNotify.get('fixture')) },
         { kind: 'group', key: 'group-fixture', id: 'fixture', name: 'Design', color: 'brand.blue', shape: 'hex', faces: [{ shape: 'ball', color: fill('brand.default'), state: 'idle' }, { shape: 'ball', color: fill('brand.blue'), state: 'idle' }], line: 'Ada: On it', time: '', at: '', unread: false, working: false, ready: true, notifications: wantsNotice(fixtureRoomNotify.get('fixture')) },

@@ -152,6 +152,8 @@ members Bots
 
   action afterSend
     if sendError == ""
+      if linkBanner == dkey
+        linkBanner = ""
       draftFiles = dropKey(draftFiles, dkey)
       noteDraft()
       writeDrafts()

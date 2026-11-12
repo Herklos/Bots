@@ -18,9 +18,9 @@ members Bots
   resource hostTime = exactTime() as shape HostTime
   resource pointerFacts = exactViewport() as shape PointerFacts
   resource session = loadSession(hostTime.locale) as shape Session else empty()
-  resource bots = loadBots(slug != "" ? slug : roomId) as shape Bot[] else empty()
+  resource bots = loadBots(rosterFocus) as shape Bot[] else empty()
   resource page = exactPage() as shape PageState
-  resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId) as shape Convo[] else empty()
+  resource convos = loadConvos(botQuery.trim().toLowerCase(), rosterFocus, roomId) as shape Convo[] else empty()
   resource chat = loadChat(slug, childThread, (childThread != "" ? "child" : "")) as shape Chat else empty()
   resource room = loadRoom(roomId) as shape Room else empty()
   resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
@@ -34,6 +34,8 @@ members Bots
   derive lastRoomId = match room.messages.at(-1) { case some(m) => m.id, case none => "" }
   derive query = botQuery.trim().toLowerCase()
   derive roomId = match stack(nav).filter(e => e.name == "group").at(-1) { case some(e) => e.params.id, case none => "" }
+  // A prompt link on the inbox names a Bot before the route does, so that roster can load.
+  derive rosterFocus = slug != "" ? slug : (roomId != "" ? roomId : searchParam(top(nav), "bot"))
   // The sidebar follows the latest conversation on the route, a chat or a group, never both.
   derive convoName = match stack(nav).filter(e => e.name == "chat" or e.name == "group").at(-1) { case some(e) => e.name, case none => "" }
   derive roomRows = withRoomPending(withWorking(room.messages, paintedWorkers.length > 0), roomPending, roomSentId).map(m => roomLine(m))

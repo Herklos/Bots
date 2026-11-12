@@ -82,6 +82,8 @@ component ChatMessage
     openMenu: action
     closeMenu: action
     noteCopied: action
+    promptBot: string
+    copyPromptLink: action
   state over = false
   state latched = false
   state closeOnLift = false
@@ -90,7 +92,8 @@ component ChatMessage
   derive showChrome = over or latched or focused or picking or menuOpen
   derive hit = canHover ? 36 : 44
   derive ring = menuOpen ? (row.mine ? "0 0 0 2px surface.canvas, 0 0 0 4px brand.default" : `0 0 0 2px ${faceHex(faceColor(speaker))}`) : "none"
-  derive menuCount = row.text != "" ? 3 : 2
+  derive promptItem = row.text != "" and promptBot != ""
+  derive menuCount = (row.text != "" ? 3 : 2) + (promptItem ? 1 : 0)
   action setOver(on: bool)
     over = on
     if not on and canHover
@@ -126,6 +129,9 @@ component ChatMessage
   action chooseCopy()
     copyText(row.text)
     noteCopied(row.id)
+  action choosePromptLink()
+    copyPromptLink(promptBot, row.text)
+    closeMenu()
   action pickEmoji(em: string)
     closeMenu()
     react(row.id, em)
@@ -137,7 +143,7 @@ component ChatMessage
       preventDefault()
       let next = k == "ArrowDown" ? (menuAt + 1 >= menuCount ? 0 : menuAt + 1) : (menuAt <= 0 ? menuCount - 1 : menuAt - 1)
       menuAt = next
-      focus(next == 0 ? `menu-reply-${row.id}` : next == 1 ? `menu-pin-${row.id}` : `menu-copy-${row.id}`)
+      focus(next == 0 ? `menu-reply-${row.id}` : next == 1 ? `menu-pin-${row.id}` : next == 2 ? `menu-copy-${row.id}` : `menu-prompt-${row.id}`)
   action chromeFocus(e: FocusEvent)
     focused = chromeTarget(e.target)
   action chromeBlur(e: FocusEvent)
@@ -186,6 +192,12 @@ component ChatMessage
                         column color="ink.muted"
                           Glyph(name=(copied ? "check" : "copy"), size=16)
                         text (copied ? t("chat.copied") : t("chat.copy")) font="-exact-subheadline" font-weight=500 color="-exact-label"
+                  if promptItem
+                    button id=`menu-prompt-${row.id}` role="menuitem" class=TextControl appearance="none" key=menuKey pointerdown=holdMenu press=choosePromptLink aria-label=t("chat.copyPromptLink") testId=`menu-prompt-${row.id}` width="100%" min-height=hit height=hit padding="0 space.sm" border-radius="radius.sm" color="-exact-label" justify-content="flex-start"
+                      row gap="space.sm" align-items="center"
+                        column color="ink.muted"
+                          Glyph(name="copy", size=16)
+                        text t("chat.copyPromptLink") font="-exact-subheadline" font-weight=500 color="-exact-label"
               if row.react != ""
                 button class=ReactionChip appearance="none" position="absolute" bottom="-4px" left=(row.mine ? "0" : "auto") right=(row.mine ? "auto" : "0") z-index=1 press=react(row.id, row.react) aria-label=t("chat.removeReaction") testId=`react-${row.id}`
                   text row.react
