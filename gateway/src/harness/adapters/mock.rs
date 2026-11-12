@@ -10,11 +10,20 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+/// One `set_model` the mock actually accepted.
+#[derive(Clone, Debug)]
+pub(crate) struct ModelPush {
+    pub project_id: Option<String>,
+    pub thread_id: Option<String>,
+    pub selection: Value,
+}
+
 #[derive(Debug)]
 pub(crate) struct MockHarness {
     pub tabs: Vec<BrowserTab>,
     pub busy: Vec<String>,
     typed: Mutex<HashMap<String, String>>,
+    model_pushes: Mutex<Vec<ModelPush>>,
 }
 
 impl MockHarness {
@@ -23,7 +32,15 @@ impl MockHarness {
             tabs: Vec::new(),
             busy: Vec::new(),
             typed: Mutex::new(HashMap::new()),
+            model_pushes: Mutex::new(Vec::new()),
         }
+    }
+
+    pub(crate) fn model_pushes(&self) -> Vec<ModelPush> {
+        self.model_pushes
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .clone()
     }
 
     pub(crate) fn typed(&self, tab: &str) -> String {
@@ -159,10 +176,18 @@ impl Provisioning for MockHarness {
 
     async fn set_model(
         &self,
-        _project_id: Option<&str>,
-        _thread_id: Option<&str>,
-        _selection: &Value,
+        project_id: Option<&str>,
+        thread_id: Option<&str>,
+        selection: &Value,
     ) -> Result<(), HarnessError> {
+        self.model_pushes
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .push(ModelPush {
+                project_id: project_id.map(str::to_string),
+                thread_id: thread_id.map(str::to_string),
+                selection: selection.clone(),
+            });
         Ok(())
     }
 

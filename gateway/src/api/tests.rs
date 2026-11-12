@@ -127,6 +127,13 @@ fn library_mime_ignores_extension_case() {
 }
 
 pub(super) fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
+    settings_state_with(dir, None)
+}
+
+pub(super) fn settings_state_with(
+    dir: &std::path::Path,
+    harness: Option<Arc<dyn crate::harness::Harness>>,
+) -> Arc<AppState> {
     let app_dir = dir.join("bots/.botapp");
     let cfg = crate::platform::config::Config {
         host: "127.0.0.1".into(),
@@ -152,7 +159,8 @@ pub(super) fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
         Arc::new(storage::LocalDisk::new(cfg.bots_root.clone()));
     Arc::new(AppState {
         auth: crate::network::auth::Auth::load(&app_dir, String::new(), vec![]).unwrap(),
-        harness: crate::harness::connect(cfg.t3_url.clone(), cfg.t3_token.clone()),
+        harness: harness
+            .unwrap_or_else(|| crate::harness::connect(cfg.t3_url.clone(), cfg.t3_token.clone())),
         bots: bots::Bots::with_workspace(
             cfg.bots_root.clone(),
             cfg.bot_mcp_url.clone(),

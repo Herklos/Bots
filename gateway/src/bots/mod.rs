@@ -253,6 +253,7 @@ pub(crate) mod library; // Files and records through the workspace adapter.
 pub(crate) mod lineage; // Subagents and delegated threads of one Bot.
 pub(crate) mod memory; // Bot memory files through the workspace.
 pub(crate) mod memory_tools;
+pub(crate) mod provider_switch; // A mid-chat provider change waits for confirmation.
 pub(crate) mod provisioner;
 pub(crate) mod roster; // What an inbox row needs: preview, working, unread.
 pub(crate) mod runtime_mode; // Approval modes, least access first, and the pure cap.
