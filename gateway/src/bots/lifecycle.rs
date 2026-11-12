@@ -120,6 +120,12 @@ impl Bots {
             clean.remove("slug");
             clean.remove("workspaceRoot");
             clean.remove("environment");
+            let mut policy = Map::new();
+            for key in ["subagent", "subagents", "childThreads"] {
+                if let Some(value) = clean.remove(key) {
+                    policy.insert(key.to_string(), value);
+                }
+            }
             next.extend(clean);
             next.insert("slug".into(), json!(slug));
             next.insert("primary".into(), json!(is_main));
@@ -127,15 +133,29 @@ impl Bots {
             if wants_main {
                 next.insert("hidden".into(), json!(false));
             }
+            super::helpers_policy::merge_policy(&mut next, &policy)?;
+            if create {
+                super::helpers_policy::ensure_can_add(
+                    &bots,
+                    &json!({
+                        "role": next.get("role"),
+                        "hideFromSidebar": next.get("hideFromSidebar"),
+                        "parentSlug": next.get("parentSlug"),
+                    }),
+                )?;
+            }
             self.persist(&Value::Object(next)).await?;
             if wants_main {
                 write_json(&self.selection_file(), &json!({ "slug": slug })).await?;
             }
-            self.reconcile()
+            let mut saved = self
+                .reconcile()
                 .await?
                 .into_iter()
                 .find(|b| b["slug"] == slug)
-                .ok_or_else(|| ApiError::not_found("Bot not found"))?
+                .ok_or_else(|| ApiError::not_found("Bot not found"))?;
+            super::helpers_policy::resolve_on_view(&mut saved);
+            saved
         };
         let slug = saved["slug"].as_str().unwrap_or("").to_string();
         self.refresh_agents(&slug).await?;
@@ -184,7 +204,7 @@ impl Bots {
         if let Some(parent) = parent {
             self.write_instructions(&parent).await?;
         }
-        self.reconcile().await
+        Ok(Self::show_all(self.reconcile().await?))
     }
 
     /// A new Bot folder: memory, library, skills and `bot.json`. A `parentSlug` makes a
@@ -246,6 +266,12 @@ impl Bots {
                 Some(Value::Array(items.clone()))
             }
             Some(_) => return Err(ApiError::bad_request("pendingRoutines must be a list")),
+        };
+        let child_plan = if let Some(parent) = &parent {
+            let existing = self.load().await?;
+            Some(super::helpers_policy::plan_child(input, parent, &existing)?)
+        } else {
+            None
         };
         let base = slugify(&name);
         let (mut slug, mut n) = (base.clone(), 2);
@@ -328,6 +354,9 @@ impl Bots {
         }
         if let Some(pending) = pending_routines {
             bot["pendingRoutines"] = pending;
+        }
+        if let Some(plan) = child_plan {
+            super::helpers_policy::apply_plan(&mut bot, plan);
         }
         self.save(&slug, &bot, true).await
     }

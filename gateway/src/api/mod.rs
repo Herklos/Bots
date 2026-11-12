@@ -32,6 +32,8 @@ mod code_api;
 #[cfg(test)]
 mod code_api_tests;
 mod computer_api;
+#[cfg(test)]
+mod helpers_policy_tests;
 mod library_api;
 #[cfg(test)]
 mod library_file_tests;

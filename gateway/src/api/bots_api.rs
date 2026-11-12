@@ -175,6 +175,16 @@ pub(crate) async fn model_put(
         };
         patch["runtimeMode"] = json!(clamped);
     }
+    if crate::bots::is_subagent(&bot) {
+        let parent_slug = crate::bots::parent_slug_of(&bot)
+            .ok_or_else(|| ApiError::bad_request("A subagent's parent is missing."))?;
+        let parent = require_bot(&s, &parent_slug).await?;
+        crate::bots::helpers_policy::check_child_update(
+            &parent,
+            &selection,
+            patch.get("runtimeMode").and_then(Value::as_str),
+        )?;
+    }
     let running = running_model(&bot["model"], &settings["defaultModel"]);
     let next = selection["instanceId"].as_str().unwrap_or("");
     match provider_step(&running, next, &body) {

@@ -203,7 +203,7 @@ impl Bots {
 
     pub async fn list(&self) -> ApiResult<Vec<Value>> {
         let _g = self.lock.lock().await;
-        self.reconcile().await
+        Ok(Self::show_all(self.reconcile().await?))
     }
 
     pub async fn get(&self, slug: &str) -> ApiResult<Option<Value>> {
@@ -213,7 +213,8 @@ impl Bots {
             .reconcile()
             .await?
             .into_iter()
-            .find(|b| b["slug"] == slug))
+            .find(|b| b["slug"] == slug)
+            .map(Self::show))
     }
 
     pub async fn select(&self, slug: &str) -> ApiResult<Vec<Value>> {
@@ -232,7 +233,16 @@ impl Bots {
             target["hidden"] = json!(false);
             self.persist(&target).await?;
         }
-        self.reconcile().await
+        Ok(Self::show_all(self.reconcile().await?))
+    }
+
+    fn show(mut bot: Value) -> Value {
+        helpers_policy::resolve_on_view(&mut bot);
+        bot
+    }
+
+    fn show_all(bots: Vec<Value>) -> Vec<Value> {
+        bots.into_iter().map(Self::show).collect()
     }
 }
 
@@ -249,6 +259,7 @@ pub(crate) mod agent_context; // The managed block of AGENTS.md: prompt text, an
 )]
 pub(crate) mod computer;
 pub(crate) mod face_icon; // The Bot face written into the workspace for the thread list.
+pub(crate) mod helpers_policy; // Lasting helpers and one-off child thread policy.
 pub(crate) mod history_tools; // Score, page, and the threads one Bot may search.
 pub(crate) mod icons; // Site icons cached under HBOTS_HOME/icons.
 pub(crate) mod image_tools; // image_show: copy a picture into this Bot's library/.
