@@ -1,8 +1,5 @@
 {
-  "app/app.contract": 2506,
-  "app/app.test.contract": 1116,
-  "app/app.ts": 880,
-  "app/bot/bot.contract": 400,
-  "app/chat/chat.contract": 362,
-  "app/ui/shared.contract": 620
+  "app/app.contract": 973,
+  "app/app.test.contract": 1118,
+  "app/app.ts": 906
 }
