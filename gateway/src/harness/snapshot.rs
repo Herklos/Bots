@@ -146,6 +146,10 @@ pub struct ComputerLink {
     pub status: String,
     pub access: String,
     pub selectable: bool,
+    pub last_seen_at: String,
+    pub last_error: String,
+    pub laptop: bool,
+    pub version: String,
 }
 
 /// This computer, plus the links T3 Code already has. `ok` is false when that list could not be read.
@@ -153,6 +157,8 @@ pub struct ComputerLink {
 pub struct ComputerCatalog {
     pub ok: bool,
     pub local_label: String,
+    pub local_version: String,
+    pub local_laptop: bool,
     pub broker_id: String,
     pub links: Vec<ComputerLink>,
 }
@@ -162,9 +168,32 @@ impl ComputerCatalog {
         Self {
             ok: false,
             local_label: String::new(),
+            local_version: String::new(),
+            local_laptop: false,
             broker_id: String::new(),
             links: Vec::new(),
         }
+    }
+}
+
+/// Drop any token that carries a URL, then keep the first 160 characters.
+/// Link hosts stay off anything the client can read.
+pub(crate) fn without_urls(raw: &str) -> String {
+    let mut out = String::new();
+    for token in raw.split_whitespace() {
+        if token.to_ascii_lowercase().contains("://") {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(token);
+    }
+    const MAX: usize = 160;
+    if out.chars().count() > MAX {
+        out.chars().take(MAX).collect()
+    } else {
+        out
     }
 }
 

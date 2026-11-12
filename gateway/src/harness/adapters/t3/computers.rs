@@ -6,7 +6,7 @@
 use serde_json::{json, Value};
 
 use super::T3;
-use crate::harness::{ComputerCatalog, ComputerLink, HarnessError};
+use crate::harness::{without_urls, ComputerCatalog, ComputerLink, HarnessError};
 
 const LIST: &str = "peerLinks.list";
 
@@ -35,6 +35,8 @@ pub(crate) fn catalog_of(probe: Option<&Value>, listed: Option<&Value>) -> Compu
     ComputerCatalog {
         ok: true,
         local_label: probe["label"].as_str().unwrap_or("").to_string(),
+        local_version: version_of(probe),
+        local_laptop: machine_is_laptop(machine_name(probe)),
         links: links_of(listed, &broker_id),
         broker_id,
     }
@@ -74,7 +76,44 @@ fn link_of(link: &Value, broker_id: &str) -> Option<ComputerLink> {
         status,
         access,
         selectable,
+        last_seen_at: field(link, "lastReachedAt"),
+        last_error: field(link, "lastError"),
+        laptop: laptop_of(link),
+        version: version_of(link),
     })
+}
+
+fn field(value: &Value, key: &str) -> String {
+    without_urls(value.get(key).and_then(Value::as_str).unwrap_or(""))
+}
+
+fn version_of(value: &Value) -> String {
+    for key in ["serverVersion", "t3Version", "version"] {
+        let text = field(value, key);
+        if !text.is_empty() {
+            return text;
+        }
+    }
+    String::new()
+}
+
+fn laptop_of(value: &Value) -> bool {
+    value.get("laptop").and_then(Value::as_bool) == Some(true)
+        || machine_is_laptop(machine_name(value))
+}
+
+fn machine_name(value: &Value) -> &str {
+    value
+        .pointer("/platform/machine")
+        .or_else(|| value.get("machine"))
+        .and_then(Value::as_str)
+        .unwrap_or("")
+}
+
+/// A laptop that cannot be reached is asleep. A desktop that cannot be reached is unreachable.
+fn machine_is_laptop(machine: &str) -> bool {
+    let lower = machine.to_ascii_lowercase();
+    lower.contains("laptop") || lower.contains("macbook") || lower.contains("notebook")
 }
 
 /// One line, 1 to 128 characters, ASCII letters, digits, `_`, `-`. Whitespace is rejected.
@@ -211,6 +250,79 @@ mod tests {
         assert!(!listed_down.ok);
         assert!(listed_down.links.is_empty());
         assert!(listed_down.local_label.is_empty());
+        assert!(listed_down.local_version.is_empty());
+        assert!(!listed_down.local_laptop);
         assert!(listed_down.broker_id.is_empty());
+    }
+
+    #[test]
+    fn a_link_keeps_status_facts_and_drops_urls() {
+        let probe = json!({
+            "label": "Studio",
+            "environmentId": "15f077d9-b158-435e-96f1-ed7709f11cbd",
+            "serverVersion": "0.1.9-nightly",
+            "platform": { "machine": "mac-mini" }
+        });
+        let listed = json!({
+            "links": [
+                {
+                    "environmentId": "srv-sleep",
+                    "label": "Travel laptop",
+                    "urls": ["https://sleep.example/wake"],
+                    "access": "auto",
+                    "status": "unreachable",
+                    "laptop": true,
+                    "lastReachedAt": "2026-11-01T00:00:00Z",
+                    "lastError": "timed out https://sleep.example/health",
+                    "serverVersion": "0.1.8"
+                },
+                {
+                    "environmentId": "srv-book",
+                    "label": "Book",
+                    "urls": ["https://book.example"],
+                    "access": "full-access",
+                    "status": "unreachable",
+                    "machine": "MacBookPro"
+                },
+                {
+                    "environmentId": "srv-west-1",
+                    "label": "Build server",
+                    "urls": ["https://build.example"],
+                    "access": "approval-required",
+                    "status": "reachable",
+                    "lastError": "https://build.example/only"
+                }
+            ]
+        });
+        let catalog = catalog_of(Some(&probe), Some(&listed));
+        assert!(catalog.ok);
+        assert_eq!(catalog.local_label, "Studio");
+        assert_eq!(catalog.local_version, "0.1.9-nightly");
+        assert!(!catalog.local_laptop);
+        let sleep = catalog
+            .links
+            .iter()
+            .find(|link| link.id == "srv-sleep")
+            .unwrap();
+        assert!(sleep.laptop);
+        assert_eq!(sleep.status, "unreachable");
+        assert_eq!(sleep.last_seen_at, "2026-11-01T00:00:00Z");
+        assert_eq!(sleep.last_error, "timed out");
+        assert_eq!(sleep.version, "0.1.8");
+        let book = catalog
+            .links
+            .iter()
+            .find(|link| link.id == "srv-book")
+            .unwrap();
+        assert!(book.laptop);
+        let build = catalog
+            .links
+            .iter()
+            .find(|link| link.id == "srv-west-1")
+            .unwrap();
+        assert!(build.last_error.is_empty());
+        let text = format!("{catalog:?}");
+        assert!(!text.contains("https://"));
+        assert!(!text.contains("urls"));
     }
 }

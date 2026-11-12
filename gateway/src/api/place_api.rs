@@ -27,7 +27,7 @@ pub(crate) async fn environment_put(
     Ok(Json(s.bots.set_environment(&slug, id, &catalog).await?))
 }
 
-async fn computers_of(s: &AppState) -> ComputerCatalog {
+pub(crate) async fn computers_of(s: &AppState) -> ComputerCatalog {
     let Ok(provisioning) = s.harness.provisioning() else {
         return ComputerCatalog::offline();
     };

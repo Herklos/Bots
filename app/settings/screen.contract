@@ -10,6 +10,7 @@ use ModelSettings from "./models.contract"
 use NoticeSettings from "./notice.contract"
 use UpdateSettings from "./updates.contract"
 use UserSettings from "./user.contract"
+use LinkedMachines from "./machines.contract"
 // SettingsScreen: one route of the root view, moved out with its values and actions injected.
 use SettingsBag from "./bag.contract"
 component SettingsScreen
@@ -168,9 +169,9 @@ component SettingsScreen
         text t("settings.title") role="heading" aria-level=1 class=PageTitle flex=1
       column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" padding="space.md space.lg space.sm"
         row class=SettingsTrack role="tablist" aria-label=t("settings.domains")
-          for d in ["user", "notifications", "models", "access", "updates"] key=d
+          for d in ["user", "notifications", "models", "access", "computers", "updates"] key=d
             button class=SettingsTab appearance="none" role="tab" aria-selected=(settingsBag.settingsDomain == d) press=pickSettingsDomain(d) testId=`settings-domain-${d}` background-color=(settingsBag.settingsDomain == d ? "surface.card" : "transparent") color=(settingsBag.settingsDomain == d ? "-exact-label" : "ink.muted")
-              text settingsDomainLabel(d, t("settings.domainUser"), t("settings.domainNotifications"), t("settings.domainModels"), t("settings.domainAccess"), t("settings.about"))
+              text settingsDomainLabel(d, t("settings.domainUser"), t("settings.domainNotifications"), t("settings.domainModels"), t("settings.domainAccess"), t("settings.domainComputers"), t("settings.about"))
       scroll id="settings-form" flex=1 min-height=0
         column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" margin="0 auto" padding="space.lg space.lg space.xl" gap="space.xl"
           if settingsBag.settingsDomain == "user"
@@ -181,5 +182,7 @@ component SettingsScreen
             ModelSettings()
           else if settingsBag.settingsDomain == "access"
             AccessSettings()
+          else if settingsBag.settingsDomain == "computers"
+            LinkedMachines(list=settingsBag.machines, down=settingsBag.machinesFailed, loading=settingsBag.machinesPending)
           else if settingsBag.settingsDomain == "updates"
             UpdateSettings()

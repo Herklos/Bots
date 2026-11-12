@@ -3258,6 +3258,50 @@
         }
       }
     },
+    "/api/machines": {
+      "get": {
+        "operationId": "hbots_machines_get",
+        "summary": "GET /api/machines",
+        "parameters": [],
+        "x-hbots-permission": "read",
+        "responses": {
+          "200": {
+            "description": "Original gateway operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                  "x-hbots-dynamic": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Gateway error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "applicationSession": []
+          }
+        ]
+      }
+    },
     "/api/bots/{slug}/computer": {
       "get": {
         "operationId": "hbots_computer_get",

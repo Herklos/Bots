@@ -78,6 +78,8 @@ members Bots
       refresh report
       if settingsDomain == "updates"
         refresh system
+      if settingsDomain == "computers"
+        refresh machines
     if onLibrary
       refresh shelf
     if onMemory

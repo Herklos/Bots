@@ -1,0 +1,37 @@
+locale "en-US"
+
+test "Settings lists linked computers and does not pair"
+  size 390x844
+  tap "Settings"
+  clock data
+  tap "settings-domain-computers"
+  clock data
+  expect text "settings-domain-computers" == "Computers"
+  expect text "machines-title" == "Linked computers"
+  expect text "machine-local-label" == "This computer"
+  expect text "machine-local-status" == "Online"
+  expect text "machine-local-version" == "0.0.0"
+  expect text "machine-srv-west-1-label" == "Build server"
+  expect text "machine-srv-west-1-status" == "Online"
+  expect text "machine-srv-sleep-label" == "Travel laptop"
+  expect text "machine-srv-sleep-status" == "Asleep"
+  expect text "machine-srv-ro-label" == "Archive"
+  expect text "machine-srv-ro-access" == "Read only"
+  expect tree missing "machines-empty"
+  expect tree missing "machines-offline"
+  expect text "machines-note" == "Pairing stays in T3 Code, Settings, Environments."
+  expect tree missing "machines-pair"
+test "Settings lists linked computers in French"
+  locale "fr"
+  size 1200x800
+  tap "Settings"
+  clock data
+  tap "settings-domain-computers"
+  clock data
+  expect text "settings-domain-computers" == "Ordinateurs"
+  expect text "machines-title" == "Ordinateurs liés"
+  expect text "machine-local-label" == "Cet ordinateur"
+  expect text "machine-local-status" == "En ligne"
+  expect text "machine-srv-sleep-status" == "En veille"
+  expect text "machine-srv-ro-access" == "Lecture seule"
+  expect text "machines-note" == "L’appairage reste dans T3 Code, Réglages, Environnements."

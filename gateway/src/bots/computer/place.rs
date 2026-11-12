@@ -139,6 +139,10 @@ mod tests {
             .into(),
             access: "approval-required".into(),
             selectable,
+            last_seen_at: String::new(),
+            last_error: String::new(),
+            laptop: false,
+            version: String::new(),
         }
     }
 
@@ -146,6 +150,8 @@ mod tests {
         ComputerCatalog {
             ok: true,
             local_label: "Computer".into(),
+            local_version: String::new(),
+            local_laptop: false,
             broker_id: "15f077d9-b158-435e-96f1-ed7709f11cbd".into(),
             links: vec![link("srv-west-1", true), link("srv-ro", false)],
         }

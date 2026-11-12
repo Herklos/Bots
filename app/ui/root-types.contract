@@ -192,7 +192,7 @@ fn initialsOf(name: string): string = name.trim().split(" ").filter(w => w != ""
 
 fn botCountLabel(n: number, one: string, many: string): string = n == 1 ? one : many
 
-fn settingsDomainLabel(domain: string, user: string, notifications: string, models: string, access: string, updates: string): string = domain == "user" ? user : domain == "notifications" ? notifications : domain == "models" ? models : domain == "access" ? access : updates
+fn settingsDomainLabel(domain: string, user: string, notifications: string, models: string, access: string, computers: string, updates: string): string = domain == "user" ? user : domain == "notifications" ? notifications : domain == "models" ? models : domain == "access" ? access : domain == "computers" ? computers : updates
 
 fn noticeOn(missing: bool, enabled: bool, state: string): bool = missing ? state == "granted" : enabled
 

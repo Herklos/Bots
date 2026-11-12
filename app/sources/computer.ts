@@ -1,4 +1,5 @@
 import type { Sources, Result } from '../app.contract.d.ts';
+import { API } from '../host/config.ts';
 import { explain } from '../host/fixture.ts';
 import { noteLocale, say, localize, call, reply } from '../host/gateway.ts';
 import { frames } from '../host/session.ts';
@@ -153,6 +154,42 @@ export const computerSources = {
       error: String(r.body.error ?? ''),
     });
   },
+  loadMachines: async ([gate, locale], store): Promise<Result<'loadMachines'>> => {
+    noteLocale(locale);
+    const hidden = { ok: false, machines: [] as Result<'loadMachines'>['machines'], error: '' };
+    if (gate !== '1') return hidden;
+    // The contract runner never reaches a gateway. A served build replaces this host.
+    if (API === 'http://hbots-origin.invalid') {
+      return {
+        ok: true,
+        error: '',
+        machines: [
+          { id: '', label: say('computer.this'), local: true, status: 'online', laptop: false, lastSeenAt: '', t3Version: '0.0.0', lastError: '', access: '' },
+          { id: 'srv-west-1', label: 'Build server', local: false, status: 'online', laptop: false, lastSeenAt: '', t3Version: '', lastError: '', access: 'approval-required' },
+          { id: 'srv-sleep', label: 'Travel laptop', local: false, status: 'asleep', laptop: true, lastSeenAt: '', t3Version: '', lastError: '', access: 'auto' },
+          { id: 'srv-ro', label: 'Archive', local: false, status: 'online', laptop: false, lastSeenAt: '', t3Version: '', lastError: '', access: 'read-only' },
+        ],
+      };
+    }
+    const r = await call(store, '/api/machines');
+    if (!r.ok) throw new Error(r.error);
+    const rows = Array.isArray(r.body.machines) ? r.body.machines : [];
+    return {
+      ok: r.body.ok === true,
+      error: String(r.body.error ?? ''),
+      machines: rows.map((row: any) => ({
+        id: String(row.id ?? ''),
+        label: String(row.label ?? ''),
+        local: row.local === true,
+        status: String(row.status ?? ''),
+        laptop: row.laptop === true,
+        lastSeenAt: String(row.lastSeenAt ?? ''),
+        t3Version: String(row.t3Version ?? ''),
+        lastError: String(row.lastError ?? ''),
+        access: String(row.access ?? ''),
+      })),
+    };
+  },
   setComputerPlace: async ([slug, id], store) => {
     if (slug === 'frame' || slug === 'page' || slug === 'tabs') {
       placeChoice[slug] = id;
@@ -164,4 +201,4 @@ export const computerSources = {
     if (!r.ok) return { ok: false, error: say('error.computerPlace') };
     return { ok: true, error: '' };
   },
-} satisfies Pick<Sources, 'loadComputer' | 'openComputer' | 'closeComputer' | 'computerControl' | 'computerInput' | 'loadComputerPlace' | 'setComputerPlace'>;
+} satisfies Pick<Sources, 'loadComputer' | 'openComputer' | 'closeComputer' | 'computerControl' | 'computerInput' | 'loadComputerPlace' | 'loadMachines' | 'setComputerPlace'>;

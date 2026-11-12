@@ -6,7 +6,7 @@ Integrations tab.
 
 | Requirement | Implementation and verification |
 | --- | --- |
-| API parity and automatic generation | `api/router/mod.rs` declares 102 application operations. Its registration macro generates operation metadata from the HTTP method/handler chain. Infrastructure routes use the same approach in `router/infrastructure.rs`. The frozen coverage artifact classifies all 115 entries; mutation contracts are mandatory. |
+| API parity and automatic generation | `api/router/mod.rs` declares 103 application operations. Its registration macro generates operation metadata from the HTTP method/handler chain. Infrastructure routes use the same approach in `router/infrastructure.rs`. The frozen coverage artifact classifies all 116 entries; mutation contracts are mandatory. |
 | Bots and groups | Shared HTTP handlers execute creation, updates, membership and deletion. SDK fixtures exercise real filesystem persistence; unit flows verify model/runtime caps and provisioning behavior through the shared handler. |
 | Conversations, routines, approvals, voice | All existing routes are tools. Recorded mock-harness flows verify outgoing messages and audio attachments, pending-request answers and owned routine create/list/enable/run/delete. |
 | Remaining API domains | Library, connectors, memory, computer, Vault, providers, usage, settings, storage, access and system operations are in the generated catalog. They call the original Axum application handlers in-process. Existing domain/adapter tests remain applicable. |

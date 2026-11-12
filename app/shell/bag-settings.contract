@@ -82,4 +82,7 @@ members Bots
     storageTestedPending=storageTestedPending,
     systemPending=systemPending,
     updateStartedPending=updateStartedPending,
+    machines=machines,
+    machinesFailed=machinesFailed,
+    machinesPending=machinesPending,
   )

@@ -317,6 +317,13 @@
       "classification": "generated"
     },
     {
+      "path": "/api/machines",
+      "method": "GET",
+      "tool": "hbots_machines_get",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
       "path": "/api/bots/{slug}/computer",
       "method": "GET",
       "tool": "hbots_computer_get",

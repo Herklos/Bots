@@ -116,6 +116,7 @@ pub(crate) fn application_routes() -> (
         "/api/bots/{slug}/environment",
         get(environment_get).put(environment_put)
     );
+    route!("/api/machines", get(machines_get));
     route!("/api/bots/{slug}/computer", get(computer_get));
     route!("/api/bots/{slug}/computer/open", post(computer_open));
     route!("/api/bots/{slug}/computer/close", post(computer_close));
