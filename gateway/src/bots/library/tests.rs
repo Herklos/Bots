@@ -402,6 +402,7 @@ fn harness_files_sort_servers_and_disable_only_what_is_off() {
     assert_eq!(claude["disabledMcpjsonServers"], json!(["notes"]));
 }
 
+#[cfg(unix)]
 #[test]
 fn claude_settings_adds_the_agents_md_hook_once() {
     let once = claude_settings(&json!({}), &[]);
@@ -410,6 +411,12 @@ fn claude_settings_adds_the_agents_md_hook_once() {
         twice["hooks"]["UserPromptSubmit"].as_array().unwrap().len(),
         1
     );
+    assert_eq!(twice["hooks"]["SessionStart"].as_array().unwrap().len(), 1);
+    let prompt = twice["hooks"]["UserPromptSubmit"][0]["hooks"][0]["command"]
+        .as_str()
+        .unwrap();
+    assert!(prompt.contains(".bot/hooks/agents-md.sh"));
+    assert!(prompt.ends_with("prompt"));
     let other = json!({ "hooks": { "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "true" }] }] } });
     let merged = claude_settings(&other, &[]);
     assert_eq!(

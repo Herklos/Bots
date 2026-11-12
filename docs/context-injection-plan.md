@@ -167,9 +167,16 @@ R3. Startup. Already covered by the loop at `main.rs:291-300`; keep it, it now a
 
 R4. Concurrency. `write_instructions` is called outside the Bots lock (after the `{ }` block in `save`) and the poller adds another caller. Atomic write plus the "unchanged, skip" check makes concurrent callers safe (last writer wins with equivalent content). Add a test that two concurrent `write_instructions` calls leave a valid single managed block.
 
-R5. In-session freshness (conditional on V2 and V4).
-- If V2 shows `CLAUDE.md` is read once per session, a long-lived main thread keeps its first snapshot. Phase 3 adds a hook channel.
-- Phase 3 (only if V4 passes): extend `claude_settings` (`library.rs:656`) to merge a `hooks.UserPromptSubmit` entry (and `SessionStart`) that prints the current memory, preserving any hooks the person already has (merge by command string, never replace the array). Command is a plain shell line run in the Bot folder, no gateway dependency, for example `sh -c 'head -c 4096 memory/MEMORY.md; tail -c 2048 memory/log.md; head -c 2048 ../.botapp/shared-memory.md'`, plus `../<parent-slug>/memory/MEMORY.md` for an inheriting subagent. When the hook is present, the static snapshot in `AGENTS.md` can shrink to a pointer to avoid double context; decide from V4 results, default is to keep both and accept the duplication for the first release. Caveat: this bypasses the symlink guards in 4.2, acceptable because the paths are gateway-generated, not user input. Claude only: Codex has no hooks, it keeps the file snapshot (`.codex/config.toml` is written by `codex_toml`, `library.rs:673`).
+R5. In-session freshness. Claude reads `CLAUDE.md` when a session starts, so a long-lived thread would keep the first snapshot. The hook below is what shipped. Codex has no hooks and keeps the file snapshot.
+
+Hook (shipped, Unix only). `write_instructions` writes `.bot/hooks/agents-md.sh` before `.claude/settings.json`. The settings commands stay fixed, so a script edit does not append another entry:
+
+- `UserPromptSubmit`: `sh "$CLAUDE_PROJECT_DIR/.bot/hooks/agents-md.sh" prompt`
+- `SessionStart`, matcher `startup|resume|clear|compact`: `sh "$CLAUDE_PROJECT_DIR/.bot/hooks/agents-md.sh" start`
+
+`fork` is not matched. That session's first prompt records a baseline and prints nothing. Each save removes a `UserPromptSubmit` command equal to the old `shasum` one-liner (state under `${TMPDIR:-/tmp}`). Other hooks are left alone.
+
+The script is POSIX `sh`, uses `cksum` (not `shasum` or `jq`), and always exits 0. State is `.bot/hook-state/<session_id>`. `start` stores the checksum of the managed block with `<memory-log …>…</memory-log>` removed, deletes state files older than seven days, and prints nothing. `prompt` prints nothing when that session has no checksum yet. On a later change it prints `AGENTS.md changed. Re-read AGENTS.md.` Claude Code caps hook stdout at 10,000 characters and, past that, shows a preview of a spilled file without asking the model to read it. A filtered block can exceed the cap (a prompt is up to 16 KiB), so the hook does not print the block. A log-only change does not print. Non-Unix builds skip the script and the settings entries. The gap between the `CLAUDE.md` read and the hook remains.
 
 ## 6. Implementation steps (PR slicing)
 

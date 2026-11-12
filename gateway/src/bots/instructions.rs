@@ -169,6 +169,11 @@ impl Bots {
             Some(0o600),
         )
         .await?;
+        #[cfg(unix)]
+        crate::bots::library::write_agents_hook_script(
+            &dir.join(".bot").join("hooks").join("agents-md.sh"),
+        )
+        .await?;
         let claude_settings = dir.join(".claude").join("settings.json");
         let cs_existing = read_json(&claude_settings)
             .await
