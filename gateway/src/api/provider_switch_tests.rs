@@ -150,7 +150,7 @@ async fn a_provider_switch_is_a_separate_confirmed_step() {
     .await
     .unwrap();
     assert_eq!(note[&slug]["name"], "codex");
-    let view = chat_view(&state, &slug, None, None).await.unwrap();
+    let view = chat_view(&state, &slug, None, None, None).await.unwrap();
     let chip = view["events"]
         .as_array()
         .unwrap()

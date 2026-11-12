@@ -32,11 +32,12 @@ component ComputerOverlay
     hideComputerLarge: action
   derive pageLabel = t("computer.pageFor", name=nameOf(computerBag.bots, computerBag.slug))
   view
-    column position="absolute" inset=0 z-index=40 align-items="center" justify-content="center" background-color="brand.black" testId="computer-overlay"
-      button class=IconControl appearance="none" press=hideComputerLarge aria-label=t("computer.close") title=t("computer.close") testId="computer-close" position="absolute" top=12 right=12 z-index=1 color="ink.light" width=44 height=44
-        Glyph(name="close", size=22)
-      column id="computer-large" position="relative" z-index=0 tabindex=(computerBag.holding ? 0 : -1) key=largePageKey pointerdown=largePoint wheel=largeWheel paste=largePaste touch-action="none" width="100%" height="100%" testId="computer-large"
-        if paneA != ""
-          PreviewLayer(src=paneA, front=showA, ready=paneLoadedA, label=pageLabel)
-        if paneB != ""
-          PreviewLayer(src=paneB, front=(not showA), ready=paneLoadedB, label=pageLabel)
+    if computerBag.computerEnlarged and not computerBag.locked and computerBag.onComputer and computerBag.computer.image != ""
+      column position="absolute" inset=0 z-index=40 align-items="center" justify-content="center" background-color="brand.black" testId="computer-overlay"
+        button class=IconControl appearance="none" press=hideComputerLarge aria-label=t("computer.close") title=t("computer.close") testId="computer-close" position="absolute" top=12 right=12 z-index=1 color="ink.light" width=44 height=44
+          Glyph(name="close", size=22)
+        column id="computer-large" position="relative" z-index=0 tabindex=(computerBag.holding ? 0 : -1) key=largePageKey pointerdown=largePoint wheel=largeWheel paste=largePaste touch-action="none" width="100%" height="100%" testId="computer-large"
+          if paneA != ""
+            PreviewLayer(src=paneA, front=showA, ready=paneLoadedA, label=pageLabel)
+          if paneB != ""
+            PreviewLayer(src=paneB, front=(not showA), ready=paneLoadedB, label=pageLabel)

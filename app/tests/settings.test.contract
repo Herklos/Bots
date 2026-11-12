@@ -116,6 +116,15 @@ test "Settings offers Independent as a default approval"
   expect state prefs.defaultRuntimeMode == "independent"
   expect tree has "default-access-independent-note"
   expect text "default-access-independent-note" == "Acts without asking for most tools. Use Always Ask for money, identity and anything you must approve."
+test "Settings starts quiet and can show a summary of tool calls"
+  tap "Settings"
+  clock data
+  tap "settings-domain-models"
+  expect tree has "activity-quiet"
+  expect text "activity-quiet" == "Quiet"
+  tap "activity-summary"
+  clock data
+  expect checked "activity-summary"
 test "Settings saves who answers in a group"
   tap "Settings"
   clock data

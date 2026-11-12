@@ -1,0 +1,48 @@
+use SettingsScreen from "../settings/screen.contract"
+use NewGroupScreen from "../group/new.contract"
+use CreateBotScreen from "../bot/create.contract"
+use GroupScreen from "../group/screen.contract"
+use ChatScreen from "../chat/screen.contract"
+use Inbox from "../inbox/screen.contract"
+use VaultScreen from "../vault/screen.contract"
+use LoginSheet from "../settings/settings.contract"
+use Login from "../ui/shapes.contract"
+use ActivityDetail from "../chat/activity.contract"
+
+// The route stack, moved out of the root so the activity resource can stay beside sideChat.
+component AppRoutes
+  props
+    doSwitchLimit: action
+    vault: Login[]
+    revealedFor: string
+    revealedText: string
+    loginError: string
+    save: action
+    reveal: action
+    hide: action
+    drop: action
+    cancel: action
+    activity: ActivityDetail
+    pickActivity: action
+    entries: Entry[]
+  view
+    for e in entries key=e.id
+      if e.name == "inbox"
+        Inbox(route=e.id)
+      else if e.name == "chat"
+        ChatScreen(route=e.id, doSwitchLimit=doSwitchLimit, activity=activity, pickActivity=pickActivity)
+      else if e.name == "group"
+        GroupScreen(route=e.id, activity=activity, pickActivity=pickActivity)
+      else if e.name == "settings"
+        SettingsScreen(route=e.id)
+      else if e.name == "vault"
+        VaultScreen(route=e.id)
+      else if e.name == "vaultAdd"
+        LoginSheet(route=e.id, item=Login(id="", title="", website="", username="", hasPassword=false, hints="", icon=""), revealedFor=revealedFor, revealedText=revealedText, error=loginError, save=save, reveal=reveal, hide=hide, drop=drop, cancel=cancel)
+      else if e.name == "vaultEdit"
+        for l in vault.filter(x => x.id == e.params.id) key=l.id
+          LoginSheet(route=e.id, item=l, revealedFor=revealedFor, revealedText=revealedText, error=loginError, save=save, reveal=reveal, hide=hide, drop=drop, cancel=cancel)
+      else if e.name == "newGroup"
+        NewGroupScreen(route=e.id)
+      else
+        CreateBotScreen(route=e.id)

@@ -32,6 +32,8 @@ component SettingsScreen
     doEditPairCode: action
     doEditSpace: action
     doGroupAnswer: action
+    doActivityLevel: action
+    doFinalOnly: action
     doMakeDefault: action
     doRefreshLimits: action
     doMute: action
@@ -91,6 +93,8 @@ component SettingsScreen
     doEditPairCode
     doEditSpace
     doGroupAnswer
+    doActivityLevel
+    doFinalOnly
     doMakeDefault
     doRefreshLimits
     limits = settingsBag.limits

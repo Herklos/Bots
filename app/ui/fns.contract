@@ -34,6 +34,12 @@ fn reactStrip(current: string): string[] = current == "" or knownReact(current) 
 // A tool line's verb. Known ids come from the string table (passed in: a top-level `fn` cannot call `t`). Anything else keeps the stored sentence.
 fn eventVerb(id: string, stored: string, sent: string, routineCreated: string, routineUpdated: string, routineDeleted: string, from: string, ran: string, started: string, providerLimit: string, providerError: string, switched: string): string = id == "sent" ? sent : id == "routine-created" ? routineCreated : id == "routine-updated" ? routineUpdated : id == "routine-deleted" ? routineDeleted : id == "from" ? from : id == "ran" ? ran : id == "started" ? started : id == "provider-limit" ? providerLimit : id == "provider-error" ? providerError : id == "provider-switch" ? switched : stored
 
+fn activityLines(pack: string): string[] = pack == "" ? [] : pack.split("\n")
+
+fn activityVerb(label: string, ran: string, edited: string, searched: string, opened: string, memory: string, vault: string, tool: string): string = label == "command" ? ran : label == "edit" ? edited : label == "search" ? searched : label == "browser" ? opened : label == "memory" ? memory : label == "vault" ? vault : label == "tool" ? tool : label
+
+fn activityBody(text: string, image: string, file: string): string = text == "image" ? image : text == "file" ? file : text
+
 // The open chat is clear. A hidden Bot keeps the mark until that chat is the open one.
 fn showUnread(unread: bool, open: bool, hidden: bool): bool = unread and not open and (hidden or not hidden)
 

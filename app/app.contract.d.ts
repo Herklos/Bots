@@ -22,6 +22,7 @@
 //   enableNotifications: (args: []) => Reply
 //   hideBot: (args: [string, boolean]) => Reply
 //   loadAbout: (args: []) => About
+//   loadActivity: (args: [string, string, string, string]) => ActivityDetail
 //   loadBots: (args: [string]) => Bot[]
 //   loadChat: (args: [string, string, string]) => Chat
 //   loadCode: (args: [string, string, string]) => CodeView
@@ -87,10 +88,12 @@
 //   sendMessage: (args: [string, string, string, string, string, string, string, string]) => Sent
 //   sendRoom: (args: [string, string, string]) => Sent
 //   sendVoice: (args: [string, number, string, string, string]) => Reply
+//   setActivityLevel: (args: [string]) => Reply
 //   setBotNotifications: (args: [string, boolean]) => Reply
 //   setComputerPlace: (args: [string, string]) => Reply
 //   setDefaultMode: (args: [string]) => Reply
 //   setDefaultModel: (args: [string, string, string]) => Reply
+//   setFinalOnly: (args: [string]) => Reply
 //   setGroupAnswerPolicy: (args: [string]) => Reply
 //   setManagementMcp: (args: [boolean]) => McpResult
 //   setMaxMode: (args: [string]) => Reply
@@ -158,7 +161,8 @@
 //   Health = { ok: boolean; version: string }
 //   Made = { ok: boolean; id: string; error: string }
 //   Section = { id: string; name: string; collapsed: boolean; sort: string; items: string[] }
-//   Prefs = { userName: string; theme: string; defaultInstance: string; defaultModel: string; defaultEffort: string; defaultRuntimeMode: string; noticeEnabled: boolean; noticeSound: boolean; noticePreview: string; noticeWhen: string; noticeEnabledMissing: boolean; groupAnswerPolicy: string; maxRuntimeMode: string; codeBeta: boolean; sections: Section[] }
+//   ActivityDetail = { id: string; input: string; output: string; truncated: boolean; missing: boolean }
+//   Prefs = { userName: string; theme: string; defaultInstance: string; defaultModel: string; defaultEffort: string; defaultRuntimeMode: string; noticeEnabled: boolean; noticeSound: boolean; noticePreview: string; noticeWhen: string; noticeEnabledMissing: boolean; groupAnswerPolicy: string; maxRuntimeMode: string; codeBeta: boolean; sections: Section[]; activityLevel: string; finalOnly: boolean }
 //   Diagnostics = { ok: boolean; text: string; error: string }
 //   NoticeState = { available: boolean; state: string }
 //   Attached = { ok: boolean; id: string; name: string; error: string }
@@ -496,7 +500,7 @@ type T81 = { "ok": T9; "version": T0; };
 type T82 = { "ok": T9; "id": T0; "error": T0; };
 type T83 = { "id": T0; "name": T0; "collapsed": T9; "sort": T0; "items": T16; };
 type T84 = T83[];
-type T85 = { "userName": T0; "theme": T0; "defaultInstance": T0; "defaultModel": T0; "defaultEffort": T0; "defaultRuntimeMode": T0; "noticeEnabled": T9; "noticeSound": T9; "noticePreview": T0; "noticeWhen": T0; "noticeEnabledMissing": T9; "groupAnswerPolicy": T0; "maxRuntimeMode": T0; "codeBeta": T9; "sections": T84; };
+type T85 = { "userName": T0; "theme": T0; "defaultInstance": T0; "defaultModel": T0; "defaultEffort": T0; "defaultRuntimeMode": T0; "noticeEnabled": T9; "noticeSound": T9; "noticePreview": T0; "noticeWhen": T0; "noticeEnabledMissing": T9; "groupAnswerPolicy": T0; "maxRuntimeMode": T0; "codeBeta": T9; "sections": T84; "activityLevel": T0; "finalOnly": T9; };
 type T86 = { "ok": T9; "text": T0; "error": T0; };
 type T87 = { "visibilityState": T0; "hasFocus": T9; };
 type T88 = { "available": T9; "state": T0; };
@@ -702,9 +706,10 @@ type T287 = T286[];
 type T288 = { "offsetX": T13; "offsetY": T13; "files": T16; "shiftKey": T9; "ctrlKey": T9; "altKey": T9; "metaKey": T9; };
 type T289 = { "scrollLeft": T13; "scrollTop": T13; "scrollWidth": T13; "scrollHeight": T13; "clientWidth": T13; "clientHeight": T13; "firstVisibleKey": T1; "firstVisibleOffset": T13; };
 type T290 = { "target": T0; "relatedTarget": T1; };
+type T291 = { "id": T0; "input": T0; "output": T0; "truncated": T9; "missing": T9; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "askDiagnostics" | "checkAnytype" | "closeComputer" | "computerControl" | "computerInput" | "confirmPairing" | "copyStorage" | "createBot" | "createGroup" | "createManagementMcpCredential" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "mergeSide" | "noteUnread" | "openComputer" | "openSide" | "pinBot" | "pinMessage" | "prepareAnytype" | "reactTo" | "readHealth" | "recolourBot" | "refreshLimits" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "revokeManagementMcpCredential" | "saveBotMemory" | "saveBotPrompt" | "saveDrafts" | "saveHelperPolicy" | "saveLogin" | "saveSections" | "saveSpace" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setComputerPlace" | "setDefaultMode" | "setDefaultModel" | "setGroupAnswerPolicy" | "setManagementMcp" | "setMaxMode" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startPairing" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "askDiagnostics" | "checkAnytype" | "closeComputer" | "computerControl" | "computerInput" | "confirmPairing" | "copyStorage" | "createBot" | "createGroup" | "createManagementMcpCredential" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "mergeSide" | "noteUnread" | "openComputer" | "openSide" | "pinBot" | "pinMessage" | "prepareAnytype" | "reactTo" | "readHealth" | "recolourBot" | "refreshLimits" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "revokeManagementMcpCredential" | "saveBotMemory" | "saveBotPrompt" | "saveDrafts" | "saveHelperPolicy" | "saveLogin" | "saveSections" | "saveSpace" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setActivityLevel" | "setBotNotifications" | "setComputerPlace" | "setDefaultMode" | "setDefaultModel" | "setFinalOnly" | "setGroupAnswerPolicy" | "setManagementMcp" | "setMaxMode" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startPairing" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "askDiagnostics": { args: [T0]; result: T69 };
@@ -725,6 +730,7 @@ export interface SourceMap {
   "enableNotifications": { args: []; result: T69 };
   "hideBot": { args: [T0, T9]; result: T69 };
   "loadAbout": { args: []; result: T78 };
+  "loadActivity": { args: [T0, T0, T0, T0]; result: T291 };
   "loadBots": { args: [T0]; result: T108 };
   "loadChat": { args: [T0, T0, T0]; result: T26 };
   "loadCode": { args: [T0, T0, T0]; result: T146 };
@@ -790,10 +796,12 @@ export interface SourceMap {
   "sendMessage": { args: [T0, T0, T0, T0, T0, T0, T0, T0]; result: T70 };
   "sendRoom": { args: [T0, T0, T0]; result: T70 };
   "sendVoice": { args: [T0, T13, T0, T0, T0]; result: T69 };
+  "setActivityLevel": { args: [T0]; result: T69 };
   "setBotNotifications": { args: [T0, T9]; result: T69 };
   "setComputerPlace": { args: [T0, T0]; result: T69 };
   "setDefaultMode": { args: [T0]; result: T69 };
   "setDefaultModel": { args: [T0, T0, T0]; result: T69 };
+  "setFinalOnly": { args: [T0]; result: T69 };
   "setGroupAnswerPolicy": { args: [T0]; result: T69 };
   "setManagementMcp": { args: [T9]; result: T103 };
   "setMaxMode": { args: [T0]; result: T69 };

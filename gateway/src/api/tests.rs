@@ -319,6 +319,47 @@ async fn group_answer_policy_defaults_to_last_and_put_rejects_anything_else() {
 }
 
 #[tokio::test]
+async fn activity_level_defaults_to_quiet_and_put_rejects_anything_else() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = settings_state(dir.path());
+    assert_eq!(
+        AppState::settings_defaults()["activityLevel"],
+        json!("quiet")
+    );
+    assert_eq!(AppState::settings_defaults()["finalOnly"], json!(false));
+    assert_eq!(state.settings().await["activityLevel"], "quiet");
+    assert_eq!(state.settings().await["finalOnly"], false);
+    storage::write_json(
+        &state.settings_path(),
+        &json!({ "activityLevel": "nope", "finalOnly": "yes" }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(state.settings().await["activityLevel"], "quiet");
+    assert_eq!(state.settings().await["finalOnly"], false);
+    let err = put(&state, json!({ "activityLevel": "loud" }))
+        .await
+        .unwrap_err();
+    assert_eq!(err.status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        err.message,
+        "activityLevel must be quiet, problems, summary, or detail"
+    );
+    let flag = put(&state, json!({ "finalOnly": "yes" }))
+        .await
+        .unwrap_err();
+    assert_eq!(flag.message, "finalOnly must be true or false");
+    let next = put(
+        &state,
+        json!({ "activityLevel": "summary", "finalOnly": true }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(next["activityLevel"], "summary");
+    assert_eq!(next["finalOnly"], true);
+}
+
+#[tokio::test]
 async fn max_runtime_mode_defaults_to_full_access_and_put_rejects_anything_else() {
     let dir = tempfile::tempdir().unwrap();
     let state = settings_state(dir.path());

@@ -1,5 +1,5 @@
 import type { Sources, Result } from '../app.contract.d.ts';
-import { fixtureDefaultMode, fixtureGroupAnswer, fixtureMaxMode, setFixtureDefaultMode, setFixtureGroupAnswer, setFixtureMaxMode, savedEffort } from '../host/fixture.ts';
+import { fixtureActivity, fixtureDefaultMode, fixtureFinalOnly, fixtureGroupAnswer, fixtureMaxMode, setFixtureActivity, setFixtureDefaultMode, setFixtureFinalOnly, setFixtureGroupAnswer, setFixtureMaxMode, savedEffort } from '../host/fixture.ts';
 import { fetchLimits, refreshLimitBars } from '../host/limits.ts';
 import { REACH_GATEWAY, say, localize, call, read, noteLocale, setNoticeHost, hostNotice, reply, systemChecked, setSystemChecked } from '../host/gateway.ts';
 import { forgetSections, offlineSections, readSections, rememberSections, sectionsFromRows } from '../host/sections.ts';
@@ -39,7 +39,7 @@ export const settingsSources = {
       body = await read(store, '/api/settings');
     } catch (error) {
       offline = true;
-      if (fixtureGroupAnswer === '' && fixtureDefaultMode === '' && fixtureMaxMode === '' && held === null) throw error;
+      if (fixtureGroupAnswer === '' && fixtureDefaultMode === '' && fixtureMaxMode === '' && fixtureActivity === '' && fixtureFinalOnly === '' && held === null) throw error;
     }
     const note = noticePrefs(body);
     return {
@@ -58,6 +58,8 @@ export const settingsSources = {
       maxRuntimeMode: fixtureMaxMode !== '' ? fixtureMaxMode : (storedCap(String(body.maxRuntimeMode ?? '')) ? String(body.maxRuntimeMode) : 'full-access'),
       codeBeta: body.beta?.code === true,
       sections: offline ? (held ?? []) : readSections(body.sections),
+      activityLevel: fixtureActivity !== '' ? fixtureActivity : (body.activityLevel === 'problems' || body.activityLevel === 'summary' || body.activityLevel === 'detail' ? body.activityLevel : 'quiet'),
+      finalOnly: fixtureFinalOnly === 'on' ? true : fixtureFinalOnly === 'off' ? false : body.finalOnly === true,
     };
   },
   saveSections: async ([rows], store) => {
@@ -107,6 +109,20 @@ export const settingsSources = {
       return { ok: true, error: '' };
     }
     if (r.ok) setFixtureDefaultMode('');
+    return reply(r);
+  },
+  setActivityLevel: async ([activityLevel], store) => {
+    const level = activityLevel === 'problems' || activityLevel === 'summary' || activityLevel === 'detail' ? activityLevel : 'quiet';
+    const r = await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ activityLevel: level }) });
+    if (!r.ok && r.error === REACH_GATEWAY) { setFixtureActivity(level); return { ok: true, error: '' }; }
+    if (r.ok) setFixtureActivity('');
+    return reply(r);
+  },
+  setFinalOnly: async ([flag], store) => {
+    const on = flag === 'on';
+    const r = await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ finalOnly: on }) });
+    if (!r.ok && r.error === REACH_GATEWAY && (flag === 'on' || flag === 'off')) { setFixtureFinalOnly(flag); return { ok: true, error: '' }; }
+    if (r.ok) setFixtureFinalOnly('');
     return reply(r);
   },
   setGroupAnswerPolicy: async ([groupAnswerPolicy], store) => {
@@ -270,4 +286,4 @@ export const settingsSources = {
   setDefaultModel: async ([instanceId, model, effort], store) => reply(await call(store, '/api/settings', {
     method: 'PUT', body: JSON.stringify({ defaultModel: { instanceId, model, ...(effort !== '' ? { effort } : {}) } }),
   })),
-} satisfies Pick<Sources, 'loadManagementMcp' | 'setManagementMcp' | 'createManagementMcpCredential' | 'revokeManagementMcpCredential' | 'enableNotifications' | 'loadPrefs' | 'saveSections' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setMaxMode' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadLimits' | 'refreshLimits' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'loadDiagnostics' | 'askDiagnostics' | 'setDefaultModel'>;
+} satisfies Pick<Sources, 'loadManagementMcp' | 'setManagementMcp' | 'createManagementMcpCredential' | 'revokeManagementMcpCredential' | 'enableNotifications' | 'loadPrefs' | 'saveSections' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setMaxMode' | 'setDefaultMode' | 'setActivityLevel' | 'setFinalOnly' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadLimits' | 'refreshLimits' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'loadDiagnostics' | 'askDiagnostics' | 'setDefaultModel'>;

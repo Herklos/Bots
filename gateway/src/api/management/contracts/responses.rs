@@ -20,6 +20,7 @@ impl Operation {
             "hbots_list" => object(&[("attachments",array(record(&["id"])))],&["attachments"]),
             "hbots_download" | "hbots_export" | "hbots_library_file" | "hbots_get_icon" => record(&["contentType","bodyBase64"]),
             "hbots_memory_get" | "hbots_memory_put" => record(&["text","revision"]),
+            "hbots_read_activity" => object(&[("input", string()), ("output", string()), ("truncated", boolean())], &["input", "output", "truncated"]),
             "hbots_import" | "hbots_import_csv" => object(&[("added",json!({"type":"integer"})),("updated",json!({"type":"integer"})),("skipped",json!({"type":"integer"}))],&["added","updated","skipped"]),
             _ => dynamic("Original gateway response with domain and provider extension fields. Preserved without transport-specific projection."),
         }

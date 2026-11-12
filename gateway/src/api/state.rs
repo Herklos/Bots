@@ -52,6 +52,8 @@ impl AppState {
             "beta": { "projects": false, "code": false },
             "notifications": { "enabled": false, "sound": true, "preview": "full", "when": "any" },
             "groupAnswerPolicy": "last",
+            "activityLevel": "quiet",
+            "finalOnly": false,
             "managementMcp": { "enabled": false },
             "maxRuntimeMode": "full-access",
         })
@@ -100,6 +102,8 @@ impl AppState {
         out["managementMcp"] = json!({"enabled": saved["managementMcp"]["enabled"] == true});
         out["notifications"] = Self::notifications_view(&saved);
         out["groupAnswerPolicy"] = json!(group_answer_policy(&out).as_str());
+        out["activityLevel"] = json!(activity_level(&out));
+        out["finalOnly"] = json!(final_only(&out));
         // Unknown or missing is full access, so the cap is off.
         out["maxRuntimeMode"] = json!(max_runtime_mode(&out).as_str());
         crate::bots::runtime_mode::apply_default_cap(&mut out);
@@ -107,6 +111,20 @@ impl AppState {
         out["sections"] = super::settings::sections_view(&saved);
         out
     }
+}
+
+/// Stored tool-call display. Missing or unknown stays quiet.
+pub(crate) fn activity_level(settings: &Value) -> &'static str {
+    match settings["activityLevel"].as_str() {
+        Some("problems") => "problems",
+        Some("summary") => "summary",
+        Some("detail") => "detail",
+        _ => "quiet",
+    }
+}
+
+pub(crate) fn final_only(settings: &Value) -> bool {
+    settings["finalOnly"] == true
 }
 
 pub(crate) fn group_answer_policy(settings: &Value) -> crate::chat::rooms::AnswerPolicy {

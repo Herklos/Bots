@@ -6,6 +6,7 @@ import { API } from './config.ts';
 import { fill } from './palette.ts';
 import { call, read } from './gateway.ts';
 import { marksOf, quoteOf, splitTables, tokenText } from './markdown.ts';
+import { activityRow } from './activity.ts';
 
 // What the gateway last said the time was, and each Bot's last computer frame. A data module may keep
 // values like these between reads. The session token and the draft map live in the secret store.
@@ -101,6 +102,7 @@ export function chatRows(slug: string, body: any, now: number, reactions: Record
   const timeline = [
     ...(body.messages as any[]).map((m) => ({ ...m, _t: 'message' })),
     ...((body.events ?? []) as any[]).map((e) => ({ ...e, _t: 'event' })),
+    ...((body.activity ?? []) as any[]).map((a) => ({ ...a, _t: 'activity' })),
   ].sort((a, b) => (a.ordinal ?? 0) - (b.ordinal ?? 0));
   const rows: any[] = [];
   let prev: any = null;
@@ -123,6 +125,11 @@ export function chatRows(slug: string, body: any, now: number, reactions: Record
       prev = null;
       continue;
     }
+    if (item._t === 'activity') {
+      rows.push(activityRow(blank, item));
+      prev = null;
+      continue;
+    }
     const mine = item.role === 'user' && !item.from;
     const who = `${mine}:${item.from?.slug ?? ''}`;
     const files = ((item.files ?? []) as any[]).map((f) => ({
@@ -130,7 +137,7 @@ export function chatRows(slug: string, body: any, now: number, reactions: Record
       url: fileUrl(slug, f), width: fileDim(f.width), height: fileDim(f.height),
     }));
     const text = String(item.text ?? '');
-    const row = { ...blank, ...peer(item.from), id: String(item.id), kind: 'message', mine, text, parts: mine ? [] : splitTables(text), react: ((reactions[String(item.id)] ?? []) as string[]).join(' '), quote: quoteOf(replyTo, String(item.id)), tokens: tokenText(item.tokens), files, head: !(prev && prev.who === who && t - prev.t < 5 * 60_000), tail: true,
+    const row = { ...blank, ...peer(item.from), id: String(item.id), kind: 'message', mine, text, parts: mine ? [] : splitTables(text), react: ((reactions[String(item.id)] ?? []) as string[]).join(' '), quote: quoteOf(replyTo, String(item.id)), tokens: tokenText(item.tokens), files, variant: item.hidden === true ? 'hidden' : '', head: !(prev && prev.who === who && t - prev.t < 5 * 60_000), tail: true,
       time: Number.isFinite(t) ? clock(new Date(t)) : '' };
     if (prev && !row.head) rows[prev.index].tail = false;
     rows.push(row);

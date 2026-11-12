@@ -12,7 +12,7 @@ members Bots
 
   derive firstRun = bots.length == 0 and not pending(bots) and not failed(bots)
 
-  derive filteredRows = chat.rows.filter(m => m.kind != "message" or qtext == "" or m.text.toLowerCase().includes(qtext))
+  derive filteredRows = chat.rows.filter(m => m.kind != "message" or ((m.variant != "hidden" or qtext != "") and (qtext == "" or m.text.toLowerCase().includes(qtext))))
 
   derive shownRows = holdWorking(withPending(filteredRows, sentId, pendingText, pendingFailed), holdWork)
 

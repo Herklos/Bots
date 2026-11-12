@@ -226,6 +226,18 @@
               "maxRuntimeMode": {
                 "type": "string"
               },
+              "activityLevel": {
+                "type": "string",
+                "enum": [
+                  "quiet",
+                  "problems",
+                  "summary",
+                  "detail"
+                ]
+              },
+              "finalOnly": {
+                "type": "boolean"
+              },
               "autoReview": {
                 "type": "boolean"
               },
@@ -1468,6 +1480,9 @@
             "properties": {
               "child": {
                 "type": "string"
+              },
+              "activity": {
+                "type": "string"
               }
             },
             "required": [],
@@ -1684,6 +1699,132 @@
       "annotations": {
         "readOnlyHint": false,
         "destructiveHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hbots_read_activity",
+      "description": "GET /api/bots/{slug}/chat/activity/{id}. Required permission: read. Supply API parameters in path/query and the JSON request in body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string",
+                "minLength": 1
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "slug",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "query": {
+            "type": "object",
+            "properties": {
+              "child": {
+                "type": "string"
+              },
+              "side": {
+                "type": "string"
+              }
+            },
+            "required": [],
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 299
+              },
+              "body": {
+                "type": "object",
+                "properties": {
+                  "input": {
+                    "type": "string"
+                  },
+                  "output": {
+                    "type": "string"
+                  },
+                  "truncated": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "input",
+                  "output",
+                  "truncated"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "status",
+              "body"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "details": {
+                    "description": "Original structured gateway error details when available.",
+                    "x-hbots-dynamic": true
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": false,
         "openWorldHint": true
       }
     },

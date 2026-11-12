@@ -64,6 +64,7 @@ pub(crate) fn application_routes() -> (
     );
     route!("/api/bots/{slug}/seen", post(mark_seen));
     route!("/api/bots/{slug}/chat", get(read_chat).post(send_chat));
+    route!("/api/bots/{slug}/chat/activity/{id}", get(read_activity));
     route!("/api/bots/{slug}/side", get(list_side).post(open_side));
     route!("/api/bots/{slug}/side/merge", post(merge_side));
     route!("/api/bots/{slug}/voice", post(send_voice));

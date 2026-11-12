@@ -1,0 +1,75 @@
+use Glyph from "../glyph.contract"
+use WorkingDots from "../bot/first.contract"
+use fieldAt, activityCount from "../ui/root-types.contract"
+use activityLines, activityVerb, activityBody from "../ui/fns.contract"
+
+shape ActivityDetail
+  id: string
+  input: string
+  output: string
+  truncated: bool
+  missing: bool
+
+// A tool-call row beside the transcript. Summary counts stay on the row. The root owns the detail read.
+component ActivityRow
+  props
+    id: string
+    status: string
+    counts: string
+    calls: string
+    showDetail: bool
+    slug: string
+    child: string
+    lane: string
+    activity: ActivityDetail
+    pick: action
+  state open = false
+  state picked = ""
+  derive commands = activityCount(counts, 0)
+  derive edits = activityCount(counts, 1)
+  derive searches = activityCount(counts, 2)
+  derive pages = activityCount(counts, 3)
+  derive memories = activityCount(counts, 4)
+  derive vaults = activityCount(counts, 5)
+  derive tools = activityCount(counts, 6)
+  derive summary = [commands > 0 ? t("activity.commands", n=commands) : "", edits > 0 ? t("activity.edits", n=edits) : "", searches > 0 ? t("activity.searches", n=searches) : "", pages > 0 ? t("activity.browser", n=pages) : "", memories > 0 ? t("activity.memory", n=memories) : "", vaults > 0 ? t("activity.vault", n=vaults) : "", tools > 0 ? t("activity.tools", n=tools) : ""].filter(bit => bit != "").join(", ")
+  action toggle()
+    let line = match activityLines(calls).at(0) { case some(v) => v, case none => "" }
+    let next = (not open and showDetail and picked == "") ? fieldAt(line, 0) : picked
+    if not open and showDetail and next != ""
+      pick(slug, next, child, lane)
+    picked = next
+    open = not open
+  action copyOut()
+    copyText(activity.output)
+  view
+    column padding="space.sm space.lg" gap="space.xs" align-items="center"
+      button appearance="none" press=toggle aria-expanded=open aria-label=(open ? t("activity.hide") : t("activity.show")) testId=`activity-${id}`
+        row gap="space.xs" align-items="center" padding="2px space.sm" border-radius="radius.full" background-color="surface.bubble"
+          text summary font="-exact-footnote" color=(status == "failed" ? "-exact-system-red" : "-exact-label") testId=`activity-summary-${id}`
+          if status == "running"
+            row testId="activity-running"
+              WorkingDots()
+          Glyph(name="chevron", size=14)
+      if open
+        column gap="space.xs" max-width="32rem" width="100%"
+          for line in activityLines(calls) key=fieldAt(line, 0)
+            column gap="2px" padding="space.xs space.sm" testId=`activity-call-${fieldAt(line, 0)}`
+              text activityVerb(fieldAt(line, 1), t("activity.ran"), t("activity.edited"), t("activity.searched"), t("activity.opened"), t("activity.readMemory"), t("activity.usedVault"), t("activity.usedTool")) font="-exact-footnote" color=(fieldAt(line, 2) == "failed" ? "-exact-system-red" : "-exact-label")
+              if showDetail and fieldAt(line, 3) != ""
+                text fieldAt(line, 3) font="-exact-footnote" color="ink.muted"
+          if showDetail and picked != "" and activity.id == picked
+            column gap="space.xs" padding="space.xs space.sm" testId=`activity-detail-${id}`
+              if activity.missing
+                text t("activity.missing") font="-exact-footnote" color="-exact-system-red"
+              else
+                if activity.input != ""
+                  text t("activity.input") font="-exact-footnote" color="ink.muted"
+                  text activityBody(activity.input, t("activity.image"), t("activity.file")) font="-exact-footnote" color="-exact-label"
+                if activity.output != ""
+                  text t("activity.output") font="-exact-footnote" color="ink.muted"
+                  text activityBody(activity.output, t("activity.image"), t("activity.file")) font="-exact-footnote" color="-exact-label" testId=`activity-output-${id}`
+                if activity.truncated
+                  text t("activity.outputCut") font="-exact-footnote" color="ink.muted"
+                button appearance="none" press=copyOut testId=`activity-copy-${id}`
+                  text t("activity.copyOutput") font="-exact-footnote" color="-exact-label"

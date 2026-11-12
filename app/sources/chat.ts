@@ -170,6 +170,23 @@ export const chatSources = {
       return { stamp: '', texts: [], files: [], voices: [] };
     }
   },
+  loadActivity: async ([slug, id, child, lane], store): Promise<Result<'loadActivity'>> => {
+    const blank = { id: '', input: '', output: '', truncated: false, missing: false };
+    if (slug === '' || id === '') return blank;
+    const query = lane === 'side' && child !== '' ? `?side=${encodeURIComponent(child)}` : child !== '' ? `?child=${encodeURIComponent(child)}` : '';
+    try {
+      const body = await read(store, `/api/bots/${encodeURIComponent(slug)}/chat/activity/${encodeURIComponent(id)}${query}`);
+      return {
+        id,
+        input: String(body?.input ?? ''),
+        output: String(body?.output ?? ''),
+        truncated: body?.truncated === true,
+        missing: false,
+      };
+    } catch {
+      return { id, input: '', output: '', truncated: false, missing: true };
+    }
+  },
   saveDrafts: async ([texts, files, voices], store) => {
     try {
       store.set('drafts', JSON.stringify(draftMap(texts, files, voices)));
@@ -178,4 +195,4 @@ export const chatSources = {
     }
     return { ok: true, error: '' };
   },
-} satisfies Pick<Sources, 'reactTo' | 'pinMessage' | 'loadChat' | 'respondRequest' | 'sendMessage' | 'uploadAttachment' | 'stageVoice' | 'sendVoice' | 'dropVoice' | 'stopRun' | 'loadDrafts' | 'saveDrafts' | 'loadSideChats' | 'openSide' | 'mergeSide'>;
+} satisfies Pick<Sources, 'reactTo' | 'pinMessage' | 'loadChat' | 'respondRequest' | 'sendMessage' | 'uploadAttachment' | 'stageVoice' | 'sendVoice' | 'dropVoice' | 'stopRun' | 'loadDrafts' | 'saveDrafts' | 'loadActivity' | 'loadSideChats' | 'openSide' | 'mergeSide'>;

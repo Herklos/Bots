@@ -1,14 +1,16 @@
 use ModelPicker from "./settings.contract"
 use ProviderLimits, LimitList from "./limits.contract"
-use SectionLabel from "../ui/controls.contract"
+use SectionLabel, ToggleControl from "../ui/controls.contract"
 use Prefs from "../ui/root-types.contract"
 use Provider from "../ui/shapes.contract"
-use GroupCard, SettingsTrack, SettingsTab, SettingsFoot from "../ui/sidebar.contract"
+use GroupCard, SettingsTrack, SettingsTab, SettingsRow, SettingsFoot from "../ui/sidebar.contract"
 // ModelSettings: one settings domain, values injected from the root through SettingsScreen.
 component ModelSettings
   inject
     doDefaultMode: action
     doGroupAnswer: action
+    doActivityLevel: action
+    doFinalOnly: action
     doMakeDefault: action
     prefs: Prefs
     prefsError: string
@@ -54,5 +56,17 @@ component ModelSettings
             button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.groupAnswerPolicy == policy) press=doGroupAnswer(policy) testId=`group-answer-${policy}` background-color=(prefs.groupAnswerPolicy == policy ? "surface.card" : "transparent") color=(prefs.groupAnswerPolicy == policy ? "-exact-label" : "ink.muted")
               text (policy == "last" ? t("group.policyLast") : policy == "everyone" ? t("group.policyEveryone") : t("group.policyChief"))
       text t("settings.groupAnswerNote") class=SettingsFoot
+    column
+      text t("settings.activity") class=SectionLabel
+      column class=GroupCard padding="space.sm"
+        row class=SettingsTrack role="radiogroup" aria-label=t("settings.activity")
+          for level in ["quiet", "problems", "summary", "detail"] key=level
+            button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.activityLevel == level) press=doActivityLevel(level) testId=`activity-${level}` background-color=(prefs.activityLevel == level ? "surface.card" : "transparent") color=(prefs.activityLevel == level ? "-exact-label" : "ink.muted")
+              text (level == "quiet" ? t("settings.activityQuiet") : level == "problems" ? t("settings.activityProblems") : level == "summary" ? t("settings.activitySummary") : t("settings.activityDetail"))
+      text t("settings.activityNote") class=SettingsFoot
+      row class=SettingsRow align-items="center"
+        text t("settings.finalOnly") flex=1
+        button class=ToggleControl appearance="none" role="switch" aria-checked=prefs.finalOnly press=doFinalOnly(prefs.finalOnly ? "off" : "on") aria-label=t("settings.finalOnly") testId="activity-final-only"
+      text t("settings.finalOnlyNote") class=SettingsFoot
       if prefsError != ""
         text prefsError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0"

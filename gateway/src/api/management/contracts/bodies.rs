@@ -70,6 +70,9 @@ fn settings() -> Value {
         "defaultRuntimeMode",
         "maxRuntimeMode",
     ]);
+    schema["properties"]["activityLevel"] =
+        enumeration(&["quiet", "problems", "summary", "detail"]);
+    schema["properties"]["finalOnly"] = boolean();
     schema["properties"]["autoReview"] = boolean();
     for key in [
         "rules",
