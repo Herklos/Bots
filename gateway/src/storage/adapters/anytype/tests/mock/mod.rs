@@ -5,6 +5,8 @@
 mod catalog;
 mod objects;
 mod routes;
+mod routes_files;
+mod routes_types;
 mod search;
 mod state;
 

@@ -50,7 +50,13 @@ fn a_bad_saved_folder_falls_back_and_the_reason_is_on_the_view() {
     write_file(&home, &stored);
     let resolved = resolve_root(&home, &ProcessEnv::default());
     assert_eq!(resolved, home.join("bots"));
-    let body = view(&home, &home.join("bots"), &ProcessEnv::default(), false);
+    let body = view(
+        &home,
+        &home.join("bots"),
+        &ProcessEnv::default(),
+        false,
+        None,
+    );
     assert_eq!(body["effective"]["backend"], "filesystem");
     assert!(body["error"]
         .as_str()
@@ -74,6 +80,7 @@ async fn a_locked_folder_rejects_a_different_value() {
         &locked,
         &env,
         false,
+        None,
         &json!({ "root": other.display().to_string() }),
     )
     .await
@@ -115,7 +122,7 @@ fn copy_matches_hashes_and_leaves_the_old_folder() {
     std::fs::create_dir_all(source.join("ada")).unwrap();
     std::fs::write(source.join("ada").join("note.txt"), b"keep-me").unwrap();
     let dest = dir.path().join("next");
-    let body = copy_folder(&source, &home, dest.to_str().unwrap()).unwrap();
+    let body = copy_folder(&source, &home, dest.to_str().unwrap(), None).unwrap();
     assert_eq!(body["ok"], true);
     assert_eq!(body["files"], 1);
     assert_eq!(
@@ -142,13 +149,14 @@ async fn saving_a_new_folder_asks_for_a_restart_and_does_not_move_files() {
     std::fs::write(running.join("ada").join("note.txt"), b"stay").unwrap();
     let next = dir.path().join("next");
     std::fs::create_dir_all(&home).unwrap();
-    let before = view(&home, &running, &ProcessEnv::default(), false);
+    let before = view(&home, &running, &ProcessEnv::default(), false, None);
     assert_eq!(before["restartRequired"], false);
     let after = save(
         &home,
         &running,
         &ProcessEnv::default(),
         true,
+        None,
         &json!({ "root": next.display().to_string() }),
     )
     .await
@@ -177,6 +185,7 @@ async fn anytype_stays_on_the_file_system_until_the_space_is_reachable() {
         &running,
         &ProcessEnv::default(),
         false,
+        None,
         &json!({
             "backend": "anytype",
             "host": "http://127.0.0.1:31009/",
@@ -197,6 +206,7 @@ async fn anytype_stays_on_the_file_system_until_the_space_is_reachable() {
         &running,
         &ProcessEnv::default(),
         false,
+        None,
         &json!({ "backend": "anytype", "host": host, "space": "hbots" }),
     )
     .await
@@ -214,6 +224,7 @@ async fn anytype_stays_on_the_file_system_until_the_space_is_reachable() {
         &running,
         &ProcessEnv::default(),
         false,
+        None,
         &json!({ "backend": "anytype", "space": "missing" }),
     )
     .await
@@ -222,8 +233,12 @@ async fn anytype_stays_on_the_file_system_until_the_space_is_reachable() {
     let still: Value =
         serde_json::from_str(&std::fs::read_to_string(storage_path(&home)).unwrap()).unwrap();
     assert_eq!(still["backend"], "anytype");
-    let rejected =
-        test_choice(&home, &json!({ "host": "http://127.0.0.1:31009/space" })).unwrap_err();
+    let rejected = test_choice(
+        &home,
+        None,
+        &json!({ "host": "http://127.0.0.1:31009/space" }),
+    )
+    .unwrap_err();
     assert_eq!(rejected.status, StatusCode::BAD_REQUEST);
 }
 
@@ -277,16 +292,17 @@ async fn responses_say_whether_a_key_is_set_and_never_include_it() {
         &running,
         &ProcessEnv::default(),
         false,
+        None,
         &json!({ "backend": "filesystem", "key": secret }),
     )
     .await
     .unwrap();
-    let tested = test_choice(&home, &json!({ "backend": "filesystem" })).unwrap();
+    let tested = test_choice(&home, None, &json!({ "backend": "filesystem" })).unwrap();
     let copied = {
         let dest = dir.path().join("copy");
-        copy_folder(&running, &home, dest.to_str().unwrap()).unwrap()
+        copy_folder(&running, &home, dest.to_str().unwrap(), None).unwrap()
     };
-    let status = view(&home, &running, &ProcessEnv::default(), false);
+    let status = view(&home, &running, &ProcessEnv::default(), false, None);
     assert_eq!(status["effective"]["keySet"], true);
     assert_eq!(status["saved"]["keySet"], true);
     let removed = remove_key(&home, &ProcessEnv::default()).await.unwrap();

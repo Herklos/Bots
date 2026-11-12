@@ -320,6 +320,7 @@ fn fixture_state(dir: &std::path::Path, t3_url: String) -> Arc<AppState> {
             tailnet.clone(),
         )),
         tailnet,
+        sync: crate::storage::sync::SyncSlot::default(),
         cfg,
     })
 }

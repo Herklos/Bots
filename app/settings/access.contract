@@ -1,7 +1,8 @@
 use McpSettings from "./mcp.contract"
 use Glyph from "../glyph.contract"
 use SectionLabel, IconTile, Field from "../ui/controls.contract"
-use Session, Network, Storage, AnytypeCheck, networkModeLabel from "../ui/root-types.contract"
+use Session, Network, Storage, AnytypeCheck, networkModeLabel, nText from "../ui/root-types.contract"
+use SyncStatus, syncStateLabel from "../ui/sync-types.contract"
 use GroupCard, SettingsTrack, SettingsTab, SettingsRow, SettingsFoot, FieldLabel, FieldBox, ActionMain, ActionQuiet from "../ui/sidebar.contract"
 // AccessSettings: one settings domain, values injected from the root through SettingsScreen.
 component AccessSettings
@@ -31,6 +32,9 @@ component AccessSettings
     doSaveStorage: action
     doSetNetwork: action
     doTestStorage: action
+    doResolveConflict: action
+    doSyncImport: action
+    doSyncNow: action
     editNewPassword: action
     network: Network
     networkError: string
@@ -64,6 +68,16 @@ component AccessSettings
     storageSavedPending: bool
     storageTestError: string
     storageTestedPending: bool
+    sync: SyncStatus
+    syncImportError: string
+    syncImportPending: bool
+    syncNowPending: bool
+    syncPreviewConflict: number
+    syncPreviewMinutes: number
+    syncPreviewPull: number
+    syncPreviewPush: number
+    syncPreviewed: bool
+    syncResolvedPending: bool
   view
     column
       text t("settings.private") class=SectionLabel
@@ -178,6 +192,52 @@ component AccessSettings
                   text anytypePrepareError color="-exact-system-red" font="-exact-footnote" testId="anytype-prepare-error"
               else
                 text t("settings.anytype.missing", name=anytypeSpace) color="-exact-system-red" font="-exact-footnote" testId="anytype-missing"
+          if sync.ok
+            text t("settings.sync.title") class=SectionLabel testId="sync-section"
+            column class=GroupCard padding="space.md" gap="space.sm" testId="sync-card"
+              row gap="space.sm" align-items="center"
+                text syncStateLabel(sync.state, sync.conflicts.length > 0, t("settings.sync.stateSyncing"), t("settings.sync.stateUpToDate"), t("settings.sync.stateOffline"), t("settings.sync.stateAttention"), t("settings.sync.stateNotConnected")) border-radius="radius.full" background-color="surface.card" padding="3px space.md" font="-exact-footnote" font-weight=600 testId="sync-state"
+                if sync.lastSync != ""
+                  text t("settings.sync.last", time=sync.lastSync) color="ink.muted" font="-exact-footnote" testId="sync-last"
+              if sync.pending > 0
+                text nText(sync.pending, t("settings.sync.pendingOne"), t("settings.sync.pendingMany")) color="ink.muted" font="-exact-footnote" testId="sync-pending"
+              for d in sync.devices key=d.name
+                row gap="space.sm" align-items="center"
+                  text d.name flex=1 testId=`sync-device-${d.name}`
+                  text d.lastSeen color="ink.muted" font="-exact-footnote"
+              row gap="space.sm" align-items="center"
+                button appearance="none" class=ActionMain press=doSyncNow disabled=syncNowPending min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="sync-now"
+                  text t("settings.sync.now")
+              text t("settings.sync.note") color="ink.muted" font="-exact-footnote" testId="sync-note"
+              if sync.error != ""
+                text sync.error color="-exact-system-red" font="-exact-footnote" testId="sync-error"
+              if sync.needsImport
+                column gap="space.xs"
+                  text t("settings.sync.needsImport") color="ink.muted" font="-exact-footnote" testId="sync-import-hint"
+                  if syncPreviewed
+                    text t("settings.sync.preview", push=syncPreviewPush, pull=syncPreviewPull, conflict=syncPreviewConflict) color="-exact-label" font="-exact-footnote" font-weight=600 testId="sync-preview"
+                    text t("settings.sync.estimate", minutes=syncPreviewMinutes) color="ink.muted" font="-exact-footnote" testId="sync-estimate"
+                  if syncPreviewed
+                    button appearance="none" class=ActionMain press=doSyncImport(false) disabled=syncImportPending min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="sync-import-confirm"
+                      text t("settings.sync.confirm")
+                  else
+                    button appearance="none" class=ActionQuiet press=doSyncImport(true) disabled=syncImportPending min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="sync-import-review"
+                      text t("settings.sync.review")
+                if syncImportError != "" and not syncImportPending
+                  text syncImportError color="-exact-system-red" font="-exact-footnote" testId="sync-import-error"
+              if sync.conflicts.length > 0
+                column gap="space.xs"
+                  text t("settings.sync.conflictsTitle") class=FieldLabel testId="sync-conflicts-title"
+                  for c in sync.conflicts key=c.id
+                    column class=GroupCard padding="space.sm" gap="space.xs" testId="sync-conflict"
+                      text c.path font="-exact-subheadline" testId="sync-conflict-path"
+                      row gap="space.sm" align-items="center"
+                        button appearance="none" class=ActionQuiet press=doResolveConflict(c.id, "local") disabled=syncResolvedPending min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="sync-conflict-mine"
+                          text t("settings.sync.keepMine")
+                        button appearance="none" class=ActionQuiet press=doResolveConflict(c.id, "remote") disabled=syncResolvedPending min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="sync-conflict-anytype"
+                          text t("settings.sync.keepAnytype")
+                        button appearance="none" class=ActionQuiet press=doResolveConflict(c.id, "both") disabled=syncResolvedPending min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="sync-conflict-both"
+                          text t("settings.sync.keepBoth")
       text t("settings.storage.folder") class=SectionLabel
       column class=GroupCard padding="space.md" gap="space.sm"
         text t("settings.storage.folderLabel") class=FieldLabel

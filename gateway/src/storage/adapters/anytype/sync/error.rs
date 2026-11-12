@@ -13,6 +13,17 @@ pub(super) enum SyncError {
     Conflict(String),
 }
 
+impl std::fmt::Display for SyncError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(error) => write!(formatter, "io error: {error}"),
+            Self::Manifest(error) => write!(formatter, "manifest error: {error:?}"),
+            Self::Outbox(error) => write!(formatter, "outbox error: {error:?}"),
+            Self::Conflict(text) => write!(formatter, "{text}"),
+        }
+    }
+}
+
 impl From<io::Error> for SyncError {
     fn from(error: io::Error) -> Self {
         Self::Io(error)

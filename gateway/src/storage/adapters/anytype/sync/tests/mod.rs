@@ -5,6 +5,7 @@ mod both_edited;
 mod concurrent;
 mod decide;
 mod delete;
+mod device;
 mod duplicate;
 mod edit_wins;
 mod etag;

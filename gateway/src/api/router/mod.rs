@@ -179,6 +179,20 @@ pub(crate) fn application_routes() -> (
         "/api/storage/anytype/setup",
         post(storage::settings::anytype_setup)
     );
+    route!("/api/sync/status", get(storage::settings::get_sync_status));
+    route!("/api/sync/run", post(storage::settings::post_sync_run));
+    route!(
+        "/api/sync/import",
+        post(storage::settings::post_sync_import)
+    );
+    route!(
+        "/api/sync/conflicts",
+        get(storage::settings::get_sync_conflicts)
+    );
+    route!(
+        "/api/sync/conflicts/{id}/resolve",
+        post(storage::settings::post_sync_conflict_resolve)
+    );
     route!("/api/access/tailscale", post(access_tailscale));
     route!("/api/access/tunnel", post(access_tunnel));
     route!("/api/thread-previews", post(thread_previews));

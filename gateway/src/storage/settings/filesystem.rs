@@ -28,7 +28,12 @@ pub(crate) fn root_matches_env(env: &ProcessEnv, requested: Option<&str>) -> boo
 }
 
 /// Copy the running Bots folder. The source is never deleted, including when the copy fails.
-pub(crate) fn copy_folder(source: &Path, data_root: &Path, raw_dest: &str) -> ApiResult<Value> {
+pub(crate) fn copy_folder(
+    source: &Path,
+    data_root: &Path,
+    raw_dest: &str,
+    sync: Option<&crate::storage::sync::SyncHandle>,
+) -> ApiResult<Value> {
     let dest = validate_folder(data_root, raw_dest).map_err(ApiError::bad_request)?;
     if same_path(source, &dest) {
         return Err(ApiError::bad_request("Choose a different folder."));
@@ -59,6 +64,6 @@ pub(crate) fn copy_folder(source: &Path, data_root: &Path, raw_dest: &str) -> Ap
         "ok": true,
         "root": dest.display().to_string(),
         "files": files,
-        "anytype": anytype_status(),
+        "anytype": anytype_status(sync),
     }))
 }

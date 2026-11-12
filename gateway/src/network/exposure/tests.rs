@@ -172,6 +172,7 @@ fn state(dir: &Path, exposure: Exposure) -> Arc<AppState> {
             tailnet.clone(),
         )),
         tailnet,
+        sync: crate::storage::sync::SyncSlot::default(),
         cfg,
     })
 }

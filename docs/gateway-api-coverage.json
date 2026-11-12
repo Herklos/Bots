@@ -555,6 +555,41 @@
       "classification": "generated"
     },
     {
+      "path": "/api/sync/status",
+      "method": "GET",
+      "tool": "hbots_get_sync_status",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/sync/run",
+      "method": "POST",
+      "tool": "hbots_post_sync_run",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/sync/import",
+      "method": "POST",
+      "tool": "hbots_post_sync_import",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/sync/conflicts",
+      "method": "GET",
+      "tool": "hbots_get_sync_conflicts",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/sync/conflicts/{id}/resolve",
+      "method": "POST",
+      "tool": "hbots_post_sync_conflict_resolve",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
       "path": "/api/access/tailscale",
       "method": "POST",
       "tool": "hbots_access_tailscale",

@@ -119,6 +119,51 @@ async fn a_missing_property_is_the_only_create() {
 }
 
 #[tokio::test]
+async fn a_type_without_its_property_definitions_is_repaired() {
+    // A space prepared before types carried their field list: the types and
+    // properties exist, but a `fields` search needs the type to name them.
+    let mock = Mock::start().await;
+    let api = client(&mock);
+    for table in TABLES {
+        api.create_type(
+            &json!({ "name": table.name, "api_key": table.key, "layout": table.layout }),
+            &format!("seed-type-{}", table.key),
+        )
+        .await
+        .unwrap();
+    }
+    for column in COLUMNS {
+        api.create_property(
+            &json!({ "name": column.name, "key": column.key, "format": column.format }),
+            &format!("seed-property-{}", column.key),
+        )
+        .await
+        .unwrap();
+    }
+    let preview = bootstrap(&api, true).await.unwrap();
+    assert!(preview.types.is_empty());
+    assert!(!preview.schema_ready);
+    // Every table column shows up as a property to attach, shared columns once per table.
+    let expected: usize = TABLES.iter().map(|table| table.properties.len()).sum();
+    assert_eq!(preview.properties.len(), expected);
+
+    let report = bootstrap(&api, false).await.unwrap();
+    assert!(report.schema_ready);
+    let after = bootstrap(&api, true).await.unwrap();
+    assert!(after.schema_ready);
+    assert!(after.properties.is_empty());
+    let file_type = api.get_type("hb_file").await.unwrap();
+    let names: Vec<&str> = file_type["blocks"][0]["properties"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|property| property["property"].as_str())
+        .collect();
+    assert!(names.contains(&"hb_path"));
+    assert!(names.contains(&"hb_sha"));
+}
+
+#[tokio::test]
 async fn a_drifted_key_is_kept_in_hb_keys_json() {
     let mock = Mock::start().await;
     mock.rewrite_key("hb_sha", "hb_sha_kept");

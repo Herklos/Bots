@@ -40,6 +40,19 @@ impl SyncState {
             Phase::Live => Self::Live,
         }
     }
+
+    /// The wire name. The gateway and the UI keep these words for the state.
+    pub(super) fn as_str(self) -> &'static str {
+        match self {
+            Self::NeedsImport => "needs_import",
+            Self::Importing => "importing",
+            Self::Live => "live",
+            Self::Offline => "offline",
+            Self::NotGranted => "not_granted",
+            Self::ApiChanged => "api_changed",
+            Self::NotFound => "not_found",
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -37,6 +37,7 @@ mod filesystem;
 mod http;
 mod save;
 mod stored;
+mod sync_http;
 #[cfg(test)]
 mod tests;
 mod view;
@@ -50,8 +51,14 @@ use stored::*;
 use view::*;
 
 pub(crate) use anytype::{
-    anytype_check, anytype_setup, delete_storage_key, pair_confirm, pair_start, put_storage_key,
+    anytype_check, anytype_setup, delete_storage_key, effective_host, effective_space,
+    normalize_host, pair_confirm, pair_start, put_storage_key, read_key,
 };
 pub(crate) use env::ProcessEnv;
 pub(crate) use filesystem::resolve_root;
 pub(crate) use http::{copy_storage, get_storage, put_storage, restart_storage, test_storage};
+pub(crate) use stored::{read_load, Backend, Stored};
+pub(crate) use sync_http::{
+    get_sync_conflicts, get_sync_status, post_sync_conflict_resolve, post_sync_import,
+    post_sync_run,
+};

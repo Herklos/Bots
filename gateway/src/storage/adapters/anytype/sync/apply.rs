@@ -217,7 +217,7 @@ async fn refresh_etag(ctx: &Ctx<'_>, job: &mut Job) {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Keep {
+pub(crate) enum Keep {
     Local,
     Remote,
     Both,

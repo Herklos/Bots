@@ -15,6 +15,7 @@ pub(crate) async fn save(
     running_root: &Path,
     env: &ProcessEnv,
     can_restart: bool,
+    sync: Option<&crate::storage::sync::SyncHandle>,
     body: &Value,
 ) -> ApiResult<Value> {
     let mut load = read_load(data_root);
@@ -97,11 +98,15 @@ pub(crate) async fn save(
         }
     }
     write_stored(data_root, &load.stored).await?;
-    Ok(view(data_root, running_root, env, can_restart))
+    Ok(view(data_root, running_root, env, can_restart, sync))
 }
 
 /// Check a folder, host, backend, or space without writing `storage.json`.
-pub(crate) fn test_choice(data_root: &Path, body: &Value) -> ApiResult<Value> {
+pub(crate) fn test_choice(
+    data_root: &Path,
+    sync: Option<&crate::storage::sync::SyncHandle>,
+    body: &Value,
+) -> ApiResult<Value> {
     let backend = match field_string(body, "backend")? {
         Some(value) => Backend::parse(&value).map_err(ApiError::bad_request)?,
         None => Backend::Filesystem,
@@ -136,6 +141,6 @@ pub(crate) fn test_choice(data_root: &Path, body: &Value) -> ApiResult<Value> {
         "root": root,
         "host": host,
         "space": space,
-        "anytype": anytype_status(),
+        "anytype": anytype_status(sync),
     }))
 }

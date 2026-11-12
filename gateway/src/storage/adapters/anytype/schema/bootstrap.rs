@@ -31,10 +31,15 @@ pub(crate) async fn bootstrap(
     let mut keys = existing.as_ref().map(read_keys).unwrap_or_default();
     let mut create_types = Vec::new();
     let mut create_properties = Vec::new();
+    let mut attach = Vec::new();
 
     for table in TABLES {
-        if remember(&types, table.key, &type_label(table), &mut keys).is_none() {
-            create_types.push(table.key.to_string());
+        match remember(&types, table.key, &type_label(table), &mut keys) {
+            Some(ref type_key) if missing_definitions(client, type_key, table).await? => {
+                attach.push((*table, type_key.clone()));
+            }
+            Some(_) => {}
+            None => create_types.push(table.key.to_string()),
         }
     }
     for column in COLUMNS {
@@ -47,6 +52,7 @@ pub(crate) async fn bootstrap(
     let drift = drifts(&keys);
     let ready_now = create_types.is_empty()
         && create_properties.is_empty()
+        && attach.is_empty()
         && current.as_ref().and_then(|meta| meta.version) == Some(SCHEMA_VERSION)
         && current
             .as_ref()
@@ -54,10 +60,16 @@ pub(crate) async fn bootstrap(
             .is_some()
         && current.as_ref().map(|meta| &meta.keys) == Some(&drift);
     if dry_run {
+        let mut properties = create_properties;
+        properties.extend(
+            attach
+                .iter()
+                .flat_map(|(table, _)| table.properties.iter().map(|key| key.to_string())),
+        );
         return Ok(Report {
             dry_run: true,
             types: create_types,
-            properties: create_properties,
+            properties,
             meta: !ready_now,
             schema_ready: ready_now,
             keys: drift,
@@ -77,6 +89,12 @@ pub(crate) async fn bootstrap(
             .create_property(&property_body(column), &format!("hbots-property-{key}"))
             .await?;
         keys.insert((*key).to_string(), read_back(&created, key));
+    }
+    for (table, type_key) in &attach {
+        let body = json!({ "property_definitions": property_definitions(table) });
+        client
+            .patch_type(type_key, &body, &format!("hbots-type-defs-{}", table.key))
+            .await?;
     }
 
     let drifts = drifts(&keys);
@@ -115,7 +133,55 @@ fn type_label(table: &Table) -> String {
 }
 
 fn type_body(table: &Table) -> Value {
-    json!({ "name": table.name, "api_key": table.key, "layout": table.layout })
+    json!({
+        "name": table.name,
+        "api_key": table.key,
+        "layout": table.layout,
+        "property_definitions": property_definitions(table),
+    })
+}
+
+fn property_definitions(table: &Table) -> Vec<Value> {
+    table
+        .properties
+        .iter()
+        .map(|key| {
+            let column = table::column(key).expect("declared property");
+            match column.options.is_empty() {
+                true => json!({ "name": column.name, "format": column.format }),
+                false => json!({
+                    "name": column.name,
+                    "format": column.format,
+                    "options": column
+                        .options
+                        .iter()
+                        .map(|option| json!({ "name": option }))
+                        .collect::<Vec<_>>(),
+                }),
+            }
+        })
+        .collect()
+}
+
+/// True when the type exists but does not name every column hbots searches with.
+/// Anytype rejects a `fields` projection that the type has not declared.
+async fn missing_definitions(
+    client: &AnytypeClient,
+    type_key: &str,
+    table: &Table,
+) -> Result<bool, AnytypeError> {
+    let value = client.get_type(type_key).await?;
+    let names: Vec<&str> = value["blocks"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|block| block["properties"].as_array().into_iter().flatten())
+        .filter_map(|property| property["property"].as_str())
+        .collect();
+    Ok(table.properties.iter().any(|key| {
+        let name = table::column(key).map(|column| column.name).unwrap_or(key);
+        !names.contains(&name)
+    }))
 }
 
 fn property_body(column: &Column) -> Value {
@@ -196,16 +262,29 @@ async fn meta_object(
     types: &[Value],
     keys: &BTreeMap<String, String>,
 ) -> Result<Option<Value>, AnytypeError> {
+    // A brand-new space does not know the `hb_meta` type yet, and Anytype
+    // refuses searches that filter by an unknown type key. Filter by name
+    // locally instead when the type is not in the space's type list.
     let type_key = find_row(
         types,
         "hb_meta",
         keys.get(&table::type_map_key("hb_meta"))
             .map(String::as_str),
-    )
-    .unwrap_or("hb_meta");
-    let mut rows = client
-        .search(&json!({ "type": type_key, "query": "hb_meta" }))
-        .await?;
+    );
+    let mut body = json!({
+        "query": "hb_meta",
+        "fields": [
+            "name",
+            "hb_schema_version",
+            "hb_min_gateway",
+            "hb_keys_json",
+            "created_date",
+        ],
+    });
+    if let Some(key) = type_key {
+        body["type"] = json!(key);
+    }
+    let mut rows = client.search(&body).await?;
     rows.retain(|row| row["name"].as_str() == Some("hb_meta") && row["archived"] != true);
     rows.sort_by(|left, right| {
         left["created_date"]

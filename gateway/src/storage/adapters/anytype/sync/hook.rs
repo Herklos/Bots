@@ -14,13 +14,13 @@ pub(super) enum Control {
     Stop,
 }
 
-pub(super) trait Hook: Send {
+pub(super) trait Hook: Send + Sync {
     fn on_step(&mut self, step: Step, path: &str) -> Control;
 }
 
 impl<F> Hook for F
 where
-    F: FnMut(Step, &str) -> Control + Send,
+    F: FnMut(Step, &str) -> Control + Send + Sync,
 {
     fn on_step(&mut self, step: Step, path: &str) -> Control {
         self(step, path)

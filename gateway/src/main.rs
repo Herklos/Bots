@@ -103,8 +103,21 @@ async fn main() -> anyhow::Result<()> {
         &cfg.access_aud,
         &cfg.access_emails.join(","),
     );
-    let workspace: Arc<dyn storage::workspace::Workspace> =
-        Arc::new(storage::LocalDisk::new(cfg.bots_root.clone()));
+    // The Anytype sync engine runs behind the workspace: the nudging wrapper is built
+    // whenever the saved choice is Anytype, so Library writes wake the engine as soon
+    // as it starts. A nudge with no running engine is only a queued entry.
+    let sync_nudges = std::sync::Arc::new(storage::sync::Nudges::default());
+    let disk = storage::LocalDisk::new(cfg.bots_root.clone());
+    let workspace: Arc<dyn storage::workspace::Workspace> = if storage::sync::chooses_anytype(&cfg)
+    {
+        Arc::new(storage::adapters::anytype::SyncedWorkspace::new(
+            disk,
+            sync_nudges.clone(),
+        ))
+    } else {
+        Arc::new(disk)
+    };
+    let workspace: Arc<dyn storage::workspace::Workspace> = workspace;
     let state = Arc::new(AppState {
         access,
         exposure: exposure_cfg,
@@ -149,6 +162,7 @@ async fn main() -> anyhow::Result<()> {
         code_reads: chat::code::ReadCache::default(),
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
+        sync: storage::sync::SyncSlot::default(),
         holds: chat::HeldReads::new(),
         cfg,
     });
@@ -171,6 +185,11 @@ async fn main() -> anyhow::Result<()> {
             tracing::warn!("refreshing instructions for {}: {}", bot["slug"], e.message);
         }
     }
+    // Anytype sync starts after the state exists. It never fails the gateway: a bad
+    // host, a missing key, or a missing space stays on the handle as the reason.
+    state
+        .sync
+        .set(storage::sync::start(state.as_ref(), sync_nudges).await);
     crate::bots::provisioner::start(state.clone());
     crate::bots::agent_context::start(state.clone());
     crate::harness::providers::notices::start(state.clone());

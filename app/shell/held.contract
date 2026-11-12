@@ -85,6 +85,8 @@ members Bots
       refresh report
       if settingsDomain == "models"
         refresh providerLimits
+      if settingsDomain == "access"
+        refresh sync
       if settingsDomain == "updates"
         refresh system
       if settingsDomain == "computers"

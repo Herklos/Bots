@@ -212,6 +212,7 @@ pub(crate) fn settings_state_with(
             tailnet.clone(),
         )),
         tailnet,
+        sync: crate::storage::sync::SyncSlot::default(),
         cfg,
     })
 }
