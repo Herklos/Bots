@@ -15,7 +15,7 @@ use requestNotificationPermission, NotificationStatus from "@exact/notifications
 use InboxRow from "./inbox/inbox.contract"
 use Faces, GroupPanel from "./group/group.contract"
 use LoginSheet, ModelPicker, UsageView from "./settings/settings.contract"
-use pickerColours, shapeOf, colorOf, faceColor, showUnread, memberFaces from "./ui/fns.contract"
+use pickerColours, shapeOf, colorOf, faceColor, showUnread, memberFaces, memberCalled, quietPolicyHint from "./ui/fns.contract"
 use PanelRow, ChoiceRow from "./ui/panel.contract"
 use Bot, Chat, Room, Convo, Login, Provider, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer from "./ui/shapes.contract"
 use Reply, Sent, DriveReply, Session, Network, Storage, Pairing, AnytypeCheck, Suggestion, About, SystemStatus, UpdateStart, Health, Made, Prefs, PageState, NoticeState, Attached, VoiceHeld, Revealed, Usage, pageKeyKind, pageKeyCode, pageModifiers, pageChord, DraftPack, HostTime, PointerFacts, nameOf, initialsOf, botCountLabel, settingsDomainLabel, noticeOn, mutedBots, mutedGroups, firstMutedBot, firstMutedGroup, noticeStatusLabel, networkModeLabel, attachmentName, convoKey, dropKey, putText, putVoice, fieldAt, voiceNumber, entryId, hasFileId, hasVoiceId, themeLabel, pickedFaces, withWorking, withRoomPending, roomLine, transcriptId, knownSent, botCount, holdWorking, withPending, wordChar, mentionReplace, botMentions, roomMentions, filterMentions from "./ui/root-types.contract"
@@ -489,7 +489,7 @@ component Bots
                     textarea id="room-composer" value=roomText input=editRoomText key=roomKey outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(room.title != "" ? t("chat.messageTo", name=room.title) : t("chat.write")) aria-label=t("group.message") aria-expanded=(mentionHits.length > 0) aria-controls="mention-menu" testId="room-composer" flex=1 min-width=0 padding="space.sm space.sm" border="none" background-color="transparent" color="-exact-label"
                     button class=SendControl appearance="none" press=postRoom disabled=(roomText.trim() == "" or pending(roomSent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="room-send"
                       Glyph(name="send", size=18)
-                  text (roomText.includes("@everyone") ? t("group.hintEveryone") : (roomText.includes("@") ? t("group.hintMention") : t("group.hintNone"))) color="ink.muted" font="-exact-footnote" testId="room-hint"
+                  text (roomText.includes("@everyone") ? t("group.hintEveryone") : roomText.includes("@") ? t("group.hintMention") : quietPolicyHint(room.answerPolicyEffective, t("group.hintNoneLast"), t("group.hintNoneEveryone"), t("group.hintNoneChief", chief=memberCalled(room.members, room.chief)))) color="ink.muted" font="-exact-footnote" testId="room-hint" width="100%" min-width=0 overflow-wrap="anywhere"
               GroupPanel(shown=groupPanel, wide=wide, page=groupPage, room=room, bots=bots, closePanel=toggleGroupPanel, openEdit=openGroupEdit, goRoot=groupBack, openAdd=openGroupAdd, closeAdd=closeGroupAdd, patch=patchGroup, removeMember=removeGroupMember, addMember=addGroupMember, drop=dropGroup, error=groupSaveError)
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0

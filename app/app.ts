@@ -3,12 +3,12 @@ import { when, isGroupLeak, lineOf, stackFaces, initials } from './host/time.ts'
 import { REACH_GATEWAY, noteLocale, say, localize, call, read, fresh, botsBody, roomsBody, noticeHost, setNoticeHost, hostNotice, reply, sentFrom, systemChecked, setSystemChecked, madeFromBot } from './host/gateway.ts';
 import { NOT_IN_VIEW, roomMessage } from './host/markdown.ts';
 import { blankChat, PinRow, fixtureMade, setFixtureMade, fixtureMemberEdits, fixtureMemberRow, fixtureCrowdBots, fixtureSent, fixtureRoomSent, fixtureBotNotify, fixtureRoomNotify, fixtureRoomPolicy, fixtureRoomChief, fixtureGroupAnswer, setFixtureGroupAnswer, roomAnswer, roomChief, wantsNotice, FIXTURE_SUGGESTIONS, fixtureModelList, rememberFixtureModel, savedEffort, fixturePins, quietChatView, fixtureChat, explain } from './host/fixture.ts';
-
-// A group on the machine default follows the Settings choice; fixtures use last speaker.
-const effectivePolicy = (policy: string): string => (policy === 'everyone' || policy === 'chief' ? policy : 'last');
 import { prettyModel, nextLabel, emptyReport, usageReport } from './host/report.ts';
 import { frames, threads, chatKept, roomKept, forgetChat, forgetMeta, lastMessageId, threadMeta, blank, chatRows, storeUpload, draftMap, draftRows } from './host/session.ts';
 import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, shutNotice, postUnread } from './host/notices.ts';
+
+// A group on the machine default follows the Settings choice; fixtures use last speaker.
+const effectivePolicy = (policy: string): string => (policy === 'everyone' || policy === 'chief' ? policy : 'last');
 
 // Where the hbots gateway (the `hbots` binary) listens. A data module can't read the page's address
 // (no `location`, and `fetch` refuses a relative URL), so the web build is made with this placeholder
@@ -893,7 +893,7 @@ const sources: Sources = {
       messages: messages.map((m: any) => roomMessage(m)),
       notifications: wantsNotice(body.notifications),
       answerPolicy: body.answerPolicy === 'last' || body.answerPolicy === 'everyone' || body.answerPolicy === 'chief' ? body.answerPolicy : 'default',
-      answerPolicyEffective: body.answerPolicyEffective === 'everyone' || body.answerPolicyEffective === 'chief' ? body.answerPolicyEffective : 'last',
+      answerPolicyEffective: body.answerPolicyEffective === 'last' || body.answerPolicyEffective === 'everyone' || body.answerPolicyEffective === 'chief' ? body.answerPolicyEffective : 'last',
       chief: typeof body.chief === 'string' ? body.chief : '',
     };
     roomKept.set(id, { etag: res.etag, view });

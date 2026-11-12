@@ -1,6 +1,6 @@
 use Avatar from "../face.contract"
 use Glyph from "../glyph.contract"
-use shapeOf, colorOf, faceColor, bitShape, bitColor, bitState, memberFaces from "../ui/fns.contract"
+use shapeOf, colorOf, faceColor, bitShape, bitColor, bitState, memberFaces, memberCalled, quietPolicyHint from "../ui/fns.contract"
 use ChoiceRow from "../ui/panel.contract"
 use Bot, Room, FaceBit from "../ui/shapes.contract"
 use PageTitle, TextControl, IconControl, ToggleControl, ConversationLink, SectionLabel, IconTile, Field from "../ui/controls.contract"
@@ -169,4 +169,4 @@ component GroupPanel
                     column gap="2px" flex=1 min-width=0
                       text m.name font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
                       text m.line color="ink.muted" font="-exact-footnote"
-            text t("group.hint") color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="group-details-hint"
+            text quietPolicyHint(room.answerPolicyEffective, t("group.hintNoneLast"), t("group.hintNoneEveryone"), t("group.hintNoneChief", chief=memberCalled(room.members, room.chief))) color="ink.muted" font="-exact-footnote" testId="group-details-hint" width="100%" min-width=0 overflow-wrap="anywhere"
