@@ -39,6 +39,8 @@ mod memory_api;
 #[cfg(test)]
 mod memory_api_tests;
 #[cfg(test)]
+mod provider_limits_tests;
+#[cfg(test)]
 mod provider_switch_tests;
 mod rooms_api;
 mod router;

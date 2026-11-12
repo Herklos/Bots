@@ -1,6 +1,7 @@
 //! The providers and models a Bot can use. T3 Code is the harness wired today: its server
 //! config lists every provider instance with its models and what each model lets you tune.
 //! Only what the app shows leaves this module: never an account's email or workspace.
+//! The model list and the limit bars are two views of one 30-second cache.
 use crate::harness::Harness;
 use serde_json::{json, Value};
 use std::{
@@ -8,31 +9,71 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod limits;
+
 const KEEP: Duration = Duration::from_secs(30);
+
+/// One read of the harness config, reduced to the model list and the limit bars.
+/// The raw config is not kept: it can hold an email, a fingerprint, or a runtime path.
+#[derive(Clone, Debug)]
+struct Snapshot {
+    fetched: Instant,
+    at: String,
+    list: Value,
+    limits: Vec<Value>,
+}
+
+impl Snapshot {
+    fn of(config: &Value) -> Self {
+        let limits = config["providers"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(limits::limits_of)
+            .collect();
+        Self {
+            fetched: Instant::now(),
+            at: crate::platform::release::iso8601(crate::platform::release::unix_now()),
+            list: from_config(config),
+            limits,
+        }
+    }
+}
 
 /// The provider list, read from T3 at most every 30 seconds.
 #[derive(Debug, Default)]
 pub struct Providers {
-    cached: Mutex<Option<(Instant, Value)>>,
+    cached: Mutex<Option<Snapshot>>,
 }
 
 impl Providers {
-    pub async fn list(&self, harness: &dyn Harness) -> anyhow::Result<Value> {
-        if let Some((at, list)) = self.cached.lock().ok().and_then(|g| g.clone()) {
-            if at.elapsed() < KEEP {
-                return Ok(list);
+    async fn snapshot(&self, harness: &dyn Harness) -> anyhow::Result<Snapshot> {
+        if let Some(hit) = self.cached.lock().ok().and_then(|guard| guard.clone()) {
+            if hit.fetched.elapsed() < KEEP {
+                return Ok(hit);
             }
         }
-        let list = harness
+        let config = harness
             .provisioning()
             .map_err(|err| anyhow::anyhow!(err.to_string()))?
             .provider_config()
             .await
             .map_err(|err| anyhow::anyhow!(err.to_string()))?;
+        let shot = Snapshot::of(&config);
         if let Ok(mut slot) = self.cached.lock() {
-            *slot = Some((Instant::now(), list.clone()));
+            *slot = Some(shot.clone());
         }
-        Ok(list)
+        Ok(shot)
+    }
+
+    pub async fn list(&self, harness: &dyn Harness) -> anyhow::Result<Value> {
+        Ok(self.snapshot(harness).await?.list)
+    }
+
+    /// `{ providers, at }` for the same cached read as [`Self::list`]. `at` is when that read was taken.
+    pub async fn limits(&self, harness: &dyn Harness) -> anyhow::Result<Value> {
+        let shot = self.snapshot(harness).await?;
+        Ok(json!({ "providers": shot.limits, "at": shot.at }))
     }
 }
 
@@ -214,7 +255,7 @@ mod tests {
 
     fn config() -> Value {
         let f: Value =
-            serde_json::from_str(include_str!("../../../tests/fixtures/t3/providers.json"))
+            serde_json::from_str(include_str!("../../../../tests/fixtures/t3/providers.json"))
                 .unwrap();
         json!({ "providers": f["providers"], "settings": { "providerModelPreferences": {} } })
     }
