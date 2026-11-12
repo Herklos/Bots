@@ -28,7 +28,7 @@ cargo test -p hbots-design              # the brand's rules, and the drift check
 | Output | Consumer |
 |---|---|
 | `app/app.tamber` | Exact's design: the tint (`AccentColor`), the avatar colours as `brand.default` and `brand.<name>`, the inks `ink.light` and `ink.dark`, the spacing and radius scale |
-| `app/app.ts` (between `design:begin palette`) | Maps a stored colour name, its hex or its token to a `brand.*` token |
+| `app/host/palette.ts` (between `design:begin palette`) | Maps a stored colour name, its hex or its token to a `brand.*` token |
 | `app/app.contract` (between `design:begin colours`) | `pickerColours()` and `avatarInk()` |
 | `app/face.contract` (between `design:begin colours`) | The Face's fill and edge functions |
 | `app/app.json` | `theme_color`, `background_color` |

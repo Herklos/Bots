@@ -2,7 +2,7 @@ import { blank } from './session.ts';
 import { transcriptRowId } from './gateway.ts';
 import { NOT_IN_VIEW } from './markdown.ts';
 import type { Result } from '../app.contract.d.ts';
-import { fill } from '../app.ts';
+import { fill } from './palette.ts';
 import { loadSentence, say } from './gateway.ts';
 import { roomMessage, splitTables } from './markdown.ts';
 import { isGroupLeak, when } from './time.ts';

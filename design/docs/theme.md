@@ -33,7 +33,7 @@ Tide is 2.2:1 on white, so the app can't use it for text, links or a selected st
 
 ## The avatar palette
 
-Sixteen named colours, the same in the client and the gateway. Each is a `brand.<name>` token in `app/app.tamber` (Tide is `brand.default`); the app stores the plain name and `app/app.ts` maps it to the token. The picker offers ten (`brown`, `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet`, `pink`, `gray`). Initials use `ink.light` (white) or `ink.dark` (Night), chosen per colour by `avatarInk()` in `app/app.contract`. The crate checks each choice (minimum 4.3:1). Black on the avatar palette is white in dark mode, so a black Bot still shows.
+Sixteen named colours, the same in the client and the gateway. Each is a `brand.<name>` token in `app/app.tamber` (Tide is `brand.default`); the app stores the plain name and `app/host/palette.ts` maps it to the token. The picker offers ten (`brown`, `red`, `orange`, `amber`, `green`, `teal`, `blue`, `violet`, `pink`, `gray`). Initials use `ink.light` (white) or `ink.dark` (Night), chosen per colour by `avatarInk()` in `app/app.contract`. The crate checks each choice (minimum 4.3:1). Black on the avatar palette is white in dark mode, so a black Bot still shows.
 
 ## Light and dark
 

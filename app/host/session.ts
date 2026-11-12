@@ -3,7 +3,7 @@ import type { MessagePart } from './markdown.ts';
 import { FILE_EMPTY, FILE_READ, FILE_TOO_BIG, localize } from './gateway.ts';
 import type { Result, Storage } from '../app.contract.d.ts';
 import { API } from './config.ts';
-import { fill } from '../app.ts';
+import { fill } from './palette.ts';
 import { call, read } from './gateway.ts';
 import { marksOf, quoteOf, splitTables, tokenText } from './markdown.ts';
 
