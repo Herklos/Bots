@@ -1,10 +1,26 @@
 # Changelog
 
-## Unreleased
+## 0.3.7
+
+This release improves group mentions and adds routine review, computer preferences and provider usage information. It also includes the independent mode and memory API described under 0.3.6.
+
+### New features
+
+- View and edit a Bot’s memory in its details panel, with a conflict message if the file changed since it was opened.
+- Let Bots propose memory facts for a person to accept; accepted suggestions become Bot-owned facts.
+- Choose Independent as the default approval mode in Settings. Independent mode runs with full harness access.
+- Hold newly discovered Bot-created routines for approval. A routine scheduled just a few seconds ahead can still run once before the watcher disables it.
+- Save a preferred computer for a Bot; this records the choice but does not yet place the Bot on that computer.
+- Expose provider usage limits from the cached model list through the API.
 
 ### Improvements
 
-- Ignore an `@` mention inside code when a group message chooses who wakes, and still wake a Bot mentioned after punctuation.
+- Apply a parent Bot’s helper policy when creating durable children, including enabled state, limits and model allowlists.
+- Validate saved sidebar sections and preserve valid sections when other settings change.
+
+### Bug fixes
+
+- Ignore group mentions inside inline or fenced code while recognizing mentions after punctuation.
 
 ## 0.3.6
 
