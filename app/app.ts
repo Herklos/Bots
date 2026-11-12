@@ -428,6 +428,14 @@ const fixtureRoomSent: { id: string; text: string }[] = [];
 // Mute choices the contract runner makes. Missing means the chat still notifies.
 const fixtureBotNotify = new Map<string, boolean>();
 const fixtureRoomNotify = new Map<string, boolean>();
+const fixtureRoomPolicy = new Map<string, string>();
+let fixtureGroupAnswer = '';
+function roomAnswer(id: string, made?: string): string {
+  const saved = fixtureRoomPolicy.get(id);
+  if (saved) return saved;
+  if (made === 'last' || made === 'everyone' || made === 'chief' || made === 'default') return made;
+  return 'default';
+}
 const wantsNotice = (value: unknown): boolean => value !== false;
 
 // The model page's fixture: five levels in the order a provider would send them.
@@ -1040,7 +1048,12 @@ const sources: Sources = {
   pinBot: async ([slug, pinned], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify({ pinned }) })),
   deleteBot: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'DELETE' })),
   loadPrefs: async (_args, store): Promise<Result<'loadPrefs'>> => {
-    const body = await read(store, '/api/settings');
+    let body: any = {};
+    try {
+      body = await read(store, '/api/settings');
+    } catch (error) {
+      if (fixtureGroupAnswer === '') throw error;
+    }
     const note = noticePrefs(body);
     return {
       userName: String(body.userName ?? ''),
@@ -1054,6 +1067,7 @@ const sources: Sources = {
       noticePreview: note.preview,
       noticeWhen: note.when,
       noticeEnabledMissing: note.enabled === null,
+      groupAnswerPolicy: fixtureGroupAnswer !== '' ? fixtureGroupAnswer : (body.groupAnswerPolicy === 'everyone' || body.groupAnswerPolicy === 'chief' ? body.groupAnswerPolicy : 'last'),
     };
   },
   loadNotice: async (): Promise<Result<'loadNotice'>> => {
@@ -1076,6 +1090,16 @@ const sources: Sources = {
   },
   setUserName: async ([userName], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ userName }) })),
   setDefaultMode: async ([defaultRuntimeMode], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ defaultRuntimeMode }) })),
+  setGroupAnswerPolicy: async ([groupAnswerPolicy], store) => {
+    const policy = groupAnswerPolicy === 'everyone' || groupAnswerPolicy === 'chief' ? groupAnswerPolicy : 'last';
+    const r = await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ groupAnswerPolicy: policy }) });
+    if (!r.ok && r.error === REACH_GATEWAY) {
+      fixtureGroupAnswer = policy;
+      return { ok: true, error: '' };
+    }
+    if (r.ok) fixtureGroupAnswer = '';
+    return reply(r);
+  },
   setTheme: async ([theme], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ theme }) })),
   setPassword: async ([password], store) => reply(await call(store, '/api/access/password', { method: 'PUT', body: JSON.stringify({ password }) })),
   loadNetwork: async ([gate], store): Promise<Result<'loadNetwork'>> => {
@@ -1215,6 +1239,11 @@ const sources: Sources = {
     }
     if (fixtureRoom && field === 'members') {
       fixtureMemberEdits.set(id, value === '' ? [] : value.split('\n').filter((slug) => slug !== ''));
+      return { ok: true, error: '' };
+    }
+    if (fixtureRoom && field === 'answerPolicy') {
+      const policy = value === 'last' || value === 'everyone' || value === 'chief' || value === 'default' ? value : 'default';
+      fixtureRoomPolicy.set(id, policy);
       return { ok: true, error: '' };
     }
     const body = field === 'members'
@@ -1664,7 +1693,7 @@ const sources: Sources = {
     return { ok: true, error: '', text: typeof r.body.text === 'string' ? r.body.text : '' };
   },
   loadRoom: async ([id], store): Promise<Result<'loadRoom'>> => {
-    if (id === '') return { id: '', title: '', description: '', color: 'brand.default', shape: 'ball', members: [], messages: [], notifications: true };
+    if (id === '') return { id: '', title: '', description: '', color: 'brand.default', shape: 'ball', members: [], messages: [], notifications: true, answerPolicy: 'default' };
     if (id === 'fixture') {
       const edited = fixtureMemberEdits.get('fixture');
       if (fixtureMade && !edited) {
@@ -1674,6 +1703,7 @@ const sources: Sources = {
           members: fixtureMade.slugs.map((slug) => ({ slug, name: nameOf(slug), line: 'Ready to chat', state: 'idle', ready: true, working: false })),
           messages: fixtureRoomSent.map((m) => roomMessage({ id: m.id, name: 'You', text: m.text, from: 'user' })),
           notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
+          answerPolicy: roomAnswer('fixture', fixtureMade?.answerPolicy),
         };
       }
       return {
@@ -1688,6 +1718,7 @@ const sources: Sources = {
           ...fixtureRoomSent.map((m) => roomMessage({ id: m.id, name: 'You', text: m.text, from: 'user' })),
         ],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
+        answerPolicy: roomAnswer('fixture', fixtureMade?.answerPolicy),
       };
     }
     if (id === 'fixture-crowd') {
@@ -1697,6 +1728,7 @@ const sources: Sources = {
         members: (edited ?? ['ada', 'bea']).map(fixtureMemberRow),
         messages: [],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture-crowd')),
+        answerPolicy: roomAnswer('fixture-crowd'),
       };
     }
     if (id === 'fixture-busy') {
@@ -1712,6 +1744,7 @@ const sources: Sources = {
           ...fixtureRoomSent.map((m) => roomMessage({ id: m.id, name: 'You', text: m.text, from: 'user' })),
         ],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture-busy')),
+        answerPolicy: roomAnswer('fixture-busy'),
       };
     }
     const kept = roomKept.get(id);
@@ -1733,6 +1766,7 @@ const sources: Sources = {
       })),
       messages: messages.map((m: any) => roomMessage(m)),
       notifications: wantsNotice(body.notifications),
+      answerPolicy: body.answerPolicy === 'last' || body.answerPolicy === 'everyone' || body.answerPolicy === 'chief' ? body.answerPolicy : 'default',
     };
     roomKept.set(id, { etag: res.etag, view });
     return view;

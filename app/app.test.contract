@@ -1054,6 +1054,33 @@ test "a wide window replaces a group with the chat"
   expect tree missing "chat-title"
   expect tree missing "room-title"
 
+test "Settings saves who answers in a group"
+  tap "Settings"
+  clock data
+  tap "settings-domain-models"
+  expect tree has "group-answer-last"
+  expect text "group-answer-last" == "Last speaker"
+  expect text "group-answer-everyone" == "Everyone"
+  expect text "group-answer-chief" == "A chief"
+  tap "group-answer-everyone"
+  clock data
+  expect checked "group-answer-everyone"
+  expect tree missing "group-answer-default"
+
+test "a group's edit page saves who answers"
+  size 1200x800
+  at "/group/fixture"
+  clock data
+  tap "group-toggle"
+  tap "group-edit"
+  expect checked "group-policy-default"
+  expect text "group-policy-default" == "This machine"
+  expect text "group-policy-last" == "Last speaker"
+  tap "group-policy-chief"
+  clock data
+  expect checked "group-policy-chief"
+  expect text "group-policy-chief" == "A chief"
+
 test "a mention names a Bot and leaves the group selected"
   size 1440x900
   at "/group/fixture"

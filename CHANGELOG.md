@@ -4,6 +4,7 @@
 
 ### Improvements
 
+- Settings and a group’s edit page choose who answers: the last speaker, everyone, or a chief. A group can follow the machine setting.
 - The group composer offers @everyone: a chip and a mention suggestion insert it, and the hint says it wakes every Bot in the group.
 - The sidebar highlights only the open conversation. On a wide window, switching conversations replaces that route.
 - Creating a group is a short walk: a name, the member faces, who answers, a kickoff, then review.
