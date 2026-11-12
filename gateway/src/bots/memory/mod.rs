@@ -1,7 +1,27 @@
 //! Bot memory files, through the workspace. Callers pass relative keys.
 //! Canonical paths stay inside `LocalDisk`.
 
+mod evidence;
+mod facts;
+#[cfg(test)]
+#[path = "facts_tests.rs"]
+mod facts_tests;
+mod history;
+#[allow(
+    dead_code,
+    reason = "gateway boot calls journal recovery in a later phase; tests cover it now"
+)]
+mod journal;
+#[cfg(test)]
+#[path = "journal_tests.rs"]
+mod journal_tests;
+mod mutate;
+#[cfg(test)]
+#[path = "mutate_tests.rs"]
+mod mutate_tests;
+mod search;
 mod skills;
+mod state;
 #[cfg(test)]
 mod tests;
 
@@ -10,8 +30,10 @@ pub(crate) use skills::skill_file_name;
 
 use crate::bots::valid_slug;
 use crate::storage::workspace::{EntryKind, Workspace};
+use std::collections::HashMap;
 use std::io;
 use std::sync::Arc;
+use tokio::sync::{Mutex, OwnedMutexGuard};
 
 #[derive(Debug)]
 pub(crate) enum MemoryScopeError {
@@ -29,14 +51,31 @@ impl std::fmt::Display for MemoryScopeError {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MemoryStore {
     ws: Arc<dyn Workspace>,
+    /// One writer at a time per store, so a stale revision always conflicts.
+    locks: std::sync::Mutex<HashMap<String, Arc<Mutex<()>>>>,
 }
 
 impl MemoryStore {
     pub(crate) fn new(ws: Arc<dyn Workspace>) -> Self {
-        Self { ws }
+        Self {
+            ws,
+            locks: std::sync::Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// `bot:{slug}` or `shared`. The guard is held across the whole mutation.
+    async fn lock_store(&self, key: &str) -> OwnedMutexGuard<()> {
+        let mutex = {
+            let mut locks = self.locks.lock().unwrap_or_else(|err| err.into_inner());
+            locks
+                .entry(key.to_string())
+                .or_insert_with(|| Arc::new(Mutex::new(())))
+                .clone()
+        };
+        mutex.lock_owned().await
     }
 
     pub(crate) fn bot_memory(slug: &str) -> String {
@@ -101,6 +140,9 @@ impl MemoryStore {
         mode: Option<u32>,
     ) -> io::Result<()> {
         self.refuse_symlink(rel).await?;
+        if self.ws.symlink_kind(rel).await? == Some(EntryKind::Dir) {
+            return Err(io::Error::new(io::ErrorKind::InvalidInput, "directory"));
+        }
         self.ws.write(rel, text.as_bytes(), mode).await
     }
 
@@ -267,6 +309,13 @@ impl MemoryStore {
         }
     }
 }
+
+pub(crate) use evidence::{
+    check_owner_evidence, generic_attachment_quote, owner_messages, pick_message,
+};
+pub(crate) use facts::{FACT_CHARS, FULL_NOTE_CHARS, MEMORY_CHARS, NOTE_CHARS};
+pub(crate) use mutate::{mutate, Coded, MutateFail, MutateOk, Mutation, Op, Scope};
+pub(crate) use search::{document, list_notes, read_note, search as search_memory, Hit, NoteInfo};
 
 fn cap_prefix(bytes: &[u8], cap: usize) -> (String, bool) {
     if bytes.len() <= cap {

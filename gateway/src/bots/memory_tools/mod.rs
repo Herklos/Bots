@@ -3,8 +3,8 @@
 //! The caller is the Bot whose `mainThreadId` is `threadId`. A slug, path, or
 //! `parentSlug` in the arguments is ignored. A subagent (`role` `subagent`, or
 //! `hideFromSidebar`) also reads its parent's `memory/` and `skills/`. The parent
-//! folder is `parentSlug` on the caller record. These tools never write, and they
-//! do not follow a symlink or a `..` segment out of a Bot folder.
+//! folder is `parentSlug` on the caller record. A subagent writes only its own
+//! store. None of these tools follow a symlink or a `..` segment out of a Bot folder.
 //!
 //! Each file is capped at [`FILE_CAP`] bytes. A missing file is an empty string.
 //! A missing parent folder is a tool error.
@@ -15,6 +15,9 @@ use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use tokio::io::AsyncReadExt;
 
+mod edit;
+mod read;
+
 #[cfg(test)]
 mod tests;
 
@@ -23,12 +26,33 @@ pub(crate) const FILE_CAP: usize = 16 * 1024;
 
 const PARENT_MISSING: &str = "This subagent's parent folder is missing.";
 
-const NAMES: [&str; 2] = ["memory_read", "skills_read"];
+const NAMES: [&str; 5] = [
+    "memory_read",
+    "memory_edit",
+    "memory_forget",
+    "memory_search",
+    "skills_read",
+];
 
-/// What the tools need. Tests pass a store on a temp folder.
+/// What the tools need. Tests pass a store and, for a write, the turn items.
 pub(crate) struct Deps<'a> {
     pub memory: &'a MemoryStore,
     pub roster: &'a [Value],
+    pub turn_items: &'a [Value],
+    /// Slugs whose memory changed. `call` refreshes their agents afterwards.
+    pub refreshed: Option<&'a std::sync::Mutex<Vec<String>>>,
+}
+
+impl<'a> Deps<'a> {
+    #[cfg(test)]
+    fn reading(memory: &'a MemoryStore, roster: &'a [Value]) -> Self {
+        Self {
+            memory,
+            roster,
+            turn_items: &[],
+            refreshed: None,
+        }
+    }
 }
 
 pub(crate) fn tool_defs() -> Vec<Value> {
@@ -42,10 +66,15 @@ pub(crate) fn tool_defs() -> Vec<Value> {
     vec![
         json!({
             "name": "memory_read",
-            "description": format!("Read your memory/MEMORY.md and memory/log.md. A missing file is empty. A subagent also receives its parent's copies, read-only. {cap}"),
+            "description": format!("Read your memory/MEMORY.md and memory/log.md, plus shared memory, a notes index, and the revision a later write must send back. Pass topic to read one note. Pass scope bot, shared, or all. A missing file is empty. A subagent also receives its parent's copies, read-only. {cap}"),
             "inputSchema": {
                 "type": "object",
-                "properties": { "threadId": thread },
+                "properties": {
+                    "threadId": thread,
+                    "scope": { "type": "string", "enum": ["bot", "shared", "all"], "description": "What to read. The default is all." },
+                    "topic": { "type": "string", "description": "A note path from the notes index, such as memory/notes/projects/launch.md." },
+                    "full": { "type": "boolean", "description": "Read the whole note instead of the session-sized preview." }
+                },
                 "required": ["threadId"],
             },
             "annotations": { "readOnlyHint": true }
@@ -61,6 +90,9 @@ pub(crate) fn tool_defs() -> Vec<Value> {
             "annotations": { "readOnlyHint": true }
         }),
     ]
+    .into_iter()
+    .chain(edit::defs(&thread))
+    .collect()
 }
 
 pub(crate) fn is_memory_tool(name: &str) -> bool {
@@ -70,26 +102,63 @@ pub(crate) fn is_memory_tool(name: &str) -> bool {
 /// Entry point from `mcp.rs`.
 pub(crate) async fn call(state: &AppState, name: &str, args: &Value) -> Result<Value, String> {
     let roster = state.bots.list().await.map_err(|e| e.message)?;
-    dispatch(
+    let items = if edit::needs_evidence(name) {
+        load_items(state, args).await?
+    } else {
+        Vec::new()
+    };
+    let refreshed = std::sync::Mutex::new(Vec::new());
+    let result = dispatch(
         &Deps {
             memory: &state.memory,
             roster: &roster,
+            turn_items: &items,
+            refreshed: Some(&refreshed),
         },
         name,
         args,
     )
-    .await
+    .await?;
+    let slugs = refreshed
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .clone();
+    for slug in slugs {
+        if let Err(err) = state.bots.refresh_agents(&slug).await {
+            tracing::warn!(slug, "memory saved; agents refresh failed: {}", err.message);
+        }
+    }
+    Ok(result)
+}
+
+async fn load_items(state: &AppState, args: &Value) -> Result<Vec<Value>, String> {
+    let Some(thread) = args["threadId"]
+        .as_str()
+        .map(str::trim)
+        .filter(|id| !id.is_empty())
+    else {
+        return Ok(Vec::new());
+    };
+    let transcript = state.harness.transcript().map_err(|err| err.to_string())?;
+    let snapshot = transcript
+        .read(thread)
+        .await
+        .map_err(|err| err.to_string())?;
+    Ok(snapshot.items())
 }
 
 pub(crate) async fn dispatch(d: &Deps<'_>, name: &str, args: &Value) -> Result<Value, String> {
     match name {
-        "memory_read" => read_memory(d, args).await,
+        "memory_read" => read::read(d, args).await,
+        "memory_edit" => edit::edit(d, args).await,
+        "memory_forget" => edit::forget(d, args).await,
+        "memory_search" => edit::search(d, args).await,
         "skills_read" => read_skills(d, args).await,
         _ => Err(format!("Unknown tool {name}")),
     }
 }
 
-fn caller<'a>(roster: &'a [Value], args: &Value) -> Result<&'a Value, String> {
+pub(super) fn caller<'a>(roster: &'a [Value], args: &Value) -> Result<&'a Value, String> {
     let thread = args["threadId"]
         .as_str()
         .map(str::trim)
@@ -206,7 +275,7 @@ fn trim_partial_char_end(buf: &mut Vec<u8>) {
     }
 }
 
-async fn memory_of(memory: &MemoryStore, slug: &str) -> Result<Value, String> {
+pub(super) async fn memory_of(memory: &MemoryStore, slug: &str) -> Result<Value, String> {
     if !present(memory, slug).await? {
         return Ok(json!({
             "MEMORY.md": empty_file(),
@@ -255,7 +324,7 @@ async fn present(memory: &MemoryStore, slug: &str) -> Result<bool, String> {
     }
 }
 
-async fn scope(d: &Deps<'_>, args: &Value) -> Result<(String, Option<String>), String> {
+pub(super) async fn scope(d: &Deps<'_>, args: &Value) -> Result<(String, Option<String>), String> {
     let bot = caller(d.roster, args)?;
     let slug = bot["slug"].as_str().unwrap_or_default().to_string();
     let parent = if is_subagent(bot) {
@@ -269,15 +338,6 @@ async fn scope(d: &Deps<'_>, args: &Value) -> Result<(String, Option<String>), S
         None
     };
     Ok((slug, parent))
-}
-
-async fn read_memory(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
-    let (own, parent) = scope(d, args).await?;
-    let mut result = json!({ "memory": memory_of(d.memory, &own).await? });
-    if let Some(parent) = parent {
-        result["parent"] = json!({ "memory": memory_of(d.memory, &parent).await? });
-    }
-    Ok(result)
 }
 
 async fn read_skills(d: &Deps<'_>, args: &Value) -> Result<Value, String> {

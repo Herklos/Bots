@@ -30,6 +30,12 @@ impl ThreadSnapshot {
         crate::harness::t3::transcript::transcript(&self.body)
     }
 
+    /// Turn items as the runtime stored them, oldest first. Memory evidence reads these
+    /// directly so a routine prompt is still visible as a routine prompt.
+    pub(crate) fn items(&self) -> Vec<Value> {
+        crate::harness::t3::transcript::turn_items(&self.body)
+    }
+
     pub(crate) fn transcript_for(&self, peers: &crate::chat::Peers) -> Value {
         crate::harness::t3::transcript::with_tokens(
             crate::harness::t3::transcript::transcript_for(&self.body, peers),
