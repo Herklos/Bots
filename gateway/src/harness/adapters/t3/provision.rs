@@ -2,7 +2,9 @@
 //! A main thread uses `orchestration.launchThread`. The brief is a dispatched
 //! message queued behind an active run; a person's first message starts immediately.
 use super::T3;
-use crate::harness::{HarnessError, LaunchThread, ProjectInfo, ProvisionedSend, Provisioning};
+use crate::harness::{
+    ComputerCatalog, HarnessError, LaunchThread, ProjectInfo, ProvisionedSend, Provisioning,
+};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 
@@ -139,6 +141,10 @@ impl Provisioning for T3 {
             .map_err(HarnessError::failed)?;
         }
         Ok(())
+    }
+
+    async fn computers(&self) -> Result<ComputerCatalog, HarnessError> {
+        super::computers::list(self).await
     }
 
     async fn provider_config(&self) -> Result<Value, HarnessError> {

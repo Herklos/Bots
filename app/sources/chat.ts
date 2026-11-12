@@ -34,6 +34,7 @@ export const chatSources = {
     if (slug === 'bea') return blankChat('bea');
     if (slug === 'tabs') return blankChat('tabs');
     if (slug === 'frame') return blankChat('frame');
+    if (slug === 'page') return blankChat('page');
     const query = child !== '' ? `?child=${encodeURIComponent(child)}` : '';
     const key = `${slug}\n${child}`;
     const kept = chatKept.get(key);

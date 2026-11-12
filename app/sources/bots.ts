@@ -9,9 +9,9 @@ export const botSources = {
   loadBots: async ([focus], store): Promise<Result<'loadBots'>> => {
     // Reserved slugs for the contract runner, which has no gateway. A real inbox still fetches.
     // `bea` is the second fixture Bot, so a draft test can open her and come back without a gateway.
-    if (focus === 'tabs' || focus === 'frame') {
-      const slug = focus === 'frame' ? 'frame' : 'tabs';
-      const name = focus === 'frame' ? 'Frame' : 'Tabs';
+    if (focus === 'tabs' || focus === 'frame' || focus === 'page') {
+      const slug = focus;
+      const name = focus === 'frame' ? 'Frame' : focus === 'tabs' ? 'Tabs' : 'Page';
       return [
         { slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt(slug, ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get(slug)) },
       ];

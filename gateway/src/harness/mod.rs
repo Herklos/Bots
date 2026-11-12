@@ -13,8 +13,8 @@ pub(crate) mod providers;
 pub(crate) use adapters::t3;
 pub(crate) use error::HarnessError;
 pub(crate) use snapshot::{
-    message_id, BrowserTab, Frame, ProvisionedSend, ShellSnapshot, ShellThread, ThreadSnapshot,
-    UserMessage,
+    message_id, BrowserTab, ComputerCatalog, ComputerLink, Frame, ProvisionedSend, ShellSnapshot,
+    ShellThread, ThreadSnapshot, UserMessage,
 };
 
 use async_trait::async_trait;
@@ -130,6 +130,8 @@ pub trait Provisioning: Send + Sync {
         selection: &Value,
     ) -> Result<(), HarnessError>;
     async fn provider_config(&self) -> Result<Value, HarnessError>;
+    /// This computer and the links already on it. A down runtime is `ok: false`, not an error.
+    async fn computers(&self) -> Result<ComputerCatalog, HarnessError>;
 }
 
 #[async_trait]

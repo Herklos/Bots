@@ -1,4 +1,5 @@
 use Computer from "../ui/shapes.contract"
+use ComputerPlace from "./place.contract"
 use Reply, DriveReply, pageKeyKind, pageKeyCode, pageModifiers, pageChord from "../ui/root-types.contract"
 members Bots
   // The page the person is driving. Cleared after Release, including when they leave.
@@ -30,6 +31,16 @@ members Bots
   derive onComputer = top(nav).name == "chat" and panelOpen and panelTab == "computer"
 
   derive computerGate = (onComputer and slug != "") ? "1" : "0"
+
+  resource places = loadComputerPlace(slug, computerGate, hostTime.locale) as shape ComputerPlace else empty()
+
+  mutation placeSet as shape Reply refreshes places
+
+  derive placeError = match placeSet { case some(r) => r.error, case none => "" }
+
+  action doPickComputer(id: string)
+    if slug != "" and id != places.selected and not pending(placeSet)
+      send placeSet = setComputerPlace(slug, id)
 
   derive controlError = match controlled { case some(r) => r.error, case none => "" }
 

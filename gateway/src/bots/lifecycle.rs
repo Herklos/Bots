@@ -119,6 +119,7 @@ impl Bots {
             let wants_main = clean.remove("primary") == Some(Value::Bool(true));
             clean.remove("slug");
             clean.remove("workspaceRoot");
+            clean.remove("environment");
             next.extend(clean);
             next.insert("slug".into(), json!(slug));
             next.insert("primary".into(), json!(is_main));

@@ -137,6 +137,10 @@ component Bots
     doOpenBrowser
     doCloseBrowser
     showComputerLarge
+    places
+    placesFailed
+    placeError
+    doPickComputer
     editPassword
     largePageKey
     largePoint

@@ -5,6 +5,7 @@
 mod approvals;
 mod browser;
 mod client;
+mod computers;
 pub(crate) mod fill;
 pub(crate) mod hold;
 mod previews;

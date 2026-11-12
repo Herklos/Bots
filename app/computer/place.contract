@@ -1,0 +1,45 @@
+use SectionLabel from "../ui/controls.contract"
+
+shape ComputerLink
+  id: string
+  label: string
+  status: string
+  access: string
+  selectable: bool
+
+shape ComputerPlace
+  ok: bool
+  selected: string
+  localLabel: string
+  links: ComputerLink[]
+  waiting: bool
+  error: string
+
+component ComputerPlace
+  props
+    name: string
+    place: ComputerPlace
+    down: bool
+    error: string
+    pick: action
+  // The saved link's name, or "" when that id has left the list.
+  derive waitingLabel = match first(place.links.filter(link => link.id == place.selected)) { case some(link) => link.label, case none => "" }
+  view
+    if place.ok or down
+      column testId="computer-place" width="100%" box-sizing="border-box" padding="0 space.lg space.xl" gap="space.sm" align-items="stretch"
+        text t("computer.place") class=SectionLabel testId="computer-place-label"
+        if down or not place.ok
+          text t("computer.placeOffline") font="-exact-footnote" color="ink.muted" line-height=1.4 testId="computer-place-offline"
+        else
+          select value=place.selected change=pick width="100%" box-sizing="border-box" min-height=44 padding="0 space.md" border="1px solid surface.line" border-radius="radius.sm" background-color="surface.card" color="-exact-label" font-weight=600 aria-label=t("computer.place") testId="computer-place-select"
+            option t("computer.this") value=""
+            for link in place.links key=link.id
+              option (link.selectable ? link.label : (link.access == "read-only" ? t("computer.placeReadOnly", label=link.label) : (link.status == "expired" ? t("computer.placeExpired", label=link.label) : ((link.status == "" and link.access == "") ? link.label : t("computer.placeUnreachable", label=link.label))))) value=link.id disabled=(not link.selectable)
+          if place.waiting
+            text t("computer.placeWaiting", name=name, label=(waitingLabel != "" ? waitingLabel : t("computer.placeUnknown"))) font="-exact-footnote" color="ink.muted" line-height=1.4 testId="computer-place-note"
+          else
+            text t("computer.placeHere", name=name) font="-exact-footnote" color="ink.muted" line-height=1.4 testId="computer-place-note"
+          if place.links.length == 0
+            text t("computer.placeEmpty") font="-exact-footnote" color="ink.muted" line-height=1.4 testId="computer-place-empty"
+        if error != ""
+          text error font="-exact-footnote" color="-exact-system-red" line-height=1.4 testId="computer-place-error"

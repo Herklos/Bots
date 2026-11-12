@@ -4,8 +4,12 @@
 use serde_json::{json, Value};
 
 mod messages;
+mod place;
 #[cfg(test)]
 mod tests;
+
+#[allow(unused_imports, reason = "the place route reads the public view")]
+pub(crate) use place::place_view;
 
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use messages::*;
