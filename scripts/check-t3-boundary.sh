@@ -2,7 +2,7 @@
 # Fails when a T3 RPC name appears outside the T3 adapter (see AGENTS.md).
 set -eu
 cd "$(dirname "$0")/.."
-pattern='orchestration\.(getThreadProjection|subscribeShell|dispatchCommand|launchThread)|scheduledTasks\.(subscribe|upsert|setEnabled|delete|runNow|listRuns)|preview\.list|projects\.mutate|secrets\.answerRequest|runtime-request\.respond|server\.(getConfig|refreshProviders)'
+pattern='orchestration\.(getThreadProjection|subscribeShell|dispatchCommand|launchThread|searchThreads)|scheduledTasks\.(subscribe|upsert|setEnabled|delete|runNow|listRuns)|preview\.list|projects\.mutate|secrets\.answerRequest|runtime-request\.respond|server\.(getConfig|refreshProviders)'
 bad=0
 for f in $(find gateway -name '*.rs' -not -path 'gateway/src/harness/adapters/t3/*'); do
   if grep -E -n -H -e "$pattern" "$f"; then

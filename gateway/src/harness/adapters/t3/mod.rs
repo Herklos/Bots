@@ -13,6 +13,7 @@ mod previews;
 mod provision;
 mod proxy;
 mod routines;
+mod search;
 pub(crate) mod setup;
 pub(crate) mod stream;
 pub(crate) mod transcript;
@@ -28,7 +29,8 @@ pub(crate) use proxy::{proxy_http, proxy_ws};
 use crate::harness::{
     Approvals as ApprovalsCap, Browser as BrowserCap, Forks as ForksCap, Harness, HarnessError,
     Previews as PreviewsCap, Provisioning as ProvisioningCap, Relay, Repos as ReposCap,
-    Routines as RoutinesCap, Transcript as TranscriptCap, Turns as TurnsCap,
+    Routines as RoutinesCap, ThreadSearch as ThreadSearchCap, Transcript as TranscriptCap,
+    Turns as TurnsCap,
 };
 use async_trait::async_trait;
 
@@ -39,6 +41,10 @@ impl Harness for T3 {
     }
 
     fn transcript(&self) -> Result<&dyn TranscriptCap, HarnessError> {
+        Ok(self)
+    }
+
+    fn thread_search(&self) -> Result<&dyn ThreadSearchCap, HarnessError> {
         Ok(self)
     }
 
