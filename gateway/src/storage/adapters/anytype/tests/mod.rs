@@ -1,3 +1,4 @@
+mod bootstrap;
 mod errors;
 mod files;
 mod idempotency;

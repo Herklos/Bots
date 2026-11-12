@@ -1,7 +1,7 @@
 //! What the key reaches, and whether the chosen space is private.
 
 use super::http::{legacy_client, legacy_json, legacy_unreachable, API_VERSION};
-use crate::platform::error::ApiResult;
+use crate::platform::error::{ApiError, ApiResult};
 use serde_json::{json, Value};
 
 async fn get(host: &str, key: &str, path: &str) -> ApiResult<Value> {
@@ -49,4 +49,27 @@ pub(crate) async fn status(host: &str, key: &str, space_name: &str) -> ApiResult
         "spaceFound": space_found,
         "shared": shared,
     }))
+}
+
+/// A client for the named space, when this key can see it.
+pub(crate) async fn open_client(
+    host: &str,
+    key: &str,
+    space_name: &str,
+) -> ApiResult<super::AnytypeClient> {
+    let spaces = get(host, key, "/v2/spaces?ids=full").await?;
+    let id = spaces["data"].as_array().and_then(|rows| {
+        rows.iter()
+            .find(|row| row["name"].as_str() == Some(space_name))
+            .and_then(|row| row["id"].as_str().map(str::to_string))
+    });
+    let Some(id) = id else {
+        return Err(ApiError::new(404, "The Anytype space was not found."));
+    };
+    super::AnytypeClient::new(host, key, id).map_err(|_error| {
+        ApiError::new(
+            502,
+            "Anytype is not reachable. Open the Anytype app and check the host.",
+        )
+    })
 }

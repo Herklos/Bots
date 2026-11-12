@@ -121,7 +121,7 @@
 //   Network = { mode: string; locked: boolean; restartRequired: boolean; canRestart: boolean; listening: string; urls: string; error: string; http: boolean }
 //   Storage = { backend: string; root: string; backendLock: string; rootLock: string; restartRequired: boolean; canRestart: boolean; error: string; keySet: boolean; space: string; spaceLock: string }
 //   Pairing = { ok: boolean; error: string; challengeId: string }
-//   AnytypeCheck = { ok: boolean; error: string; space: string; spaceFound: boolean; shared: boolean }
+//   AnytypeCheck = { ok: boolean; error: string; space: string; spaceFound: boolean; shared: boolean; schemaReady: boolean }
 //   Suggestion = { name: string; about: string; color: string; shape: string; first: string }
 //   About = { ok: boolean; version: string; harness: string; connected: boolean }
 //   SystemStatus = { ok: boolean; installed: boolean; service: boolean; version: string; latest: string; updateAvailable: boolean; error: string }
@@ -421,7 +421,7 @@ type T56 = { "authenticated": T1; "passwordRequired": T1; };
 type T57 = { "mode": T0; "locked": T1; "restartRequired": T1; "canRestart": T1; "listening": T0; "urls": T0; "error": T0; "http": T1; };
 type T58 = { "backend": T0; "root": T0; "backendLock": T0; "rootLock": T0; "restartRequired": T1; "canRestart": T1; "error": T0; "keySet": T1; "space": T0; "spaceLock": T0; };
 type T59 = { "ok": T1; "error": T0; "challengeId": T0; };
-type T60 = { "ok": T1; "error": T0; "space": T0; "spaceFound": T1; "shared": T1; };
+type T60 = { "ok": T1; "error": T0; "space": T0; "spaceFound": T1; "shared": T1; "schemaReady": T1; };
 type T61 = { "name": T0; "about": T0; "color": T0; "shape": T0; "first": T0; };
 type T62 = { "ok": T1; "version": T0; "harness": T0; "connected": T1; };
 type T63 = { "ok": T1; "installed": T1; "service": T1; "version": T0; "latest": T0; "updateAvailable": T1; "error": T0; };
@@ -597,7 +597,7 @@ type T232 = { "scrollLeft": T39; "scrollTop": T39; "scrollWidth": T39; "scrollHe
 type T233 = { "target": T0; "relatedTarget": T88; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "checkAnytype" | "closeComputer" | "computerControl" | "computerInput" | "confirmPairing" | "copyStorage" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "noteUnread" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSpace" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setGroupAnswerPolicy" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startPairing" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "checkAnytype" | "closeComputer" | "computerControl" | "computerInput" | "confirmPairing" | "copyStorage" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "noteUnread" | "openComputer" | "pinBot" | "pinMessage" | "prepareAnytype" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveSpace" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setGroupAnswerPolicy" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startPairing" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "checkAnytype": { args: []; result: T60 };
@@ -644,6 +644,7 @@ export interface SourceMap {
   "openComputer": { args: [T0]; result: T53 };
   "pinBot": { args: [T0, T1]; result: T53 };
   "pinMessage": { args: [T0, T0, T0, T0]; result: T53 };
+  "prepareAnytype": { args: []; result: T53 };
   "reactTo": { args: [T0, T0, T0]; result: T53 };
   "readHealth": { args: []; result: T65 };
   "recolourBot": { args: [T0, T0]; result: T53 };

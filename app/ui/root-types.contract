@@ -61,6 +61,7 @@ shape AnytypeCheck
   space: string
   spaceFound: bool
   shared: bool
+  schemaReady: bool
 
 shape Suggestion
   name: string

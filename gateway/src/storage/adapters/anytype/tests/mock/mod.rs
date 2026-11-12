@@ -72,6 +72,14 @@ impl Mock {
         self.state.lock().expect("mock").seed_objects(count);
     }
 
+    pub(super) fn rewrite_key(&self, from: &str, to: &str) {
+        self.state
+            .lock()
+            .expect("mock")
+            .rewrites
+            .insert(from.to_string(), to.to_string());
+    }
+
     pub(super) fn seed_types(&self, count: usize) {
         self.state.lock().expect("mock").seed_types(count);
     }
