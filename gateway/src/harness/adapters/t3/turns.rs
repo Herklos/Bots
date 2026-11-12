@@ -39,4 +39,35 @@ impl Turns for T3 {
             .map_err(HarnessError::failed)?;
         Ok(id)
     }
+
+    async fn set_runtime_mode(&self, thread_id: &str, mode: &str) -> Result<(), HarnessError> {
+        let rpc = self.rpc().await.map_err(HarnessError::unavailable)?;
+        rpc.dispatch(runtime_mode_command(thread_id, mode))
+            .await
+            .map_err(HarnessError::failed)?;
+        Ok(())
+    }
+}
+
+/// `thread.runtime-mode.set` on an existing thread. `dispatch` adds the command id.
+pub(crate) fn runtime_mode_command(thread_id: &str, mode: &str) -> serde_json::Value {
+    json!({
+        "type": "thread.runtime-mode.set",
+        "threadId": thread_id,
+        "runtimeMode": mode,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::runtime_mode_command;
+
+    #[test]
+    fn a_runtime_mode_command_names_the_existing_thread_command() {
+        let command = runtime_mode_command("thread-1", "auto");
+        assert_eq!(command["type"], "thread.runtime-mode.set");
+        assert_eq!(command["threadId"], "thread-1");
+        assert_eq!(command["runtimeMode"], "auto");
+        assert!(command.get("commandId").is_none());
+    }
 }

@@ -1,16 +1,24 @@
 use super::*;
 
 pub(crate) async fn list_bots(State(s): S) -> ApiResult<Response> {
+    let mut bots = crate::bots::roster::list(&s, s.bots.list().await?).await;
+    let settings = s.settings().await;
+    crate::bots::runtime_mode::mark_above_limit(
+        &mut bots,
+        crate::bots::runtime_mode::RuntimeMode::cap(settings["maxRuntimeMode"].as_str()),
+    );
     Ok((
         [(header::CACHE_CONTROL, "no-store")],
-        Json(json!({ "bots": crate::bots::roster::list(&s, s.bots.list().await?).await, "now": unix_now() * 1000 })),
+        Json(json!({ "bots": bots, "now": unix_now() * 1000 })),
     )
         .into_response())
 }
 
 pub(crate) async fn create_bot(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
     require_json(&h)?;
-    let bot = s.bots.create(&parse(&body)?).await?;
+    let mut body = parse(&body)?;
+    clamp_body_mode(&s, &mut body).await;
+    let bot = s.bots.create(&body).await?;
     s.provision_now.notify_one();
     Ok(Json(bot))
 }
@@ -30,7 +38,25 @@ pub(crate) async fn save_bot(
     body: Bytes,
 ) -> ApiResult<Json<Value>> {
     require_json(&h)?;
-    Ok(Json(s.bots.save(&slug, &parse(&body)?, false).await?))
+    let mut body = parse(&body)?;
+    if body.get("runtimeMode").is_some() {
+        clamp_body_mode(&s, &mut body).await;
+    }
+    Ok(Json(s.bots.save(&slug, &body, false).await?))
+}
+
+/// A known `runtimeMode` on a write is stored at or below the cap. Unknown stays for validation.
+async fn clamp_body_mode(s: &AppState, body: &mut Value) {
+    let Some(mode) = body.get("runtimeMode").and_then(Value::as_str) else {
+        return;
+    };
+    let Some(clamped) = crate::bots::runtime_mode::clamp_label(
+        mode,
+        crate::bots::runtime_mode::RuntimeMode::cap(s.settings().await["maxRuntimeMode"].as_str()),
+    ) else {
+        return;
+    };
+    body["runtimeMode"] = json!(clamped);
 }
 
 /// The person has this Bot's chat open: everything up to now is read.
@@ -126,12 +152,17 @@ pub(crate) async fn model_put(
     let mut patch = json!({ "model": selection });
     if body.get("runtimeMode").is_some() {
         let mode = body["runtimeMode"].as_str().unwrap_or("");
-        if !matches!(mode, "approval-required" | "auto" | "full-access") {
+        let Some(clamped) = crate::bots::runtime_mode::clamp_label(
+            mode,
+            crate::bots::runtime_mode::RuntimeMode::cap(
+                s.settings().await["maxRuntimeMode"].as_str(),
+            ),
+        ) else {
             return Err(ApiError::bad_request(
                 "runtimeMode must be approval-required, auto, or full-access",
             ));
-        }
-        patch["runtimeMode"] = json!(mode);
+        };
+        patch["runtimeMode"] = json!(clamped);
     }
     s.bots.save(&slug, &patch, false).await?;
     if s.harness.connected().await {

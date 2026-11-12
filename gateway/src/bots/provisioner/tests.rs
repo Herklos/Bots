@@ -97,6 +97,23 @@ fn a_missing_mode_follows_auto_review_and_a_stored_mode_wins() {
         launch_runtime_mode(&json!({ "runtimeMode": "ask" }), &review_on),
         "auto"
     );
+    let capped = json!({ "maxRuntimeMode": "auto", "autoReview": false });
+    assert_eq!(
+        launch_runtime_mode(&json!({ "runtimeMode": "full-access" }), &capped),
+        "auto"
+    );
+    assert_eq!(launch_runtime_mode(&json!({}), &capped), "auto");
+    assert_eq!(
+        launch_runtime_mode(
+            &json!({}),
+            &json!({ "defaultRuntimeMode": "full-access", "maxRuntimeMode": "approval-required" })
+        ),
+        "approval-required"
+    );
+    assert_eq!(
+        launch_runtime_mode(&json!({ "runtimeMode": "approval-required" }), &capped),
+        "approval-required"
+    );
 }
 
 #[test]

@@ -217,6 +217,7 @@
   "group.showDetails": "Show group details",
   "group.stepKickoff": "Kickoff message",
   "group.stepPolicy": "Answer policy",
+  "inbox.aboveLimit": "Above the limit",
   "inbox.closeMenu": "Close menu",
   "inbox.emptyAction": "Create Bot",
   "inbox.emptyBody": "A short walk: a name, a look, and a first message.",

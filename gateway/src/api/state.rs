@@ -93,6 +93,7 @@ impl AppState {
         out["groupAnswerPolicy"] = json!(group_answer_policy(&out).as_str());
         // Unknown or missing is full access, so the cap is off.
         out["maxRuntimeMode"] = json!(max_runtime_mode(&out).as_str());
+        crate::bots::runtime_mode::apply_default_cap(&mut out);
         out
     }
 }
@@ -104,8 +105,7 @@ pub(crate) fn group_answer_policy(settings: &Value) -> crate::chat::rooms::Answe
 
 /// Stored `maxRuntimeMode`. Missing or unknown is full access, which is no cap.
 pub(crate) fn max_runtime_mode(settings: &Value) -> crate::bots::runtime_mode::RuntimeMode {
-    crate::bots::runtime_mode::RuntimeMode::parse(settings["maxRuntimeMode"].as_str())
-        .unwrap_or(crate::bots::runtime_mode::RuntimeMode::FullAccess)
+    crate::bots::runtime_mode::RuntimeMode::cap(settings["maxRuntimeMode"].as_str())
 }
 
 pub(crate) type S = State<Arc<AppState>>;

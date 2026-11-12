@@ -5,6 +5,7 @@
 //! already carry `lastRunAt`, `lastRunStatus`, `lastRunError` and `runCount`. The
 //! gateway keeps a short local history of the changes it made. Labels and clocks stay here.
 
+use crate::bots::runtime_mode::{clamp_label, RuntimeMode};
 use crate::harness::{HarnessError, Routines};
 use crate::platform::error::{ApiError, ApiResult};
 use serde_json::{json, Value};
@@ -162,6 +163,7 @@ pub(crate) fn new_routine(
     title: &str,
     kind: &str,
     now: u64,
+    cap: RuntimeMode,
 ) -> Result<Value, &'static str> {
     let title = title.trim();
     if title.is_empty() {
@@ -193,7 +195,7 @@ pub(crate) fn new_routine(
         }
         _ => return Err("Pick hourly, daily, or once."),
     };
-    Ok(json!({
+    let mut task = json!({
         "title": title,
         "prompt": title,
         "enabled": false,
@@ -207,7 +209,21 @@ pub(crate) fn new_routine(
         "interactionMode": "default",
         "createdBy": "user",
         "creationSource": "web",
-    }))
+    });
+    clamp_task_mode(&mut task, cap);
+    Ok(task)
+}
+
+/// A known `runtimeMode` on a routine write is stored at or below the cap.
+/// An unknown mode is left for the harness to reject.
+pub(crate) fn clamp_task_mode(task: &mut Value, cap: RuntimeMode) {
+    let Some(mode) = task.get("runtimeMode").and_then(Value::as_str) else {
+        return;
+    };
+    let Some(clamped) = clamp_label(mode, cap) else {
+        return;
+    };
+    task["runtimeMode"] = json!(clamped);
 }
 
 /// A wizard entry is either a preset or a local time, one weekday, and a prompt.
@@ -270,6 +286,7 @@ pub(crate) fn pending_routine_task(
     thread_id: &str,
     model: &Value,
     entry: &Value,
+    cap: RuntimeMode,
 ) -> Result<Value, &'static str> {
     if project_id.is_empty() || thread_id.is_empty() {
         return Err("This Bot is still getting set up.");
@@ -281,7 +298,7 @@ pub(crate) fn pending_routine_task(
     } else {
         crate::bots::provisioner::default_model()
     };
-    Ok(json!({
+    let mut task = json!({
         "title": prompt,
         "prompt": prompt,
         "enabled": true,
@@ -295,7 +312,9 @@ pub(crate) fn pending_routine_task(
         "interactionMode": "default",
         "createdBy": "user",
         "creationSource": "web",
-    }))
+    });
+    clamp_task_mode(&mut task, cap);
+    Ok(task)
 }
 
 pub(crate) fn task_row(task: &Value) -> Value {

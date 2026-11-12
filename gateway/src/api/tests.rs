@@ -344,3 +344,104 @@ async fn max_runtime_mode_defaults_to_full_access_and_put_rejects_anything_else(
         assert_eq!(state.settings().await["maxRuntimeMode"], mode);
     }
 }
+
+#[tokio::test]
+async fn a_default_mode_above_the_cap_is_lowered_on_read_and_on_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = settings_state(dir.path());
+    storage::write_json(
+        &state.settings_path(),
+        &json!({
+            "defaultRuntimeMode": "full-access",
+            "maxRuntimeMode": "auto",
+            "userName": "Ada",
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(state.settings().await["defaultRuntimeMode"], "auto");
+    let untouched = storage::read_json(&state.settings_path()).await.unwrap();
+    assert_eq!(untouched["defaultRuntimeMode"], "full-access");
+    let next = put(
+        &state,
+        json!({ "defaultRuntimeMode": "full-access", "maxRuntimeMode": "auto" }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(next["defaultRuntimeMode"], "auto");
+    assert_eq!(next["maxRuntimeMode"], "auto");
+    let stored = storage::read_json(&state.settings_path()).await.unwrap();
+    assert_eq!(stored["defaultRuntimeMode"], "auto");
+}
+
+#[tokio::test]
+async fn a_bot_write_stores_the_cap_and_a_higher_stored_mode_stays_until_an_edit() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = settings_state(dir.path());
+    put(&state, json!({ "maxRuntimeMode": "auto" }))
+        .await
+        .unwrap();
+    let Json(ada) = create_bot(
+        State(state.clone()),
+        json_headers(),
+        Bytes::from(r#"{"name":"Ada","runtimeMode":"full-access"}"#),
+    )
+    .await
+    .unwrap();
+    assert_eq!(ada["slug"], "ada");
+    assert_eq!(ada["runtimeMode"], "auto");
+    let refused = create_bot(
+        State(state.clone()),
+        json_headers(),
+        Bytes::from(r#"{"name":"Nope","runtimeMode":"ask"}"#),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(refused.status, StatusCode::BAD_REQUEST);
+
+    state
+        .bots
+        .save("ada", &json!({ "runtimeMode": "full-access" }), false)
+        .await
+        .unwrap();
+    let Json(renamed) = save_bot(
+        State(state.clone()),
+        Path("ada".into()),
+        json_headers(),
+        Bytes::from(r#"{"name":"Ada"}"#),
+    )
+    .await
+    .unwrap();
+    assert_eq!(renamed["runtimeMode"], "full-access");
+
+    let listed = list_bots(State(state.clone())).await.unwrap();
+    let bytes = axum::body::to_bytes(listed.into_body(), 64 * 1024)
+        .await
+        .unwrap();
+    let body: Value = serde_json::from_slice(&bytes).unwrap();
+    let row = body["bots"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|bot| bot["slug"] == "ada")
+        .unwrap();
+    assert_eq!(row["aboveLimit"], true);
+    assert_eq!(row["runtimeMode"], "full-access");
+    let stored = state.bots.get("ada").await.unwrap().unwrap();
+    assert_eq!(stored["runtimeMode"], "full-access");
+
+    let Json(saved) = model_put(
+        State(state.clone()),
+        Path("ada".into()),
+        json_headers(),
+        Bytes::from(
+            r#"{"instanceId":"claudeAgent","model":"claude-haiku-5-5","runtimeMode":"full-access"}"#,
+        ),
+    )
+    .await
+    .unwrap();
+    assert_eq!(saved["ok"], true);
+    let edited = state.bots.get("ada").await.unwrap().unwrap();
+    assert_eq!(edited["runtimeMode"], "auto");
+    assert_eq!(edited["name"], "Ada");
+}

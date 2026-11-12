@@ -37,7 +37,7 @@ export function fixtureMemberRow(slug: string) {
 
 export function fixtureCrowdBots() {
   return FIXTURE_CROWD.map(([slug, name]) => ({
-    slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt(slug, ''), inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get(slug)),
+    slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt(slug, ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get(slug)),
   }));
 }
 // Lines the contract runner has sent. The transcript uses the same id the send returned.

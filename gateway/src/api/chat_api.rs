@@ -197,6 +197,10 @@ pub(crate) async fn send_chat(
     // builds no command, so the parent thread is not written.
     let message_id = crate::harness::message_id(body["messageId"].as_str());
     let thread = resolve_chat_thread(&s, &slug, asked).await?;
+    let bot = require_bot(&s, &slug).await?;
+    crate::bots::provisioner::limit_existing_thread(&s, &bot, &thread)
+        .await
+        .map_err(|err| err.api())?;
     let turns = s.harness.turns().map_err(|err| err.api())?;
     if let Some(reply_to) = body["replyTo"].as_str().filter(|id| !id.is_empty()) {
         s.threads
@@ -287,6 +291,14 @@ pub(crate) async fn send_voice(
         )
     };
     let command = &stored["command"];
+    let bot = require_bot(&s, &slug).await?;
+    crate::bots::provisioner::limit_existing_thread(
+        &s,
+        &bot,
+        command["threadId"].as_str().unwrap_or(&thread),
+    )
+    .await
+    .map_err(|err| err.api())?;
     s.harness
         .turns()
         .map_err(|err| err.api())?

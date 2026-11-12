@@ -28,7 +28,6 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
     if let Some(mode) = patch.get("defaultRuntimeMode") {
         require_runtime_mode("defaultRuntimeMode", mode)?;
     }
-    // Stored here only. Bots, routines, and the default mode read the cap in a later change.
     if let Some(mode) = patch.get("maxRuntimeMode") {
         require_runtime_mode("maxRuntimeMode", mode)?;
     }
@@ -87,6 +86,8 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
         }
         next["notifications"] = merged;
     }
+    // The default for a new Bot is stored at or below the cap.
+    crate::bots::runtime_mode::apply_default_cap(&mut next);
     storage::write_json(&s.settings_path(), &next).await?;
     Ok(Json(next))
 }

@@ -26,6 +26,7 @@ component InboxRow
   derive mine = bots.filter(b => row.kind == "bot" and b.slug == row.id)
   derive pinned = mine.filter(b => b.pinned).length > 0
   derive botMuted = mine.filter(b => not b.notifications).length > 0
+  derive over = mine.filter(b => b.aboveLimit).length > 0
   action openFromSecondary()
     preventDefault()
     openMenu(row.key)
@@ -76,6 +77,8 @@ component InboxRow
             row gap="space.sm" align-items="baseline"
               text row.name font-weight=(row.unread ? 700 : 600) flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=(row.kind == "group" ? `group-title-${row.id}` : `bot-title-${row.id}`)
               text row.time font="-exact-footnote" color="ink.faint"
+            if over
+              text t("inbox.aboveLimit") font="-exact-footnote" color="ink.muted" testId=`above-limit-${row.id}`
             row gap="space.sm" align-items="center"
               text row.line color=(row.unread ? "-exact-label" : "ink.muted") font="-exact-footnote" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
               if showUnread(row.unread, current, false)

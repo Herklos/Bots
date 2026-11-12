@@ -13,19 +13,19 @@ export const botSources = {
       const slug = focus === 'frame' ? 'frame' : 'tabs';
       const name = focus === 'frame' ? 'Frame' : 'Tabs';
       return [
-        { slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt(slug, ''), inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get(slug)) },
+        { slug, name, label: '', initials: name.slice(0, 1), color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt(slug, ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get(slug)) },
       ];
     }
     if (focus === 'quiet') {
       return [
-        { slug: 'quiet', name: 'Quiet', label: '', initials: 'Q', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt('quiet', ''), inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get('quiet')) },
+        { slug: 'quiet', name: 'Quiet', label: '', initials: 'Q', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt('quiet', ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get('quiet')) },
       ];
     }
     if (focus === 'fixture' || focus === 'bea' || focus === 'fixture-crowd') {
       return [
-        { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt('fixture', ''), inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get('fixture')) },
-        { slug: 'ada-junior-1', name: 'Ada junior 1', label: '', initials: 'AJ', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: 'fixture', hideFromSidebar: true, subagent: true, prompt: fixturePrompt('ada-junior-1', 'Look things up.'), inheritParentPrompt: true, notifications: wantsNotice(fixtureBotNotify.get('ada-junior-1')) },
-        { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true, shape: 'ball', pinned: false, working: false, line: 'Getting set up…', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt('bea', ''), inheritParentPrompt: false, notifications: wantsNotice(fixtureBotNotify.get('bea')) },
+        { slug: 'fixture', name: 'Ada', label: '', initials: 'A', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: true, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt('fixture', ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get('fixture')) },
+        { slug: 'ada-junior-1', name: 'Ada junior 1', label: '', initials: 'AJ', color: fill('brand.default'), main: false, hidden: false, ready: true, unread: false, shape: 'ball', pinned: false, working: false, line: 'Ready to chat', time: '', parentSlug: 'fixture', hideFromSidebar: true, subagent: true, prompt: fixturePrompt('ada-junior-1', 'Look things up.'), inheritParentPrompt: true, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get('ada-junior-1')) },
+        { slug: 'bea', name: 'Bea', label: '', initials: 'B', color: fill('brand.blue'), main: false, hidden: true, ready: false, unread: true, shape: 'ball', pinned: false, working: false, line: 'Getting set up…', time: '', parentSlug: '', hideFromSidebar: false, subagent: false, prompt: fixturePrompt('bea', ''), inheritParentPrompt: false, aboveLimit: false, notifications: wantsNotice(fixtureBotNotify.get('bea')) },
         ...(focus === 'fixture-crowd' ? fixtureCrowdBots() : []),
       ];
     }
@@ -46,6 +46,7 @@ export const botSources = {
         ? (typeof b.subagent?.prompt === 'string' ? b.subagent.prompt : '')
         : (typeof b.prompt === 'string' ? b.prompt : ''),
       inheritParentPrompt: b.subagent?.inheritParentPrompt === true,
+      aboveLimit: b.aboveLimit === true,
       notifications: wantsNotice(b.notifications),
     }));
   },

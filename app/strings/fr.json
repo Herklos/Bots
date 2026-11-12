@@ -217,6 +217,7 @@
   "group.showDetails": "Afficher les détails du groupe",
   "group.stepKickoff": "Message d’ouverture",
   "group.stepPolicy": "Qui répond",
+  "inbox.aboveLimit": "Au-dessus de la limite",
   "inbox.closeMenu": "Fermer le menu",
   "inbox.emptyAction": "Créer le Bot",
   "inbox.emptyBody": "Un court parcours : un nom, un visage, et un premier message.",

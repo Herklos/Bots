@@ -37,6 +37,8 @@ pub trait Turns: Send + Sync {
     async fn interrupt(&self, thread_id: &str, run_id: &str) -> Result<(), HarnessError>;
     /// Computer open or close. Returns the message id the command used.
     async fn steer(&self, thread_id: &str, text: &str) -> Result<String, HarnessError>;
+    /// Set an existing thread's approval mode before the next turn.
+    async fn set_runtime_mode(&self, thread_id: &str, mode: &str) -> Result<(), HarnessError>;
 }
 
 #[async_trait]

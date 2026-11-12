@@ -102,6 +102,8 @@ component Inbox
                 column align-items="center" gap="space.xs" width="100%" min-width=0 max-width="100%"
                   Avatar(shape=b.shape, color=faceColor(b.color), state=(b.ready ? (b.working ? "working" : "idle") : "asleep"), size=64, still=(not b.working), presence=(b.unread ? "unread" : b.working ? "online" : ""))
                   text b.name font="-exact-footnote" font-weight=600 max-width="100%" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" text-align="center"
+                  if b.aboveLimit
+                    text t("inbox.aboveLimit") font="-exact-footnote" color="ink.muted" max-width="100%" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" text-align="center" testId=`above-limit-${b.slug}`
         scroll id="bots-list" flex=1 min-height=0
           column padding="0 space.sm" gap="2px"
             for c in inboxBag.convos key=c.key
@@ -118,6 +120,8 @@ component Inbox
                     row gap="space.md" align-items="center" flex=1 min-width=0
                       Avatar(shape=b.shape, color=faceColor(b.color), state="asleep", size=32, still=true, presence="")
                       text b.name flex=1 color="ink.muted"
+                      if b.aboveLimit
+                        text t("inbox.aboveLimit") font="-exact-footnote" color="ink.muted" testId=`above-limit-${b.slug}`
                       if showUnread(b.unread, inboxBag.convoName == "chat" and inboxBag.slug == b.slug, b.hidden)
                         column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${b.slug}`
       if inboxBag.wide

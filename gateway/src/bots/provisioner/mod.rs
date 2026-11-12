@@ -1,6 +1,8 @@
 //! With no client open, gives a new Bot a project and a main thread on the harness, then
 //! sends its brief. T3 Code is the harness wired today; other backends may be added.
 
+use crate::bots::runtime_mode::{clamp_mode, turn_mode, RuntimeMode};
+use crate::harness::HarnessError;
 use crate::AppState;
 use serde_json::{json, Value};
 use std::{sync::Arc, time::Duration};
@@ -8,10 +10,11 @@ use std::{sync::Arc, time::Duration};
 #[cfg(test)]
 mod tests;
 
-/// The mode a launch already accepts. A missing or unknown field keeps
-/// today's launch: `autoReview == false` is full access, otherwise auto. A stored choice wins.
+/// The mode a launch already accepts, lowered to `maxRuntimeMode`.
+/// A missing or unknown field keeps today's launch: `autoReview == false` is full access,
+/// otherwise auto. A stored choice wins, then the cap.
 pub(crate) fn launch_runtime_mode(bot: &Value, settings: &Value) -> &'static str {
-    match bot
+    let resolved = match bot
         .get("runtimeMode")
         .and_then(Value::as_str)
         .filter(|mode| matches!(*mode, "approval-required" | "auto" | "full-access"))
@@ -27,7 +30,31 @@ pub(crate) fn launch_runtime_mode(bot: &Value, settings: &Value) -> &'static str
                 "auto"
             }
         }
+    };
+    let mode = RuntimeMode::parse(Some(resolved)).unwrap_or(RuntimeMode::Auto);
+    clamp_mode(
+        mode,
+        RuntimeMode::cap(settings.get("maxRuntimeMode").and_then(Value::as_str)),
+    )
+    .as_str()
+}
+
+/// Before a turn on a thread that already exists, set its mode to the cap when the
+/// stored mode is above the cap. A missing mode, or one within the cap, is left alone.
+pub(crate) async fn limit_existing_thread(
+    state: &AppState,
+    bot: &Value,
+    thread: &str,
+) -> Result<(), HarnessError> {
+    if thread.is_empty() {
+        return Ok(());
     }
+    let settings = state.settings().await;
+    let cap = RuntimeMode::cap(settings.get("maxRuntimeMode").and_then(Value::as_str));
+    let Some(mode) = turn_mode(bot.get("runtimeMode").and_then(Value::as_str), cap) else {
+        return Ok(());
+    };
+    state.harness.turns()?.set_runtime_mode(thread, mode).await
 }
 
 pub(crate) fn default_model() -> Value {
@@ -268,6 +295,9 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
                 .as_str()
                 .map(|c| format!("From {c}: "))
                 .unwrap_or_default();
+            limit_existing_thread(state, &bot, &thread)
+                .await
+                .map_err(|err| anyhow::anyhow!(err.to_string()))?;
             provisioning
                 .send_provisioned(
                     &thread,
@@ -287,6 +317,9 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
         }
         // What the person typed on New Bot goes out once, as their own message.
         if let Some(first) = bot["firstMessage"].as_str().filter(|m| !m.is_empty()) {
+            limit_existing_thread(state, &bot, &thread)
+                .await
+                .map_err(|err| anyhow::anyhow!(err.to_string()))?;
             provisioning
                 .send_provisioned(&thread, first, crate::harness::ProvisionedSend::First)
                 .await?;
@@ -296,7 +329,6 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
                 .await
                 .map_err(|e| anyhow::anyhow!(e.message))?;
         }
-        // The launch above already set this thread's runtime mode. There is no later RPC for it.
         // Routines wait until that thread exists, then run once. A failed upsert leaves the Bot
         // and the entries that did not land, so the next pass can retry them.
         if let Some(entries) = bot["pendingRoutines"]
@@ -310,6 +342,7 @@ async fn tick(state: &AppState) -> anyhow::Result<()> {
                     &thread,
                     &model,
                     entry,
+                    RuntimeMode::cap(settings.get("maxRuntimeMode").and_then(Value::as_str)),
                 ) {
                     Ok(task) => task,
                     Err(_) => {
