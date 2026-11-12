@@ -4,6 +4,10 @@ use faceColor, showUnread from "../ui/fns.contract"
 use Bot, Convo from "../ui/shapes.contract"
 use TextControl, ConversationLink from "../ui/controls.contract"
 
+// One inbox row, a Bot or a group. A normal click still opens the chat or the group.
+// A secondary click or a long press (both a contextmenu) opens one menu on this row.
+// A Bot can be pinned, hidden, edited, or made main, with the actions the panel already uses.
+// A group can only be edited. The menu stays on the row, so it leaves when the row does or when a row is chosen.
 component InboxRow
   props
     row: Convo

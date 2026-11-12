@@ -7,10 +7,6 @@ use shapeNames, Avatar from "../face.contract"
 use Glyph from "../glyph.contract"
 use EditBotPage from "./edit.contract"
 use BotShelf, ScreenCard from "../computer/computer.contract"
-// One inbox row, a Bot or a group. A normal click still opens the chat or the group.
-// A secondary click or a long press (both a contextmenu) opens one menu on this row.
-// A Bot can be pinned, hidden, edited, or made main, with the actions the panel already uses.
-// A group can only be edited. The menu stays on the row, so it leaves when the row does or when a row is chosen.
 component BotPanel
   props
     working: bool
