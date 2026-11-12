@@ -1,0 +1,400 @@
+use Face from "../face.contract"
+use Avatar from "../face.contract"
+use shapeNames from "../face.contract"
+use Glyph from "../glyph.contract"
+use PageTitle, HeroTitle, QuietButton, TextControl, IconControl, ToggleControl, SwatchControl, ConversationLink, SectionLabel, Chip, IconTile, Segment, Field, PrimaryButton, Bot, Provider, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer, pickerColours, faceColor from "../app.contract"
+use ModelPage, UsageView from "../settings/settings.contract"
+use BotShelf, ScreenCard from "../computer/computer.contract"
+
+component WorkingDots
+  view
+    row gap="6px" align-items="center"
+      for n in [0, 1, 2] key=n
+        column width=7 height=7 border-radius="radius.full" background-color="ink.muted" animation=`dot 1.2s ease-in-out infinite ${n * 0.16}s`
+
+// A group's face is its members, at most three, overlapped. It has no colour or shape of its own.
+
+// The empty roster. Creating still uses the new-Bot walk. The phone inbox and the wide placeholder share this.
+component FirstBot
+  props
+    color: string
+    shape: string
+    start: action
+  view
+    scroll flex=1 min-height=0 width="100%" background-color="surface.canvas" testId="first-bot"
+      column width="100%" max-width="24rem" box-sizing="border-box" margin="0 auto" align-items="center" gap="space.md" padding="space.xl"
+        Avatar(shape=shape, color=faceColor(color), state="idle", size=96, still=false, presence="")
+        text t("inbox.emptyTitle") role="heading" aria-level=2 class=HeroTitle text-align="center"
+        text t("inbox.emptyBody") color="ink.muted" text-align="center" max-width="22rem"
+        button buttonStyle="filled" press=start testId="first-create"
+          text t("inbox.emptyAction")
+
+// One inbox row, a Bot or a group. A normal click still opens the chat or the group.
+// A secondary click or a long press (both a contextmenu) opens one menu on this row.
+// A Bot can be pinned, hidden, edited, or made main, with the actions the panel already uses.
+// A group can only be edited. The menu stays on the row, so it leaves when the row does or when a row is chosen.
+component BotPanel
+  props
+    working: bool
+    shown: bool
+    tab: string
+    page: string
+    pickTab: action
+    openPage: action
+    closePanel: action
+    openChild: action
+    wide: bool
+    bot: Bot
+    error: string
+    rename: action
+    recolour: action
+    reshape: action
+    pin: action
+    hide: action
+    mute: action
+    makeMain: action
+    drop: action
+    models: ModelList
+    modelsDown: bool
+    pickModel: action
+    modelError: string
+    routines: RoutineList
+    routinesDown: bool
+    lineage: Lineage
+    lineageDown: bool
+    report: UsageReport
+    reportDown: bool
+    period: string
+    usageView: string
+    pickPeriod: action
+    pickView: action
+    retryDetails: action
+    shelf: Shelf
+    shelfDown: bool
+    computer: Computer
+    computerDown: bool
+    showComputerLarge: action
+    heldTab: string
+    controlError: string
+    driveError: string
+    live: bool
+    drive: action
+    take: action
+    release: action
+    picked: string
+    pick: action
+    openBrowser: action
+    opening: bool
+    openError: string
+    closeBrowser: action
+    closing: bool
+    closeError: string
+    bots: Bot[]
+    subSlug: string
+    subName: string
+    subShape: string
+    subColor: string
+    subPrompt: string
+    subInherit: bool
+    openNewSub: action
+    editSub: action
+    editSubName: action
+    editSubPrompt: action
+    pickSubColor: action
+    pickSubShape: action
+    toggleSubInherit: action
+    createSub: action
+    saveSub: action
+    dropChild: action
+    creating: bool
+    saving: bool
+    subError: string
+    childModels: ModelList
+    childModelsDown: bool
+  derive children = bots.filter(c => c.parentSlug == bot.slug)
+  action tabKey(k: string, event: KeyboardEvent)
+    if not event.isComposing and (k == "ArrowRight" or k == "ArrowLeft" or k == "Home" or k == "End")
+      preventDefault()
+      let next = k == "Home" ? "details" : k == "End" ? "computer" : k == "ArrowRight" ? (tab == "details" ? "library" : tab == "library" ? "computer" : "details") : (tab == "details" ? "computer" : tab == "computer" ? "library" : "details")
+      pickTab(next)
+      focus(`panel-tab-${next}`)
+  action goRoot
+    openPage("root")
+  action goModel
+    openPage("model")
+  action goUsage
+    openPage("usage")
+  action goEdit
+    openPage("edit")
+  view
+    // On a narrow screen the panel is a full-height sheet with one identity
+    // row (close, face, edit). The large Face stays for the wide side panel.
+    column id="bot-panel" display=(shown ? "flex" : "none") position="absolute" top=0 right=0 bottom=0 width=(wide ? "20rem" : "100%") z-index=(wide ? 0 : 5) box-sizing="border-box" background-color="surface.canvas" border-left="1px solid surface.line" testId="bot-panel"
+      if page != "root"
+        row align-items="center" gap="space.xs" padding="space.sm space.sm space.sm space.md" min-height=52 box-sizing="border-box"
+          button class=IconControl appearance="none" press=goRoot aria-label=t("common.back") title=t("common.back") testId="panel-back"
+            column rotate="180deg"
+              Glyph(name="chevron", size=20)
+          text (page == "model" ? t("panel.model") : page == "usage" ? t("panel.usage") : page == "subagent" ? (subSlug != "" ? t("subagent.page") : t("subagent.new")) : t("panel.edit")) role="heading" aria-level=2 class=PageTitle flex=1 testId="panel-page-title"
+      else if wide
+        row align-items="center" gap="space.xs" padding="space.sm space.sm space.sm space.md" min-height=52 box-sizing="border-box"
+          column flex=1
+          button class=IconControl appearance="none" press=goEdit aria-label=t("panel.edit") title=t("panel.edit") testId="panel-edit"
+            Glyph(name="settings", size=20)
+          button class=IconControl appearance="none" press=closePanel aria-label=t("panel.close") title=t("panel.close") testId="panel-close"
+            Glyph(name="close", size=20)
+      else
+        row align-items="center" gap="space.sm" padding="space.sm space.sm space.sm space.md" min-height=56 box-sizing="border-box" border-bottom="1px solid surface.line" testId="panel-compact-header"
+          button class=IconControl appearance="none" press=closePanel aria-label=t("panel.close") title=t("panel.close") testId="panel-close"
+            Glyph(name="close", size=20)
+          row align-items="center" gap="space.sm" flex=1 min-width=0
+            Avatar(shape=bot.shape, color=faceColor(bot.color), state=(bot.hidden ? "asleep" : working ? "working" : "idle"), size=36, still=(not working), presence="")
+            column flex=1 min-width=0 gap="1px"
+              text bot.name role="heading" aria-level=2 font="-exact-headline" font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="details-name"
+              text (bot.hidden ? t("panel.hiddenInbox") : working ? t("status.working") : bot.ready ? t("status.ready") : t("status.settingUp")) color="ink.muted" font="-exact-footnote" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="details-status"
+          button class=IconControl appearance="none" press=goEdit aria-label=t("panel.edit") title=t("panel.edit") testId="panel-edit"
+            Glyph(name="settings", size=20)
+      if page == "model"
+        scroll flex=1 min-height=0
+          ModelPage(models=models, down=modelsDown, bot=bot, pick=pickModel, error=modelError)
+      else if page == "usage"
+        scroll flex=1 min-height=0
+          UsageView(report=report, down=reportDown, period=period, view=usageView, pickPeriod=pickPeriod, pickView=pickView, showBots=false)
+      else if page == "edit"
+        scroll flex=1 min-height=0
+          EditBotPage(bot=bot, error=error, rename=rename, recolour=recolour, reshape=reshape, pin=pin, hide=hide, mute=mute, makeMain=makeMain, drop=drop)
+      else if page == "subagent"
+        scroll flex=1 min-height=0
+          column gap="space.lg" padding="space.sm space.lg space.xl" testId="subagent-page"
+            column gap="space.sm"
+              text t("common.name") class=SectionLabel
+              input appearance="none" class=Field value=subName input=editSubName aria-label=t("common.name") placeholder=(subSlug == "" ? t("subagent.namePlaceholder") : "") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="subagent-name"
+            column gap="space.sm"
+              text t("edit.colour") class=SectionLabel
+              row gap="space.xs" flex-wrap="wrap"
+                for c in pickerColours() key=c
+                  button class=SwatchControl press=pickSubColor(c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(subColor == c) testId=`sub-colour-${c}` width=40 height=40 padding=0
+                    column width=30 height=30 box-sizing="border-box" border-radius="radius.full" background-color=c border=(subColor == c ? "3px solid AccentColor" : "3px solid transparent")
+            column gap="space.sm"
+              text t("edit.shape") class=SectionLabel
+              row gap="space.xs" flex-wrap="wrap"
+                for s in shapeNames() key=s
+                  button class=SwatchControl press=pickSubShape(s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(subShape == s) testId=`sub-shape-${s}` width=48 height=48 padding=0 border-radius="radius.md" background-color=(subShape == s ? "surface.raised" : "transparent")
+                    Avatar(shape=s, color=faceColor(subColor), state="idle", size=34, still=true, presence="")
+            column gap="space.sm"
+              text t("subagent.prompt") class=SectionLabel
+              input appearance="none" class=Field value=subPrompt input=editSubPrompt aria-label=t("subagent.prompt") placeholder=t("subagent.promptPlaceholder") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="subagent-prompt"
+            row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
+              column flex=1 gap="2px"
+                text t("subagent.inherit") font-weight=600
+                text t("subagent.inheritNote") color="ink.muted" font="-exact-footnote"
+              button class=ToggleControl appearance="none" role="switch" aria-checked=subInherit press=toggleSubInherit aria-label=t("subagent.inherit") testId="subagent-inherit"
+                row width=44 height=26 border-radius="radius.full" background-color=(subInherit ? "AccentColor" : "surface.line") align-items="center" justify-content=(subInherit ? "flex-end" : "flex-start")
+                  column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+            if subSlug != ""
+              text t("panel.model") class=SectionLabel
+              for c in children.filter(c => c.slug == subSlug) key=c.slug
+                ModelPage(models=childModels, down=childModelsDown, bot=c, pick=pickModel, error=modelError)
+            if subError != ""
+              text subError color="-exact-system-red" testId="subagent-error"
+            if subSlug == ""
+              button class=PrimaryButton buttonStyle="filled" press=createSub disabled=creating testId="subagent-create"
+                text (creating ? t("subagent.creating") : t("subagent.create"))
+            else
+              button class=PrimaryButton buttonStyle="filled" press=saveSub disabled=saving testId="subagent-save"
+                text (saving ? t("subagent.saving") : t("common.save"))
+              button class=IconControl appearance="none" commandfor=`drop-sub-${subSlug}` command="show-modal" aria-label=t("subagent.delete") title=t("subagent.delete") color="-exact-system-red" testId="delete-subagent"
+                Glyph(name="trash", size=20)
+              dialog id=`drop-sub-${subSlug}` role="alertdialog" aria-label=t("subagent.deleteNamed", name=subName)
+                text t("subagent.deleteBody")
+                button press=dropChild(subSlug) destructive=true commandfor=`drop-sub-${subSlug}` command="close" testId="drop-sub-ok"
+                  text t("common.delete")
+                button commandfor=`drop-sub-${subSlug}` command="close" testId="drop-sub-cancel"
+                  text t("common.cancel")
+      else
+        if wide
+          column align-items="center" gap="space.xs" padding="0 space.lg space.md"
+            Avatar(shape=bot.shape, color=faceColor(bot.color), state=(bot.hidden ? "asleep" : working ? "working" : "idle"), size=72, still=(not working), presence="")
+            text bot.name font="-exact-title3" font-weight=700 letter-spacing="-0.3px" testId="details-name" text-align="center" overflow-wrap="anywhere"
+            text (bot.hidden ? t("panel.hiddenInbox") : working ? t("status.working") : bot.ready ? t("status.ready") : t("status.settingUp")) color="ink.muted" font="-exact-footnote" testId="details-status"
+        row role="tablist" appearance="none" background-color="surface.canvas" aria-label=t("panel.sidebar") justify-content="center" padding="space.xs space.md space.md" gap="space.xs"
+          for t in ["details", "library", "computer"] key=t
+            button id=`panel-tab-${t}` key=tabKey tabindex=(tab == t ? 0 : -1) class=Segment appearance="none" role="tab" aria-selected=(tab == t) aria-controls=`bot-tab-${t}` press=pickTab(t) min-height=36 padding="space.xs space.md" testId=`panel-tab-${t}` background-color=(tab == t ? "surface.raised" : "transparent") color=(tab == t ? "-exact-label" : "ink.muted")
+              text (t == "details" ? t("panel.details") : t == "library" ? t("panel.library") : t("panel.computer")) font="-exact-subheadline"
+        column id="bot-tab-details" role="tabpanel" aria-label=t("panel.details") display=(tab == "details" ? "flex" : "none") flex=1 min-height=0
+          scroll id=`panel-${bot.slug}` flex=1 min-height=0
+            column width="100%" box-sizing="border-box" padding="0 space.lg space.xl" gap="space.sm"
+              if modelsDown
+                text t("error.model") color="-exact-system-red" testId="model-error"
+              else
+                button class=PanelRow appearance="none" press=goModel testId="model-row" aria-label=t("panel.modelNamed", name=models.currentName)
+                  column class=IconTile color="AccentColor"
+                    text (models.providerName != "" ? models.providerName.slice(0, 1) : "?") font-weight=700
+                  column flex=1 gap="2px" min-width=0
+                    text (models.currentName != "" ? models.currentName : t("panel.choosingModel")) font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="model-name"
+                    text (models.effortLabel != "" ? `${models.providerName}, ${models.effortLabel}` : models.providerName) color="ink.muted" font="-exact-footnote"
+                  column color="ink.muted"
+                    Glyph(name="chevron", size=18)
+              button class=PanelRow appearance="none" press=goUsage testId="usage-card" aria-label=t("panel.usage")
+                column flex=1 gap="space.xs" min-width=0
+                  row gap="space.sm" align-items="baseline"
+                    text t("panel.usagePeriod", period=(report.periodLabel != "" ? report.periodLabel : t("usage.days7"))) color="ink.muted" font="-exact-footnote" flex=1
+                  if reportDown
+                    text t("error.usageShort") color="-exact-system-red" font="-exact-footnote"
+                  else
+                    text t("panel.tokenCount", n=report.tokens) font="-exact-headline" font-weight=600 testId="usage-tokens"
+                    row gap="3px" align-items="flex-end" height=30
+                      for d in report.days key=d.day
+                        column flex=1 height=d.spx border-radius="2px" background-color="brand.default"
+                column color="ink.muted"
+                  Glyph(name="chevron", size=18)
+              text t("panel.routines") class=SectionLabel
+              if routinesDown
+                text t("error.routines") color="-exact-system-red" padding="0 space.md" testId="routine-error"
+              else if routines.tasks.length == 0
+                text t("panel.routineEmpty", name=bot.name) color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="routine-empty"
+              else
+                column gap="2px"
+                  for r in routines.tasks key=r.id
+                    row gap="space.md" align-items="center" padding="space.sm space.md" testId=`routine-${r.id}`
+                      column color=(r.paused ? "ink.faint" : "AccentColor")
+                        Glyph(name=(r.paused ? "pause" : "clock"), size=18)
+                      column flex=1 gap="2px" min-width=0
+                        text r.title font-weight=500 overflow-wrap="anywhere"
+                        text r.schedule color="ink.muted" font="-exact-footnote"
+                        if r.next != "" and not r.paused
+                          text r.next color="ink.faint" font="-exact-footnote"
+                        if r.failed
+                          text t("panel.runFailed") color="-exact-system-red" font="-exact-footnote"
+                      if r.paused
+                        text t("status.paused") color="ink.faint" font="-exact-footnote"
+              if routines.error != "" and routines.tasks.length == 0
+                text routines.error color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="routine-setup"
+              if children.length > 0
+                text t("subagent.heading") class=SectionLabel testId="subagent-heading"
+                column gap="2px"
+                  for c in children key=c.slug
+                    row align-items="center" gap="space.sm" padding="space.xs space.md" testId=`subagent-row-${c.slug}`
+                      link class=ConversationLink href=path("chat", c.slug) testId=`subagent-${c.slug}` flex=1 min-width=0
+                        row gap="space.md" align-items="center"
+                          Avatar(shape=c.shape, color=faceColor(c.color), state=(c.ready ? (c.working ? "working" : "idle") : "asleep"), size=32, still=(not c.working), presence="")
+                          text c.name font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=`subagent-name-${c.slug}`
+                      button class=QuietButton appearance="none" press=editSub(c.slug, c.name, c.shape, c.color, c.prompt, c.inheritParentPrompt) min-height=44 testId=`edit-subagent-${c.slug}`
+                        text t("subagent.edit")
+              if lineageDown
+                text t("panel.workingOn") class=SectionLabel testId="lineage-heading"
+                text t("error.lineage") color="-exact-system-red" padding="0 space.md" testId="lineage-error"
+              else if lineage.rows.length > 0
+                text t("panel.workingOn") class=SectionLabel testId="lineage-heading"
+                column gap="2px"
+                  for line in lineage.rows key=line.id
+                    row align-items="center" gap="space.md" padding="space.sm space.md" testId=`line-${line.id}`
+                      column color="ink.faint"
+                        Glyph(name="chevron", size=14)
+                      column flex=1 gap="2px" min-width=0
+                        text line.title font-weight=500 overflow-wrap="anywhere"
+                        text (line.remote ? t("panel.remote") : line.threadId != "" ? t("panel.local") : t("panel.thisTurn")) color="ink.muted" font="-exact-footnote" testId=`where-${line.id}`
+                      if not line.remote and line.threadId != ""
+                        button class=TextControl appearance="none" press=openChild(line.threadId) min-height=28 padding="0 space.sm" font="-exact-footnote" color="AccentColor" testId=`open-${line.id}`
+                          text t("common.open")
+                      row class=Chip
+                        text line.status
+        column id="bot-tab-library" role="tabpanel" aria-label=t("panel.library") display=(tab == "library" ? "flex" : "none") flex=1 min-height=0
+          scroll id="panel-library-scroll" flex=1 min-height=0
+            BotShelf(shelf=shelf, down=shelfDown, name=bot.name)
+        column id="bot-tab-computer" role="tabpanel" aria-label=t("panel.computer") display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0
+          scroll id="panel-computer-scroll" flex=1 min-height=0
+            ScreenCard(name=bot.name, computer=computer, down=computerDown, showLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=live, drive=drive, take=take, release=release, picked=picked, pick=pick, openBrowser=openBrowser, opening=opening, openError=openError, closeBrowser=closeBrowser, closing=closing, closeError=closeError)
+
+// Pick the provider, the model and how hard it thinks. Each choice applies to the Bot's next message.
+// Provider, model and effort as one picker. The Bot's panel and Settings both use it.
+component EditBotPage
+  props
+    bot: Bot
+    error: string
+    rename: action
+    recolour: action
+    reshape: action
+    pin: action
+    hide: action
+    mute: action
+    makeMain: action
+    drop: action
+  state name = bot.name
+  action editName(v: string)
+    name = v
+  view
+    column gap="space.lg" padding="space.sm space.lg space.xl" testId="edit-page"
+      column gap="space.sm"
+        text t("common.name") class=SectionLabel
+        input appearance="none" class=Field value=name input=editName change=rename(bot.slug) aria-label=t("common.name") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="bot-name"
+      column gap="space.sm"
+        text t("edit.colour") class=SectionLabel
+        row gap="space.xs" flex-wrap="wrap"
+          for c in pickerColours() key=c
+            button class=SwatchControl press=recolour(bot.slug, c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(bot.color == c) testId=`colour-${c}` width=40 height=40 padding=0
+              column width=30 height=30 box-sizing="border-box" border-radius="radius.full" background-color=c border=(bot.color == c ? "3px solid AccentColor" : "3px solid transparent")
+      column gap="space.sm"
+        text t("edit.shape") class=SectionLabel
+        row gap="space.xs" flex-wrap="wrap"
+          for s in shapeNames() key=s
+            button class=SwatchControl press=reshape(bot.slug, s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(bot.shape == s) testId=`shape-${s}` width=48 height=48 padding=0 border-radius="radius.md" background-color=(bot.shape == s ? "surface.raised" : "transparent")
+              Avatar(shape=s, color=faceColor(bot.color), state="idle", size=34, still=true, presence="")
+      column gap="2px"
+        row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
+          column class=IconTile color="AccentColor"
+            Glyph(name="pin", size=18)
+          column flex=1 gap="2px"
+            text t("edit.pin") font-weight=600
+            text t("edit.pinNote") color="ink.muted" font="-exact-footnote"
+          button class=ToggleControl appearance="none" role="switch" aria-checked=bot.pinned disabled=bot.main press=pin(bot.slug, not bot.pinned) aria-label=t("edit.pin") testId="pin-bot"
+            row width=44 height=26 border-radius="radius.full" background-color=(bot.pinned or bot.main ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.pinned or bot.main ? "flex-end" : "flex-start")
+              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+        row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
+          column class=IconTile color="AccentColor"
+            Glyph(name="star", size=18)
+          column flex=1 gap="2px"
+            text t("edit.main") font-weight=600
+            text (bot.main ? t("edit.isDefault") : t("edit.makeDefault")) color="ink.muted" font="-exact-footnote"
+          if bot.main
+            column color="AccentColor" aria-label=t("edit.main") testId="is-main"
+              Glyph(name="check", size=20)
+          else
+            button class=IconControl appearance="none" press=makeMain(bot.slug) aria-label=t("edit.makeMain") title=t("edit.makeMain") testId="make-main"
+              Glyph(name="star", size=20)
+        row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
+          column class=IconTile color="ink.muted"
+            Glyph(name="eye-off", size=18)
+          column flex=1 gap="2px"
+            text t("edit.hide") font-weight=600
+            text t("edit.hideNote") color="ink.muted" font="-exact-footnote"
+          button class=ToggleControl appearance="none" role="switch" aria-checked=bot.hidden disabled=bot.main press=hide(bot.slug, not bot.hidden) aria-label=t("edit.hidden") testId="hide-bot"
+            row width=44 height=26 border-radius="radius.full" background-color=(bot.hidden ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.hidden ? "flex-end" : "flex-start")
+              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+        row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
+          column class=IconTile color="AccentColor"
+            Glyph(name="bell", size=18)
+          column flex=1 gap="2px"
+            text t("edit.notify") font-weight=600 testId="mute-label"
+            text t("edit.muteNote") color="ink.muted" font="-exact-footnote"
+          button class=ToggleControl appearance="none" role="switch" aria-checked=bot.notifications press=mute(bot.slug, not bot.notifications) aria-label=t("edit.notify") testId="mute-bot"
+            row width=44 height=26 border-radius="radius.full" background-color=(bot.notifications ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.notifications ? "flex-end" : "flex-start")
+              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+      if bot.main
+        text t("edit.mainStays") color="ink.muted" font="-exact-footnote" padding="0 space.md"
+      if error != ""
+        text error color="-exact-system-red" testId="bot-error" padding="0 space.md"
+      row align-items="center" gap="space.md" min-height=56 padding="0 space.md" border-top="1px solid surface.line"
+        column class=IconTile color="-exact-system-red"
+          Glyph(name="trash", size=18)
+        column flex=1 gap="2px"
+          text t("edit.delete") font-weight=600 color=(bot.main ? "ink.muted" : "-exact-system-red")
+          text t("edit.deleteMove") color="ink.muted" font="-exact-footnote"
+        button class=IconControl appearance="none" commandfor=`drop-bot-${bot.slug}` command="show-modal" disabled=bot.main aria-label=t("edit.delete") title=t("edit.delete") color="-exact-system-red" testId="delete-bot"
+          Glyph(name="trash", size=20)
+      dialog id=`drop-bot-${bot.slug}` role="alertdialog" aria-label=t("edit.deleteNamed", name=bot.name)
+        text t("edit.deleteBody")
+        button press=drop(bot.slug) destructive=true commandfor=`drop-bot-${bot.slug}` command="close" testId="drop-bot-ok"
+          text t("common.delete")
+        button commandfor=`drop-bot-${bot.slug}` command="close" testId="drop-bot-cancel"
+          text t("common.cancel")

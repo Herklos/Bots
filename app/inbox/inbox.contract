@@ -1,0 +1,97 @@
+use Avatar from "../face.contract"
+use TextControl, ConversationLink, Bot, Convo, faceColor, showUnread from "../app.contract"
+use Faces from "../group/group.contract"
+
+component InboxRow
+  props
+    row: Convo
+    bots: Bot[]
+    current: bool
+    menuOpen: bool
+    openMenu: action
+    closeMenu: action
+    pin: action
+    hide: action
+    mute: action
+    muteGroup: action
+    makeMain: action
+    editBot: action
+    editGroup: action
+  derive mine = bots.filter(b => row.kind == "bot" and b.slug == row.id)
+  derive pinned = mine.filter(b => b.pinned).length > 0
+  derive botMuted = mine.filter(b => not b.notifications).length > 0
+  action openFromSecondary()
+    preventDefault()
+    openMenu(row.key)
+  action choosePin()
+    closeMenu()
+    match first(mine)
+      case some(b)
+        pin(b.slug, not b.pinned)
+      case none
+  action chooseHide()
+    closeMenu()
+    match first(mine)
+      case some(b)
+        hide(b.slug, true)
+      case none
+  action chooseMute()
+    closeMenu()
+    if row.kind == "group"
+      muteGroup(row.id, not row.notifications)
+    else
+      match first(mine)
+        case some(b)
+          mute(b.slug, not b.notifications)
+        case none
+  action chooseMain()
+    closeMenu()
+    match first(mine)
+      case some(b)
+        makeMain(b.slug)
+      case none
+  action chooseEdit()
+    closeMenu()
+    if row.kind == "group"
+      editGroup(row.id)
+    else
+      editBot(row.id)
+  view
+    column
+      link class=ConversationLink href=(row.kind == "group" ? path("group", row.id) : path("chat", row.id)) contextmenu=openFromSecondary testId=(row.kind == "group" ? `group-${row.id}` : `bot-${row.id}`) aria-current=(current ? "page" : "false") background-color=(current ? "surface.raised" : "transparent")
+        if current
+          column width=0 height=0 overflow="hidden" testId=(row.kind == "group" ? `open-group-${row.id}` : `open-bot-${row.id}`)
+        row gap="space.md" align-items="center" flex=1 min-width=0
+          if row.kind == "group"
+            Faces(faces=row.faces, size=44, tuck=-18)
+          else
+            Avatar(shape=row.shape, color=faceColor(row.color), state=(row.ready ? (row.working ? "working" : "idle") : "asleep"), size=44, still=(not row.working), presence=(row.working ? "online" : ""))
+          column gap="2px" flex=1 min-width=0
+            row gap="space.sm" align-items="baseline"
+              text row.name font-weight=(row.unread ? 700 : 600) flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId=(row.kind == "group" ? `group-title-${row.id}` : `bot-title-${row.id}`)
+              text row.time font="-exact-footnote" color="ink.faint"
+            row gap="space.sm" align-items="center"
+              text row.line color=(row.unread ? "-exact-label" : "ink.muted") font="-exact-footnote" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+              if showUnread(row.unread, current, false)
+                column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${row.id}`
+      if menuOpen and row.kind == "group"
+        column role="menu" aria-label=row.name gap="2px" padding="space.xs" border-radius="radius.md" background-color="surface.card" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="row-menu"
+          button class=TextControl appearance="none" press=chooseMute aria-label=(row.notifications ? t("edit.mute") : t("edit.unmute")) width="100%" justify-content="flex-start"
+            text (row.notifications ? t("edit.mute") : t("edit.unmute")) testId=`menu-mute-${row.id}`
+          button class=TextControl appearance="none" press=chooseEdit aria-label=t("group.edit") width="100%" justify-content="flex-start"
+            text t("group.edit") testId=`menu-edit-${row.id}`
+      if menuOpen and row.kind == "bot"
+        column role="menu" aria-label=row.name gap="2px" padding="space.xs" border-radius="radius.md" background-color="surface.card" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="row-menu"
+          button class=TextControl appearance="none" press=choosePin aria-label=(pinned ? t("edit.unpin") : t("edit.pin")) width="100%" justify-content="flex-start"
+            text (pinned ? t("edit.unpin") : t("edit.pin")) testId=`menu-pin-${row.id}`
+          button class=TextControl appearance="none" press=chooseMute aria-label=(botMuted ? t("edit.unmute") : t("edit.mute")) width="100%" justify-content="flex-start"
+            text (botMuted ? t("edit.unmute") : t("edit.mute")) testId=`menu-mute-${row.id}`
+          button class=TextControl appearance="none" press=chooseHide aria-label=t("edit.hide") width="100%" justify-content="flex-start"
+            text t("edit.hide") testId=`menu-hide-${row.id}`
+          button class=TextControl appearance="none" press=chooseEdit aria-label=t("panel.edit") width="100%" justify-content="flex-start"
+            text t("panel.edit") testId=`menu-edit-${row.id}`
+          button class=TextControl appearance="none" press=chooseMain aria-label=t("edit.makeMain") width="100%" justify-content="flex-start"
+            text t("edit.makeMain") testId=`menu-main-${row.id}`
+
+// A Bot bubble: one markdown text when the message has no table, otherwise each
+// text slice and each pipe table. Both the 1:1 transcript and a room use this.

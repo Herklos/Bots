@@ -1,0 +1,362 @@
+use Face from "../face.contract"
+use Avatar from "../face.contract"
+use Glyph from "../glyph.contract"
+use faceHex from "../face.contract"
+use FileCard, ChoiceButton, TextControl, IconTile, Bubble, ReactionChip, Field, Bot, Part, Row, Pin, RoomMember, MentionHit, shapeOf, colorOf, faceColor, chromeTarget, reactStrip, eventVerb, alignAt from "../app.contract"
+use WorkingDots from "../bot/bot.contract"
+
+component MessageParts
+  props
+    id: string
+    parts: Part[]
+    tail: bool
+    textTestId: string
+    ring: string
+  view
+    match parts.at(0)
+      case some(first)
+        if parts.length == 1 and first.kind == "text"
+          text first.text markup="markdown" class=Bubble white-space="normal" testId=textTestId box-shadow=ring
+            background-color="surface.bubble"
+            color="-exact-label"
+            border-top-left-radius="radius.lg"
+            border-top-right-radius="radius.lg"
+            border-bottom-left-radius=(tail ? "radius.sm" : "radius.lg")
+            border-bottom-right-radius="radius.lg"
+        else
+          column gap="space.xs" max-width="100%" min-width=0
+            for part, i in parts key=`${id}-${i}`
+              if part.kind == "text" and part.text != ""
+                text part.text markup="markdown" class=Bubble white-space="normal" testId=(i == 0 ? textTestId : `message-${id}-text-${i}`) box-shadow=ring
+                  background-color="surface.bubble"
+                  color="-exact-label"
+                  border-top-left-radius="radius.lg"
+                  border-top-right-radius="radius.lg"
+                  border-bottom-left-radius=(tail ? "radius.sm" : "radius.lg")
+                  border-bottom-right-radius="radius.lg"
+              else if part.kind == "table"
+                row overflow-x="auto" max-width="100%" min-width=0 testId=`message-${id}-table-${i}`
+                  column min-width="100%" width=`max(100%, ${part.head.length * 96}px)` border="1px solid surface.line" border-radius="radius.md" background-color="surface.bubble" color="-exact-label" box-shadow=ring
+                    row
+                      for cell, c in part.head key=`h-${c}`
+                        column flex=1 min-width=96 padding="space.xs space.sm" border-bottom="1px solid surface.line" border-right=(c == part.head.length - 1 ? "none" : "1px solid surface.line")
+                          text cell markup="markdown" white-space="normal" font-weight=700 text-align=alignAt(part.align, c) overflow-wrap="break-word"
+                    for cells, r in part.rows key=`r-${r}`
+                      row
+                        for cell, c in cells key=`c-${c}`
+                          column flex=1 min-width=96 padding="space.xs space.sm" border-bottom=(r == part.rows.length - 1 ? "none" : "1px solid surface.line") border-right=(c == cells.length - 1 ? "none" : "1px solid surface.line")
+                            text cell markup="markdown" white-space="normal" text-align=alignAt(part.align, c) overflow-wrap="break-word"
+      case none
+        column
+
+// One transcript message. Time and reply stay in the tree so the keyboard
+// can focus the action. They paint while the pointer is over the message, while a tap
+// has left them open, or while an action is focused. The tap that opens them
+// does not close them on the way up; the next tap does. On a device that can
+// hover, the pointer leaving the message closes them too. Hidden chrome takes
+// no taps. An applied reaction is a chip overlapping the bubble corner; the add control sits beside a Bot bubble only while that chrome (or the picker) is showing.
+// A secondary click or a long press (both a contextmenu) opens a menu on this
+// bubble. The tray is absolute, so it does not push the transcript. The last
+// few rows open upward. Exact does not expose element frames here, so that
+// flip is the row index, not a measurement. One message menu is open.
+// The entrance scales and fades. trayFade is the opacity-only entrance used
+// when the host is reducing motion; this contract cannot read that preference,
+// and the host already owns reduced motion for the working dots.
+component ChatMessage
+  props
+    row: Row
+    canHover: bool
+    picking: bool
+    menuOpen: bool
+    pinned: bool
+    nearEnd: bool
+    copied: bool
+    speaker: string
+    inRoom: bool
+    textTestId: string
+    react: action
+    openPicker: action
+    reply: action
+    pin: action
+    openMenu: action
+    closeMenu: action
+    noteCopied: action
+  state over = false
+  state latched = false
+  state closeOnLift = false
+  state focused = false
+  state menuAt = 0
+  derive showChrome = over or latched or focused or picking or menuOpen
+  derive hit = canHover ? 36 : 44
+  derive ring = menuOpen ? (row.mine ? "0 0 0 2px surface.canvas, 0 0 0 4px brand.default" : `0 0 0 2px ${faceHex(faceColor(speaker))}`) : "none"
+  derive menuCount = row.text != "" ? 3 : 2
+  action setOver(on: bool)
+    over = on
+    if not on and canHover
+      latched = false
+      closeOnLift = false
+      closeMenu()
+  action tapDown(e: PointerEvent)
+    if e.button == 0
+      if latched
+        closeOnLift = true
+      else
+        latched = true
+        closeOnLift = false
+  action tapUp(e: PointerEvent)
+    if e.button == 0 and closeOnLift
+      latched = false
+      closeOnLift = false
+      closeMenu()
+  action openFromSecondary()
+    preventDefault()
+    latched = true
+    closeOnLift = false
+    menuAt = 0
+    openMenu(row.id)
+  action holdMenu()
+    stopPropagation()
+  action chooseReply()
+    closeMenu()
+    reply(row.id, row.text)
+  action choosePin()
+    closeMenu()
+    pin(row.id, row.text)
+  action chooseCopy()
+    copyText(row.text)
+    noteCopied(row.id)
+  action pickEmoji(em: string)
+    closeMenu()
+    react(row.id, em)
+  action menuKey(k: string, event: KeyboardEvent)
+    if menuOpen and k == "Escape"
+      preventDefault()
+      closeMenu()
+    else if menuOpen and not event.repeat and (k == "ArrowDown" or k == "ArrowUp")
+      preventDefault()
+      let next = k == "ArrowDown" ? (menuAt + 1 >= menuCount ? 0 : menuAt + 1) : (menuAt <= 0 ? menuCount - 1 : menuAt - 1)
+      menuAt = next
+      focus(next == 0 ? `menu-reply-${row.id}` : next == 1 ? `menu-pin-${row.id}` : `menu-copy-${row.id}`)
+  action chromeFocus(e: FocusEvent)
+    focused = chromeTarget(e.target)
+  action chromeBlur(e: FocusEvent)
+    match e.relatedTarget
+      case some(id)
+        focused = chromeTarget(id)
+      case none
+        focused = false
+  view
+    row justify-content=(row.mine ? "flex-end" : "flex-start") width=(inRoom ? "100%" : "auto") padding=(inRoom ? "0" : (row.head ? "space.sm space.lg 1px" : "1px space.lg"))
+      column id=`bubble-${row.id}` tabindex=-1 gap="2px" max-width=(inRoom ? "100%" : "82%") width=(inRoom ? "100%" : "auto") align-items=(row.mine ? "flex-end" : "flex-start") hover=setOver pointerdown=tapDown pointerup=tapUp contextmenu=openFromSecondary focusin=chromeFocus focusout=chromeBlur key=menuKey
+        if row.quote != ""
+          text row.quote color="ink.muted" font="-exact-footnote" testId=`quote-${row.id}`
+        if row.text != "" or row.react != "" or not row.mine
+          row gap="space.xs" align-items="center" max-width="100%"
+            column position="relative" padding-bottom="6px" max-width="100%"
+              if row.text != "" and row.mine
+                text row.text class=Bubble testId=textTestId box-shadow=ring
+                  background-color="brand.default"
+                  color="ink.dark"
+                  border-top-left-radius="radius.lg"
+                  border-top-right-radius="radius.lg"
+                  border-bottom-left-radius="radius.lg"
+                  border-bottom-right-radius=(row.tail ? "radius.sm" : "radius.lg")
+              else if row.text != ""
+                MessageParts(id=row.id, parts=row.parts, tail=row.tail, textTestId=textTestId, ring=ring)
+              if menuOpen
+                column role="menu" aria-label=t("chat.messageActions") key=menuKey pointerdown=holdMenu pointer-events="auto" position="absolute" z-index=2 top=(nearEnd ? "auto" : "calc(100% + 4px)") bottom=(nearEnd ? "calc(100% + 4px)" : "auto") left=(row.mine ? "auto" : "0") right=(row.mine ? "0" : "auto") width=216 box-sizing="border-box" padding="space.xs" gap="2px" border-radius="radius.md" background-color="surface.card" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" transform-origin=(row.mine ? (nearEnd ? "bottom right" : "top right") : (nearEnd ? "bottom left" : "top left")) animation="trayIn 120ms ease-out both" testId="message-menu"
+                  row gap="2px" testId=`menu-react-${row.id}`
+                    for em, n in reactStrip(row.react) key=em
+                      button class=TextControl appearance="none" key=menuKey pointerdown=holdMenu press=pickEmoji(em) aria-label=t("chat.reactWith", emoji=em) aria-pressed=(row.react == em) width=hit height=hit min-height=hit padding=0 border-radius="radius.sm" font="-exact-title3" box-shadow=(row.react == em ? "0 0 0 2px brand.default" : "none") animation=`emojiIn 120ms ease-out ${n * 20}ms both` testId=`pick-${em}`
+                        text em
+                  button id=`menu-reply-${row.id}` role="menuitem" class=TextControl appearance="none" key=menuKey pointerdown=holdMenu press=chooseReply aria-label=t("chat.reply") testId=`menu-reply-${row.id}` width="100%" min-height=hit height=hit padding="0 space.sm" border-radius="radius.sm" color="-exact-label" justify-content="flex-start"
+                    row gap="space.sm" align-items="center"
+                      column color="ink.muted"
+                        Glyph(name="reply", size=16)
+                      text t("chat.reply") font="-exact-subheadline" font-weight=500 color="-exact-label"
+                  button id=`menu-pin-${row.id}` role="menuitem" class=TextControl appearance="none" key=menuKey pointerdown=holdMenu press=choosePin aria-label=(pinned ? t("chat.unpin") : t("chat.pin")) testId=`menu-pin-${row.id}` width="100%" min-height=hit height=hit padding="0 space.sm" border-radius="radius.sm" color="-exact-label" justify-content="flex-start"
+                    row gap="space.sm" align-items="center"
+                      column color="ink.muted"
+                        Glyph(name="pin", size=16)
+                      text (pinned ? t("chat.unpin") : t("chat.pin")) font="-exact-subheadline" font-weight=500 color="-exact-label"
+                  if row.text != ""
+                    button id=`menu-copy-${row.id}` role="menuitem" class=TextControl appearance="none" key=menuKey pointerdown=holdMenu press=chooseCopy aria-label=(copied ? t("chat.copied") : t("chat.copy")) testId=`menu-copy-${row.id}` width="100%" min-height=hit height=hit padding="0 space.sm" border-radius="radius.sm" color="-exact-label" justify-content="flex-start"
+                      row gap="space.sm" align-items="center"
+                        column color="ink.muted"
+                          Glyph(name=(copied ? "check" : "copy"), size=16)
+                        text (copied ? t("chat.copied") : t("chat.copy")) font="-exact-subheadline" font-weight=500 color="-exact-label"
+              if row.react != ""
+                button class=ReactionChip appearance="none" position="absolute" bottom="-4px" left=(row.mine ? "0" : "auto") right=(row.mine ? "auto" : "0") z-index=1 press=react(row.id, row.react) aria-label=t("chat.removeReaction") testId=`react-${row.id}`
+                  text row.react
+            if not row.mine and row.react == ""
+              button class=TextControl appearance="none" press=openPicker(row.id) aria-label=t("chat.react") title=t("chat.react") min-height=24 padding="0 space.xs" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none") testId=`add-react-${row.id}`
+                Glyph(name="smile", size=14)
+            button id=`reply-${row.id}` class=TextControl appearance="none" press=reply(row.id, row.text) aria-label=t("chat.reply") title=t("chat.reply") min-height=24 padding="0 space.xs" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none") testId=`reply-${row.id}`
+              Glyph(name="reply", size=14)
+        for f in row.files key=f.id
+          if f.kind == "image"
+            link href=f.url target="_blank" aria-label=t("common.openNamed", name=f.name) testId=`image-${f.id}`
+              image f.url aria-label=f.name max-width="20rem" width="100%" border-radius="radius.lg"
+          else if f.kind == "audio" and f.url != ""
+            audio f.url controls=true testId=`audio-${f.id}`
+          else
+            link class=FileCard href=f.url target="_blank" aria-label=t("chat.downloadNamed", name=f.name) testId=`file-${f.id}`
+              row gap="space.md" align-items="center"
+                column class=IconTile color="AccentColor"
+                  Glyph(name="file", size=18)
+                column gap="2px" flex=1 min-width=0
+                  text f.name font-weight=500 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                  text f.size font="-exact-footnote" color="ink.muted"
+                column color="ink.muted"
+                  Glyph(name="download", size=18)
+        if row.tokens != ""
+          text row.tokens color="ink.muted" font="-exact-footnote" testId=`tokens-${row.id}`
+        if row.tail and row.time != ""
+          row gap="space.xs" align-items="center" padding="0 space.xs"
+            row gap="space.xs" align-items="center" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none")
+              text row.time font="-exact-footnote" color="ink.faint"
+        if picking
+          row gap="2px" flex-wrap="wrap" max-width="100%" box-sizing="border-box" padding="space.xs" border-radius="radius.lg" background-color="surface.raised" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="react-picker"
+            for em in ["👍", "❤️", "😂", "😮", "🎉", "🙏"] key=em
+              button class=TextControl appearance="none" press=react(row.id, em) aria-label=t("chat.reactWith", emoji=em) width=44 height=44 min-height=44 padding=0 border-radius="radius.md" font="-exact-title3" testId=`pick-${em}`
+                text em
+
+// The scrolling transcript. The Bot chat and a group both render their rows here.
+// ChatMessage is one message. This list owns every other row kind.
+component ChatLog
+  props
+    rows: Row[]
+    inRoom: bool
+    logId: string
+    logTestId: string
+    bots: Bot[]
+    slug: string
+    pins: Pin[]
+    workers: RoomMember[]
+    hover: bool
+    reactFor: string
+    messageMenu: string
+    copiedMenu: string
+    answerText: string
+    answerError: string
+    answering: bool
+    react: action
+    openPicker: action
+    reply: action
+    pin: action
+    openMenu: action
+    closeMenu: action
+    noteCopied: action
+    answer: action
+    editAnswer: action
+    retry: action
+    scrolled: action
+  view
+    column testId="chat-log" flex=1 min-height=0 width="100%"
+      list id=logId testId=logTestId width="100%" box-sizing="border-box" flex=1 min-height=0 appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true scroll=scrolled padding=(inRoom ? "space.sm max(0px, calc((100% - 46rem) / 2)) space.xl" : "space.lg max(0px, calc((100% - 46rem) / 2)) space.xl")
+        for m, i in rows key=m.id
+          column
+            if inRoom
+              if m.kind == "working"
+                column gap="space.sm" padding="1px 0" testId="room-working"
+                  for w in workers key=w.slug
+                    row gap="space.sm" align-items="center" testId=`room-working-${w.slug}`
+                      Face(shape=shapeOf(bots, w.slug), color=faceColor(colorOf(bots, w.slug)), state="working", size=24, still=false)
+                      row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working") testId=`room-working-dots-${w.slug}`
+                        WorkingDots()
+              else if m.kind == "message"
+                row justify-content=(m.mine ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="1px 0" testId=`room-msg-${m.id}`
+                  if not m.mine
+                    Face(shape=shapeOf(bots, m.botSlug), color=faceColor(colorOf(bots, m.botSlug)), state="idle", size=28, still=true)
+                  column gap="2px" max-width="82%" align-items=(m.mine ? "flex-end" : "flex-start")
+                    if not m.mine
+                      text m.botName font="-exact-footnote" font-weight=600 color="ink.muted" testId=`room-from-${m.id}`
+                    ChatMessage(row=m, canHover=hover, picking=(reactFor == m.id), menuOpen=(messageMenu == m.id), pinned=false, nearEnd=(i + 4 >= rows.length), copied=(copiedMenu == m.id), speaker=colorOf(bots, m.botSlug), inRoom=true, textTestId=`room-text-${m.id}`, react=react, openPicker=openPicker, reply=reply, pin=pin, openMenu=openMenu, closeMenu=closeMenu, noteCopied=noteCopied)
+              else
+                row justify-content="flex-end" padding="1px 0" testId=`room-msg-${m.id}`
+                  text m.text class=Bubble opacity=0.6 testId=`room-text-${m.id}`
+                    background-color="brand.default"
+                    color="ink.dark"
+                    border-radius="radius.lg"
+                    border-bottom-right-radius="radius.sm"
+            else if m.kind == "day"
+              text m.text text-align="center" font="-exact-footnote" color="ink.faint" padding="space.lg space.lg space.xs" testId=`day-${m.id}`
+            else if m.kind == "event"
+              row justify-content="center" padding="space.sm space.lg"
+                row gap="space.xs" align-items="center" padding="2px space.sm 2px 2px" border-radius="radius.full" background-color="surface.bubble" testId=`event-${m.id}`
+                  Face(shape=(m.botSlug != "" ? m.botShape : shapeOf(bots, slug)), color=faceColor(m.botSlug != "" ? m.botColor : colorOf(bots, slug)), state="idle", size=18, still=true)
+                  text eventVerb(m.variant, m.text, t("event.sent"), t("event.routineCreated"), t("event.routineUpdated"), t("event.routineDeleted"), t("event.from"), t("event.ran"), t("event.started"), t("event.providerLimit"), t("event.providerError")) font="-exact-footnote" color="-exact-label" testId=`event-verb-${m.id}`
+                  if m.botName != ""
+                    text m.botName font="-exact-footnote" color="-exact-label" testId=`event-bot-${m.id}`
+                  if m.title != ""
+                    text m.title font="-exact-footnote" color="-exact-label" testId=`event-title-${m.id}`
+                  if m.resetAt != ""
+                    text t("event.resetsAt", time=m.resetAt) font="-exact-footnote" color="-exact-label" testId=`event-reset-${m.id}`
+            else if m.kind == "message"
+              ChatMessage(row=m, canHover=hover, picking=(reactFor == m.id), menuOpen=(messageMenu == m.id), pinned=(pins.filter(p => p.id == m.id).length > 0), nearEnd=(i + 4 >= rows.length), copied=(copiedMenu == m.id), speaker=(m.botColor != "" ? m.botColor : colorOf(bots, slug)), inRoom=false, textTestId=`message-${m.id}`, react=react, openPicker=openPicker, reply=reply, pin=pin, openMenu=openMenu, closeMenu=closeMenu, noteCopied=noteCopied)
+            else if m.kind == "pending"
+              row justify-content="flex-end" padding="2px space.lg" testId=(m.variant == "failed" ? "not-sent" : "sending")
+                if m.variant == "failed"
+                  column align-items="flex-end" gap="space.xs" max-width="82%"
+                    text m.text class=Bubble background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" opacity=0.7
+                    row gap="space.sm" align-items="center"
+                      text t("chat.notSent") font="-exact-footnote" color="-exact-system-red"
+                      button class=TextControl appearance="none" press=retry testId="retry-send"
+                        text t("common.retry")
+                else
+                  text m.text class=Bubble opacity=0.6 background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" max-width="82%"
+            else if m.kind == "request"
+              row padding="space.sm space.lg"
+                column gap="space.sm" padding="space.md space.lg" border-radius="radius.lg" background-color="surface.bubble" flex=1 max-width="32rem" testId=`request-${m.id}`
+                  row gap="space.sm" align-items="center"
+                    Avatar(shape=shapeOf(bots, slug), color=faceColor(colorOf(bots, slug)), state="idle", size=24, still=true, presence="")
+                    text m.text font-weight=600 flex=1 min-width=0
+                  if m.title != ""
+                    text m.title color="ink.muted" font="-exact-footnote"
+                  if m.variant == "approval_request"
+                    row gap="space.sm" flex-wrap="wrap"
+                      for c in m.choices key=c.value
+                        button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, c.key, c.value) testId=`answer-${c.value}`
+                          background-color=(c.value == "accept" ? "brand.default" : "surface.card")
+                          color=(c.value == "accept" ? "ink.dark" : "-exact-label")
+                          text c.label
+                  else if m.variant == "user_input_request"
+                    column gap="space.sm"
+                      for c in m.choices key=c.value
+                        button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, c.key, c.value) background-color="surface.card" testId=`answer-${c.value}`
+                          text c.label
+                      if m.placeholder != ""
+                        row gap="space.sm" align-items="center"
+                          input appearance="none" class=Field value=answerText input=editAnswer placeholder=m.placeholder aria-label=t("chat.yourAnswer") flex=1 min-width=0 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" testId="answer-text"
+                          button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, m.key, answerText) disabled=(answerText.trim() == "") background-color="brand.default" color="ink.dark" testId="answer-send"
+                            text t("common.send")
+                  else
+                    row gap="space.sm" align-items="center"
+                      input appearance="none" class=Field type="password" value=answerText input=editAnswer placeholder=(m.placeholder != "" ? m.placeholder : t("chat.secret")) aria-label=t("chat.secret") flex=1 min-width=0 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" testId="secret-text"
+                      button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, "", answerText) disabled=(answerText == "") background-color="brand.default" color="ink.dark" testId="secret-save"
+                        text t("common.save")
+                      button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, "", "") background-color="surface.card" testId="secret-decline"
+                        text t("chat.decline")
+                  if answerError != "" and not answering
+                    text answerError color="-exact-system-red" font="-exact-footnote" testId="answer-error"
+            else
+              row padding="space.sm space.lg" gap="space.sm" align-items="center" testId="working"
+                Face(shape=shapeOf(bots, slug), color=faceColor(colorOf(bots, slug)), state="working", size=24, still=false)
+                row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working")
+                  WorkingDots()
+
+component MentionMenu
+  props
+    hits: MentionHit[]
+    picked: number
+    choose: action
+  view
+    if hits.length > 0
+      column id="mention-menu" role="listbox" aria-label=t("chat.mentions") position="absolute" left=0 right=0 bottom="100%" margin-bottom="space.xs" z-index=12 max-height=220 overflow-y="auto" box-sizing="border-box" padding="space.xs" gap="2px" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" box-shadow="0 8px 24px rgba(0,0,0,0.18)" testId="mention-menu"
+        for h, i in hits key=h.slug
+          button appearance="none" role="option" aria-selected=(i == picked) press=choose(h.slug) aria-label=t("group.mention", name=h.name) title=`@${h.slug}` testId=`mention-opt-${h.slug}` width="100%" box-sizing="border-box" min-height=40 padding="space.xs space.sm" border-radius="radius.sm" border="none" background-color=(i == picked ? "surface.soft" : "transparent") color="-exact-label"
+            row gap="space.sm" align-items="center" width="100%" min-width=0
+              Avatar(shape=h.shape, color=faceColor(h.color), state="idle", size=24, still=true, presence="")
+              column flex=1 min-width=0 align-items="flex-start" gap="0"
+                text h.name font="-exact-footnote" font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" max-width="100%"
+                text `@${h.slug}` font="-exact-caption2" color="ink.muted"

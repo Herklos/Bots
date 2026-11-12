@@ -1,0 +1,125 @@
+use Glyph from "../glyph.contract"
+use FileCard, IconControl, SectionLabel, IconTile, PrimaryButton, Bot, Shelf, Computer, tabId, tabTitle from "../app.contract"
+
+component BotShelf
+  props
+    shelf: Shelf
+    down: bool
+    name: string
+  view
+    column gap="space.lg" padding="0 space.lg space.xl" testId="shelf"
+      if down or not shelf.ok
+        text t("error.library") color="-exact-system-red" testId="library-error"
+      else if shelf.total == 0
+        text t("library.empty", name=name) color="ink.muted" testId="library-status"
+      else
+        if shelf.pictures.length > 0
+          column gap="space.sm"
+            text t("library.pictures") class=SectionLabel
+            row gap="space.xs" flex-wrap="wrap"
+              for p in shelf.pictures key=p.id
+                link href=p.url target="_blank" aria-label=t("common.openNamed", name=p.title) testId=`picture-${p.id}`
+                  image p.url aria-label=p.title width=88 height=88 border-radius="radius.md" object-fit="cover"
+        if shelf.files.length > 0
+          column gap="space.sm"
+            text t("library.files") class=SectionLabel
+            column gap="space.xs"
+              for f in shelf.files key=f.id
+                link class=FileCard href=f.url target="_blank" aria-label=t("common.openNamed", name=f.title) testId=`shelf-file-${f.id}` min-width=0
+                  row gap="space.md" align-items="center"
+                    column class=IconTile color="AccentColor"
+                      Glyph(name="file", size=18)
+                    column gap="2px" flex=1 min-width=0
+                      text f.title font-weight=500 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                      text f.detail color="ink.muted" font="-exact-footnote" overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+        if shelf.links.length > 0
+          column gap="space.sm"
+            text t("library.links") class=SectionLabel
+            column gap="space.xs"
+              for l in shelf.links key=l.id
+                link class=FileCard href=l.url target="_blank" aria-label=t("common.openNamed", name=l.title) testId=`shelf-link-${l.id}` min-width=0
+                  row gap="space.md" align-items="center"
+                    column class=IconTile color="AccentColor"
+                      Glyph(name="globe", size=18)
+                    column gap="2px" flex=1 min-width=0
+                      text l.title font-weight=500 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+                      text l.detail color="ink.muted" font="-exact-footnote" overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
+
+// The page a Bot has open, as a picture. Watching changes nothing; taking control is a second step.
+// Click the picture to open it large. Take control opens large and drives there.
+component ScreenCard
+  props
+    name: string
+    computer: Computer
+    down: bool
+    showLarge: action
+    heldTab: string
+    controlError: string
+    driveError: string
+    live: bool
+    drive: action
+    take: action
+    release: action
+    picked: string
+    pick: action
+    openBrowser: action
+    opening: bool
+    openError: string
+    closeBrowser: action
+    closing: bool
+    closeError: string
+  derive current = tabId(computer.tabs, picked, computer.selected)
+  view
+    column gap="space.md" padding="0 space.lg space.xl" testId="screen"
+      if down or not computer.ok
+        text t("error.computer") color="-exact-system-red" testId="computer-error"
+      else if computer.tabs.length == 0
+        column align-items="center" gap="space.sm" padding="space.xl 0"
+          column color="ink.faint"
+            Glyph(name="monitor", size=32)
+          text t("computer.none", name=name) color="ink.muted" text-align="center" testId="computer-status"
+          if opening
+            text t("computer.opening", name=name) color="ink.muted" font="-exact-footnote" text-align="center" testId="computer-opening"
+          else
+            button class=PrimaryButton buttonStyle="bordered" press=openBrowser testId="computer-open"
+              text t("computer.open")
+          if openError != ""
+            text openError color="-exact-system-red" testId="computer-open-error"
+      else
+        column position="relative" border-radius="radius.md" overflow="hidden" border="1px solid surface.line" background-color="surface.card"
+          if computer.image != ""
+            button appearance="none" press=showLarge padding=0 border="none" background-color="transparent" width="100%" aria-label=t("computer.openScreen", name=name) testId="computer-frame"
+              image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=name) width="100%"
+          else
+            column align-items="center" justify-content="center" height=140 color="ink.faint"
+              Glyph(name="monitor", size=28)
+          button class=IconControl appearance="none" press=closeBrowser disabled=closing aria-label=t("computer.closePage", name=name) title=t("computer.closePage", name=name) testId="computer-close-page" position="absolute" top=8 right=8 z-index=1 width=36 height=36 border-radius="radius.full" background-color="brand.black" color="ink.light" opacity=(closing ? 0.5 : 0.85)
+            Glyph(name="close", size=18)
+        column gap="space.xs" align-items="center"
+          text t("computer.screen", name=name) color="ink.muted" testId="computer-status"
+          text tabTitle(computer.tabs, current) font-weight=500 text-align="center" overflow-wrap="anywhere" testId="computer-tab-title"
+          if closing
+            text t("computer.closing", name=name) color="ink.muted" font="-exact-footnote" text-align="center" testId="computer-closing"
+          if closeError != ""
+            text closeError color="-exact-system-red" testId="computer-close-error"
+        if computer.tabs.length > 1
+          column gap="2px" width="100%"
+            for t in computer.tabs key=t.id
+              button appearance="none" press=pick(t.id) min-height=44 padding="0 space.md" aria-pressed=(t.id == current) testId=`tab-${t.id}`
+                text t.title font-weight=(t.id == current ? 600 : 400) overflow-wrap="anywhere"
+        if heldTab == current
+          button class=PrimaryButton buttonStyle="filled" press=release testId="computer-release"
+            text t("computer.release")
+        else
+          button class=PrimaryButton buttonStyle="bordered" press=take(current) testId="computer-take"
+            text t("computer.take")
+        if heldTab != ""
+          text t("computer.held") color="ink.muted" font="-exact-footnote" text-align="center"
+        else
+          text t("computer.watching") color="ink.muted" font="-exact-footnote" text-align="center"
+        if controlError != ""
+          text controlError color="-exact-system-red" testId="computer-error"
+        else if driveError != ""
+          text driveError color="-exact-system-red" testId="computer-error"
+
+// Everything about a Bot that is not what it is doing: its name, colour and shape, and where it sits.

@@ -1,0 +1,261 @@
+use Face from "../face.contract"
+use Avatar from "../face.contract"
+use Glyph from "../glyph.contract"
+use Screen, PageHeader, SectionLabel, Segment, Field, FormList, Bot, Login, Provider, ModelList, UsageReport, PanelRow, ChoiceRow, keptEffort, modelEfforts, faceColor from "../app.contract"
+
+component LoginSheet
+  props
+    route: number
+    item: Login
+    revealedFor: string
+    revealedText: string
+    error: string
+    save: action
+    reveal: action
+    hide: action
+    drop: action
+    cancel: action
+  state ttl = item.title
+  state site = item.website
+  state user = item.username
+  state pass = ""
+  state note = item.hints
+  action editTitle(v: string)
+    ttl = v
+  action editWebsite(v: string)
+    site = v
+  action editUsername(v: string)
+    user = v
+  action editPassword(v: string)
+    pass = v
+  action editHints(v: string)
+    note = v
+  view
+    column class=Screen navigationKey=`${route}` navigationPresentation="modal" position="absolute" inset=0
+      header class=PageHeader justify-content="space-between"
+        button press=cancel aria-label=t("common.cancel") testId="login-cancel"
+          Glyph(name="close", size=20)
+        text (item.id == "" ? t("vault.new") : item.title) role="heading" aria-level=1
+        button press=save(item.id, ttl, site, user, pass, note) disabled=(ttl.trim() == "" and site.trim() == "") buttonStyle="filled" aria-label=t("common.save") testId="login-save"
+          text t("common.save")
+      list class=FormList appearance="auto" listStyle="inset-grouped" flex=1 min-height=0
+        section
+          row
+            text t("vault.titleField")
+            input appearance="none" class=Field value=ttl input=editTitle placeholder=t("vault.titleField") aria-label=t("vault.titleField") text-align="end" flex=1 min-width=0 testId="login-title"
+          row
+            text t("vault.website")
+            input appearance="none" class=Field type="url" value=site input=editWebsite placeholder=t("vault.website") aria-label=t("vault.website") autocapitalize="none" text-align="end" flex=1 min-width=0 testId="login-website"
+          footer
+            text t("vault.needsSite")
+        section
+          row
+            text t("vault.username")
+            input appearance="none" class=Field value=user input=editUsername placeholder=t("vault.username") aria-label=t("vault.username") autocapitalize="none" autocomplete="username" text-align="end" flex=1 min-width=0 testId="login-username"
+          row
+            text t("common.password")
+            input appearance="none" class=Field type="password" value=pass input=editPassword placeholder=(item.hasPassword ? t("vault.passwordKeep") : t("common.password")) aria-label=t("common.password") autocomplete="new-password" text-align="end" flex=1 min-width=0 testId="login-password"
+        section
+          if item.hasPassword
+            row
+              text t("vault.savedPassword")
+              if revealedFor == item.id and revealedText != ""
+                text revealedText user-select="text" testId="revealed-password"
+              else
+                text "••••••••" color="-exact-secondary-label" testId="hidden-password"
+            row
+              if revealedFor == item.id and revealedText != ""
+                button press=hide buttonStyle="bordered" testId="hide-password"
+                  text t("common.hide")
+              else
+                button press=reveal(item.id) buttonStyle="bordered" testId="reveal-password"
+                  text t("vault.reveal")
+        section
+          row
+            text t("vault.notes")
+            input appearance="none" class=Field value=note input=editHints placeholder=t("vault.notes") aria-label=t("vault.notes") text-align="end" flex=1 min-width=0 testId="login-notes"
+        if error != ""
+          section
+            text error color="-exact-system-red" testId="login-error"
+        if item.id != ""
+          section
+            button commandfor="drop-login" command="show-modal" testId="login-delete"
+              text t("vault.delete")
+      dialog id="drop-login" role="alertdialog" aria-label=t("vault.deleteAsk")
+        text t("vault.deleteBody")
+        button press=drop(item.id) destructive=true commandfor="drop-login" command="close" testId="drop-login-ok"
+          text t("common.delete")
+        button commandfor="drop-login" command="close" testId="drop-login-cancel"
+          text t("common.cancel")
+
+// ---------- the Bot panel ----------
+
+// A row that opens a page: a title line, the value, and a chevron.
+component ModelPicker
+  props
+    providers: Provider[]
+    instanceId: string
+    model: string
+    effort: string
+    prefix: string
+    pick: action
+  state viewing = ""
+  action showProvider(id: string)
+    viewing = id
+  derive shownProvider = viewing != "" ? viewing : instanceId
+  view
+    column gap="space.md" testId=`${prefix}-picker`
+      if providers.length > 1
+        row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("model.provider")
+          for p in providers key=p.instanceId
+            button class=Segment appearance="none" role="radio" aria-checked=(shownProvider == p.instanceId) press=showProvider(p.instanceId) testId=`provider-${p.instanceId}` border="1px solid surface.line" background-color=(shownProvider == p.instanceId ? "surface.raised" : "transparent")
+              text p.name
+      for p in providers.filter(x => x.instanceId == shownProvider and x.account != "") key=p.instanceId
+        text p.account color="ink.muted" font="-exact-footnote" padding="0 space.xs"
+      column gap="2px" role="radiogroup" aria-label=t("panel.model")
+        for p in providers.filter(x => x.instanceId == shownProvider) key=p.instanceId
+          for m in p.models key=m.slug
+            button class=ChoiceRow appearance="none" role="radio" aria-checked=(instanceId == p.instanceId and model == m.slug) press=pick(p.instanceId, m.slug, keptEffort(m.efforts, effort)) testId=`${prefix}-${m.slug}` background-color=(instanceId == p.instanceId and model == m.slug ? "surface.raised" : "transparent")
+              text m.name font-weight=500 flex=1 min-width=0
+              if m.recommended
+                text t("model.recommended") color="ink.faint" font="-exact-footnote"
+              if instanceId == p.instanceId and model == m.slug
+                column color="AccentColor"
+                  Glyph(name="check", size=16)
+      if modelEfforts(providers, instanceId, model).length > 0
+        row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("model.effort")
+          for e in modelEfforts(providers, instanceId, model) key=e.id
+            button class=Segment appearance="none" role="radio" aria-checked=(effort == e.id) press=pick(instanceId, model, e.id) testId=`effort-${e.id}` border="1px solid surface.line" background-color=(effort == e.id ? "AccentColor" : "transparent") color=(effort == e.id ? "AccentColorText" : "-exact-label")
+              text e.label
+
+component ModelPage
+  props
+    models: ModelList
+    down: bool
+    bot: Bot
+    pick: action
+    error: string
+  action choose(i: string, m: string, e: string)
+    pick(bot.slug, i, m, e, "")
+  action chooseMode(mode: string)
+    pick(bot.slug, models.instanceId, models.current, models.effort, mode)
+  view
+    column gap="space.lg" padding="space.sm space.lg space.xl" testId="model-page"
+      if down
+        text t("error.providers") color="-exact-system-red" testId="provider-error"
+      else if models.providers.length == 0
+        text t("model.noProviderLong") color="ink.muted" testId="provider-none"
+      else
+        column gap="space.xs"
+          ModelPicker(providers=models.providers, instanceId=models.instanceId, model=models.current, effort=models.effort, prefix="model", pick=choose)
+          text t("model.applies", name=bot.name) color="ink.muted" font="-exact-footnote" padding="0 space.xs"
+        column gap="space.xs"
+          row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("model.access")
+            button class=Segment appearance="none" role="radio" aria-checked=(models.runtimeMode == "approval-required") press=chooseMode("approval-required") testId="access-ask" border="1px solid surface.line" background-color=(models.runtimeMode == "approval-required" ? "surface.raised" : "transparent")
+              text t("model.ask")
+            button class=Segment appearance="none" role="radio" aria-checked=(models.runtimeMode == "auto") press=chooseMode("auto") testId="access-auto" border="1px solid surface.line" background-color=(models.runtimeMode == "auto" ? "surface.raised" : "transparent")
+              text t("model.auto")
+            button class=Segment appearance="none" role="radio" aria-checked=(models.runtimeMode == "full-access") press=chooseMode("full-access") testId="access-full" border="1px solid surface.line" background-color=(models.runtimeMode == "full-access" ? "surface.raised" : "transparent")
+              text t("model.fullAccess")
+          text t("model.nextThread") color="ink.muted" font="-exact-footnote" padding="0 space.xs"
+        if error != ""
+          text error color="-exact-system-red" font="-exact-footnote" testId="model-save-error"
+
+// One report of what a Bot (or every Bot) used: a period, a summary or a detail, always with the figures as a table.
+component UsageView
+  props
+    report: UsageReport
+    down: bool
+    period: string
+    view: string
+    pickPeriod: action
+    pickView: action
+    showBots: bool
+  view
+    column gap="space.lg" padding="space.sm space.lg space.xl" testId="usage-view"
+      row gap="space.xs" role="radiogroup" aria-label=t("usage.period") flex-wrap="wrap"
+        for p in ["today", "7d", "30d", "all"] key=p
+          button class=Segment appearance="none" role="radio" aria-checked=(period == p) press=pickPeriod(p) testId=`period-${p}` border="1px solid surface.line" min-height=32 padding="2px space.xs" font="-exact-footnote" white-space="nowrap" box-sizing="border-box"
+            background-color=(period == p ? "surface.raised" : "transparent")
+            text (p == "today" ? t("usage.today") : p == "7d" ? t("usage.days7") : p == "30d" ? t("usage.days30") : t("usage.all"))
+      row gap="space.xs" role="radiogroup" aria-label=t("usage.view")
+        for v in ["summary", "detail"] key=v
+          button class=Segment appearance="none" role="radio" aria-checked=(view == v) press=pickView(v) testId=`view-${v}` min-height=28 font="-exact-footnote" padding="2px space.md"
+            background-color=(view == v ? "surface.raised" : "transparent")
+            color=(view == v ? "-exact-label" : "ink.muted")
+            text (v == "summary" ? t("usage.summary") : t("usage.detail"))
+      if down or not report.ok
+        text (report.error != "" ? report.error : t("error.loadUsage")) color="-exact-system-red" testId="usage-error"
+      else if report.empty
+        text t("usage.empty") color="ink.muted" testId="usage-empty"
+      else
+        row gap="space.lg"
+          column gap="2px" flex=1
+            text report.tokens font="-exact-headline" font-weight=700 testId="figure-tokens"
+            text t("usage.tokensWord") color="ink.muted" font="-exact-footnote"
+          column gap="2px" flex=1
+            text report.messages font="-exact-headline" font-weight=700 testId="figure-messages"
+            text t("usage.messagesWord") color="ink.muted" font="-exact-footnote"
+          column gap="2px" flex=1
+            text report.turns font="-exact-headline" font-weight=700 testId="figure-turns"
+            text t("usage.turnsWord") color="ink.muted" font="-exact-footnote"
+        column gap="space.xs"
+          row gap="4px" align-items="flex-end" width="100%" height=72 role="img" aria-label=t("usage.perDay", first=report.first, last=report.last)
+            for d in report.days key=d.day
+              column flex=1 min-width=0 height=d.px border-radius="3px" background-color="brand.default"
+          row justify-content="space-between"
+            text report.first color="ink.faint" font="-exact-footnote"
+            text report.last color="ink.faint" font="-exact-footnote"
+        if report.sentence != ""
+          text report.sentence color="ink.muted" font="-exact-footnote"
+        if view == "detail"
+          column gap="space.sm" testId="usage-detail"
+            text t("usage.byDay") class=SectionLabel
+            column gap="2px"
+              for d in report.rows key=d.day
+                row gap="space.md" align-items="center" padding="space.xs space.md"
+                  column flex=1 gap="2px" min-width=0
+                    text d.label font-weight=500
+                    text t("usage.dayLine", input=d.input, output=d.output, cached=d.cached) color="ink.muted" font="-exact-footnote" white-space="normal" overflow-wrap="anywhere"
+                  column align-items="flex-end" gap="2px"
+                    text d.tokens font-weight=600
+                    text t("usage.msg", n=d.messages) color="ink.faint" font="-exact-footnote"
+            text t("usage.byModel") class=SectionLabel
+            column gap="space.sm" padding="0 space.md"
+              for m in report.models key=m.name
+                column gap="space.xs"
+                  row gap="space.md" align-items="baseline"
+                    text m.name font-weight=500 flex=1 min-width=0
+                    text t("usage.modelLine", tokens=m.tokens, turns=m.turns) color="ink.muted" font="-exact-footnote"
+                  row height=6 border-radius="3px" background-color="surface.line"
+                    column width=`${m.share}%` height=6 border-radius="3px" background-color="brand.default"
+            if showBots
+              text t("usage.byBot") class=SectionLabel
+              column gap="space.sm" padding="0 space.md"
+                for b in report.bots key=b.slug
+                  column gap="space.xs"
+                    row gap="space.md" align-items="center"
+                      Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=22, still=true, presence="")
+                      text b.name font-weight=500 flex=1 min-width=0
+                      text t("usage.botLine", tokens=b.tokens, messages=b.messages) color="ink.muted" font="-exact-footnote"
+                    row height=6 border-radius="3px" background-color="surface.line"
+                      column width=`${b.share}%` height=6 border-radius="3px" background-color="brand.default"
+            text t("usage.totals") class=SectionLabel
+            column gap="2px" padding="0 space.md"
+              row justify-content="space-between"
+                text t("usage.input") color="ink.muted"
+                text report.input
+              row justify-content="space-between"
+                text t("usage.output") color="ink.muted"
+                text report.output
+              row justify-content="space-between"
+                text t("usage.cached") color="ink.muted"
+                text report.cached
+              row justify-content="space-between"
+                text t("usage.cacheWrite") color="ink.muted"
+                text report.cacheWrite
+              row justify-content="space-between"
+                text t("usage.attachments") color="ink.muted"
+                text report.attachments
+
+// What a Bot has kept, to look at: pictures, files and links. Nothing here can be changed.
