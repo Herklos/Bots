@@ -1,0 +1,250 @@
+use super::*;
+use crate::bots::Bots;
+use serde_json::{json, Value};
+use std::time::Duration;
+use tokio::sync::Notify;
+
+async fn world() -> (tempfile::TempDir, Bots, Notify) {
+    let dir = tempfile::tempdir().unwrap();
+    let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
+    bots.create(&json!({ "name": "Ada", "prompt": "Be brief." }))
+        .await
+        .unwrap();
+    bots.save("ada", &json!({ "mainThreadId": "thread-ada" }), false)
+        .await
+        .unwrap();
+    bots.create(&json!({ "name": "Bea" })).await.unwrap();
+    bots.save("bea", &json!({ "mainThreadId": "thread-bea" }), false)
+        .await
+        .unwrap();
+    bots.create(&json!({
+        "parentSlug": "bea",
+        "name": "Bea helper",
+        "subagent": { "prompt": "Bea's notes." }
+    }))
+    .await
+    .unwrap();
+    (dir, bots, Notify::new())
+}
+
+fn deps<'a>(bots: &'a Bots, roster: &'a [Value], notify: &'a Notify) -> Deps<'a> {
+    Deps {
+        bots,
+        roster,
+        provision_now: notify,
+        settings: json!({}),
+    }
+}
+
+#[tokio::test]
+async fn a_parent_creates_a_child_and_a_subagent_caller_is_refused() {
+    let (dir, bots, notify) = world().await;
+    let roster = bots.list().await.unwrap();
+    let created = dispatch(
+        &deps(&bots, &roster, &notify),
+        "subagent_create",
+        &json!({
+            "threadId": "thread-ada",
+            "prompt": "Look things up.",
+            "parentSlug": "bea",
+            "toolAllow": ["read"],
+            "shape": "cloud",
+            "color": "#ffffff",
+            "model": "opus",
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(created["slug"], "ada-junior-1");
+    assert_eq!(created["name"], "Ada junior 1");
+    assert!(created["mainThreadId"].is_null());
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), notify.notified())
+            .await
+            .is_ok()
+    );
+    let child = bots.get("ada-junior-1").await.unwrap().unwrap();
+    assert_eq!(child["parentSlug"], "ada");
+    assert_eq!(child["runtimeMode"], "auto");
+    assert_eq!(child["subagent"]["prompt"], "Look things up.");
+    assert_eq!(child["subagent"]["inheritParentPrompt"], false);
+    assert!(child["subagent"].get("toolAllow").is_none());
+    assert!(child["model"].is_null());
+    assert_eq!(
+        child["shape"],
+        bots.get("ada").await.unwrap().unwrap()["shape"]
+    );
+    assert!(child.get("firstMessage").is_none() || child["firstMessage"].is_null());
+    let agents = std::fs::read_to_string(dir.path().join("ada-junior-1/AGENTS.md")).unwrap();
+    assert!(agents.contains("Look things up."));
+
+    bots.save(
+        "ada-junior-1",
+        &json!({ "mainThreadId": "thread-junior" }),
+        false,
+    )
+    .await
+    .unwrap();
+    let roster = bots.list().await.unwrap();
+    let err = dispatch(
+        &deps(&bots, &roster, &notify),
+        "subagent_create",
+        &json!({ "threadId": "thread-junior", "prompt": "Nested.", "parentSlug": "ada" }),
+    )
+    .await
+    .unwrap_err();
+    assert!(err.contains("subagent"), "{err}");
+    assert!(bots.get("ada-junior-1-junior-1").await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn a_forged_parent_slug_is_ignored_and_list_is_only_this_parents_children() {
+    let (_dir, bots, notify) = world().await;
+    let roster = bots.list().await.unwrap();
+    dispatch(
+        &deps(&bots, &roster, &notify),
+        "subagent_create",
+        &json!({
+            "threadId": "thread-ada",
+            "prompt": "Ada's lookup.",
+            "name": "Lookup",
+            "parentSlug": "bea",
+        }),
+    )
+    .await
+    .unwrap();
+    let child = bots.get("lookup").await.unwrap().unwrap();
+    assert_eq!(child["parentSlug"], "ada");
+    assert_eq!(child["name"], "Lookup");
+
+    let roster = bots.list().await.unwrap();
+    let listed = dispatch(
+        &deps(&bots, &roster, &notify),
+        "subagent_list",
+        &json!({ "threadId": "thread-ada", "parentSlug": "bea" }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(listed["subagents"].as_array().unwrap().len(), 1);
+    assert_eq!(listed["subagents"][0]["slug"], "lookup");
+    assert_eq!(listed["subagents"][0]["name"], "Lookup");
+    assert_eq!(listed["subagents"][0]["prompt"], "Ada's lookup.");
+    assert_eq!(listed["subagents"][0]["inheritParentPrompt"], false);
+    assert!(listed["subagents"][0]["mainThreadId"].is_null());
+    let text = listed.to_string();
+    assert!(!text.contains("workspace"));
+    assert!(!text.contains("token"));
+    assert!(!text.contains("bot.json"));
+
+    let bea = dispatch(
+        &deps(&bots, &roster, &notify),
+        "subagent_list",
+        &json!({ "threadId": "thread-bea" }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(bea["subagents"].as_array().unwrap().len(), 1);
+    assert_eq!(bea["subagents"][0]["slug"], "bea-helper");
+    assert_eq!(bea["subagents"][0]["prompt"], "Bea's notes.");
+}
+
+#[tokio::test]
+async fn an_empty_prompt_is_refused_and_overlong_text_is_an_error() {
+    let (_dir, bots, notify) = world().await;
+    let roster = bots.list().await.unwrap();
+    let d = deps(&bots, &roster, &notify);
+    let missing = dispatch(&d, "subagent_create", &json!({ "threadId": "thread-ada" }))
+        .await
+        .unwrap_err();
+    assert!(missing.contains("prompt"), "{missing}");
+    for prompt in [json!(""), json!("   "), json!(null)] {
+        let err = dispatch(
+            &d,
+            "subagent_create",
+            &json!({ "threadId": "thread-ada", "prompt": prompt }),
+        )
+        .await
+        .unwrap_err();
+        assert!(err.contains("prompt"), "{err}");
+    }
+    let long = "x".repeat(2001);
+    let err = dispatch(
+        &d,
+        "subagent_create",
+        &json!({ "threadId": "thread-ada", "prompt": long }),
+    )
+    .await
+    .unwrap_err();
+    assert!(err.contains("2000"), "{err}");
+    let err = dispatch(
+        &d,
+        "subagent_create",
+        &json!({ "threadId": "thread-ada", "prompt": "Ok.", "task": "y".repeat(2001) }),
+    )
+    .await
+    .unwrap_err();
+    assert!(err.contains("task"), "{err}");
+    assert!(bots.get("ada-junior-1").await.unwrap().is_none());
+    let err = dispatch(
+        &d,
+        "subagent_create",
+        &json!({ "threadId": "missing", "prompt": "Ok." }),
+    )
+    .await
+    .unwrap_err();
+    assert!(err.contains("threadId"), "{err}");
+}
+
+#[tokio::test]
+async fn task_lands_as_brief_plus_created_by() {
+    let (dir, bots, notify) = world().await;
+    let roster = bots.list().await.unwrap();
+    dispatch(
+        &deps(&bots, &roster, &notify),
+        "subagent_create",
+        &json!({
+            "threadId": "thread-ada",
+            "prompt": "  File the notes.  ",
+            "name": "   ",
+            "inheritParentPrompt": true,
+            "task": "  Sort today's mail.  ",
+        }),
+    )
+    .await
+    .unwrap();
+    let child = bots.get("ada-junior-1").await.unwrap().unwrap();
+    assert_eq!(child["name"], "Ada junior 1");
+    assert_eq!(child["brief"], "Sort today's mail.");
+    assert_eq!(child["createdBy"], "Ada");
+    assert_eq!(child["subagent"]["prompt"], "File the notes.");
+    assert_eq!(child["subagent"]["inheritParentPrompt"], true);
+    assert!(child["firstMessage"].is_null());
+    let raw = std::fs::read_to_string(dir.path().join("ada-junior-1/.bot/bot.json")).unwrap();
+    assert!(raw.contains("Sort today's mail."));
+    assert!(raw.contains("\"createdBy\": \"Ada\"") || raw.contains("\"createdBy\":\"Ada\""));
+    let agents = std::fs::read_to_string(dir.path().join("ada-junior-1/AGENTS.md")).unwrap();
+    assert!(agents.contains("File the notes."));
+    assert!(!agents.contains("Sort today's mail."));
+}
+
+#[tokio::test]
+async fn a_subagent_is_stored_within_the_cap_and_the_parent_is_left_alone() {
+    let (_dir, bots, notify) = world().await;
+    bots.save("ada", &json!({ "runtimeMode": "full-access" }), false)
+        .await
+        .unwrap();
+    let roster = bots.list().await.unwrap();
+    let mut d = deps(&bots, &roster, &notify);
+    d.settings = json!({ "maxRuntimeMode": "auto" });
+    dispatch(
+        &d,
+        "subagent_create",
+        &json!({ "threadId": "thread-ada", "prompt": "Look things up." }),
+    )
+    .await
+    .unwrap();
+    let child = bots.get("ada-junior-1").await.unwrap().unwrap();
+    assert_eq!(child["runtimeMode"], "auto");
+    let parent = bots.get("ada").await.unwrap().unwrap();
+    assert_eq!(parent["runtimeMode"], "full-access");
+}

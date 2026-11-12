@@ -27,7 +27,7 @@ pub(crate) fn tool_defs() -> Vec<Value> {
     vec![
         json!({
             "name": "subagent_list",
-            "description": "List your durable subagents: slug, name, prompt, whether they inherit your prompt, and mainThreadId (null until their thread has started). A one-off child thread of this turn is not listed here.",
+            "description": "List your lasting helpers and this Bot's helper policy. Each helper includes slug, name, prompt, inheritParentPrompt, mainThreadId (null until its thread has started), runtimeMode, model, and toolAllow. policy says whether you may create another. A one-off child thread of this turn is not listed here.",
             "inputSchema": {
                 "type": "object",
                 "properties": { "threadId": thread },
@@ -36,14 +36,14 @@ pub(crate) fn tool_defs() -> Vec<Value> {
         }),
         json!({
             "name": "subagent_create",
-            "description": "Create a lasting subagent: another Bot that keeps its own folder, project and main thread, with your face. Pass the standing prompt. An optional task is the first job, queued once as a brief, not copied into the prompt. Work that ends with this turn stays a T3 child thread instead. mainThreadId is null until the thread starts; read it later with subagent_list.",
+            "description": "Create a lasting helper: another Bot with its own folder, project, and main thread, and your face. The owner's helper policy decides whether this is allowed and which model, effort, and approval the helper gets. If lasting helpers are turned off, or this Bot is already at its limit, the call is refused. Pass the standing prompt. An optional task is the first job, queued once, and is not copied into the prompt. Omit inheritParentPrompt to use the owner's default. Work that ends with this turn stays a T3 child thread. mainThreadId is null until the thread starts; read it later with subagent_list.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
                     "threadId": thread,
-                    "prompt": { "type": "string", "description": "What this subagent is for. Required, at most 2000 characters." },
+                    "prompt": { "type": "string", "description": "What this helper is for. Required, at most 2000 characters." },
                     "name": { "type": "string", "description": "Optional. Blank uses \"{your name} junior N\"." },
-                    "inheritParentPrompt": { "type": "boolean", "description": "Copy your prompt into the subagent's instructions. Default false." },
+                    "inheritParentPrompt": { "type": "boolean", "description": "Copy your prompt into the helper's instructions. Omit this to use the owner's default." },
                     "task": { "type": "string", "description": "Optional first job, at most 2000 characters. Not copied into the prompt." },
                 },
                 "required": ["threadId", "prompt"],
@@ -104,6 +104,36 @@ fn child_view(bot: &Value) -> Value {
         "prompt": bot["subagent"]["prompt"].as_str().unwrap_or("").trim(),
         "inheritParentPrompt": bot["subagent"]["inheritParentPrompt"] == true,
         "mainThreadId": main_thread,
+        "runtimeMode": text_or_null(bot.get("runtimeMode")),
+        "model": model_view(&bot["model"]),
+        "toolAllow": bot["subagent"].get("toolAllow").filter(|tools| tools.is_array()).cloned().unwrap_or(Value::Null),
+    })
+}
+
+fn text_or_null(value: Option<&Value>) -> Value {
+    value
+        .and_then(Value::as_str)
+        .filter(|text| !text.is_empty())
+        .map(|text| json!(text))
+        .unwrap_or(Value::Null)
+}
+
+fn model_view(model: &Value) -> Value {
+    let instance = model["instanceId"].as_str().filter(|id| !id.is_empty());
+    let name = model["model"].as_str().filter(|name| !name.is_empty());
+    match (instance, name) {
+        (Some(instance), Some(name)) => json!({ "instanceId": instance, "model": name }),
+        (Some(_), None) | (None, Some(_)) | (None, None) => Value::Null,
+    }
+}
+
+fn policy_view(parent: &Value, count: usize) -> Value {
+    let policy = crate::bots::helpers_policy::subagents_of(parent);
+    json!({
+        "enabled": policy["enabled"] == true,
+        "maxCount": policy["maxCount"],
+        "count": count,
+        "when": policy["when"],
     })
 }
 
@@ -116,7 +146,14 @@ fn list(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
         .filter(|bot| bot["parentSlug"].as_str() == Some(slug))
         .map(child_view)
         .collect();
-    Ok(json!({ "subagents": subagents }))
+    if is_subagent(parent) {
+        return Ok(json!({ "subagents": subagents }));
+    }
+    let count = subagents.len();
+    Ok(json!({
+        "subagents": subagents,
+        "policy": policy_view(parent, count),
+    }))
 }
 
 fn limited(args: &Value, key: &str) -> Result<Option<String>, String> {
@@ -143,18 +180,18 @@ async fn create(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
     };
     let task = limited(args, "task")?;
     let name = limited(args, "name")?;
-    let inherit = match args.get("inheritParentPrompt") {
-        None | Some(Value::Null) => false,
-        Some(Value::Bool(v)) => *v,
-        Some(_) => return Err("inheritParentPrompt must be a boolean.".into()),
-    };
+    let inherit = optional_bool(args, "inheritParentPrompt")?;
     let parent_slug = parent["slug"]
         .as_str()
         .filter(|s| !s.is_empty())
         .ok_or("That threadId isn't a Bot's main conversation. Pass your main thread id from AGENTS.md (or mainThreadId in .bot/bot.json).")?;
+    let mut subagent = json!({ "prompt": prompt });
+    if let Some(inherit) = inherit {
+        subagent["inheritParentPrompt"] = json!(inherit);
+    }
     let mut input = json!({
         "parentSlug": parent_slug,
-        "subagent": { "prompt": prompt, "inheritParentPrompt": inherit },
+        "subagent": subagent,
     });
     if let Some(name) = name {
         input["name"] = json!(name);
@@ -169,11 +206,8 @@ async fn create(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
     {
         input["createdBy"] = json!(created_by);
     }
-    input["runtimeMode"] = json!(crate::bots::provisioner::launch_runtime_mode(
-        parent,
-        &d.settings
-    ));
     let bot = d.bots.create(&input).await.map_err(|e| e.message)?;
+    let bot = cap_runtime_mode(d, parent, bot).await?;
     d.provision_now.notify_one();
     Ok(json!({
         "slug": bot["slug"],
@@ -182,254 +216,36 @@ async fn create(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
     }))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-    use std::time::Duration;
-
-    async fn world() -> (tempfile::TempDir, Bots, Notify) {
-        let dir = tempfile::tempdir().unwrap();
-        let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
-        bots.create(&json!({ "name": "Ada", "prompt": "Be brief." }))
-            .await
-            .unwrap();
-        bots.save("ada", &json!({ "mainThreadId": "thread-ada" }), false)
-            .await
-            .unwrap();
-        bots.create(&json!({ "name": "Bea" })).await.unwrap();
-        bots.save("bea", &json!({ "mainThreadId": "thread-bea" }), false)
-            .await
-            .unwrap();
-        bots.create(&json!({
-            "parentSlug": "bea",
-            "name": "Bea helper",
-            "subagent": { "prompt": "Bea's notes." }
-        }))
-        .await
-        .unwrap();
-        (dir, bots, Notify::new())
-    }
-
-    fn deps<'a>(bots: &'a Bots, roster: &'a [Value], notify: &'a Notify) -> Deps<'a> {
-        Deps {
-            bots,
-            roster,
-            provision_now: notify,
-            settings: json!({}),
-        }
-    }
-
-    #[tokio::test]
-    async fn a_parent_creates_a_child_and_a_subagent_caller_is_refused() {
-        let (dir, bots, notify) = world().await;
-        let roster = bots.list().await.unwrap();
-        let created = dispatch(
-            &deps(&bots, &roster, &notify),
-            "subagent_create",
-            &json!({
-                "threadId": "thread-ada",
-                "prompt": "Look things up.",
-                "parentSlug": "bea",
-                "toolAllow": ["read"],
-                "shape": "cloud",
-                "color": "#ffffff",
-                "model": "opus",
-            }),
-        )
-        .await
-        .unwrap();
-        assert_eq!(created["slug"], "ada-junior-1");
-        assert_eq!(created["name"], "Ada junior 1");
-        assert!(created["mainThreadId"].is_null());
-        assert!(
-            tokio::time::timeout(Duration::from_secs(1), notify.notified())
-                .await
-                .is_ok()
-        );
-        let child = bots.get("ada-junior-1").await.unwrap().unwrap();
-        assert_eq!(child["parentSlug"], "ada");
-        assert_eq!(child["runtimeMode"], "auto");
-        assert_eq!(child["subagent"]["prompt"], "Look things up.");
-        assert_eq!(child["subagent"]["inheritParentPrompt"], false);
-        assert!(child["subagent"].get("toolAllow").is_none());
-        assert!(child["model"].is_null());
-        assert_eq!(
-            child["shape"],
-            bots.get("ada").await.unwrap().unwrap()["shape"]
-        );
-        assert!(child.get("firstMessage").is_none() || child["firstMessage"].is_null());
-        let agents = std::fs::read_to_string(dir.path().join("ada-junior-1/AGENTS.md")).unwrap();
-        assert!(agents.contains("Look things up."));
-
-        bots.save(
-            "ada-junior-1",
-            &json!({ "mainThreadId": "thread-junior" }),
-            false,
-        )
-        .await
-        .unwrap();
-        let roster = bots.list().await.unwrap();
-        let err = dispatch(
-            &deps(&bots, &roster, &notify),
-            "subagent_create",
-            &json!({ "threadId": "thread-junior", "prompt": "Nested.", "parentSlug": "ada" }),
-        )
-        .await
-        .unwrap_err();
-        assert!(err.contains("subagent"), "{err}");
-        assert!(bots.get("ada-junior-1-junior-1").await.unwrap().is_none());
-    }
-
-    #[tokio::test]
-    async fn a_forged_parent_slug_is_ignored_and_list_is_only_this_parents_children() {
-        let (_dir, bots, notify) = world().await;
-        let roster = bots.list().await.unwrap();
-        dispatch(
-            &deps(&bots, &roster, &notify),
-            "subagent_create",
-            &json!({
-                "threadId": "thread-ada",
-                "prompt": "Ada's lookup.",
-                "name": "Lookup",
-                "parentSlug": "bea",
-            }),
-        )
-        .await
-        .unwrap();
-        let child = bots.get("lookup").await.unwrap().unwrap();
-        assert_eq!(child["parentSlug"], "ada");
-        assert_eq!(child["name"], "Lookup");
-
-        let roster = bots.list().await.unwrap();
-        let listed = dispatch(
-            &deps(&bots, &roster, &notify),
-            "subagent_list",
-            &json!({ "threadId": "thread-ada", "parentSlug": "bea" }),
-        )
-        .await
-        .unwrap();
-        assert_eq!(listed["subagents"].as_array().unwrap().len(), 1);
-        assert_eq!(listed["subagents"][0]["slug"], "lookup");
-        assert_eq!(listed["subagents"][0]["name"], "Lookup");
-        assert_eq!(listed["subagents"][0]["prompt"], "Ada's lookup.");
-        assert_eq!(listed["subagents"][0]["inheritParentPrompt"], false);
-        assert!(listed["subagents"][0]["mainThreadId"].is_null());
-        let text = listed.to_string();
-        assert!(!text.contains("workspace"));
-        assert!(!text.contains("token"));
-        assert!(!text.contains("bot.json"));
-
-        let bea = dispatch(
-            &deps(&bots, &roster, &notify),
-            "subagent_list",
-            &json!({ "threadId": "thread-bea" }),
-        )
-        .await
-        .unwrap();
-        assert_eq!(bea["subagents"].as_array().unwrap().len(), 1);
-        assert_eq!(bea["subagents"][0]["slug"], "bea-helper");
-        assert_eq!(bea["subagents"][0]["prompt"], "Bea's notes.");
-    }
-
-    #[tokio::test]
-    async fn an_empty_prompt_is_refused_and_overlong_text_is_an_error() {
-        let (_dir, bots, notify) = world().await;
-        let roster = bots.list().await.unwrap();
-        let d = deps(&bots, &roster, &notify);
-        let missing = dispatch(&d, "subagent_create", &json!({ "threadId": "thread-ada" }))
-            .await
-            .unwrap_err();
-        assert!(missing.contains("prompt"), "{missing}");
-        for prompt in [json!(""), json!("   "), json!(null)] {
-            let err = dispatch(
-                &d,
-                "subagent_create",
-                &json!({ "threadId": "thread-ada", "prompt": prompt }),
-            )
-            .await
-            .unwrap_err();
-            assert!(err.contains("prompt"), "{err}");
-        }
-        let long = "x".repeat(2001);
-        let err = dispatch(
-            &d,
-            "subagent_create",
-            &json!({ "threadId": "thread-ada", "prompt": long }),
-        )
-        .await
-        .unwrap_err();
-        assert!(err.contains("2000"), "{err}");
-        let err = dispatch(
-            &d,
-            "subagent_create",
-            &json!({ "threadId": "thread-ada", "prompt": "Ok.", "task": "y".repeat(2001) }),
-        )
-        .await
-        .unwrap_err();
-        assert!(err.contains("task"), "{err}");
-        assert!(bots.get("ada-junior-1").await.unwrap().is_none());
-        let err = dispatch(
-            &d,
-            "subagent_create",
-            &json!({ "threadId": "missing", "prompt": "Ok." }),
-        )
-        .await
-        .unwrap_err();
-        assert!(err.contains("threadId"), "{err}");
-    }
-
-    #[tokio::test]
-    async fn task_lands_as_brief_plus_created_by() {
-        let (dir, bots, notify) = world().await;
-        let roster = bots.list().await.unwrap();
-        dispatch(
-            &deps(&bots, &roster, &notify),
-            "subagent_create",
-            &json!({
-                "threadId": "thread-ada",
-                "prompt": "  File the notes.  ",
-                "name": "   ",
-                "inheritParentPrompt": true,
-                "task": "  Sort today's mail.  ",
-            }),
-        )
-        .await
-        .unwrap();
-        let child = bots.get("ada-junior-1").await.unwrap().unwrap();
-        assert_eq!(child["name"], "Ada junior 1");
-        assert_eq!(child["brief"], "Sort today's mail.");
-        assert_eq!(child["createdBy"], "Ada");
-        assert_eq!(child["subagent"]["prompt"], "File the notes.");
-        assert_eq!(child["subagent"]["inheritParentPrompt"], true);
-        assert!(child["firstMessage"].is_null());
-        let raw = std::fs::read_to_string(dir.path().join("ada-junior-1/.bot/bot.json")).unwrap();
-        assert!(raw.contains("Sort today's mail."));
-        assert!(raw.contains("\"createdBy\": \"Ada\"") || raw.contains("\"createdBy\":\"Ada\""));
-        let agents = std::fs::read_to_string(dir.path().join("ada-junior-1/AGENTS.md")).unwrap();
-        assert!(agents.contains("File the notes."));
-        assert!(!agents.contains("Sort today's mail."));
-    }
-
-    #[tokio::test]
-    async fn a_subagent_is_stored_within_the_cap_and_the_parent_is_left_alone() {
-        let (_dir, bots, notify) = world().await;
-        bots.save("ada", &json!({ "runtimeMode": "full-access" }), false)
-            .await
-            .unwrap();
-        let roster = bots.list().await.unwrap();
-        let mut d = deps(&bots, &roster, &notify);
-        d.settings = json!({ "maxRuntimeMode": "auto" });
-        dispatch(
-            &d,
-            "subagent_create",
-            &json!({ "threadId": "thread-ada", "prompt": "Look things up." }),
-        )
-        .await
-        .unwrap();
-        let child = bots.get("ada-junior-1").await.unwrap().unwrap();
-        assert_eq!(child["runtimeMode"], "auto");
-        let parent = bots.get("ada").await.unwrap().unwrap();
-        assert_eq!(parent["runtimeMode"], "full-access");
+fn optional_bool(args: &Value, key: &str) -> Result<Option<bool>, String> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Bool(value)) => Ok(Some(*value)),
+        Some(_) => Err(format!("{key} must be a boolean.")),
     }
 }
+
+/// The settings cap, stored when it is still inside the parent's helper allowlist.
+/// Create already applied the policy. This only lowers a mode that sits above the cap,
+/// or writes the launch mode when the policy left the field unset.
+async fn cap_runtime_mode(d: &Deps<'_>, parent: &Value, bot: Value) -> Result<Value, String> {
+    let capped = crate::bots::provisioner::launch_runtime_mode(&bot, &d.settings);
+    if bot["runtimeMode"].as_str() == Some(capped) {
+        return Ok(bot);
+    }
+    if !crate::bots::helpers_policy::runtime_allowed(parent, capped) {
+        return Ok(bot);
+    }
+    let slug = bot["slug"].as_str().unwrap_or("").to_string();
+    d.bots
+        .save(&slug, &json!({ "runtimeMode": capped }), false)
+        .await
+        .map_err(|err| err.message)
+}
+
+#[cfg(test)]
+#[path = "subagent_tools_tests.rs"]
+mod tests;
+
+#[cfg(test)]
+#[path = "subagent_policy_tests.rs"]
+mod policy_tests;
