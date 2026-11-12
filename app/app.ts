@@ -15,7 +15,7 @@ setGatewayUrl(HBOTS_URL);
 
 // Any gateway the person runs: their machine, a Tailscale address or a tunnel. Plain `http:` to a host
 // name on Apple also needs `appTransportSecurity.allowsArbitraryLoads` in app.json.
-export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session\nsecret.keep drafts\nfs.read app:/tmp\nfs.write app:/tmp\ndevice.microphone purpose.microphone\ndevice.notifications purpose.notifications';
+export const grants = 'net.fetch https:\nnet.fetch http:\nsecret.keep session\nsecret.keep drafts\nsecret.keep section-order\nfs.read app:/tmp\nfs.write app:/tmp\ndevice.microphone purpose.microphone\ndevice.notifications purpose.notifications';
 
 const sources: Sources = {
   ...sessionSources,

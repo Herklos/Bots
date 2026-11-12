@@ -23,6 +23,10 @@ component InboxRow
     makeMain: action
     editBot: action
     editGroup: action
+    move: action
+    showMove: bool
+    canUp: bool
+    canDown: bool
   derive mine = bots.filter(b => row.kind == "bot" and b.slug == row.id)
   derive pinned = mine.filter(b => b.pinned).length > 0
   derive botMuted = mine.filter(b => not b.notifications).length > 0
@@ -63,6 +67,12 @@ component InboxRow
       editGroup(row.id)
     else
       editBot(row.id)
+  action chooseUp()
+    closeMenu()
+    move(row.key, -1)
+  action chooseDown()
+    closeMenu()
+    move(row.key, 1)
   view
     column
       link class=ConversationLink href=(row.kind == "group" ? path("group", row.id) : path("chat", row.id)) contextmenu=openFromSecondary testId=(row.kind == "group" ? `group-${row.id}` : `bot-${row.id}`) aria-current=(current ? "page" : "false") background-color=(current ? "surface.raised" : "transparent")
@@ -89,6 +99,11 @@ component InboxRow
             text (row.notifications ? t("edit.mute") : t("edit.unmute")) testId=`menu-mute-${row.id}`
           button class=TextControl appearance="none" press=chooseEdit aria-label=t("group.edit") width="100%" justify-content="flex-start"
             text t("group.edit") testId=`menu-edit-${row.id}`
+          if showMove
+            button class=TextControl appearance="none" press=chooseUp disabled=(not canUp) aria-label=t("inbox.moveUp") width="100%" justify-content="flex-start" testId=`menu-up-${row.id}`
+              text t("inbox.moveUp")
+            button class=TextControl appearance="none" press=chooseDown disabled=(not canDown) aria-label=t("inbox.moveDown") width="100%" justify-content="flex-start" testId=`menu-down-${row.id}`
+              text t("inbox.moveDown")
       if menuOpen and row.kind == "bot"
         column role="menu" aria-label=row.name gap="2px" padding="space.xs" border-radius="radius.md" background-color="surface.card" border="1px solid surface.line" box-shadow="0 4px 16px rgba(0,0,0,0.25)" testId="row-menu"
           button class=TextControl appearance="none" press=choosePin aria-label=(pinned ? t("edit.unpin") : t("edit.pin")) width="100%" justify-content="flex-start"
@@ -101,6 +116,11 @@ component InboxRow
             text t("panel.edit") testId=`menu-edit-${row.id}`
           button class=TextControl appearance="none" press=chooseMain aria-label=t("edit.makeMain") width="100%" justify-content="flex-start"
             text t("edit.makeMain") testId=`menu-main-${row.id}`
+          if showMove
+            button class=TextControl appearance="none" press=chooseUp disabled=(not canUp) aria-label=t("inbox.moveUp") width="100%" justify-content="flex-start" testId=`menu-up-${row.id}`
+              text t("inbox.moveUp")
+            button class=TextControl appearance="none" press=chooseDown disabled=(not canDown) aria-label=t("inbox.moveDown") width="100%" justify-content="flex-start" testId=`menu-down-${row.id}`
+              text t("inbox.moveDown")
 
 // A Bot bubble: one markdown text when the message has no table, otherwise each
 // text slice and each pipe table. Both the 1:1 transcript and a room use this.

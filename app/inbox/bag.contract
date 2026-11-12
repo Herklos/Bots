@@ -17,6 +17,7 @@ shape InboxBag
   plusOpen: bool
   bots: Bot[]
   convos: Convo[]
+  sectionHomes: string[]
   chat: Chat
   slug: string
   query: string

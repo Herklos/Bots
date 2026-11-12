@@ -1,0 +1,51 @@
+use Convo from "../ui/shapes.contract"
+
+// One sidebar section, as settings.sections stores it. `chats` and `hidden`
+// keep an empty name. Custom ids are `s` plus 7 lowercase letters or digits.
+shape Section
+  id: string
+  name: string
+  collapsed: bool
+  sort: string
+  items: string[]
+
+fn itemOf(c: Convo): string = c.kind == "group" ? `group:${c.id}` : `bot:${c.id}`
+
+fn homeId(sections: Section[], key: string): string = match first(sections.filter(s => s.id != "hidden" and s.items.includes(key))) { case some(s) => s.id, case none => "chats" }
+
+fn pad3(n: number): string = n < 0 ? "000" : n + 1 < 10 ? `00${n + 1}` : n + 1 < 100 ? `0${n + 1}` : `${n + 1}`
+
+// The first section that lists the key, or the Chats section when none does.
+// Hidden never owns a row. A missing Chats section sorts before the others.
+fn ownerRank(sections: Section[], key: string): number = match first(sections.map((s, i) => s.id != "hidden" and s.items.includes(key) ? i : -1).filter(n => n >= 0)) { case some(n) => n, case none => sections.map(s => s.id).indexOf("chats") }
+
+fn sectionById(sections: Section[], id: string): Section = match first(sections.filter(s => s.id == id)) { case some(s) => s, case none => Section(id="chats", name="", collapsed=false, sort="recent", items=[]) }
+
+// Manual membership keeps its stored place. Anything else keeps the recency
+// order `convos` already has, after the manual rows.
+fn itemRank(sections: Section[], convos: Convo[], key: string): number = sectionById(sections, homeId(sections, key)).sort == "manual" and sectionById(sections, homeId(sections, key)).items.includes(key) ? sectionById(sections, homeId(sections, key)).items.indexOf(key) : 400 + convos.map(c => itemOf(c)).indexOf(key)
+
+fn orderKey(sections: Section[], convos: Convo[], c: Convo): string = `${pad3(ownerRank(sections, itemOf(c)))}:${pad3(itemRank(sections, convos, itemOf(c)))}`
+
+// No sections, or a search: the recency feed, unchanged. Search must not become the saved order.
+fn arranged(convos: Convo[], sections: Section[], query: string): Convo[] = query != "" or sections.length == 0 ? convos : sortBy(convos, c => orderKey(sections, convos, c))
+
+fn homeAt(homes: string[], n: number): string = n < 0 ? "" : match homes.at(n) { case some(h) => h, case none => "" }
+
+fn withChats(sections: Section[]): Section[] = sections.map(s => s.id).includes("chats") ? sections : [Section(id="chats", name="", collapsed=false, sort="recent", items=[])].concat(sections)
+
+fn swapItems(items: string[], a: string, b: string): string[] = items.map(i => i == a ? b : i == b ? a : i)
+
+fn rewrite(sections: Section[], id: string, items: string[], sort: string): Section[] = sections.map(s => s.id == id ? Section(s, sort=sort, items=items) : s)
+
+// A move stays inside one section. Manual rows swap in the stored list, so a
+// pinned or hidden membership that is not on screen keeps its place.
+fn nextItems(stored: Section, visible: string[], a: string, b: string): string[] = stored.sort == "manual" and stored.items.includes(a) and stored.items.includes(b) ? swapItems(stored.items, a, b) : swapItems(visible, a, b).concat(stored.items.filter(i => not visible.includes(i)))
+
+fn encodeSection(s: Section): string = `${s.id}\u001f${s.name}\u001f${s.collapsed ? "1" : "0"}\u001f${s.sort}\u001f${s.items.join("\u001f")}`
+
+fn encodeSections(rows: Section[]): string[] = rows.map(s => encodeSection(s))
+
+fn fieldAt(row: string, n: number): string = match row.split("\u001f").at(n) { case some(s) => s, case none => "" }
+
+fn sectionFrom(row: string): Section = Section(id=fieldAt(row, 0), name=fieldAt(row, 1), collapsed=(fieldAt(row, 2) == "1"), sort=(fieldAt(row, 3) == "recent" ? "recent" : "manual"), items=row.split("\u001f").slice(4).filter(s => s != ""))

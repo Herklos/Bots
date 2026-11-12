@@ -5,6 +5,7 @@ use Prefs, initialsOf from "../ui/root-types.contract"
 use Screen, PageTitle, HeroTitle, TextControl, IconControl, ConversationLink, PrimaryButton from "../ui/controls.contract"
 use SidebarBar, Disc, TileLink, SearchField from "../ui/sidebar.contract"
 use InboxRow from "./inbox.contract"
+use homeAt from "./order.contract"
 use Face, Avatar from "../face.contract"
 use Glyph from "../glyph.contract"
 use FirstBot from "../bot/first.contract"
@@ -23,6 +24,7 @@ component Inbox
     toggleHidden: action
     openRowMenu: action
     closeRowMenu: action
+    moveRow: action
     editBotFromRow: action
     editGroupFromRow: action
     retry: action
@@ -104,11 +106,15 @@ component Inbox
                   text b.name font="-exact-footnote" font-weight=600 max-width="100%" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" text-align="center"
                   if b.aboveLimit
                     text t("inbox.aboveLimit") font="-exact-footnote" color="ink.muted" max-width="100%" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" text-align="center" testId=`above-limit-${b.slug}`
-        scroll id="bots-list" flex=1 min-height=0
-          column padding="0 space.sm" gap="2px"
-            for c in inboxBag.convos key=c.key
-              InboxRow(row=c, bots=inboxBag.bots, current=(c.kind == "group" ? (inboxBag.convoName == "group" and inboxBag.roomId == c.id) : (inboxBag.convoName == "chat" and inboxBag.slug == c.id)), menuOpen=(inboxBag.rowMenu == c.key), openMenu=openRowMenu, closeMenu=closeRowMenu, pin=doPin, hide=doHide, mute=doMute, muteGroup=doMuteGroup, makeMain=doMain, editBot=editBotFromRow, editGroup=editGroupFromRow)
-            if inboxBag.hiddenBots.length > 0
+        column flex=1 min-height=0
+          // One virtualized list. An empty list beside another does not take a drop.
+          list id="bots-list" appearance="none" virtualized=true flex=1 min-height=0 width="100%" box-sizing="border-box"
+            for c, i in inboxBag.convos key=c.key
+              column padding="2px space.sm"
+                column width=0 height=0 overflow="hidden" testId=`at-${i}-${c.key}`
+                InboxRow(row=c, bots=inboxBag.bots, current=(c.kind == "group" ? (inboxBag.convoName == "group" and inboxBag.roomId == c.id) : (inboxBag.convoName == "chat" and inboxBag.slug == c.id)), menuOpen=(inboxBag.rowMenu == c.key), openMenu=openRowMenu, closeMenu=closeRowMenu, pin=doPin, hide=doHide, mute=doMute, muteGroup=doMuteGroup, makeMain=doMain, editBot=editBotFromRow, editGroup=editGroupFromRow, move=moveRow, showMove=(inboxBag.query == ""), canUp=(inboxBag.query == "" and i > 0 and homeAt(inboxBag.sectionHomes, i) != "" and homeAt(inboxBag.sectionHomes, i) == homeAt(inboxBag.sectionHomes, i - 1)), canDown=(inboxBag.query == "" and homeAt(inboxBag.sectionHomes, i) != "" and homeAt(inboxBag.sectionHomes, i) == homeAt(inboxBag.sectionHomes, i + 1)))
+          if inboxBag.hiddenBots.length > 0
+            column padding="0 space.sm" gap="2px"
               button class=ConversationLink appearance="none" press=toggleHidden aria-expanded=inboxBag.hiddenOpen testId="hidden-toggle"
                 row gap="space.sm" align-items="center" flex=1 min-width=0
                   text t("inbox.hidden", n=inboxBag.hiddenBots.length) font="-exact-footnote" color="ink.muted" flex=1

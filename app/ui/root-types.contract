@@ -1,5 +1,6 @@
 use shapeOf, colorOf from "./fns.contract"
 use Bot, Row, RoomMember, RoomMessage, MentionHit, FaceBit, Convo from "./shapes.contract"
+use Section from "../inbox/order.contract"
 
 shape Reply
   ok: bool
@@ -113,6 +114,7 @@ shape Prefs
   noticeWhen: string
   noticeEnabledMissing: bool
   groupAnswerPolicy: string
+  sections: Section[]
 
 // The host page, as the poster reads it. `hidden` or an unfocused window is background.
 shape PageState

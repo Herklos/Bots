@@ -1,6 +1,7 @@
 import type { Sources, Result } from '../app.contract.d.ts';
 import { fixtureDefaultMode, fixtureGroupAnswer, setFixtureDefaultMode, setFixtureGroupAnswer, savedEffort } from '../host/fixture.ts';
 import { REACH_GATEWAY, say, localize, call, read, setNoticeHost, hostNotice, reply, systemChecked, setSystemChecked } from '../host/gateway.ts';
+import { forgetSections, offlineSections, readSections, rememberSections, sectionsFromRows } from '../host/sections.ts';
 import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, postUnread } from '../host/notices.ts';
 
 const storedRuntimeMode = (mode: string): boolean =>
@@ -26,12 +27,15 @@ export const settingsSources = {
     return { ...reply(r), token: '' };
   },
   enableNotifications: async (_args, store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ notifications: { enabled: true } }) })),
-  loadPrefs: async (_args, store): Promise<Result<'loadPrefs'>> => {
+  loadPrefs: async ([slug], store): Promise<Result<'loadPrefs'>> => {
     let body: any = {};
+    let offline = false;
+    const held = offlineSections(slug, store);
     try {
       body = await read(store, '/api/settings');
     } catch (error) {
-      if (fixtureGroupAnswer === '' && fixtureDefaultMode === '') throw error;
+      offline = true;
+      if (fixtureGroupAnswer === '' && fixtureDefaultMode === '' && held === null) throw error;
     }
     const note = noticePrefs(body);
     return {
@@ -47,7 +51,19 @@ export const settingsSources = {
       noticeWhen: note.when,
       noticeEnabledMissing: note.enabled === null,
       groupAnswerPolicy: fixtureGroupAnswer !== '' ? fixtureGroupAnswer : (body.groupAnswerPolicy === 'everyone' || body.groupAnswerPolicy === 'chief' ? body.groupAnswerPolicy : 'last'),
+      sections: offline ? (held ?? []) : readSections(body.sections),
     };
+  },
+  saveSections: async ([rows], store) => {
+    const sections = sectionsFromRows(rows);
+    if (!sections) return { ok: false, error: '' };
+    const r = await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ sections }) });
+    if (!r.ok && r.error === REACH_GATEWAY) {
+      rememberSections(store, sections);
+      return { ok: true, error: '' };
+    }
+    if (r.ok) forgetSections(store);
+    return reply(r);
   },
   loadNotice: async (): Promise<Result<'loadNotice'>> => {
     // Permission can change from Settings. Ask the host, then remember it for the poster.
@@ -205,7 +221,7 @@ export const settingsSources = {
     return { ok: true, version: String(r.body.version ?? '') };
   },
   noteUnread: async ([visibility, focused, available, state, enabled, enabledMissing, sound, preview, when, openSlug, openRoom], store): Promise<Result<'noteUnread'>> => {
-    if (FIXTURE_SLUG(openSlug) || FIXTURE_SLUG(openRoom) || openSlug === 'fixture-busy' || openRoom === 'fixture-busy' || openSlug === 'fixture-crowd' || openRoom === 'fixture-crowd') return { ok: true, error: '' };
+    if (FIXTURE_SLUG(openSlug) || FIXTURE_SLUG(openRoom) || openSlug === 'fixture-busy' || openRoom === 'fixture-busy' || openSlug === 'fixture-crowd' || openRoom === 'fixture-crowd' || openSlug === 'fixture-order') return { ok: true, error: '' };
     const prefs: NoticePrefs = {
       enabled: enabledMissing ? null : enabled,
       sound,
@@ -222,4 +238,4 @@ export const settingsSources = {
   setDefaultModel: async ([instanceId, model, effort], store) => reply(await call(store, '/api/settings', {
     method: 'PUT', body: JSON.stringify({ defaultModel: { instanceId, model, ...(effort !== '' ? { effort } : {}) } }),
   })),
-} satisfies Pick<Sources, 'loadManagementMcp' | 'setManagementMcp' | 'createManagementMcpCredential' | 'revokeManagementMcpCredential' | 'enableNotifications' | 'loadPrefs' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'setDefaultModel'>;
+} satisfies Pick<Sources, 'loadManagementMcp' | 'setManagementMcp' | 'createManagementMcpCredential' | 'revokeManagementMcpCredential' | 'enableNotifications' | 'loadPrefs' | 'saveSections' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'setDefaultModel'>;
