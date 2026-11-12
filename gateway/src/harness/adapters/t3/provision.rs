@@ -152,3 +152,18 @@ impl Provisioning for T3 {
         Ok(crate::harness::providers::from_config(&config))
     }
 }
+
+/// Provider rows for `hbots doctor`. Same `server.getConfig` read as [`Provisioning::provider_config`].
+/// Auth material stays in the adapter.
+pub(crate) async fn provider_health(
+    t3: &T3,
+) -> Result<Vec<crate::harness::providers::ProviderHealth>, HarnessError> {
+    let config = t3
+        .rpc()
+        .await
+        .map_err(HarnessError::unavailable)?
+        .call("server.getConfig", json!({}))
+        .await
+        .map_err(HarnessError::failed)?;
+    Ok(crate::harness::providers::health_from_config(&config))
+}

@@ -105,6 +105,46 @@ pub(crate) fn from_config(config: &Value) -> Value {
     json!({ "providers": providers })
 }
 
+/// One provider from the harness config, without its auth object.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProviderHealth {
+    pub instance_id: String,
+    pub display_name: String,
+    pub enabled: bool,
+    pub installed: bool,
+    pub status: String,
+    pub models: usize,
+}
+
+/// Every provider in a config body, including ones that are not ready.
+/// The auth object stays out: it can carry an email.
+pub(crate) fn health_from_config(config: &Value) -> Vec<ProviderHealth> {
+    config["providers"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|provider| {
+            let instance_id = provider["instanceId"].as_str().unwrap_or("").to_string();
+            if instance_id.is_empty() {
+                return None;
+            }
+            let display_name = provider["displayName"]
+                .as_str()
+                .filter(|name| !name.is_empty())
+                .unwrap_or(&instance_id)
+                .to_string();
+            Some(ProviderHealth {
+                instance_id,
+                display_name,
+                enabled: provider["enabled"] == true,
+                installed: provider["installed"] == true,
+                status: provider["status"].as_str().unwrap_or("unknown").to_string(),
+                models: provider["models"].as_array().map(Vec::len).unwrap_or(0),
+            })
+        })
+        .collect()
+}
+
 /// The selection T3 stores for a choice, checked against what the provider offers. An effort the
 /// model doesn't offer is refused; no effort means the model's own default. A choice that is the
 /// Bot's current one is kept even when T3 no longer lists it.
@@ -272,6 +312,24 @@ mod tests {
         assert!(selection(&list, "cursor", "x", None, &Value::Null)
             .unwrap_err()
             .contains("provider"));
+    }
+
+    #[test]
+    fn health_lists_providers_that_are_not_ready_and_drops_auth() {
+        let mut config = config();
+        config["providers"][0]["auth"]["email"] = json!("someone@example.com");
+        let rows = health_from_config(&config);
+        let names: Vec<&str> = rows.iter().map(|row| row.display_name.as_str()).collect();
+        assert!(names.contains(&"Cursor"));
+        assert!(names.contains(&"Claude Code"));
+        let cursor = rows.iter().find(|row| row.instance_id == "cursor").unwrap();
+        assert!(!cursor.enabled);
+        assert!(!cursor.installed);
+        assert_eq!(cursor.status, "disabled");
+        assert_eq!(cursor.models, 0);
+        let dumped = format!("{rows:?}");
+        assert!(!dumped.contains("someone@example.com"));
+        assert!(!dumped.contains("auth"));
     }
 
     #[test]

@@ -86,13 +86,7 @@ pub(crate) async fn up(flags: &Flags) -> Result<()> {
         save_t3_token(&token_file, &env_file, inline_token, &issued)?;
     }
 
-    let reachable = reqwest::Client::builder()
-        .timeout(Duration::from_secs(3))
-        .build()?
-        .get(format!("{t3_url}/.well-known/t3/environment"))
-        .send()
-        .await
-        .is_ok_and(|r| r.status().is_success());
+    let reachable = t3_reachable(&t3_url).await;
     if !reachable {
         print_line(&format!("Warning: T3 Code doesn't answer at {t3_url}. Start it (`t3 up` or the desktop app) before creating Bots."));
     }
@@ -149,10 +143,25 @@ pub(crate) fn configured_token(
         })
 }
 
-/// `GET /api/auth/session` with the saved bearer token. `Ok(false)` when the session is missing
-/// `preview:operate` or T3 rejects the token. A transport or server failure is `Err`, so a good
-/// token is kept when T3 Code does not answer.
-pub(crate) async fn session_can_operate(t3_url: &str, token: &str) -> Result<bool> {
+/// `GET {t3_url}/.well-known/t3/environment` succeeded.
+pub(crate) async fn t3_reachable(t3_url: &str) -> bool {
+    let Ok(client) = reqwest::Client::builder()
+        .timeout(Duration::from_secs(3))
+        .build()
+    else {
+        return false;
+    };
+    client
+        .get(format!("{t3_url}/.well-known/t3/environment"))
+        .send()
+        .await
+        .is_ok_and(|response| response.status().is_success())
+}
+
+/// `GET /api/auth/session` with the saved bearer token.
+/// `Ok(None)` when T3 rejects the token. A transport or server failure is `Err`,
+/// so a good token is kept when T3 Code does not answer.
+async fn fetch_session(t3_url: &str, token: &str) -> Result<Option<serde_json::Value>> {
     let response = reqwest::Client::builder()
         .timeout(Duration::from_secs(3))
         .build()?
@@ -163,13 +172,58 @@ pub(crate) async fn session_can_operate(t3_url: &str, token: &str) -> Result<boo
         .context("T3 Code did not answer /api/auth/session")?;
     let status = response.status();
     if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
-        return Ok(false);
+        return Ok(None);
     }
     if !status.is_success() {
         bail!("T3 Code returned {status} for /api/auth/session");
     }
     let body: serde_json::Value = response.json().await.context("T3 session was not JSON")?;
-    Ok(scopes_allow_preview(&body))
+    Ok(Some(body))
+}
+
+/// `Ok(false)` when the session is missing `preview:operate` or T3 rejects the token.
+/// A transport or server failure is `Err`, so a good token is kept when T3 Code does not answer.
+pub(crate) async fn session_can_operate(t3_url: &str, token: &str) -> Result<bool> {
+    Ok(fetch_session(t3_url, token)
+        .await?
+        .is_some_and(|body| scopes_allow_preview(&body)))
+}
+
+/// Whether T3 accepted the token, and the scopes it returned. The token itself is not included.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct TokenCheck {
+    pub valid: bool,
+    pub scopes: Vec<String>,
+}
+
+pub(crate) fn token_from_session(body: Option<&serde_json::Value>) -> TokenCheck {
+    let Some(body) = body else {
+        return TokenCheck {
+            valid: false,
+            scopes: Vec::new(),
+        };
+    };
+    let scopes = body
+        .get("scopes")
+        .and_then(|scopes| scopes.as_array())
+        .map(|scopes| {
+            scopes
+                .iter()
+                .filter_map(|scope| scope.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let valid = match body.get("authenticated") {
+        Some(serde_json::Value::Bool(ok)) => *ok,
+        _ => true,
+    };
+    TokenCheck { valid, scopes }
+}
+
+pub(crate) async fn token_check(t3_url: &str, token: &str) -> Result<TokenCheck> {
+    Ok(token_from_session(
+        fetch_session(t3_url, token).await?.as_ref(),
+    ))
 }
 
 /// True when the session body's `scopes` array includes `preview:operate`.

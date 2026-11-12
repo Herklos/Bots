@@ -56,7 +56,9 @@ fn setting_a_key_replaces_only_its_line() {
 
 #[test]
 fn help_lists_the_commands() {
-    for command in ["up", "status", "update", "rollback", "service", "serve"] {
+    for command in [
+        "up", "status", "doctor", "update", "rollback", "service", "serve",
+    ] {
         assert!(
             HELP.contains(&format!("  {command}")),
             "{command} missing from help"

@@ -11,6 +11,7 @@ use std::{
     time::Duration,
 };
 
+mod doctor;
 mod env;
 #[cfg(test)]
 mod tests;
@@ -34,6 +35,7 @@ Usage: hbots <command> [options]
                        --refresh-token  Ask T3 Code for a new token, even when this one can operate the browser
   serve              Run the gateway in this terminal.
   status [--json]    Show the version, the service and the gateway.
+  doctor [--json]    Show a redacted diagnostics report.
   update [version]   Install the newest release (or <version>) and restart the service.
                        --check            Only say whether there is a newer release
                        --preview          Include preview releases
@@ -71,6 +73,7 @@ pub(crate) async fn run(args: &[String]) -> Option<i32> {
         }
         "up" => crate::harness::t3::setup::up(&flags).await,
         "status" => status(&flags),
+        "doctor" => doctor::doctor(&flags).await,
         "update" => update(&flags, &rest).await,
         "rollback" => rollback(),
         "service" => service_command(&rest),
