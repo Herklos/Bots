@@ -164,6 +164,7 @@ async fn main() -> anyhow::Result<()> {
         provision_now: tokio::sync::Notify::new(),
         sync: storage::sync::SyncSlot::default(),
         holds: chat::HeldReads::new(),
+        hook_limit: Arc::new(crate::network::ratelimit::Limiter::new()),
         cfg,
     });
     // Write the defaults once; an existing file, even an unreadable one, is left alone.

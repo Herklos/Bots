@@ -122,6 +122,38 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
         }
         next["notifications"] = merged;
     }
+    if let Some(webhooks) = patch.get("webhooks") {
+        let webhooks = webhooks
+            .as_object()
+            .ok_or_else(|| ApiError::bad_request("webhooks must be an object"))?;
+        let mut merged = current["webhooks"].clone();
+        if !merged.is_object() {
+            merged = json!({ "publicBase": "" });
+        }
+        for (k, v) in webhooks {
+            match k.as_str() {
+                "publicBase" => {
+                    let text = v.as_str().ok_or_else(|| {
+                        ApiError::bad_request(
+                            "webhooks.publicBase must be empty or an https origin",
+                        )
+                    })?;
+                    if !crate::chat::routines::webhook::public_base_ok(text) {
+                        return Err(ApiError::bad_request(
+                            "webhooks.publicBase must be empty or an https origin",
+                        ));
+                    }
+                    merged[k] = json!(crate::chat::routines::webhook::canonical_public_base(text));
+                }
+                _ => {
+                    return Err(ApiError::bad_request(format!(
+                        "Unknown webhooks setting: {k}"
+                    )));
+                }
+            }
+        }
+        next["webhooks"] = merged;
+    }
     // The default for a new Bot is stored at or below the cap.
     crate::bots::runtime_mode::apply_default_cap(&mut next);
     storage::write_json(&s.settings_path(), &next).await?;

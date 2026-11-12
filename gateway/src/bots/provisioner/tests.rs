@@ -301,6 +301,7 @@ fn fixture_state(dir: &std::path::Path, t3_url: String) -> Arc<AppState> {
         mcp_token: "fixture-only".into(),
         provision_now: tokio::sync::Notify::new(),
         holds: crate::chat::HeldReads::new(),
+        hook_limit: Arc::new(crate::network::ratelimit::Limiter::new()),
         access: None,
         exposure: Exposure::from_env(|_| None),
         remote: Arc::new(RemoteAccess::new(

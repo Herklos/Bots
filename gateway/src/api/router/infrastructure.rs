@@ -85,6 +85,25 @@ pub(super) fn public_routes() -> (Router<Arc<AppState>>, Vec<Value>) {
         "/mcp/bot",
         any(mcp_route)
     );
+    // Outside require_login. The URL token is the secret; no T3 bearer is added.
+    route!(
+        router,
+        entries,
+        "Webhook ingress. The URL token is the only secret.",
+        "/hooks",
+        any(hook_route).layer(axum::extract::DefaultBodyLimit::max(
+            crate::api::hooks_api::BODY_LIMIT
+        ))
+    );
+    route!(
+        router,
+        entries,
+        "Webhook ingress. The URL token is the only secret.",
+        "/hooks/{*rest}",
+        any(hook_route).layer(axum::extract::DefaultBodyLimit::max(
+            crate::api::hooks_api::BODY_LIMIT
+        ))
+    );
     route!(
         router,
         entries,

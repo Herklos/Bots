@@ -215,6 +215,10 @@ async fn public_guard(State(s): State<Arc<AppState>>, mut req: Request, next: Ne
         if path == "/mcp/bot" && !req.headers().contains_key("cf-ray") {
             return next.run(req).await;
         }
+        // Senders come through the tunnel, so `cf-ray` is expected. The URL token is the secret.
+        if hook_path(&path) && hook_method(req.method()) {
+            return next.run(req).await;
+        }
         if read && landing_path(&path) {
             return serve_landing(&s.cfg.static_dir, &path, req).await;
         }
@@ -234,6 +238,15 @@ async fn serve_landing(static_dir: &Path, path: &str, req: Request) -> Response 
         Ok(res) => res.into_response(),
         Err(infallible) => match infallible {},
     }
+}
+
+/// `/hooks/...` on the public port. POST, PUT, and PATCH only.
+fn hook_path(path: &str) -> bool {
+    path.starts_with("/hooks/")
+}
+
+fn hook_method(method: &Method) -> bool {
+    matches!(*method, Method::POST | Method::PUT | Method::PATCH)
 }
 
 fn not_found() -> Response {

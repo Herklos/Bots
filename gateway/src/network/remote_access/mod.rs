@@ -152,7 +152,37 @@ impl RemoteAccess {
     }
 
     fn running_url(&self) -> Option<String> {
-        self.tunnel.lock().unwrap().as_ref().map(|r| r.url.clone())
+        self.quick_tunnel_url()
+    }
+
+    /// The quick tunnel's public origin while cloudflared is running.
+    /// The name changes every time the tunnel starts. There is no named tunnel.
+    pub fn quick_tunnel_url(&self) -> Option<String> {
+        self.tunnel
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .as_ref()
+            .map(|running| running.url.clone())
+    }
+
+    /// This computer's own origin, when no public hook address is available.
+    #[allow(
+        dead_code,
+        reason = "webhook URL composition reads it; the sheet that shows the address is a later phase"
+    )]
+    pub fn local_origin(&self) -> String {
+        self.local_tunnel_url()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_quick_tunnel_for_test(&self, url: String) {
+        let task = tokio::spawn(async {});
+        *self.tunnel.lock().unwrap_or_else(|err| err.into_inner()) = Some(Running {
+            id: 0,
+            url,
+            kill: None,
+            task,
+        });
     }
 
     /// Everything the Settings screen shows about remote access.
