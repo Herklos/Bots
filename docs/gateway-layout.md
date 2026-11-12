@@ -20,6 +20,7 @@ Domain code calls the harness. `gateway/src/harness/adapters/t3/` is the only pl
 | Provisioning | Projects, a main thread, the brief, the model, and provider config |
 | Browser | Pages, frames, take and control, input, tabs, and typing |
 | Relay | The `/t3` HTTP and websocket proxy |
+| Repos | Whether a workspace folder is a repository. The T3 adapter returns unsupported and sends no request |
 
 `snapshot.rs` holds the neutral values those traits return. `error.rs` is unavailable, failed, or unsupported. `providers.rs` lists models for the computer the gateway is using. `connect` returns `Arc<dyn Harness>`.
 
@@ -29,7 +30,7 @@ Domain code calls the harness. `gateway/src/harness/adapters/t3/` is the only pl
 
 - `storage/`: `workspace.rs` is the trait the library and connectors use. `settings/` is the saved choice. `adapters/` has `filesystem/`, `anytype/`, and `memory`.
 - `bots/`: Bot records, the roster, usage, the provisioner, and the computer screen. The computer tab picker stays here.
-- `chat/`: transcripts the client sees, rooms, routines as the person named them, and approvals as the person answered them.
+- `chat/`: transcripts the client sees, rooms, routines as the person named them, approvals as the person answered them, and the code gate.
 - `projects/`: the old Projects board, still off.
 - `vault/`: secrets and browser fill. Fill calls the harness.
 - `network/`: sessions, exposure, and the tool server.

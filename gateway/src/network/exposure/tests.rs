@@ -147,6 +147,7 @@ fn state(dir: &Path, exposure: Exposure) -> Arc<AppState> {
             "fixture-only".into(),
         ),
         images: crate::chat::images::Resolver::new(),
+        code_signals: crate::chat::code::SignalCache::default(),
         system: crate::platform::release::System::new(cfg.data_root.clone(), cfg.app_dir()),
         mcp_token: "fixture-only".into(),
         provision_now: tokio::sync::Notify::new(),

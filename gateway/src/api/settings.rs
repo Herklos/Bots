@@ -38,7 +38,7 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
             .ok_or_else(|| ApiError::bad_request("beta must be an object"))?;
         let mut merged = current["beta"].clone();
         for (k, v) in beta {
-            if k != "projects" {
+            if !known_beta(k) {
                 return Err(ApiError::bad_request(format!("Unknown beta feature: {k}")));
             }
             merged[k] = json!(v
@@ -90,6 +90,10 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
     crate::bots::runtime_mode::apply_default_cap(&mut next);
     storage::write_json(&s.settings_path(), &next).await?;
     Ok(Json(next))
+}
+
+fn known_beta(key: &str) -> bool {
+    matches!(key, "projects" | "code")
 }
 
 fn require_runtime_mode(key: &str, value: &Value) -> Result<(), ApiError> {

@@ -37,6 +37,9 @@ impl Bots {
                     ));
                 }
             }
+            if let Some(mode) = patch.get("code") {
+                crate::chat::code::require_mode(mode).map_err(ApiError::bad_request)?;
+            }
             if let Some(subagent) = patch.get("subagent") {
                 if subagent.is_null() {
                     if current.as_ref().is_some_and(is_subagent) {
@@ -223,6 +226,12 @@ impl Bots {
                 ))
             }
         };
+        let code_mode = match input.get("code") {
+            None | Some(Value::Null) => None,
+            Some(value) => {
+                Some(crate::chat::code::require_mode(value).map_err(ApiError::bad_request)?)
+            }
+        };
         let goal = match input.get("goal") {
             None | Some(Value::Null) => None,
             Some(Value::String(text)) => {
@@ -319,6 +328,9 @@ impl Bots {
         }
         if let Some(mode) = runtime_mode {
             bot["runtimeMode"] = json!(mode);
+        }
+        if let Some(mode) = code_mode {
+            bot["code"] = json!(mode.as_str());
         }
         if let Some(goal) = goal {
             bot["goal"] = json!(goal);

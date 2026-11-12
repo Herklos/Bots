@@ -187,6 +187,7 @@ pub(super) fn settings_state_with(
             "fixture-only".into(),
         ),
         images: chat::images::Resolver::new(),
+        code_signals: chat::code::SignalCache::default(),
         system: crate::platform::release::System::new(cfg.data_root.clone(), cfg.app_dir()),
         mcp_token: "fixture-only".into(),
         provision_now: tokio::sync::Notify::new(),
