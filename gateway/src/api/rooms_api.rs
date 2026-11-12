@@ -193,7 +193,7 @@ pub(crate) async fn room_send(
     require_json(&h)?;
     let body = parse(&body)?;
     let text = body["text"].as_str().unwrap_or("").trim().to_string();
-    let message_id = chat::message_id(body["messageId"].as_str());
+    let message_id = crate::harness::t3::transcript::message_id(body["messageId"].as_str());
     let room = s.rooms.get(&id).await?;
     let (members, _) = room_snapshot(&s, &room, true).await?;
     let (stored, dispatches) = s

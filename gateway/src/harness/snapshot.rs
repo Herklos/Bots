@@ -27,11 +27,14 @@ impl ThreadSnapshot {
     }
 
     pub(crate) fn transcript(&self) -> Value {
-        crate::chat::transcript(&self.body)
+        crate::harness::t3::transcript::transcript(&self.body)
     }
 
     pub(crate) fn transcript_for(&self, peers: &crate::chat::Peers) -> Value {
-        crate::chat::with_tokens(crate::chat::transcript_for(&self.body, peers), &self.body)
+        crate::harness::t3::transcript::with_tokens(
+            crate::harness::t3::transcript::transcript_for(&self.body, peers),
+            &self.body,
+        )
     }
 
     pub(crate) fn lineage(&self) -> Vec<Value> {
@@ -53,12 +56,12 @@ impl ThreadSnapshot {
     }
 
     pub(crate) fn preview(&self, names: &HashMap<String, String>) -> Option<Value> {
-        crate::chat::thread_meta::latest_preview(&self.body, names)
+        crate::harness::t3::transcript::latest_preview(&self.body, names)
     }
 
     /// Group-thread working flag and the messages the room shows.
     pub(crate) fn group(&self) -> (bool, Vec<Value>) {
-        let transcript = crate::chat::group_transcript(&self.body);
+        let transcript = crate::harness::t3::transcript::group_transcript(&self.body);
         let working = transcript["working"] == true;
         let messages = transcript["messages"]
             .as_array()

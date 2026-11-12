@@ -180,13 +180,20 @@ pub(crate) async fn send_chat(
         .filter(|id| !id.is_empty());
     // Resolve before any reply is stored or any command is dispatched. A refused child
     // builds no command, so the parent thread is not written.
-    let message_id = chat::message_id(body["messageId"].as_str());
+    let message_id = crate::harness::t3::transcript::message_id(body["messageId"].as_str());
     let command = if let Some(child) = asked {
         let rows = parent_rows(&s, &parent).await?;
-        chat::child_send_with(&rows, &parent, child, &text, &files, &message_id)
-            .map_err(ApiError::bad_request)?
+        crate::harness::t3::transcript::child_send_with(
+            &rows,
+            &parent,
+            child,
+            &text,
+            &files,
+            &message_id,
+        )
+        .map_err(ApiError::bad_request)?
     } else {
-        chat::command_with(&parent, &text, &files, &message_id)
+        crate::harness::t3::transcript::command_with(&parent, &text, &files, &message_id)
     };
     let thread = command["threadId"].as_str().unwrap_or(&parent).to_string();
     let turns = s.harness.turns().map_err(|err| err.api())?;

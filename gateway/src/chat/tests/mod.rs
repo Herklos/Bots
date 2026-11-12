@@ -1,4 +1,8 @@
 use super::*;
+use crate::harness::t3::transcript::{
+    child_send, command_with, group_transcript, message_id, provider_failure, send_command,
+    transcript, transcript_for, with_tokens,
+};
 
 mod hold;
 mod prompts;

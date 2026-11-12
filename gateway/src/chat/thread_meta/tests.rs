@@ -1,4 +1,5 @@
 use super::*;
+use crate::harness::t3::transcript::{latest_preview, preview_text, send_command};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 fn message(ordinal: i64, kind: &str, extra: Value) -> Value {
@@ -287,7 +288,7 @@ async fn toggling_one_reaction_twice_leaves_no_mark() {
 #[tokio::test]
 async fn reply_to_round_trips_under_the_gateway_message_id() {
     let meta = ThreadMeta::new(scratch("meta.json").1);
-    let command = crate::chat::send_command("thread-1", "thanks", &[]);
+    let command = send_command("thread-1", "thanks", &[]);
     assert!(command.get("quote").is_none());
     let message_id = command["messageId"].as_str().unwrap();
     assert_eq!(message_id, command["commandId"].as_str().unwrap());

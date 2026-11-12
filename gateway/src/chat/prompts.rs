@@ -66,7 +66,11 @@ pub(crate) async fn store_voice_send(
     let seen = threads
         .add_voice_call(Some(thread), Some(&json!(seconds)), at)
         .await?;
-    let command = send_command(thread, "", &[crate::chat::attachments::command_part(&meta)]);
+    let command = crate::harness::t3::transcript::send_command(
+        thread,
+        "",
+        &[crate::chat::attachments::command_part(&meta)],
+    );
     Ok(json!({
         "attachment": meta,
         "voiceCalls": seen["voiceCalls"],
@@ -100,7 +104,11 @@ pub(crate) async fn dispatch_stored_voice(
     let seen = threads
         .add_voice_call(Some(thread), Some(&json!(seconds)), at)
         .await?;
-    let command = send_command(thread, "", &[crate::chat::attachments::command_part(&meta)]);
+    let command = crate::harness::t3::transcript::send_command(
+        thread,
+        "",
+        &[crate::chat::attachments::command_part(&meta)],
+    );
     Ok(json!({
         "attachment": meta,
         "voiceCalls": seen["voiceCalls"],

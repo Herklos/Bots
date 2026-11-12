@@ -1,4 +1,14 @@
-use super::*;
+use crate::chat::{is_framed_prompt, Peers};
+use serde_json::{json, Value};
+
+const LIVE: &[&str] = &[
+    "running",
+    "in_progress",
+    "pending",
+    "queued",
+    "streaming",
+    "starting",
+];
 
 /// The last segment of a tool name: `mcp__t3-code__schedule_task` is `schedule_task`.
 pub(crate) fn tool_of(item: &Value) -> &str {
