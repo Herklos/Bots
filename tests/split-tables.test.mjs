@@ -3,7 +3,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import test from 'node:test';
 import { pathToFileURL } from 'node:url';
 
-const source = readFileSync(new URL('../app/app.ts', import.meta.url), 'utf8');
+const source = readFileSync(new URL('../app/host/markdown.ts', import.meta.url), 'utf8');
 const start = source.indexOf('type TableAlign');
 const end = source.indexOf('function roomMessage(');
 const extracted = '/tmp/hbots-split-tables.ts';
