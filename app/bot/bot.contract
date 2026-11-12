@@ -2,7 +2,7 @@ use Face from "../face.contract"
 use Avatar from "../face.contract"
 use shapeNames from "../face.contract"
 use Glyph from "../glyph.contract"
-use PageTitle, HeroTitle, QuietButton, TextControl, IconControl, ToggleControl, SwatchControl, ConversationLink, SectionLabel, Chip, IconTile, Segment, Field, PrimaryButton, Bot, Provider, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer, pickerColours, faceColor from "../app.contract"
+use PageTitle, HeroTitle, QuietButton, TextControl, IconControl, ToggleControl, SwatchControl, ConversationLink, SectionLabel, Chip, IconTile, Segment, Field, PrimaryButton, Bot, Provider, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer, pickerColours, faceColor, PanelRow, dot from "../ui/shared.contract"
 use ModelPage, UsageView from "../settings/settings.contract"
 use BotShelf, ScreenCard from "../computer/computer.contract"
 

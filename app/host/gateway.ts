@@ -111,6 +111,9 @@ export function roomsBody(store: any): Promise<any> {
 }
 // The host's notification permission. A tick reads the notice resource; this remembers the last answer.
 export let noticeHost: { available: boolean; state: string } | null = null;
+export function setNoticeHost(value: { available: boolean; state: string } | null) {
+  noticeHost = value;
+}
 export let noticeHostInflight: Promise<{ available: boolean; state: string } | null> | null = null;
 export async function hostNotice(): Promise<{ available: boolean; state: string } | null> {
   if (noticeHost) return noticeHost;
@@ -136,6 +139,9 @@ export function sentFrom(r: Answered, fallback: string): { ok: boolean; error: s
 }
 // The first read on the About tab asks GitHub. Later refreshes use the stored answer.
 export let systemChecked = false;
+export function setSystemChecked(value: boolean) {
+  systemChecked = value;
+}
 
 // POST /api/bots returns the saved Bot. `reply` keeps only ok and error, which drops slug.
 export function madeFromBot(r: Answered): { ok: boolean; id: string; error: string } {

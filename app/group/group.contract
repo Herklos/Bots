@@ -1,6 +1,6 @@
 use Avatar from "../face.contract"
 use Glyph from "../glyph.contract"
-use PageTitle, TextControl, IconControl, ToggleControl, ConversationLink, SectionLabel, IconTile, Field, ChoiceRow, Bot, Room, FaceBit, shapeOf, colorOf, faceColor, bitShape, bitColor, bitState, memberFaces from "../app.contract"
+use PageTitle, TextControl, IconControl, ToggleControl, ConversationLink, SectionLabel, IconTile, Field, ChoiceRow, Bot, Room, FaceBit, shapeOf, colorOf, faceColor, bitShape, bitColor, bitState, memberFaces from "../ui/shared.contract"
 
 component Faces
   props

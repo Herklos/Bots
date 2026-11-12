@@ -1,5 +1,5 @@
 use Avatar from "../face.contract"
-use TextControl, ConversationLink, Bot, Convo, faceColor, showUnread from "../app.contract"
+use TextControl, ConversationLink, Bot, Convo, faceColor, showUnread from "../ui/shared.contract"
 use Faces from "../group/group.contract"
 
 component InboxRow

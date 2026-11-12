@@ -1,5 +1,5 @@
 use Glyph from "../glyph.contract"
-use FileCard, IconControl, SectionLabel, IconTile, PrimaryButton, Bot, Shelf, Computer, tabId, tabTitle from "../app.contract"
+use FileCard, IconControl, SectionLabel, IconTile, PrimaryButton, Bot, Shelf, Computer, tabId, tabTitle from "../ui/shared.contract"
 
 component BotShelf
   props
