@@ -216,7 +216,7 @@ const sources: Sources = {
   restartGateway: async (_args, store) => reply(await call(store, '/api/access/network/restart', { method: 'POST', body: '{}' })),
   loadStorage: async ([gate], store): Promise<Result<'loadStorage'>> => {
     const fallback = '~/.hbots/bots';
-    const blank = { backend: 'filesystem', root: fallback, backendLock: '', rootLock: '', restartRequired: false, canRestart: false, error: '', keySet: false };
+    const blank = { backend: 'filesystem', root: fallback, backendLock: '', rootLock: '', restartRequired: false, canRestart: false, error: '', keySet: false, space: 'hbots', spaceLock: '' };
     if (gate !== '1') return blank;
     const body = await read(store, '/api/storage');
     const saved = body.saved ?? {};
@@ -234,6 +234,8 @@ const sources: Sources = {
       canRestart: body.canRestart === true,
       error: text(body.error),
       keySet: effective.keySet === true || saved.keySet === true,
+      space: text(effective.space) || text(saved.space) || 'hbots',
+      spaceLock: lock(locked.space, 'HBOTS_ANYTYPE_SPACE'),
     };
   },
   saveStorage: async ([path, backend, sendRoot], store) => reply(await call(store, '/api/storage', {
@@ -243,6 +245,7 @@ const sources: Sources = {
       ...(sendRoot === '1' ? { root: path } : {}),
     }),
   })),
+  saveSpace: async ([space], store) => reply(await call(store, '/api/storage', { method: 'PUT', body: JSON.stringify({ space }) })),
   testStorage: async ([path], store) => reply(await call(store, '/api/storage/test', { method: 'POST', body: JSON.stringify({ backend: 'filesystem', root: path }) })),
   copyStorage: async ([path], store) => reply(await call(store, '/api/storage/copy', { method: 'POST', body: JSON.stringify({ root: path }) })),
   restartStorage: async (_args, store) => reply(await call(store, '/api/storage/restart', { method: 'POST', body: '{}' })),

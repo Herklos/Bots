@@ -70,7 +70,11 @@ pub(crate) async fn save(
     if body.get("space").is_some() {
         let requested = field_string(body, "space")?
             .ok_or_else(|| ApiError::bad_request("The Anytype space name is not usable."))?;
-        let space = normalize_space(&requested).map_err(ApiError::bad_request)?;
+        let space = if requested.trim().is_empty() {
+            DEFAULT_SPACE.to_string()
+        } else {
+            normalize_space(&requested).map_err(ApiError::bad_request)?
+        };
         if env.anytype_space.is_some() && env.anytype_space.as_deref() != Some(space.as_str()) {
             return Err(ApiError::new(
                 409,

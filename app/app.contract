@@ -162,6 +162,36 @@ style SettingsFoot
   color="ink.muted"
   font="-exact-footnote"
   padding="space.xs space.md 0"
+style FieldLabel
+  color="-exact-label"
+  font="-exact-footnote"
+  font-weight=600
+style FieldBox
+  box-sizing="border-box"
+  min-height=40
+  padding="0 space.md"
+  border="1px solid surface.line"
+  border-radius="radius.sm"
+  background-color="surface.soft"
+  color="-exact-label"
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+style ActionMain
+  border="1px solid AccentColor"
+  color="AccentColor"
+  background-color="transparent"
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+style ActionQuiet
+  border="1px solid surface.line"
+  color="-exact-label"
+  background-color="transparent"
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
 style FileChip
   padding="space.xs space.sm"
   border-radius="radius.full"
@@ -216,6 +246,8 @@ shape Storage
   canRestart: bool
   error: string
   keySet: bool
+  space: string
+  spaceLock: string
 
 // Anytype pairing. `challengeId` is the open pairing request, or empty. The key never
 // reaches the screen. `AnytypeCheck` says whether the saved key reaches the chosen space
@@ -456,6 +488,8 @@ component Bots
   state newPassword = ""
   state folderDraft = ""
   state folderEditing = false
+  state spaceDraft = ""
+  state spaceEditing = false
   state storageHint = ""
   state pairCode = ""
   state pairStep = ""
@@ -580,6 +614,7 @@ component Bots
   mutation networkSet as shape Reply refreshes network
   mutation networkRestarted as shape Reply
   mutation storageSaved as shape Reply refreshes storage
+  mutation spaceSaved as shape Reply refreshes storage then afterSpaceSave
   mutation storageTested as shape Reply then afterStorageTest
   mutation storageCopied as shape Reply then afterStorageCopy
   mutation storageRestarted as shape Reply
@@ -651,6 +686,8 @@ component Bots
   derive passwordError = match passwordSet { case some(r) => r.error, case none => "" }
   derive networkError = match networkSet { case some(r) => r.error, case none => "" }
   derive networkRestartError = match networkRestarted { case some(r) => r.error, case none => "" }
+  derive spaceName = spaceEditing ? spaceDraft : storage.space
+  derive spaceSaveError = match spaceSaved { case some(r) => r.error, case none => "" }
   derive storagePath = folderEditing ? folderDraft : (storage.root != "" ? storage.root : "~/.hbots/bots")
   derive storageSaveError = match storageSaved { case some(r) => r.error, case none => "" }
   derive storageTestError = match storageTested { case some(r) => r.error, case none => "" }
@@ -1644,6 +1681,22 @@ component Bots
       storageHint = ""
       folderEditing = false
       send storageSaved = saveStorage(path, "", storage.rootLock == "" ? "1" : "0")
+  action doEditSpace(v: string)
+    spaceDraft = v
+    spaceEditing = true
+  action doSaveSpace
+    if storage.spaceLock == "" and not pending(spaceSaved)
+      send spaceSaved = saveSpace(spaceDraft.trim())
+  action afterSpaceSave
+    match spaceSaved
+      case some(r)
+        if r.ok
+          spaceEditing = false
+          if not pending(anytypeChecked)
+            anytypeProbed = true
+            send anytypeChecked = checkAnytype()
+      case none
+        spaceEditing = spaceEditing
   action doPickBackend(backend: string)
     if storage.backendLock == "" and not pending(storageSaved) and backend != shownBackend and (backend == "filesystem" or (backend == "anytype" and anytypeOn))
       storageHint = ""
@@ -2304,60 +2357,75 @@ component Bots
                         text networkRestartError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0"
                     column
                       text t("settings.storage") class=SectionLabel
-                      column class=GroupCard padding="space.sm" gap="space.sm"
-                        text t("settings.storage.where") font="-exact-subheadline"
+                      column class=GroupCard padding="space.md" gap="space.sm"
+                        text t("settings.storage.where") font="-exact-subheadline" font-weight=600
                         row class=SettingsTrack role="radiogroup" aria-label=t("settings.storage.where")
                           button class=SettingsTab appearance="none" role="radio" aria-checked=(shownBackend != "anytype") press=doPickBackend("filesystem") disabled=(storage.backendLock != "") testId="storage-filesystem" background-color=(shownBackend != "anytype" ? "surface.card" : "transparent") color=(shownBackend != "anytype" ? "-exact-label" : "ink.muted")
                             text t("settings.storage.filesystem")
                           button class=SettingsTab appearance="none" role="radio" aria-checked=(shownBackend == "anytype") press=doPickBackend("anytype") disabled=(storage.backendLock != "" or not anytypeOn) testId="storage-anytype" background-color=(shownBackend == "anytype" ? "surface.card" : "transparent") color=(shownBackend == "anytype" ? "-exact-label" : "ink.muted")
                             text t("settings.storage.anytype")
-                        text (shownBackend == "anytype" ? t("settings.storage.activeAnytype") : t("settings.storage.activeFile")) class=SettingsFoot testId="storage-active"
+                        text (shownBackend == "anytype" ? t("settings.storage.activeAnytype") : t("settings.storage.activeFile")) color="-exact-label" font="-exact-footnote" testId="storage-active"
                         if not anytypeOn
-                          text t("settings.storage.anytypeConnect") class=SettingsFoot testId="storage-anytype-note"
+                          text t("settings.storage.anytypeConnect") color="ink.muted" font="-exact-footnote" testId="storage-anytype-note"
                         if storage.backendLock != ""
-                          text t("settings.storage.locked", variable=storage.backendLock) class=SettingsFoot testId="storage-locked-backend"
-                      text t("settings.anytype.title") class=SectionLabel
-                      column class=GroupCard padding="space.sm" gap="space.sm" testId="anytype-connect"
-                        text t("settings.anytype.intro") class=SettingsFoot
-                        row class=SettingsRow gap="space.sm" min-height=44
-                          button appearance="none" press=doPairStart disabled=pending(pairStarted) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="anytype-connect-start"
-                            text (pairStep == "" ? t("settings.anytype.connect") : t("settings.anytype.again"))
-                          button appearance="none" press=doAnytypeCheck disabled=pending(anytypeChecked) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="anytype-check"
-                            text t("settings.anytype.check")
-                        if pairStep == "code"
-                          text t("settings.anytype.approve") class=SettingsFoot testId="anytype-approve"
-                          row class=SettingsRow gap="space.sm" min-height=44
-                            input appearance="none" class=Field value=pairCode input=doEditPairCode maxlength=4 inputmode="numeric" placeholder="0000" aria-label=t("settings.anytype.code") flex=1 min-width=0 testId="anytype-code"
-                            button appearance="none" press=doPairConfirm disabled=(pairCode.length != 4 or pending(pairConfirmed)) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="anytype-confirm"
-                              text t("settings.anytype.confirm")
-                        if pairError != "" and not pending(pairStarted)
-                          text pairError color="-exact-system-red" font="-exact-footnote" testId="anytype-pair-error"
-                        if pairConfirmError != "" and not pending(pairConfirmed)
-                          text pairConfirmError color="-exact-system-red" font="-exact-footnote" testId="anytype-confirm-error"
-                        if anytypeError != "" and not pending(anytypeChecked)
-                          text anytypeError color="-exact-system-red" font="-exact-footnote" testId="anytype-check-error"
-                        if pairStep == "checked" and anytypeError == "" and not pending(anytypeChecked) and pairConfirmError == ""
-                          text t("settings.anytype.reachable") class=SettingsFoot testId="anytype-reachable"
-                          if anytypeFound
-                            text t("settings.anytype.space", name=anytypeSpace) class=SettingsFoot testId="anytype-space"
-                            text (anytypeShared ? t("settings.anytype.shared") : t("settings.anytype.private")) class=SettingsFoot testId="anytype-shared"
-                          else
-                            text t("settings.anytype.missing", name=anytypeSpace) class=SettingsFoot testId="anytype-missing"
+                          text t("settings.storage.locked", variable=storage.backendLock) color="ink.muted" font="-exact-footnote" testId="storage-locked-backend"
+                      if shownBackend == "anytype" or not anytypeOn
+                        text t("settings.anytype.title") class=SectionLabel
+                        column class=GroupCard padding="space.md" gap="space.md" testId="anytype-connect"
+                          text t("settings.anytype.intro") color="ink.muted" font="-exact-footnote"
+                          row gap="space.sm" align-items="center"
+                            button appearance="none" class=ActionMain press=doPairStart disabled=pending(pairStarted) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="anytype-connect-start"
+                              text (pairStep == "" ? t("settings.anytype.connect") : t("settings.anytype.again"))
+                            button appearance="none" class=ActionQuiet press=doAnytypeCheck disabled=pending(anytypeChecked) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="anytype-check"
+                              text t("settings.anytype.check")
+                          if pairStep == "code"
+                            column gap="space.xs"
+                              text t("settings.anytype.approve") color="ink.muted" font="-exact-footnote" testId="anytype-approve"
+                              row gap="space.sm" align-items="center"
+                                input appearance="none" class=FieldBox value=pairCode input=doEditPairCode maxlength=4 inputmode="numeric" placeholder="0000" aria-label=t("settings.anytype.code") flex=1 min-width=0 testId="anytype-code"
+                                button appearance="none" class=ActionMain press=doPairConfirm disabled=(pairCode.length != 4 or pending(pairConfirmed)) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="anytype-confirm"
+                                  text t("settings.anytype.confirm")
+                          if pairError != "" and not pending(pairStarted)
+                            text pairError color="-exact-system-red" font="-exact-footnote" testId="anytype-pair-error"
+                          if pairConfirmError != "" and not pending(pairConfirmed)
+                            text pairConfirmError color="-exact-system-red" font="-exact-footnote" testId="anytype-confirm-error"
+                          if anytypeError != "" and not pending(anytypeChecked)
+                            text anytypeError color="-exact-system-red" font="-exact-footnote" testId="anytype-check-error"
+                          if pairStep == "checked" and anytypeError == "" and not pending(anytypeChecked) and pairConfirmError == ""
+                            text t("settings.anytype.reachable") color="-exact-label" font="-exact-footnote" font-weight=600 testId="anytype-reachable"
+                          column gap="space.xs"
+                            text t("settings.anytype.spaceLabel") class=FieldLabel
+                            row gap="space.sm" align-items="center"
+                              input appearance="none" class=FieldBox value=spaceName placeholder=t("settings.anytype.spaceDefault") input=doEditSpace aria-label=t("settings.anytype.spaceName") flex=1 min-width=0 disabled=(storage.spaceLock != "") testId="anytype-space-name"
+                              button appearance="none" class=ActionMain press=doSaveSpace disabled=(storage.spaceLock != "" or not spaceEditing or pending(spaceSaved)) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="anytype-space-save"
+                                text t("settings.storage.save")
+                            text t("settings.anytype.spaceHelp") color="ink.muted" font="-exact-footnote"
+                            if storage.spaceLock != ""
+                              text t("settings.storage.locked", variable=storage.spaceLock) color="ink.muted" font="-exact-footnote" testId="anytype-space-locked"
+                            if spaceSaveError != "" and not pending(spaceSaved)
+                              text spaceSaveError color="-exact-system-red" font="-exact-footnote" testId="anytype-space-error"
+                            if pairStep == "checked" and anytypeError == "" and not pending(anytypeChecked) and pairConfirmError == ""
+                              if anytypeFound
+                                text t("settings.anytype.space", name=anytypeSpace) color="-exact-label" font="-exact-footnote" testId="anytype-space"
+                                text (anytypeShared ? t("settings.anytype.shared") : t("settings.anytype.private")) color="ink.muted" font="-exact-footnote" testId="anytype-shared"
+                              else
+                                text t("settings.anytype.missing", name=anytypeSpace) color="-exact-system-red" font="-exact-footnote" testId="anytype-missing"
                       text t("settings.storage.folder") class=SectionLabel
-                      column class=GroupCard padding="0"
-                        row class=SettingsRow min-height=44
-                          input appearance="none" class=Field value=storagePath placeholder=t("settings.storage.defaultFolder") input=doEditFolder aria-label=t("settings.storage.folder") flex=1 min-width=0 disabled=(storage.rootLock != "") testId="storage-folder"
-                          button appearance="none" press=doSaveStorage disabled=(storagePath == "" or (storage.rootLock != "" and storage.backendLock != "") or pending(storageSaved)) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="storage-save"
+                      column class=GroupCard padding="space.md" gap="space.sm"
+                        text t("settings.storage.folderLabel") class=FieldLabel
+                        row gap="space.sm" align-items="center"
+                          input appearance="none" class=FieldBox value=storagePath placeholder=t("settings.storage.defaultFolder") input=doEditFolder aria-label=t("settings.storage.folder") flex=1 min-width=0 disabled=(storage.rootLock != "") testId="storage-folder"
+                          button appearance="none" class=ActionMain press=doSaveStorage disabled=(storagePath == "" or (storage.rootLock != "" and storage.backendLock != "") or pending(storageSaved)) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="storage-save"
                             text t("settings.storage.save")
-                      text t("settings.storage.folderNote") class=SettingsFoot
-                      if storage.rootLock != ""
-                        text t("settings.storage.locked", variable=storage.rootLock) class=SettingsFoot testId="storage-locked-folder"
-                      row class=SettingsRow padding="space.xs space.md 0" min-height=44 gap="space.sm"
-                        button appearance="none" press=doTestStorage disabled=(storagePath == "" or pending(storageTested)) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="storage-test"
-                          text t("settings.storage.test")
-                        button appearance="none" press=doCopyStorage disabled=(storagePath == "" or pending(storageCopied)) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="storage-copy"
-                          text t("settings.storage.copy")
-                      text t("settings.storage.copyNote") class=SettingsFoot
+                        text t("settings.storage.folderNote") color="ink.muted" font="-exact-footnote"
+                        if storage.rootLock != ""
+                          text t("settings.storage.locked", variable=storage.rootLock) color="ink.muted" font="-exact-footnote" testId="storage-locked-folder"
+                        row gap="space.sm" align-items="center"
+                          button appearance="none" class=ActionQuiet press=doTestStorage disabled=(storagePath == "" or pending(storageTested)) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="storage-test"
+                            text t("settings.storage.test")
+                          button appearance="none" class=ActionQuiet press=doCopyStorage disabled=(storagePath == "" or pending(storageCopied)) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="storage-copy"
+                            text t("settings.storage.copy")
+                        text t("settings.storage.copyNote") color="ink.muted" font="-exact-footnote"
                       if storageHint == "test" and storageTestError == "" and not pending(storageTested)
                         text t("settings.storage.testOk") class=SettingsFoot testId="storage-test-ok"
                       if storageHint == "copy" and storageCopyError == "" and not pending(storageCopied)
