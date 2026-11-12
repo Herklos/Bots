@@ -1,0 +1,88 @@
+use DeliveryList, DeliveryDetail, HookView, HookBag from "./deliveries.contract"
+
+members Bots
+  state hookSlug = ""
+  state hookFor = ""
+  state hookUrl = ""
+  state hookSource = ""
+  state hookStable = false
+  state hookError = ""
+  state hookOpen = ""
+  state hookDelivery = ""
+  derive onDeliveries = top(nav).name == "chat" and panelOpen and panelPage == "deliveries" and hookOpen != ""
+  derive deliveryGate = onDeliveries ? "1" : "0"
+  resource hookList = loadDeliveries(slug, hookOpen, deliveryGate, hostTime.locale) as shape DeliveryList else empty()
+  resource hookDetail = loadDelivery(slug, hookOpen, hookDelivery, deliveryGate, hostTime.locale) as shape DeliveryDetail else empty()
+  mutation hookRead as shape HookView then afterCopy
+  mutation hookRotate as shape HookView then afterRotate
+  derive hookBusy = pending(hookRead) or pending(hookRotate)
+  derive hookBag = HookBag(routineId=hookFor, url=hookUrl, source=hookSource, stable=hookStable, error=hookError, busy=hookBusy, openId=hookOpen, list=hookList, listDown=(failed(hookList) or (not pending(hookList) and not hookList.ok)), listPending=pending(hookList), detailOpen=(hookDelivery != ""), detail=hookDetail, detailDown=(failed(hookDetail) or (hookDelivery != "" and not pending(hookDetail) and not hookDetail.ok)), detailPending=pending(hookDetail))
+  task forgetHook when hookSlug != slug
+    after(1, clearHook)
+  action clearHook
+    hookSlug = slug
+    hookFor = ""
+    hookUrl = ""
+    hookSource = ""
+    hookStable = false
+    hookError = ""
+    hookOpen = ""
+    hookDelivery = ""
+    if panelPage == "deliveries"
+      panelPage = "root"
+  action copyHook(id: string)
+    if not hookBusy
+      hookFor = id
+      hookError = ""
+      send hookRead = readHook(slug, id, hostTime.locale)
+  action confirmRotate(id: string)
+    if not hookBusy
+      hookFor = id
+      hookError = ""
+      send hookRotate = rotateHook(slug, id, hostTime.locale)
+  action openDeliveries(id: string)
+    hookOpen = id
+    hookDelivery = ""
+    openPage("deliveries")
+  action openDelivery(id: string)
+    hookDelivery = id
+  action closeDelivery
+    hookDelivery = ""
+  action leaveDeliveries
+    if hookDelivery != ""
+      hookDelivery = ""
+    else
+      hookOpen = ""
+      openPage("root")
+  action afterCopy
+    match hookRead
+      case some(r)
+        if r.id == hookFor
+          if r.ok and r.url != ""
+            hookUrl = r.url
+            hookSource = r.source
+            hookStable = r.stable
+            hookError = ""
+            copyText(r.url)
+            toast = t("chat.copied")
+          else
+            hookUrl = ""
+            hookSource = ""
+            hookStable = false
+            hookError = r.error != "" ? r.error : t("hook.missing")
+      case none
+  action afterRotate
+    match hookRotate
+      case some(r)
+        if r.id == hookFor
+          if r.ok and r.url != ""
+            hookUrl = r.url
+            hookSource = r.source
+            hookStable = r.stable
+            hookError = ""
+          else
+            hookUrl = ""
+            hookSource = ""
+            hookStable = false
+            hookError = r.error != "" ? r.error : t("hook.missing")
+      case none

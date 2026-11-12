@@ -30,6 +30,8 @@
 //   loadComputer: (args: [string, string, string, string, string]) => Computer
 //   loadComputerPlace: (args: [string, string, string]) => ComputerPlace
 //   loadConvos: (args: [string, string, string]) => Convo[]
+//   loadDeliveries: (args: [string, string, string, string]) => DeliveryList
+//   loadDelivery: (args: [string, string, string, string, string]) => DeliveryDetail
 //   loadDiagnostics: (args: [string]) => Diagnostics
 //   loadDrafts: (args: []) => DraftPack
 //   loadHelperPolicy: (args: [string, string, string]) => HelpPolicy
@@ -68,6 +70,7 @@
 //   prepareAnytype: (args: []) => Reply
 //   reactTo: (args: [string, string, string, string]) => Reply
 //   readHealth: (args: []) => Health
+//   readHook: (args: [string, string, string]) => HookView
 //   readPromptLink: (args: [string]) => PromptLink
 //   recolourBot: (args: [string, string]) => Reply
 //   refreshLimits: (args: []) => LimitReply
@@ -78,6 +81,7 @@
 //   restartGateway: (args: []) => Reply
 //   restartStorage: (args: []) => Reply
 //   revealPassword: (args: [string]) => Revealed
+//   rotateHook: (args: [string, string, string]) => HookView
 //   revokeManagementMcpCredential: (args: [string]) => McpResult
 //   runSyncNow: (args: []) => Reply
 //   saveBotMemory: (args: [string, string, string]) => MemorySave
@@ -134,7 +138,7 @@
 //   ModelOption = { slug: string; name: string; recommended: boolean; effort: string; efforts: Effort[] }
 //   Provider = { instanceId: string; name: string; account: string; models: ModelOption[] }
 //   ModelList = { ok: boolean; error: string; current: string; instanceId: string; effort: string; runtimeMode: string; currentName: string; providerName: string; effortLabel: string; efforts: Effort[]; providers: Provider[] }
-//   Routine = { id: string; title: string; paused: boolean; schedule: string; next: string; failed: boolean }
+//   Routine = { id: string; title: string; paused: boolean; schedule: string; next: string; failed: boolean; kind: string; outcome: string }
 //   RoutineList = { ok: boolean; tasks: Routine[]; error: string }
 //   LineRow = { id: string; title: string; status: string; remote: boolean; threadId: string }
 //   Lineage = { ok: boolean; rows: LineRow[]; error: string }
@@ -458,7 +462,7 @@ type T31 = T30[];
 type T32 = { "instanceId": T0; "name": T0; "account": T0; "models": T31; };
 type T33 = T32[];
 type T34 = { "ok": T2; "error": T0; "current": T0; "instanceId": T0; "effort": T0; "runtimeMode": T0; "currentName": T0; "providerName": T0; "effortLabel": T0; "efforts": T29; "providers": T33; };
-type T35 = { "id": T0; "title": T0; "paused": T2; "schedule": T0; "next": T0; "failed": T2; };
+type T35 = { "id": T0; "title": T0; "paused": T2; "schedule": T0; "next": T0; "failed": T2; "kind": T0; "outcome": T0; };
 type T36 = T35[];
 type T37 = { "ok": T2; "tasks": T36; "error": T0; };
 type T38 = { "id": T0; "title": T0; "status": T0; "remote": T2; "threadId": T0; };
@@ -722,9 +726,16 @@ type T295 = T294[];
 type T296 = { "offsetX": T4; "offsetY": T4; "files": T7; "shiftKey": T2; "ctrlKey": T2; "altKey": T2; "metaKey": T2; };
 type T297 = { "scrollLeft": T4; "scrollTop": T4; "scrollWidth": T4; "scrollHeight": T4; "clientWidth": T4; "clientHeight": T4; "firstVisibleKey": T89; "firstVisibleOffset": T4; };
 type T298 = { "target": T0; "relatedTarget": T89; };
+type T299 = { "id": T0; "at": T0; "method": T0; "bytes": T0; "outcome": T0; };
+type T300 = T299[];
+type T301 = { "ok": T2; "error": T0; "rows": T300; };
+type T302 = { "name": T0; "value": T0; };
+type T303 = T302[];
+type T304 = { "ok": T2; "error": T0; "id": T0; "at": T0; "outcome": T0; "prompt": T0; "body": T0; "truncated": T2; "headers": T303; };
+type T305 = { "ok": T2; "error": T0; "id": T0; "url": T0; "source": T0; "stable": T2; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "askDiagnostics" | "checkAnytype" | "closeComputer" | "computerControl" | "computerInput" | "confirmPairing" | "copyStorage" | "createBot" | "createGroup" | "createManagementMcpCredential" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "importSync" | "makeMainBot" | "markRoomSeen" | "markSeen" | "mergeSide" | "noteUnread" | "openComputer" | "openSide" | "pinBot" | "pinMessage" | "prepareAnytype" | "reactTo" | "readHealth" | "recolourBot" | "refreshLimits" | "renameBot" | "reshapeBot" | "resolveConflict" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "revokeManagementMcpCredential" | "runSyncNow" | "saveBotMemory" | "saveBotPrompt" | "saveDrafts" | "saveHelperPolicy" | "saveLogin" | "saveSections" | "saveSpace" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setActivityLevel" | "setBotNotifications" | "setComputerPlace" | "setDefaultMode" | "setDefaultModel" | "setFinalOnly" | "setGroupAnswerPolicy" | "setManagementMcp" | "setMaxMode" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startPairing" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "askDiagnostics" | "checkAnytype" | "closeComputer" | "computerControl" | "computerInput" | "confirmPairing" | "copyStorage" | "createBot" | "createGroup" | "createManagementMcpCredential" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "importSync" | "makeMainBot" | "markRoomSeen" | "markSeen" | "mergeSide" | "noteUnread" | "openComputer" | "openSide" | "pinBot" | "pinMessage" | "prepareAnytype" | "reactTo" | "readHealth" | "readHook" | "recolourBot" | "refreshLimits" | "renameBot" | "reshapeBot" | "resolveConflict" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "revokeManagementMcpCredential" | "rotateHook" | "runSyncNow" | "saveBotMemory" | "saveBotPrompt" | "saveDrafts" | "saveHelperPolicy" | "saveLogin" | "saveSections" | "saveSpace" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setActivityLevel" | "setBotNotifications" | "setComputerPlace" | "setDefaultMode" | "setDefaultModel" | "setFinalOnly" | "setGroupAnswerPolicy" | "setManagementMcp" | "setMaxMode" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startPairing" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
   "askDiagnostics": { args: [T0]; result: T54 };
@@ -753,6 +764,8 @@ export interface SourceMap {
   "loadComputer": { args: [T0, T0, T0, T0, T0]; result: T53 };
   "loadComputerPlace": { args: [T0, T0, T0]; result: T148 };
   "loadConvos": { args: [T0, T0, T0]; result: T119 };
+  "loadDeliveries": { args: [T0, T0, T0, T0]; result: T301 };
+  "loadDelivery": { args: [T0, T0, T0, T0, T0]; result: T304 };
   "loadDiagnostics": { args: [T0]; result: T71 };
   "loadDrafts": { args: []; result: T78 };
   "loadHelperPolicy": { args: [T0, T0, T0]; result: T141 };
@@ -791,6 +804,7 @@ export interface SourceMap {
   "prepareAnytype": { args: []; result: T54 };
   "reactTo": { args: [T0, T0, T0, T0]; result: T54 };
   "readHealth": { args: []; result: T66 };
+  "readHook": { args: [T0, T0, T0]; result: T305 };
   "readPromptLink": { args: [T0]; result: T208 };
   "recolourBot": { args: [T0, T0]; result: T54 };
   "refreshLimits": { args: []; result: T104 };
@@ -801,6 +815,7 @@ export interface SourceMap {
   "restartGateway": { args: []; result: T54 };
   "restartStorage": { args: []; result: T54 };
   "revealPassword": { args: [T0]; result: T76 };
+  "rotateHook": { args: [T0, T0, T0]; result: T305 };
   "revokeManagementMcpCredential": { args: [T0]; result: T108 };
   "runSyncNow": { args: []; result: T54 };
   "saveBotMemory": { args: [T0, T0, T0]; result: T144 };

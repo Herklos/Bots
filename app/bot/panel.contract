@@ -13,6 +13,8 @@ use SubagentPage from "./subagent-page.contract"
 use BotShelf, ScreenCard from "../computer/computer.contract"
 use ComputerPlace from "../computer/place.contract"
 use CodeTab from "./code.contract"
+use RoutineSection from "./routines.contract"
+use DeliveriesPage from "./deliveries.contract"
 use CodeView from "./code.contract"
 use PanelTabs from "./tabs.contract"
 component BotPanel
@@ -102,11 +104,16 @@ component BotPanel
     doPickComputer: action
     codeOn: bool
     code: CodeView
+  inject
+    leaveDeliveries: action
   derive children = bots.filter(c => c.parentSlug == bot.slug)
   derive names = codeOn ? ["details", "library", "computer", "code"] : ["details", "library", "computer"]
   derive active = names.includes(tab) ? tab : "details"
   action goRoot
-    openPage("root")
+    if page == "deliveries"
+      leaveDeliveries()
+    else
+      openPage("root")
   action goModel
     openPage("model")
   action goUsage
@@ -124,7 +131,7 @@ component BotPanel
           button class=IconControl appearance="none" press=goRoot aria-label=t("common.back") title=t("common.back") testId="panel-back"
             column rotate="180deg"
               Glyph(name="chevron", size=20)
-          text (page == "model" ? t("panel.model") : page == "usage" ? t("panel.usage") : page == "subagent" ? (subSlug != "" ? t("subagent.page") : t("subagent.new")) : page == "helpers" ? t("helpers.title") : t("panel.edit")) role="heading" aria-level=2 class=PageTitle flex=1 testId="panel-page-title"
+          text (page == "model" ? t("panel.model") : page == "usage" ? t("panel.usage") : page == "deliveries" ? t("hook.deliveries") : page == "subagent" ? (subSlug != "" ? t("subagent.page") : t("subagent.new")) : page == "helpers" ? t("helpers.title") : t("panel.edit")) role="heading" aria-level=2 class=PageTitle flex=1 testId="panel-page-title"
       else if wide
         row align-items="center" gap="space.xs" padding="space.sm space.sm space.sm space.md" min-height=52 box-sizing="border-box"
           column flex=1
@@ -158,6 +165,9 @@ component BotPanel
       else if page == "helpers"
         scroll flex=1 min-height=0
           HelpersPage(subagent=bot.subagent, providers=models.providers, modelsDown=modelsDown)
+      else if page == "deliveries"
+        scroll flex=1 min-height=0
+          DeliveriesPage()
       else
         if wide
           column align-items="center" gap="space.xs" padding="0 space.lg space.md"
@@ -199,28 +209,7 @@ component BotPanel
                     text t("helpers.rowNote") color="ink.muted" font="-exact-footnote"
                   column color="ink.muted"
                     Glyph(name="chevron", size=18)
-              text t("panel.routines") class=SectionLabel
-              if routinesDown
-                text t("error.routines") color="-exact-system-red" padding="0 space.md" testId="routine-error"
-              else if routines.tasks.length == 0
-                text t("panel.routineEmpty", name=bot.name) color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="routine-empty"
-              else
-                column gap="2px"
-                  for r in routines.tasks key=r.id
-                    row gap="space.md" align-items="center" padding="space.sm space.md" testId=`routine-${r.id}`
-                      column color=(r.paused ? "ink.faint" : "AccentColor")
-                        Glyph(name=(r.paused ? "pause" : "clock"), size=18)
-                      column flex=1 gap="2px" min-width=0
-                        text r.title font-weight=500 overflow-wrap="anywhere"
-                        text r.schedule color="ink.muted" font="-exact-footnote"
-                        if r.next != "" and not r.paused
-                          text r.next color="ink.faint" font="-exact-footnote"
-                        if r.failed
-                          text t("panel.runFailed") color="-exact-system-red" font="-exact-footnote"
-                      if r.paused
-                        text t("status.paused") color="ink.faint" font="-exact-footnote"
-              if routines.error != "" and routines.tasks.length == 0
-                text routines.error color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="routine-setup"
+              RoutineSection(routines=routines, down=routinesDown, name=bot.name)
               if children.length > 0
                 text t("subagent.heading") class=SectionLabel testId="subagent-heading"
                 column gap="2px"

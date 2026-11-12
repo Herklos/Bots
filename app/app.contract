@@ -27,6 +27,7 @@ component Bots
   members "./settings/mcp-model.contract"
   members "./bot/model.contract"
   members "./bot/memory-model.contract"
+  members "./bot/hook-model.contract"
   members "./bot/helpers-model.contract"
   members "./mentions/model.contract"
   members "./chat/model.contract"
@@ -167,6 +168,13 @@ component Bots
     reloadMemory
     overwriteMemory
     memoryBag
+    copyHook
+    confirmRotate
+    openDeliveries
+    openDelivery
+    closeDelivery
+    leaveDeliveries
+    hookBag
     helperBag
     editHelpWhen
     editHelpCap

@@ -193,7 +193,6 @@ shape ModelList
   efforts: Effort[]
   providers: Provider[]
 
-// A routine, to read: the panel does not edit them.
 shape Routine
   id: string
   title: string
@@ -201,7 +200,8 @@ shape Routine
   schedule: string
   next: string
   failed: bool
-
+  kind: string
+  outcome: string
 shape RoutineList
   ok: bool
   tasks: Routine[]

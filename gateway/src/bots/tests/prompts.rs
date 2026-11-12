@@ -9,6 +9,7 @@ pub(crate) async fn a_main_prompt_is_listed_written_and_cleared() {
         .unwrap();
     let created = std::fs::read_to_string(dir.path().join("ada/AGENTS.md")).unwrap();
     assert!(created.contains("## Instructions\n\nBe brief."));
+    assert!(created.contains("To react to an outside service, create a webhook routine with schedule_task. Ask the person for the signing secret with request_secret. Never put it in a prompt."));
     let listed = bots.list().await.unwrap();
     let ada = listed.iter().find(|b| b["slug"] == "ada").unwrap();
     assert_eq!(ada["prompt"], "Be brief.");

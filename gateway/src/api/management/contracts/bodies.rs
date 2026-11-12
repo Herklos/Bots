@@ -318,7 +318,8 @@ impl Operation {
             | "hbots_vault_delete"
             | "hbots_delete_storage_key"
             | "hbots_room_delete"
-            | "hbots_dismiss_notice" => return None,
+            | "hbots_dismiss_notice"
+            | "hbots_bot_rotate" => return None,
             _ if self.method == "get" => return None,
             _ => panic!("Missing request contract for {}", self.name),
         };

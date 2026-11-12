@@ -21,6 +21,7 @@ export const LOAD_KEY: Record<string, string> = {
   providers: 'error.loadProviders',
   limits: 'limits.error',
   routines: 'error.routines',
+  deliveries: 'hook.error',
   'what this Bot is doing': 'error.lineage',
 };
 export const CLIENT_ERRORS: Record<string, string> = {

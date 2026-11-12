@@ -11,6 +11,7 @@ use crate::platform::error::{ApiError, ApiResult};
 use serde_json::{json, Value};
 use std::path::PathBuf;
 
+pub(crate) mod inspect;
 pub(crate) mod review;
 #[allow(
     dead_code,

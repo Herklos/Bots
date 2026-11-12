@@ -1,0 +1,114 @@
+use outcomeWord from "../ui/fns.contract"
+use PanelRow from "../ui/panel.contract"
+use Chip, SectionLabel, TextControl from "../ui/controls.contract"
+
+shape DeliveryRow
+  id: string
+  at: string
+  method: string
+  bytes: string
+  outcome: string
+
+shape DeliveryList
+  ok: bool
+  error: string
+  rows: DeliveryRow[]
+
+shape HeaderLine
+  name: string
+  value: string
+
+shape DeliveryDetail
+  ok: bool
+  error: string
+  id: string
+  at: string
+  outcome: string
+  prompt: string
+  body: string
+  truncated: bool
+  headers: HeaderLine[]
+
+shape HookView
+  ok: bool
+  error: string
+  id: string
+  url: string
+  source: string
+  stable: bool
+
+shape HookBag
+  routineId: string
+  url: string
+  source: string
+  stable: bool
+  error: string
+  busy: bool
+  openId: string
+  list: DeliveryList
+  listDown: bool
+  listPending: bool
+  detailOpen: bool
+  detail: DeliveryDetail
+  detailDown: bool
+  detailPending: bool
+
+component OutcomeChip
+  props
+    id: string
+    mark: string
+  view
+    row class=Chip testId=mark
+      text outcomeWord(id, t("hook.accepted"), t("hook.filtered"), t("hook.duplicate"), t("hook.rejected"), t("hook.dispatchFailed"), t("hook.coalesced"), t("hook.disabled"), t("hook.rateLimited"), t("hook.expired"), t("hook.queueFull"))
+
+component DeliveriesPage
+  inject
+    hookBag: HookBag
+    openDelivery: action
+    closeDelivery: action
+  view
+    column width="100%" box-sizing="border-box" padding="0 space.lg space.xl" gap="space.sm" testId="deliveries-page"
+      if hookBag.detailOpen
+        button class=TextControl appearance="none" press=closeDelivery min-height=44 padding="0 space.xs" font="-exact-footnote" color="AccentColor" testId="deliveries-back"
+          text t("hook.all")
+        if hookBag.detailDown
+          text (hookBag.detail.error != "" ? hookBag.detail.error : t("hook.error")) color="-exact-system-red" font="-exact-footnote" testId="delivery-error"
+        else if hookBag.detailPending and hookBag.detail.id == ""
+          text t("hook.loading") color="ink.muted" font="-exact-footnote" testId="delivery-loading"
+        else
+          column gap="space.sm"
+            if hookBag.detail.outcome != ""
+              OutcomeChip(id=hookBag.detail.outcome, mark="delivery-outcome")
+            if hookBag.detail.at != ""
+              text hookBag.detail.at color="ink.muted" font="-exact-footnote"
+            text t("hook.prompt") class=SectionLabel
+            text hookBag.detail.prompt white-space="pre-wrap" overflow-wrap="anywhere" testId="delivery-prompt"
+            text t("hook.body") class=SectionLabel
+            text hookBag.detail.body white-space="pre-wrap" overflow-wrap="anywhere" testId="delivery-body"
+            if hookBag.detail.truncated
+              text t("hook.truncated") color="ink.muted" font="-exact-footnote" testId="delivery-truncated"
+            text t("hook.headers") class=SectionLabel
+            column gap="2px"
+              for h in hookBag.detail.headers key=h.name
+                row gap="space.sm" align-items="baseline"
+                  text h.name color="ink.muted" font="-exact-footnote"
+                  text h.value overflow-wrap="anywhere" font="-exact-footnote" testId=`header-${h.name}`
+      else if hookBag.listPending and hookBag.list.rows.length == 0
+        text t("hook.loading") color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="deliveries-loading"
+      else if hookBag.listDown
+        text (hookBag.list.error != "" ? hookBag.list.error : t("hook.error")) color="-exact-system-red" font="-exact-footnote" padding="0 space.md" testId="deliveries-error"
+      else if hookBag.list.rows.length == 0
+        text t("hook.empty") color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="deliveries-empty"
+      else
+        column gap="2px"
+          for row in hookBag.list.rows key=row.id
+            button class=PanelRow appearance="none" press=openDelivery(row.id) testId=`delivery-${row.id}`
+              column flex=1 gap="2px" min-width=0
+                row gap="space.sm" align-items="center" flex-wrap="wrap"
+                  if row.method != ""
+                    text row.method font-weight=600
+                  if row.at != ""
+                    text row.at color="ink.muted" font="-exact-footnote"
+                  text t("hook.bytes", n=row.bytes) color="ink.muted" font="-exact-footnote"
+                if row.outcome != ""
+                  OutcomeChip(id=row.outcome, mark=`chip-${row.id}`)
