@@ -138,8 +138,8 @@ pub(crate) async fn start(state: Arc<AppState>) {
 }
 
 /// Bot threads a restart would interrupt. T3 Code is the harness wired today; other backends
-/// may be added. `orchestration.subscribeShell` stays open, so the read waits for one
-/// snapshot and then interrupts it.
+/// may be added. The shell subscription stays open, so the read waits for one snapshot
+/// and then interrupts it.
 pub(super) async fn busy_threads(state: &AppState) -> Result<usize> {
     let transcript = state
         .harness
@@ -155,14 +155,12 @@ pub(super) async fn busy_threads(state: &AppState) -> Result<usize> {
     Ok(shell.busy_count())
 }
 
-pub(crate) const SHELL: &str = "orchestration.subscribeShell";
-
 /// Live probe of a running T3. The ignored updater test is the caller.
 #[cfg(test)]
 pub(super) async fn read_busy(t3: &crate::harness::t3::T3) -> Result<usize> {
     let client = t3.rpc().await.context("couldn't reach T3")?;
     let item = client
-        .read_until(SHELL, json!({}), |item| {
+        .read_until(crate::harness::t3::transcript::SHELL, json!({}), |item| {
             matches!(
                 item.get("kind").and_then(Value::as_str),
                 Some("snapshot") | Some("snapshot-required")

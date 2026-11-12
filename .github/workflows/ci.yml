@@ -19,6 +19,8 @@ jobs:
           components: rustfmt, clippy
       - name: rust file length
         run: sh scripts/check-rs-length.sh
+      - name: T3 RPC boundary
+        run: sh scripts/check-t3-boundary.sh
       - name: cargo fmt
         run: cargo fmt --all -- --check
       - name: cargo clippy
