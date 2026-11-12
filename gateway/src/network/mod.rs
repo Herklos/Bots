@@ -394,4 +394,5 @@ mod tests {
 pub(crate) mod access; // T4: Cloudflare Access JWTs.
 pub(crate) mod auth;
 pub(crate) mod exposure; // T4: Tailscale listener and the publish commands.
+pub(crate) mod ratelimit;
 pub(crate) mod remote_access; // T4: the scrypt password in access.json.

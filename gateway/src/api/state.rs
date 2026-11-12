@@ -11,6 +11,8 @@ pub struct AppState {
     // T4 remote access: Cloudflare Access, the Tailscale listener, the tunnel, the password in access.json.
     pub access: Option<crate::network::access::Access>,
     pub exposure: crate::network::exposure::Exposure,
+    /// Per-address and global buckets for `POST /hooks/`.
+    pub hook_limit: Arc<crate::network::ratelimit::Limiter>,
     pub tailnet: Arc<crate::network::exposure::Tailnet>,
     pub remote: Arc<crate::network::remote_access::RemoteAccess>,
     pub threads: crate::chat::thread_meta::ThreadMeta,
@@ -51,6 +53,7 @@ impl AppState {
             "rules": { "alwaysAsk": [], "allowWithoutAsking": [] }, "sections": [], "defaultModel": null, "avatarDrawingModel": null,
             "beta": { "projects": false, "code": false },
             "notifications": { "enabled": false, "sound": true, "preview": "full", "when": "any" },
+            "webhooks": { "publicBase": "" },
             "groupAnswerPolicy": "last",
             "activityLevel": "quiet",
             "finalOnly": false,
@@ -89,6 +92,18 @@ impl AppState {
         out
     }
 
+    /// Known webhook fields. An empty `publicBase` means "not set". Anything else must be an https origin.
+    pub(crate) fn webhooks_view(saved: &Value) -> Value {
+        let base = saved
+            .get("webhooks")
+            .and_then(|value| value.get("publicBase"))
+            .and_then(Value::as_str)
+            .filter(|value| crate::chat::routines::webhook::public_base_ok(value))
+            .map(crate::chat::routines::webhook::canonical_public_base)
+            .unwrap_or_default();
+        json!({ "publicBase": base })
+    }
+
     /// `settings.json` with hbots defaults filled in.
     pub async fn settings(&self) -> Value {
         let saved = storage::read_json(&self.settings_path())
@@ -101,6 +116,7 @@ impl AppState {
         });
         out["managementMcp"] = json!({"enabled": saved["managementMcp"]["enabled"] == true});
         out["notifications"] = Self::notifications_view(&saved);
+        out["webhooks"] = Self::webhooks_view(&saved);
         out["groupAnswerPolicy"] = json!(group_answer_policy(&out).as_str());
         out["activityLevel"] = json!(activity_level(&out));
         out["finalOnly"] = json!(final_only(&out));

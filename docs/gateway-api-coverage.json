@@ -811,6 +811,18 @@
       "reason": "Internal Bot tool transport"
     },
     {
+      "path": "/hooks",
+      "method": "ANY",
+      "classification": "infrastructure",
+      "reason": "Webhook ingress. The URL token is the only secret."
+    },
+    {
+      "path": "/hooks/{*rest}",
+      "method": "ANY",
+      "classification": "infrastructure",
+      "reason": "Webhook ingress. The URL token is the only secret."
+    },
+    {
       "path": "/mcp",
       "method": "ANY",
       "classification": "infrastructure",

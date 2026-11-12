@@ -193,6 +193,7 @@ pub(crate) fn settings_state_with(
         mcp_token: "fixture-only".into(),
         provision_now: tokio::sync::Notify::new(),
         holds: chat::HeldReads::new(),
+        hook_limit: Arc::new(crate::network::ratelimit::Limiter::new()),
         access: None,
         exposure: crate::network::exposure::Exposure::from_env(|_| None),
         remote: Arc::new(crate::network::remote_access::RemoteAccess::new(

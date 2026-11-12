@@ -270,3 +270,90 @@ fn phase0_webhook_fixtures_decode_into_rows() {
     assert_eq!(schedule["kind"], "schedule");
     assert!(schedule.get("hook").is_none());
 }
+
+fn addressed() -> Value {
+    json!({
+        "webhook": {
+            "path": "/api/hooks/scheduled-task%3Aabc/tok-1",
+            "url": "https://connect.example/v1/hooks/key/task/tok-1",
+            "hasSecret": false
+        }
+    })
+}
+
+#[test]
+fn the_url_uses_public_base_then_connect_then_the_tunnel_then_this_computer() {
+    let task = addressed();
+    let local = "http://127.0.0.1:3780";
+    let tunnel = Some("https://brave-otter-12.trycloudflare.com/");
+    let base = webhook::webhook_url(&task, "https://hooks.example.com/", tunnel, local);
+    assert_eq!(base.source, "publicBase");
+    assert!(base.stable);
+    assert_eq!(
+        base.url,
+        "https://hooks.example.com/hooks/scheduled-task%3Aabc/tok-1"
+    );
+    let connect = webhook::webhook_url(&task, "", tunnel, local);
+    assert_eq!(connect.source, "connect");
+    assert!(connect.stable);
+    assert_eq!(
+        connect.url,
+        "https://connect.example/v1/hooks/key/task/tok-1"
+    );
+    let mut no_connect = task.clone();
+    no_connect["webhook"]["url"] = Value::Null;
+    let quick = webhook::webhook_url(&no_connect, "http://nope.example", tunnel, local);
+    assert_eq!(quick.source, "tunnel");
+    assert!(!quick.stable);
+    assert_eq!(
+        quick.url,
+        "https://brave-otter-12.trycloudflare.com/hooks/scheduled-task%3Aabc/tok-1"
+    );
+    let here = webhook::webhook_url(&no_connect, "", None, local);
+    assert_eq!(here.source, "local");
+    assert!(!here.stable);
+    assert_eq!(
+        here.url,
+        "http://127.0.0.1:3780/hooks/scheduled-task%3Aabc/tok-1"
+    );
+    assert!(!webhook::public_base_ok("https://hooks.example.com/hooks"));
+    assert!(!webhook::public_base_ok("https://hooks.example.com?x=1"));
+    assert!(webhook::public_base_ok("https://hooks.example.com"));
+    assert_eq!(
+        webhook::canonical_public_base("https://hooks.example.com/"),
+        "https://hooks.example.com"
+    );
+}
+
+#[tokio::test]
+async fn the_tunnel_handle_comes_from_remote_access() {
+    let dir = tempfile::tempdir().unwrap();
+    let tailnet = std::sync::Arc::new(crate::network::exposure::Tailnet::new());
+    let remote = crate::network::remote_access::RemoteAccess::new(
+        crate::network::remote_access::RemoteConfig {
+            home: dir.path().to_path_buf(),
+            store_file: dir.path().join("access.json"),
+            url_file: dir.path().join("tunnel-url"),
+            local_port: 3780,
+            env_password: String::new(),
+            env_tailnet: false,
+            env_tailnet_users: vec![],
+            tailscale_bin: None,
+            network_env: None,
+            process_host: None,
+            merged_host: None,
+        },
+        tailnet,
+    );
+    remote.set_quick_tunnel_for_test("https://brave-otter-12.trycloudflare.com".into());
+    let mut task = addressed();
+    task["webhook"]["url"] = Value::Null;
+    let settings = json!({ "webhooks": { "publicBase": "" } });
+    let got = webhook::webhook_url_for(&task, &settings, &remote);
+    assert_eq!(got.source, "tunnel");
+    assert!(!got.stable);
+    assert_eq!(
+        got.url,
+        "https://brave-otter-12.trycloudflare.com/hooks/scheduled-task%3Aabc/tok-1"
+    );
+}

@@ -150,6 +150,7 @@ async fn main() -> anyhow::Result<()> {
         mcp_token,
         provision_now: tokio::sync::Notify::new(),
         holds: chat::HeldReads::new(),
+        hook_limit: Arc::new(crate::network::ratelimit::Limiter::new()),
         cfg,
     });
     // Write the defaults once; an existing file, even an unreadable one, is left alone.

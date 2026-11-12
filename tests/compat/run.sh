@@ -137,6 +137,8 @@ expect R5b "main-bot.json names Ada" "$(jv "$APP/main-bot.json" 'j.slug')" "b-ad
 c=$(code PUT /api/settings "$WORK/rust.jar" '{"userName":"Rust User","beta":{"projects":true}}'); expect R6 "saving settings answers" "$c" 200
 expect R6b "settings.json keeps the name and the Projects switch" \
   "$(jv "$APP/settings.json" 'j.userName + "|" + j.beta.projects')" "Rust User|true"
+expect R6c "settings.json keeps an empty webhook public base" \
+  "$(jv "$APP/settings.json" 'j.webhooks.publicBase')" ""
 info R6 "settings.json keys written from a two-field patch: $(jv "$APP/settings.json" 'Object.keys(j).sort().join(",")')"
 info R6 "difference: the patch was userName and beta.projects. The file also stores the gateway defaults (gateway/src/main.rs settings)."
 

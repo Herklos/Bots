@@ -38,6 +38,9 @@ mod computer_api;
 mod diagnostics;
 #[cfg(test)]
 mod helpers_policy_tests;
+mod hooks_api;
+#[cfg(test)]
+mod hooks_tests;
 mod library_api;
 #[cfg(test)]
 mod library_file_tests;
@@ -58,6 +61,8 @@ mod routines_api;
 mod runtime_mode_tests;
 mod server;
 mod settings;
+#[cfg(test)]
+mod settings_webhook_tests;
 mod side_api;
 mod state;
 #[cfg(test)]
@@ -82,6 +87,8 @@ pub(crate) use code_api::*;
 pub(crate) use computer_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use diagnostics::*;
+#[allow(unused_imports, reason = "siblings and old paths use these names")]
+pub(crate) use hooks_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use library_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]

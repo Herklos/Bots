@@ -153,6 +153,7 @@ fn state(dir: &Path, exposure: Exposure) -> Arc<AppState> {
         mcp_token: "fixture-only".into(),
         provision_now: tokio::sync::Notify::new(),
         holds: crate::chat::HeldReads::new(),
+        hook_limit: Arc::new(crate::network::ratelimit::Limiter::new()),
         access: None,
         exposure,
         remote: Arc::new(RemoteAccess::new(
@@ -358,6 +359,74 @@ async fn the_normal_public_port_needs_a_session_when_cloudflare_access_is_config
         (200, "BALL".into())
     );
     assert_eq!(get(port, "/welcome%2f..%2fx", &[]).await.0, 404);
+}
+
+#[tokio::test]
+async fn landing_only_lets_hook_posts_through_and_still_hides_the_api() {
+    let _guard = crate::api::test_env_lock().await;
+    let dir = tempfile::tempdir().unwrap();
+    let s = state(
+        dir.path(),
+        Exposure {
+            landing_only: true,
+            ..Default::default()
+        },
+    );
+    let port = serve(on_public(app(s.clone()), s.clone())).await;
+    let client = reqwest::Client::new();
+    let posted = client
+        .post(format!("http://127.0.0.1:{port}/hooks/task/token"))
+        .header("cf-ray", "ray-from-the-tunnel")
+        .body("{}")
+        .send()
+        .await
+        .unwrap();
+    assert_ne!(posted.status().as_u16(), 404);
+    assert!(posted.text().await.unwrap().contains("\"ok\""));
+    let plain = client
+        .post(format!("http://127.0.0.1:{port}/hooks/task/token"))
+        .body("{}")
+        .send()
+        .await
+        .unwrap();
+    assert_ne!(plain.status().as_u16(), 404);
+    assert_eq!(get(port, "/api/bots", &[]).await.0, 404);
+    assert_eq!(
+        get(
+            port,
+            "/hooks/task/token",
+            &[("cf-ray", "ray-from-the-tunnel")]
+        )
+        .await,
+        (404, "not found".into())
+    );
+}
+
+#[tokio::test]
+async fn the_tailnet_listener_allows_hooks_without_a_tailscale_user() {
+    let _guard = crate::api::test_env_lock().await;
+    let dir = tempfile::tempdir().unwrap();
+    let s = state(dir.path(), Exposure::default());
+    let tailnet_port = free_port();
+    s.tailnet
+        .open(
+            tailnet_port,
+            &["me@example.com".into()],
+            on_tailnet(app(s.clone())),
+        )
+        .await
+        .unwrap();
+    let client = reqwest::Client::new();
+    let posted = client
+        .post(format!("http://127.0.0.1:{tailnet_port}/hooks/task/token"))
+        .body("{}")
+        .send()
+        .await
+        .unwrap();
+    assert_ne!(posted.status().as_u16(), 401);
+    assert!(posted.text().await.unwrap().contains("\"ok\""));
+    assert_eq!(get(tailnet_port, "/api/bots", &[]).await.0, 401);
+    s.tailnet.close().await;
 }
 
 #[test]
