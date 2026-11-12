@@ -103,6 +103,8 @@ async fn main() -> anyhow::Result<()> {
         &cfg.access_aud,
         &cfg.access_emails.join(","),
     );
+    let workspace: Arc<dyn storage::workspace::Workspace> =
+        Arc::new(storage::LocalDisk::new(cfg.bots_root.clone()));
     let state = Arc::new(AppState {
         access,
         exposure: exposure_cfg,
@@ -132,8 +134,9 @@ async fn main() -> anyhow::Result<()> {
         system: crate::platform::release::System::new(cfg.data_root.clone(), app_dir.clone()),
         icons: crate::bots::icons::Icons::new(cfg.data_root.join("icons")),
         usage: crate::bots::usage::Usage::new(app_dir.join("usage.json")),
+        workspace: Arc::clone(&workspace),
         library: crate::bots::library::Library::new(
-            Arc::new(storage::LocalDisk::new(cfg.bots_root.clone())),
+            workspace,
             cfg.bot_mcp_url.clone(),
             mcp_token.clone(),
         ),

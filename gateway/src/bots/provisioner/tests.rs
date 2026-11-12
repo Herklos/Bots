@@ -209,6 +209,8 @@ fn fixture_state(dir: &std::path::Path, t3_url: String) -> Arc<AppState> {
         storage: crate::storage::settings::ProcessEnv::default(),
     };
     let tailnet = Arc::new(Tailnet::new());
+    let workspace: Arc<dyn crate::storage::workspace::Workspace> =
+        Arc::new(crate::storage::LocalDisk::new(cfg.bots_root.clone()));
     Arc::new(AppState {
         auth: Auth::load(&app_dir, String::new(), vec![]).unwrap(),
         harness: crate::harness::connect(t3_url, cfg.t3_token.clone()),
@@ -229,8 +231,9 @@ fn fixture_state(dir: &std::path::Path, t3_url: String) -> Arc<AppState> {
         ),
         icons: crate::bots::icons::Icons::new(dir.join("icons")),
         usage: crate::bots::usage::Usage::new(app_dir.join("usage.json")),
+        workspace: Arc::clone(&workspace),
         library: crate::bots::library::Library::new(
-            Arc::new(crate::storage::LocalDisk::new(cfg.bots_root.clone())),
+            workspace,
             cfg.bot_mcp_url.clone(),
             "fixture-only".into(),
         ),
