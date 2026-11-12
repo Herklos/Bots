@@ -180,8 +180,8 @@ pub(crate) async fn a_child_is_a_bot_with_a_parent_and_one_level() {
         .unwrap();
     assert_eq!(replaced["subagent"]["prompt"], "New.");
     assert_eq!(replaced["subagent"]["cap"], 3);
-    assert!(replaced["subagent"].get("toolAllow").is_none());
-    assert!(replaced["subagent"].get("inheritParentPrompt").is_none());
+    assert_eq!(replaced["subagent"]["toolAllow"], json!(["read"]));
+    assert_eq!(replaced["subagent"]["inheritParentPrompt"], true);
 
     for patch in [
         json!({ "pinned": true }),
