@@ -24,6 +24,8 @@ pub struct AppState {
     pub system: crate::platform::release::System,
     pub icons: crate::bots::icons::Icons,
     pub usage: crate::bots::usage::Usage,
+    /// Shared with [`crate::bots::library::Library`].
+    pub workspace: Arc<dyn crate::storage::workspace::Workspace>,
     pub library: crate::bots::library::Library,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,

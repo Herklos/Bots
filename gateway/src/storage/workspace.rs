@@ -12,6 +12,14 @@ pub struct DirEntry {
     pub modified: u64,
 }
 
+/// What the final path component is, without following a final symlink.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryKind {
+    File,
+    Dir,
+    Symlink,
+}
+
 /// Relative paths only, under one root. `..`, absolute paths, and empty segments are refused.
 pub(crate) fn safe_rel(rel: &str) -> io::Result<()> {
     if rel.is_empty()
@@ -36,6 +44,21 @@ pub trait Workspace: std::fmt::Debug + Send + Sync {
     async fn list(&self, rel: &str) -> io::Result<Vec<DirEntry>>;
     async fn remove(&self, rel: &str) -> io::Result<()>;
     fn root_for_harness(&self, slug: &str) -> String;
+
+    /// `Ok(true)` when a directory entry is present, including a symlink.
+    /// Missing is `Ok(false)`.
+    async fn exists(&self, rel: &str) -> io::Result<bool>;
+
+    /// Kind of the final component. A final symlink is [`EntryKind::Symlink`], not its target.
+    /// Missing is `Ok(None)`.
+    async fn symlink_kind(&self, rel: &str) -> io::Result<Option<EntryKind>>;
+
+    /// The key is a real directory. A symlink, a file, or a missing key is an error.
+    async fn require_dir(&self, rel: &str) -> io::Result<()>;
+
+    /// Create a real directory when the key is missing. An existing directory is `Ok`.
+    /// A symlink or a file is an error.
+    async fn ensure_dir(&self, rel: &str) -> io::Result<()>;
 }
 
 #[cfg(test)]
