@@ -1,0 +1,12 @@
+use Suggestion from "../ui/root-types.contract"
+
+shape CreateBotBag
+  createError: string
+  createStep: string
+  createdPending: bool
+  newColor: string
+  newFirst: string
+  newName: string
+  newPrompt: string
+  newShape: string
+  suggestions: Suggestion[]

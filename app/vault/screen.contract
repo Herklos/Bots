@@ -4,39 +4,34 @@ use Screen, PageTitle, PageHeader, IconControl, IconTile from "../ui/controls.co
 use SearchField, BotRow from "../ui/sidebar.contract"
 use Glyph from "../glyph.contract"
 // VaultScreen: one route of the root view, moved out with its values and actions injected.
+use VaultBag from "./bag.contract"
 component VaultScreen
   props
     route: number
   inject
+    vaultBag: VaultBag
     open: action
-    vaultQuery: string
-    vault: Login[]
-    vquery: string
-    shownVault: Login[]
     editVaultQuery: action
     login: action
-    query: string
-    vaultFailed: bool
-    vaultPending: bool
   view
     column class=Screen navigationKey=`${route}` navigationScroll="vault-list" position="absolute" inset=0
       header class=PageHeader flex-wrap="wrap"
         text t("vault.title") role="heading" aria-level=1 class=PageTitle flex=1
         button class=IconControl appearance="none" press=open("/vault/new") aria-label=t("vault.new") title=t("vault.new") testId="new-login"
           Glyph(name="add", size=20)
-        input type="search" class=SearchField value=vaultQuery input=editVaultQuery placeholder=t("vault.search") aria-label=t("vault.search") testId="vault-search" width="100%"
-      if vaultFailed
+        input type="search" class=SearchField value=vaultBag.vaultQuery input=editVaultQuery placeholder=t("vault.search") aria-label=t("vault.search") testId="vault-search" width="100%"
+      if vaultBag.vaultFailed
         EmptyState(symbol="symbol:alert", title=t("error.vaultTitle"), message=t("error.hbotsCode"))
-      else if vault.length == 0 and not vaultPending
+      else if vaultBag.vault.length == 0 and not vaultBag.vaultPending
         EmptyState(symbol="symbol:lock", title=t("vault.emptyTitle"), message=t("vault.emptyBody"))
           button press=open("/vault/new") testId="empty-login"
             text t("vault.add")
-      else if vquery != "" and shownVault.length == 0
+      else if vaultBag.vquery != "" and vaultBag.shownVault.length == 0
         column flex=1 min-height=0 align-items="center" justify-content="center" padding="space.xl" testId="no-vault-match"
-          EmptyState(symbol="symbol:search", title=t("vault.noMatch", query=vaultQuery.trim()), message=t("vault.searchHint"))
+          EmptyState(symbol="symbol:search", title=t("vault.noMatch", query=vaultBag.vaultQuery.trim()), message=t("vault.searchHint"))
       else
         list id="vault-list" appearance="none" width="100%" box-sizing="border-box" flex=1 min-height=0 gap="space.sm" padding="space.md max(space.lg, calc((100% - 40rem) / 2))"
-          for v in shownVault key=v.id
+          for v in vaultBag.shownVault key=v.id
             link href=path("vaultEdit", v.id) testId=`login-${v.id}`
               row class=BotRow background-color="surface.card" border="1px solid surface.line" border-radius="radius.md" padding="space.md"
                 column class=IconTile color="AccentColor" overflow="hidden"

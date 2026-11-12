@@ -1,0 +1,25 @@
+use Prefs from "../ui/root-types.contract"
+use Bot, Chat, Convo from "../ui/shapes.contract"
+
+shape InboxBag
+  prefs: Prefs
+  botQuery: string
+  searching: bool
+  hiddenOpen: bool
+  rowMenu: string
+  firstRun: bool
+  visibleBots: Bot[]
+  tiles: Bot[]
+  hiddenBots: Bot[]
+  newColor: string
+  newShape: string
+  wide: bool
+  plusOpen: bool
+  bots: Bot[]
+  convos: Convo[]
+  chat: Chat
+  slug: string
+  query: string
+  roomId: string
+  convoName: string
+  botsFailed: bool

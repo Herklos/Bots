@@ -1,0 +1,10 @@
+use Login from "../ui/shapes.contract"
+
+shape VaultBag
+  vaultQuery: string
+  vault: Login[]
+  vquery: string
+  shownVault: Login[]
+  query: string
+  vaultFailed: bool
+  vaultPending: bool

@@ -11,22 +11,12 @@ use NoticeSettings from "./notice.contract"
 use UpdateSettings from "./updates.contract"
 use UserSettings from "./user.contract"
 // SettingsScreen: one route of the root view, moved out with its values and actions injected.
+use SettingsBag from "./bag.contract"
 component SettingsScreen
   props
     route: number
   inject
-    about: About
-    anytypeChecked: option<AnytypeCheck>
-    anytypePrepareError: string
-    anytypePreparedPending: bool
-    anytypeError: string
-    anytypeFound: bool
-    anytypeOn: bool
-    anytypeShared: bool
-    anytypeSpace: string
-    bots: Bot[]
-    canUpdate: bool
-    convos: Convo[]
+    settingsBag: SettingsBag
     doAllowNotices: action
     doAnytypeCheck: action
     doCopyStorage: action
@@ -55,90 +45,26 @@ component SettingsScreen
     doTestStorage: action
     editNewPassword: action
     logout: action
-    nameDraft: string
-    nameEditing: bool
-    network: Network
-    networkError: string
-    networkRestartError: string
-    networkRestarted: option<Reply>
-    networkSet: option<Reply>
-    newPassword: string
-    notice: NoticeState
-    noticeAsked: option<NotificationStatus>
     open: action
-    pairCode: string
-    pairConfirmError: string
-    pairConfirmed: option<Reply>
-    pairError: string
-    pairStarted: option<Pairing>
-    pairStep: string
-    passwordError: string
-    passwordSet: option<Reply>
     pickPeriod: action
     pickSettingsDomain: action
     pickView: action
-    prefs: Prefs
-    prefsError: string
-    providers: Provider[]
-    report: UsageReport
-    reportFailed: bool
     saveNoticePart: action
     saveNotifications: action
-    session: Session
-    settingsDomain: string
-    shownBackend: string
-    spaceEditing: bool
-    spaceName: string
-    spaceSaveError: string
-    spaceSaved: option<Reply>
-    storage: Storage
-    storageCopied: option<Reply>
-    storageCopyError: string
-    storageHint: string
-    storagePath: string
-    storageRestartError: string
-    storageRestarted: option<Reply>
-    storageSaveError: string
-    storageSaved: option<Reply>
-    storageTestError: string
-    storageTested: option<Reply>
-    system: SystemStatus
-    updateError: string
-    updateFrom: string
-    updateNeedsService: bool
-    updateStarted: option<UpdateStart>
-    updateStuck: bool
-    updateTo: string
-    usagePeriod: string
-    usageView: string
-    anytypeCheckedPending: bool
-    networkRestartedPending: bool
-    networkSetPending: bool
-    noticeAskedPending: bool
-    pairConfirmedPending: bool
-    pairStartedPending: bool
-    passwordSetPending: bool
-    spaceSavedPending: bool
-    storageCopiedPending: bool
-    storageRestartedPending: bool
-    storageSavedPending: bool
-    storageTestedPending: bool
-    systemPending: bool
-    updateStartedPending: bool
   provide
-    about
-    anytypeChecked
-    anytypeCheckedPending
-    anytypePrepareError
-    anytypePreparedPending
-    anytypeError
-    anytypeFound
-    anytypeOn
-    anytypeShared
-    anytypeSpace
-    bots
-    canUpdate
-    convos
+    about = settingsBag.about
+    anytypeChecked = settingsBag.anytypeChecked
+    anytypeCheckedPending = settingsBag.anytypeCheckedPending
+    anytypePrepareError = settingsBag.anytypePrepareError
+    anytypePreparedPending = settingsBag.anytypePreparedPending
+    anytypeError = settingsBag.anytypeError
+    anytypeFound = settingsBag.anytypeFound
+    anytypeOn = settingsBag.anytypeOn
+    anytypeShared = settingsBag.anytypeShared
+    anytypeSpace = settingsBag.anytypeSpace
+    bots = settingsBag.bots
+    canUpdate = settingsBag.canUpdate
+    convos = settingsBag.convos
     doAllowNotices
     doAnytypeCheck
     doCopyStorage
@@ -167,61 +93,61 @@ component SettingsScreen
     doTestStorage
     editNewPassword
     logout
-    nameDraft
-    nameEditing
-    network
-    networkError
-    networkRestartError
-    networkRestartedPending
-    networkSetPending
-    newPassword
-    notice
-    noticeAskedPending
+    nameDraft = settingsBag.nameDraft
+    nameEditing = settingsBag.nameEditing
+    network = settingsBag.network
+    networkError = settingsBag.networkError
+    networkRestartError = settingsBag.networkRestartError
+    networkRestartedPending = settingsBag.networkRestartedPending
+    networkSetPending = settingsBag.networkSetPending
+    newPassword = settingsBag.newPassword
+    notice = settingsBag.notice
+    noticeAskedPending = settingsBag.noticeAskedPending
     open
-    pairCode
-    pairConfirmError
-    pairConfirmedPending
-    pairError
-    pairStartedPending
-    pairStep
-    passwordError
-    passwordSetPending
+    pairCode = settingsBag.pairCode
+    pairConfirmError = settingsBag.pairConfirmError
+    pairConfirmedPending = settingsBag.pairConfirmedPending
+    pairError = settingsBag.pairError
+    pairStartedPending = settingsBag.pairStartedPending
+    pairStep = settingsBag.pairStep
+    passwordError = settingsBag.passwordError
+    passwordSetPending = settingsBag.passwordSetPending
     pickPeriod
     pickView
-    prefs
-    prefsError
-    providers
-    report
-    reportFailed
+    prefs = settingsBag.prefs
+    prefsError = settingsBag.prefsError
+    providers = settingsBag.providers
+    report = settingsBag.report
+    reportFailed = settingsBag.reportFailed
     saveNoticePart
     saveNotifications
-    session
-    shownBackend
-    spaceEditing
-    spaceName
-    spaceSaveError
-    spaceSavedPending
-    storage
-    storageCopiedPending
-    storageCopyError
-    storageHint
-    storagePath
-    storageRestartError
-    storageRestartedPending
-    storageSaveError
-    storageSavedPending
-    storageTestError
-    storageTestedPending
-    system
-    systemPending
-    updateError
-    updateFrom
-    updateNeedsService
-    updateStartedPending
-    updateStuck
-    updateTo
-    usagePeriod
-    usageView
+    session = settingsBag.session
+    shownBackend = settingsBag.shownBackend
+    spaceEditing = settingsBag.spaceEditing
+    spaceName = settingsBag.spaceName
+    spaceSaveError = settingsBag.spaceSaveError
+    spaceSavedPending = settingsBag.spaceSavedPending
+    storage = settingsBag.storage
+    storageCopiedPending = settingsBag.storageCopiedPending
+    storageCopyError = settingsBag.storageCopyError
+    storageHint = settingsBag.storageHint
+    storagePath = settingsBag.storagePath
+    storageRestartError = settingsBag.storageRestartError
+    storageRestartedPending = settingsBag.storageRestartedPending
+    storageSaveError = settingsBag.storageSaveError
+    storageSavedPending = settingsBag.storageSavedPending
+    storageTestError = settingsBag.storageTestError
+    storageTestedPending = settingsBag.storageTestedPending
+    system = settingsBag.system
+    systemPending = settingsBag.systemPending
+    updateError = settingsBag.updateError
+    updateFrom = settingsBag.updateFrom
+    updateNeedsService = settingsBag.updateNeedsService
+    updateStartedPending = settingsBag.updateStartedPending
+    updateStuck = settingsBag.updateStuck
+    updateTo = settingsBag.updateTo
+    usagePeriod = settingsBag.usagePeriod
+    usageView = settingsBag.usageView
   view
     column class=Screen navigationKey=`${route}` navigationScroll="settings-form" position="absolute" inset=0
       header class=PageHeader
@@ -229,17 +155,17 @@ component SettingsScreen
       column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" padding="space.md space.lg space.sm"
         row class=SettingsTrack role="tablist" aria-label=t("settings.domains")
           for d in ["user", "notifications", "models", "access", "updates"] key=d
-            button class=SettingsTab appearance="none" role="tab" aria-selected=(settingsDomain == d) press=pickSettingsDomain(d) testId=`settings-domain-${d}` background-color=(settingsDomain == d ? "surface.card" : "transparent") color=(settingsDomain == d ? "-exact-label" : "ink.muted")
+            button class=SettingsTab appearance="none" role="tab" aria-selected=(settingsBag.settingsDomain == d) press=pickSettingsDomain(d) testId=`settings-domain-${d}` background-color=(settingsBag.settingsDomain == d ? "surface.card" : "transparent") color=(settingsBag.settingsDomain == d ? "-exact-label" : "ink.muted")
               text settingsDomainLabel(d, t("settings.domainUser"), t("settings.domainNotifications"), t("settings.domainModels"), t("settings.domainAccess"), t("settings.about"))
       scroll id="settings-form" flex=1 min-height=0
         column width="100%" max-width="40rem" align-self="center" box-sizing="border-box" margin="0 auto" padding="space.lg space.lg space.xl" gap="space.xl"
-          if settingsDomain == "user"
+          if settingsBag.settingsDomain == "user"
             UserSettings()
-          else if settingsDomain == "notifications"
+          else if settingsBag.settingsDomain == "notifications"
             NoticeSettings()
-          else if settingsDomain == "models"
+          else if settingsBag.settingsDomain == "models"
             ModelSettings()
-          else if settingsDomain == "access"
+          else if settingsBag.settingsDomain == "access"
             AccessSettings()
-          else if settingsDomain == "updates"
+          else if settingsBag.settingsDomain == "updates"
             UpdateSettings()

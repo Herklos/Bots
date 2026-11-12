@@ -1,0 +1,116 @@
+use InboxBag from "../inbox/bag.contract"
+use GroupBag from "../group/bag.contract"
+use VaultBag from "../vault/bag.contract"
+use NewGroupBag from "../group/new-bag.contract"
+use CreateBotBag from "../bot/create-bag.contract"
+use ComputerBag from "../computer/bag.contract"
+use LockBag from "../session/bag.contract"
+use ToastBag from "./toast-bag.contract"
+
+members Bots
+  derive inboxBag = InboxBag(
+    prefs=prefs,
+    botQuery=botQuery,
+    searching=searching,
+    hiddenOpen=hiddenOpen,
+    rowMenu=rowMenu,
+    firstRun=firstRun,
+    visibleBots=visibleBots,
+    tiles=tiles,
+    hiddenBots=hiddenBots,
+    newColor=newColor,
+    newShape=newShape,
+    wide=wide,
+    plusOpen=plusOpen,
+    bots=bots,
+    convos=convos,
+    chat=chat,
+    slug=slug,
+    query=query,
+    roomId=roomId,
+    convoName=convoName,
+    botsFailed=botsFailed,
+  )
+  derive groupBag = GroupBag(
+    answerError=answerError,
+    answerText=answerText,
+    answered=answered,
+    answeredPending=answeredPending,
+    away=away,
+    bots=bots,
+    chat=chat,
+    copiedMenu=copiedMenu,
+    groupPage=groupPage,
+    groupPanel=groupPanel,
+    groupSaveError=groupSaveError,
+    mentionHits=mentionHits,
+    mentionIdx=mentionIdx,
+    messageMenu=messageMenu,
+    paintedWorkers=paintedWorkers,
+    pointerFacts=pointerFacts,
+    prefs=prefs,
+    reactFor=reactFor,
+    room=room,
+    roomError=roomError,
+    roomPending=roomPending,
+    roomRows=roomRows,
+    roomSent=roomSent,
+    roomText=roomText,
+    wide=wide,
+    roomSentPending=roomSentPending,
+    roomFailed=roomFailed,
+  )
+  derive vaultBag = VaultBag(
+    vaultQuery=vaultQuery,
+    vault=vault,
+    vquery=vquery,
+    shownVault=shownVault,
+    query=query,
+    vaultFailed=vaultFailed,
+    vaultPending=vaultPending,
+  )
+  derive newGroupBag = NewGroupBag(
+    bots=bots,
+    canMakeGroup=canMakeGroup,
+    groupAbout=groupAbout,
+    groupChief=groupChief,
+    groupError=groupError,
+    groupMade=groupMade,
+    groupMembers=groupMembers,
+    groupName=groupName,
+    groupPolicy=groupPolicy,
+    groupStep=groupStep,
+    pickableBots=pickableBots,
+    groupMadePending=groupMadePending,
+  )
+  derive createBotBag = CreateBotBag(
+    createError=createError,
+    createStep=createStep,
+    createdPending=createdPending,
+    newColor=newColor,
+    newFirst=newFirst,
+    newName=newName,
+    newPrompt=newPrompt,
+    newShape=newShape,
+    suggestions=suggestions,
+  )
+  derive computerBag = ComputerBag(
+    computerEnlarged=computerEnlarged,
+    computer=computer,
+    onComputer=onComputer,
+    holding=holding,
+    locked=locked,
+    bots=bots,
+    slug=slug,
+  )
+  derive lockBag = LockBag(
+    system=system,
+    password=password,
+    signedIn=signedIn,
+    signInError=signInError,
+    locked=locked,
+    signedInPending=signedInPending,
+  )
+  derive toastBag = ToastBag(
+    toast=toast,
+  )

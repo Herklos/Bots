@@ -1,0 +1,16 @@
+use Bot from "../ui/shapes.contract"
+use Made from "../ui/root-types.contract"
+
+shape NewGroupBag
+  bots: Bot[]
+  canMakeGroup: bool
+  groupAbout: string
+  groupChief: string
+  groupError: string
+  groupMade: option<Made>
+  groupMembers: string[]
+  groupName: string
+  groupPolicy: string
+  groupStep: string
+  pickableBots: Bot[]
+  groupMadePending: bool

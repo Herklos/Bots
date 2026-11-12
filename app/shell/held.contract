@@ -1,0 +1,145 @@
+use Reply, Session, Pairing, AnytypeCheck, Suggestion, PageState, HostTime, PointerFacts, withWorking, withRoomPending, roomLine, botCount from "../ui/root-types.contract"
+use Bot, Chat, Room, Convo, Provider from "../ui/shapes.contract"
+
+members Bots
+  // Kept while this send's turn is open, so a poll that says working is false does not drop the row.
+  state holdWork = false
+  // Bot messages already in the transcript when the send started. A newer one ends the turn.
+  state botMark = 0
+  state roomSentId = ""
+  state roomText = ""
+  state plusOpen = false
+  state groupPanel = false
+  state spaceDraft = ""
+  state spaceEditing = false
+  state pairCode = ""
+  state pairStep = ""
+  state anytypeProbed = false
+  resource hostTime = exactTime() as shape HostTime
+  resource pointerFacts = exactViewport() as shape PointerFacts
+  resource session = loadSession(hostTime.locale) as shape Session else empty()
+  resource bots = loadBots(slug != "" ? slug : roomId) as shape Bot[] else empty()
+  resource page = exactPage() as shape PageState
+  resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId) as shape Convo[] else empty()
+  resource chat = loadChat(slug, childThread) as shape Chat else empty()
+  resource room = loadRoom(roomId) as shape Room else empty()
+  resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
+  resource providers = loadProviders() as shape Provider[] else empty()
+  mutation noted as shape Reply
+  mutation spaceSaved as shape Reply refreshes storage then afterSpaceSave
+  mutation pairStarted as shape Pairing then afterPairStart
+  mutation pairConfirmed as shape Reply then afterPairConfirm
+  mutation anytypeChecked as shape AnytypeCheck
+  derive slug = match stack(nav).filter(e => e.name == "chat").at(-1) { case some(e) => e.params.slug, case none => "" }
+  derive lastRoomId = match room.messages.at(-1) { case some(m) => m.id, case none => "" }
+  derive query = botQuery.trim().toLowerCase()
+  derive roomId = match stack(nav).filter(e => e.name == "group").at(-1) { case some(e) => e.params.id, case none => "" }
+  // The sidebar follows the latest conversation on the route, a chat or a group, never both.
+  derive convoName = match stack(nav).filter(e => e.name == "chat" or e.name == "group").at(-1) { case some(e) => e.name, case none => "" }
+  derive roomRows = withRoomPending(withWorking(room.messages, paintedWorkers.length > 0), roomPending, roomSentId).map(m => roomLine(m))
+  derive laterBot = botCount(chat.rows) > botMark
+  derive spaceName = spaceEditing ? spaceDraft : storage.space
+  derive spaceSaveError = match spaceSaved { case some(r) => r.error, case none => "" }
+  derive pairChallenge = match pairStarted { case some(r) => r.challengeId, case none => "" }
+  derive pairError = match pairStarted { case some(r) => r.error, case none => "" }
+  derive pairConfirmError = match pairConfirmed { case some(r) => r.error, case none => "" }
+  derive anytypeError = match anytypeChecked { case some(r) => r.error, case none => "" }
+  derive anytypeSpace = match anytypeChecked { case some(r) => r.space, case none => "" }
+  derive anytypeFound = match anytypeChecked { case some(r) => r.spaceFound, case none => false }
+  derive anytypeShared = match anytypeChecked { case some(r) => r.shared, case none => false }
+  derive anytypeOn = pairStep == "checked" and anytypeError == "" and anytypeFound and not pending(anytypeChecked)
+  derive shownBackend = (storage.backend == "anytype" and anytypeOn) ? "anytype" : "filesystem"
+  derive pendingAttaches = draftFiles.filter(f => f.startsWith(`${dkey}\u001f`)).map(f => f.slice(dkey.length + 1))
+  derive canSend = draft.trim() != "" or pendingAttaches.length > 0
+  derive onBot = top(nav).name == "chat"
+  derive onGroup = top(nav).name == "group"
+  derive workingHere = onGroup ? (paintedWorkers.length > 0 ? "working" : "") : (onBot and chat.working ? "working" : "")
+  derive onLibrary = top(nav).name == "chat" and panelOpen and panelTab == "library"
+  task probeAnytype when networkGate == "1" and storage.keySet and not anytypeProbed and not pending(anytypeChecked)
+    after(1, doAnytypeCheck)
+  action pull
+    refresh bots
+    if top(nav).name == "inbox" or wide
+      refresh convos
+    if top(nav).name == "chat"
+      refresh chat
+      if openUnread and not pending(seen)
+        send seen = markSeen(slug)
+    if top(nav).name == "group"
+      refresh room
+      if roomId != "" and not pending(roomSeen)
+        send roomSeen = markRoomSeen(roomId)
+    if top(nav).name == "settings"
+      refresh usage
+      refresh report
+      if settingsDomain == "updates"
+        refresh system
+    if onLibrary
+      refresh shelf
+    if onComputer
+      refresh computer
+    if onBot and panelOpen and panelTab == "details"
+      refresh models
+      refresh routines
+      refresh lineage
+      refresh report
+  action goCreateStep(s: string)
+    createStep = s
+  action goGroupStep(s: string)
+    groupStep = s
+  action togglePlus
+    plusOpen = not plusOpen
+  action applyScheme
+    setScheme(prefs.theme)
+  action doEditSpace(v: string)
+    spaceDraft = v
+    spaceEditing = true
+  action doSaveSpace
+    if storage.spaceLock == "" and not pending(spaceSaved)
+      send spaceSaved = saveSpace(spaceDraft.trim())
+  action afterSpaceSave
+    match spaceSaved
+      case some(r)
+        if r.ok
+          spaceEditing = false
+          if not pending(anytypeChecked)
+            anytypeProbed = true
+            send anytypeChecked = checkAnytype()
+      case none
+        spaceEditing = spaceEditing
+  action doPickBackend(backend: string)
+    if storage.backendLock == "" and not pending(storageSaved) and backend != shownBackend and (backend == "filesystem" or (backend == "anytype" and anytypeOn))
+      storageHint = ""
+      send storageSaved = saveStorage(storagePath, backend, "0")
+  action doPairStart
+    if not pending(pairStarted)
+      pairCode = ""
+      pairStep = ""
+      send pairStarted = startPairing()
+  action afterPairStart
+    match pairStarted
+      case some(r)
+        if r.ok
+          pairStep = "code"
+      case none
+        pairStep = pairStep
+  action doEditPairCode(v: string)
+    pairCode = v.trim()
+  action doPairConfirm
+    if pairChallenge != "" and pairCode.length == 4 and not pending(pairConfirmed)
+      send pairConfirmed = confirmPairing(pairChallenge, pairCode)
+  action afterPairConfirm
+    match pairConfirmed
+      case some(r)
+        if r.ok
+          pairStep = "checked"
+          pairCode = ""
+          anytypeProbed = true
+          send anytypeChecked = checkAnytype()
+      case none
+        pairStep = pairStep
+  action doAnytypeCheck
+    if not pending(anytypeChecked)
+      pairStep = "checked"
+      anytypeProbed = true
+      send anytypeChecked = checkAnytype()
