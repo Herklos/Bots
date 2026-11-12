@@ -54,6 +54,9 @@
 //   respondRequest: (args: [string, string, string, string, string, string]) => Reply
 //   restartGateway: (args: []) => Reply
 //   restartStorage: (args: []) => Reply
+//   startPairing: (args: []) => Pairing
+//   confirmPairing: (args: [string, string]) => Reply
+//   checkAnytype: (args: []) => AnytypeCheck
 //   revealPassword: (args: [string]) => Revealed
 //   saveDrafts: (args: [string[], string[], string[]]) => Reply
 //   saveLogin: (args: [string, string, string, string, string, string]) => Reply
@@ -86,7 +89,9 @@
 //   DriveReply = { ok: boolean; error: string; text: string }
 //   Session = { authenticated: boolean; passwordRequired: boolean }
 //   Network = { mode: string; locked: boolean; restartRequired: boolean; canRestart: boolean; listening: string; urls: string; error: string; http: boolean }
-//   Storage = { backend: string; root: string; backendLock: string; rootLock: string; restartRequired: boolean; canRestart: boolean; error: string }
+//   Storage = { backend: string; root: string; backendLock: string; rootLock: string; restartRequired: boolean; canRestart: boolean; error: string; keySet: boolean }
+//   Pairing = { ok: boolean; error: string; challengeId: string }
+//   AnytypeCheck = { ok: boolean; error: string; space: string; spaceFound: boolean; shared: boolean }
 //   Suggestion = { name: string; about: string; color: string; shape: string; first: string }
 //   About = { ok: boolean; version: string; harness: string; connected: boolean }
 //   SystemStatus = { ok: boolean; installed: boolean; service: boolean; version: string; latest: string; updateAvailable: boolean; error: string }
@@ -362,7 +367,9 @@ type T3 = { "ok": T0; "error": T1; "messageId": T1; };
 type T4 = { "ok": T0; "error": T1; "text": T1; };
 type T5 = { "authenticated": T0; "passwordRequired": T0; };
 type T6 = { "mode": T1; "locked": T0; "restartRequired": T0; "canRestart": T0; "listening": T1; "urls": T1; "error": T1; "http": T0; };
-type T7 = { "backend": T1; "root": T1; "backendLock": T1; "rootLock": T1; "restartRequired": T0; "canRestart": T0; "error": T1; };
+type T7 = { "backend": T1; "root": T1; "backendLock": T1; "rootLock": T1; "restartRequired": T0; "canRestart": T0; "error": T1; "keySet": T0; };
+type T230 = { "ok": T0; "error": T1; "challengeId": T1 };
+type T231 = { "ok": T0; "error": T1; "space": T1; "spaceFound": T0; "shared": T0 };
 type T8 = { "name": T1; "about": T1; "color": T1; "shape": T1; "first": T1; };
 type T9 = { "ok": T0; "version": T1; "harness": T1; "connected": T0; };
 type T10 = { "ok": T0; "installed": T0; "service": T0; "version": T1; "latest": T1; "updateAvailable": T0; "error": T1; };
@@ -587,12 +594,14 @@ type T228 = { "offsetX": T18; "offsetY": T18; "deltaX": T18; "deltaY": T18; "del
 type T229 = { "target": T1; "relatedTarget": T37; };
 
 /** Sources called by compiled mutation sends. */
-export type MutationSource = "closeComputer" | "computerControl" | "computerInput" | "copyStorage" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "noteUnread" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setGroupAnswerPolicy" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
+export type MutationSource = "checkAnytype" | "closeComputer" | "computerControl" | "computerInput" | "confirmPairing" | "copyStorage" | "createBot" | "createGroup" | "createSubagent" | "deleteBot" | "deleteGroup" | "deleteLogin" | "dropVoice" | "enableNotifications" | "hideBot" | "makeMainBot" | "markRoomSeen" | "markSeen" | "noteUnread" | "openComputer" | "pinBot" | "pinMessage" | "reactTo" | "readHealth" | "recolourBot" | "renameBot" | "reshapeBot" | "respondRequest" | "restartGateway" | "restartStorage" | "revealPassword" | "saveDrafts" | "saveLogin" | "saveStorage" | "saveSubagent" | "sendMessage" | "sendRoom" | "sendVoice" | "setBotNotifications" | "setDefaultMode" | "setDefaultModel" | "setGroupAnswerPolicy" | "setModel" | "setNetwork" | "setNotifications" | "setPassword" | "setTheme" | "setUserName" | "signIn" | "signOut" | "stageVoice" | "startPairing" | "startUpdate" | "stopRun" | "testStorage" | "updateGroup" | "uploadAttachment";
 
 export interface SourceMap {
+  "checkAnytype": { args: []; result: T231 };
   "closeComputer": { args: [T1]; result: T2 };
   "computerControl": { args: [T1, T1, T1]; result: T2 };
   "computerInput": { args: [T1, T1, T18, T18, T18, T18, T18, T1, T18, T18]; result: T4 };
+  "confirmPairing": { args: [T1, T1]; result: T2 };
   "copyStorage": { args: [T1]; result: T2 };
   "createBot": { args: [T1, T1, T1, T1]; result: T13 };
   "createGroup": { args: [T1, T1, T1, T1, T1, T1]; result: T13 };
@@ -661,6 +670,7 @@ export interface SourceMap {
   "signIn": { args: [T1]; result: T2 };
   "signOut": { args: []; result: T2 };
   "stageVoice": { args: [T1, T1, T1, T18]; result: T19 };
+  "startPairing": { args: []; result: T230 };
   "startUpdate": { args: []; result: T11 };
   "stopRun": { args: [T1, T1]; result: T2 };
   "testStorage": { args: [T1]; result: T2 };

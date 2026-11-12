@@ -80,6 +80,18 @@ pub(crate) async fn save(
         load.stored.space = space;
     }
     load.stored.key_name = KEY_NAME.into();
+    if body.get("backend").is_some() && matches!(load.stored.backend, Backend::Anytype) {
+        let key = read_key(data_root, env)
+            .ok_or_else(|| ApiError::new(409, "Connect to Anytype first."))?;
+        let host = effective_host(env, &load.stored);
+        let space = effective_space(env, &load.stored);
+        let status = crate::storage::adapters::anytype::status(&host, &key, &space).await?;
+        if status.get("spaceFound") != Some(&Value::Bool(true)) {
+            return Err(ApiError::bad_request(
+                "The Anytype space is not reachable. hbots is keeping the file system.",
+            ));
+        }
+    }
     write_stored(data_root, &load.stored).await?;
     Ok(view(data_root, running_root, env, can_restart))
 }
