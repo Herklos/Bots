@@ -1,0 +1,194 @@
+import type { Sources, Result } from '../app.contract.d.ts';
+import { fixtureGroupAnswer, setFixtureGroupAnswer, savedEffort } from '../host/fixture.ts';
+import { REACH_GATEWAY, localize, call, read, setNoticeHost, hostNotice, reply, systemChecked, setSystemChecked } from '../host/gateway.ts';
+import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, postUnread } from '../host/notices.ts';
+
+export const settingsSources = {
+  enableNotifications: async (_args, store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ notifications: { enabled: true } }) })),
+  loadPrefs: async (_args, store): Promise<Result<'loadPrefs'>> => {
+    let body: any = {};
+    try {
+      body = await read(store, '/api/settings');
+    } catch (error) {
+      if (fixtureGroupAnswer === '') throw error;
+    }
+    const note = noticePrefs(body);
+    return {
+      userName: String(body.userName ?? ''),
+      theme: String(body.theme ?? 'system'),
+      defaultInstance: String(body.defaultModel?.instanceId ?? ''),
+      defaultModel: String(body.defaultModel?.model ?? ''),
+      defaultEffort: savedEffort(body),
+      defaultRuntimeMode: String(body.defaultRuntimeMode ?? (body.autoReview === false ? "full-access" : "auto")),
+      noticeEnabled: note.enabled === true,
+      noticeSound: note.sound,
+      noticePreview: note.preview,
+      noticeWhen: note.when,
+      noticeEnabledMissing: note.enabled === null,
+      groupAnswerPolicy: fixtureGroupAnswer !== '' ? fixtureGroupAnswer : (body.groupAnswerPolicy === 'everyone' || body.groupAnswerPolicy === 'chief' ? body.groupAnswerPolicy : 'last'),
+    };
+  },
+  loadNotice: async (): Promise<Result<'loadNotice'>> => {
+    // Permission can change from Settings. Ask the host, then remember it for the poster.
+    setNoticeHost(null);
+    try {
+      const status = await hostNotice();
+      if (!status) return { available: false, state: 'unknown' };
+      return status;
+    } catch (error) {
+      if (!unsupported(error)) console.log(`notification status failed: ${String(error)}`);
+      return { available: false, state: 'unknown' };
+    }
+  },
+  setNotifications: async ([enabled, sound, preview, when], store) => {
+    const notifications: { sound: boolean; preview: string; when: string; enabled?: boolean } = { sound, preview, when };
+    // "" leaves a never-saved master unset. "on" and "off" write it.
+    if (enabled === 'on' || enabled === 'off') notifications.enabled = enabled === 'on';
+    return reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ notifications }) }));
+  },
+  setUserName: async ([userName], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ userName }) })),
+  setDefaultMode: async ([defaultRuntimeMode], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ defaultRuntimeMode }) })),
+  setGroupAnswerPolicy: async ([groupAnswerPolicy], store) => {
+    const policy = groupAnswerPolicy === 'everyone' || groupAnswerPolicy === 'chief' ? groupAnswerPolicy : 'last';
+    const r = await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ groupAnswerPolicy: policy }) });
+    if (!r.ok && r.error === REACH_GATEWAY) {
+      setFixtureGroupAnswer(policy);
+      return { ok: true, error: '' };
+    }
+    if (r.ok) setFixtureGroupAnswer('');
+    return reply(r);
+  },
+  setTheme: async ([theme], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ theme }) })),
+  setPassword: async ([password], store) => reply(await call(store, '/api/access/password', { method: 'PUT', body: JSON.stringify({ password }) })),
+  loadNetwork: async ([gate], store): Promise<Result<'loadNetwork'>> => {
+    const blank = { mode: 'local', locked: false, restartRequired: false, canRestart: false, listening: '', urls: '', error: '', http: false };
+    if (gate !== '1') return blank;
+    const body = await read(store, '/api/access');
+    const n = body.network ?? {};
+    const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+    return {
+      mode: text(n.mode) || 'local',
+      locked: n.locked === true,
+      restartRequired: n.restartRequired === true,
+      canRestart: n.canRestart === true,
+      listening: text(n.listening),
+      urls: text(n.urls),
+      error: text(n.error),
+      http: n.http === true,
+    };
+  },
+  setNetwork: async ([mode], store) => reply(await call(store, '/api/access/network', { method: 'PUT', body: JSON.stringify({ mode }) })),
+  restartGateway: async (_args, store) => reply(await call(store, '/api/access/network/restart', { method: 'POST', body: '{}' })),
+  loadStorage: async ([gate], store): Promise<Result<'loadStorage'>> => {
+    const fallback = '~/.hbots/bots';
+    const blank = { backend: 'filesystem', root: fallback, backendLock: '', rootLock: '', restartRequired: false, canRestart: false, error: '', keySet: false, space: 'hbots', spaceLock: '' };
+    if (gate !== '1') return blank;
+    const body = await read(store, '/api/storage');
+    const saved = body.saved ?? {};
+    const effective = body.effective ?? {};
+    const locked = body.locked ?? {};
+    const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+    const lock = (value: unknown, variable: string): string => (typeof value === 'string' && value.trim() !== '' ? value.trim() : value === true ? variable : '');
+    const savedRoot = text(saved.root);
+    return {
+      backend: text(saved.backend) || text(effective.backend) || 'filesystem',
+      root: savedRoot || fallback,
+      backendLock: lock(locked.backend, 'HBOTS_STORAGE'),
+      rootLock: lock(locked.root, 'HBOTS_ROOT'),
+      restartRequired: body.restartRequired === true,
+      canRestart: body.canRestart === true,
+      error: text(body.error),
+      keySet: effective.keySet === true || saved.keySet === true,
+      space: text(effective.space) || text(saved.space) || 'hbots',
+      spaceLock: lock(locked.space, 'HBOTS_ANYTYPE_SPACE'),
+    };
+  },
+  saveStorage: async ([path, backend, sendRoot], store) => reply(await call(store, '/api/storage', {
+    method: 'PUT',
+    body: JSON.stringify({
+      ...(backend === 'filesystem' || backend === 'anytype' ? { backend } : {}),
+      ...(sendRoot === '1' ? { root: path } : {}),
+    }),
+  })),
+  saveSpace: async ([space], store) => reply(await call(store, '/api/storage', { method: 'PUT', body: JSON.stringify({ space }) })),
+  testStorage: async ([path], store) => reply(await call(store, '/api/storage/test', { method: 'POST', body: JSON.stringify({ backend: 'filesystem', root: path }) })),
+  copyStorage: async ([path], store) => reply(await call(store, '/api/storage/copy', { method: 'POST', body: JSON.stringify({ root: path }) })),
+  restartStorage: async (_args, store) => reply(await call(store, '/api/storage/restart', { method: 'POST', body: '{}' })),
+  startPairing: async (_args, store): Promise<Result<'startPairing'>> => {
+    const r = await call(store, '/api/storage/anytype/pair', { method: 'POST', body: '{}' });
+    if (!r.ok) return { ok: false, error: localize(r.error), challengeId: '' };
+    const id = typeof r.body?.challengeId === 'string' ? r.body.challengeId : '';
+    return { ok: id !== '', error: '', challengeId: id };
+  },
+  confirmPairing: async ([challengeId, code], store) => reply(await call(store, '/api/storage/anytype/pair/confirm', { method: 'POST', body: JSON.stringify({ challengeId, code }) })),
+  checkAnytype: async (_args, store): Promise<Result<'checkAnytype'>> => {
+    const r = await call(store, '/api/storage/anytype/check', { method: 'POST', body: '{}' });
+    if (!r.ok) return { ok: false, error: localize(r.error), space: '', spaceFound: false, shared: false };
+    const b = r.body ?? {};
+    return { ok: b.reachable === true && b.spaceFound === true, error: '', space: typeof b.space === 'string' ? b.space : '', spaceFound: b.spaceFound === true, shared: b.shared === true };
+  },
+  loadProviders: async (_args, store): Promise<Result<'loadProviders'>> => {
+    const p = await call(store, '/api/providers');
+    return (p.ok && Array.isArray(p.body.providers) ? p.body.providers : []).map((x: any) => ({
+      instanceId: String(x.instanceId), name: String(x.displayName ?? x.instanceId), account: String(x.account ?? ''),
+      models: ((x.models ?? []) as any[]).map((o) => ({
+        slug: String(o.slug), name: String(o.name ?? o.slug), recommended: o.recommended === true, effort: String(o.effort ?? ''),
+        efforts: ((o.efforts ?? []) as any[]).map((e) => ({ id: String(e.id), label: String(e.label ?? e.id) })),
+      })),
+    }));
+  },
+  loadAbout: async (_args, store): Promise<Result<'loadAbout'>> => {
+    const r = await call(store, '/api/config');
+    if (!r.ok) return { ok: false, version: '', harness: '', connected: false };
+    return { ok: true, version: String(r.body.version ?? ''), harness: String(r.body.harness?.name ?? 'T3 Code'), connected: r.body.harness?.connected === true };
+  },
+  loadSystem: async ([gate], store): Promise<Result<'loadSystem'>> => {
+    const blank: Result<'loadSystem'> = { ok: false, installed: false, service: false, version: '', latest: '', updateAvailable: false, error: '' };
+    if (gate !== '1') {
+      setSystemChecked(false);
+      return blank;
+    }
+    const path = systemChecked ? '/api/system' : '/api/system?check=1';
+    setSystemChecked(true);
+    const r = await call(store, path);
+    if (!r.ok) return blank;
+    const latest = r.body.latest;
+    return {
+      ok: true,
+      installed: r.body.installed === true,
+      service: r.body.service === true,
+      version: String(r.body.version ?? ''),
+      latest: latest && typeof latest === 'object' && typeof latest.version === 'string' ? latest.version : '',
+      updateAvailable: r.body.updateAvailable === true,
+      error: typeof r.body.error === 'string' ? r.body.error : '',
+    };
+  },
+  startUpdate: async (_args, store): Promise<Result<'startUpdate'>> => {
+    const r = await call(store, '/api/system/update', { method: 'POST', body: '{}' });
+    if (!r.ok) return { ok: false, version: '', error: localize(r.error) };
+    return { ok: true, version: String(r.body.version ?? ''), error: '' };
+  },
+  readHealth: async (_args, store): Promise<Result<'readHealth'>> => {
+    const r = await call(store, '/api/health');
+    if (!r.ok) return { ok: false, version: '' };
+    return { ok: true, version: String(r.body.version ?? '') };
+  },
+  noteUnread: async ([visibility, focused, available, state, enabled, enabledMissing, sound, preview, when, openSlug, openRoom], store): Promise<Result<'noteUnread'>> => {
+    if (FIXTURE_SLUG(openSlug) || FIXTURE_SLUG(openRoom) || openSlug === 'fixture-busy' || openRoom === 'fixture-busy' || openSlug === 'fixture-crowd' || openRoom === 'fixture-crowd') return { ok: true, error: '' };
+    const prefs: NoticePrefs = {
+      enabled: enabledMissing ? null : enabled,
+      sound,
+      preview: preview === 'hidden' ? 'hidden' : 'full',
+      when: when === 'background' ? 'background' : 'any',
+    };
+    try {
+      await postUnread(store, openSlug, openRoom, visibility, focused, { available, state }, prefs);
+    } catch {
+      // A missing notification host still leaves the roster alone.
+    }
+    return { ok: true, error: '' };
+  },
+  setDefaultModel: async ([instanceId, model, effort], store) => reply(await call(store, '/api/settings', {
+    method: 'PUT', body: JSON.stringify({ defaultModel: { instanceId, model, ...(effort !== '' ? { effort } : {}) } }),
+  })),
+} satisfies Pick<Sources, 'enableNotifications' | 'loadPrefs' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'setDefaultModel'>;
