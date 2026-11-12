@@ -1,4 +1,6 @@
-//! The Anytype adapter: a thin client for the local Anytype HTTP API.
+//! The Anytype adapter: a local HTTP client. Pairing and the space check are what
+//! Settings uses. Object, search, schema, and file calls are not wired into storage yet.
+
 mod client;
 #[cfg(test)]
 mod tests;
