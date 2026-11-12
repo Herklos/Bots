@@ -77,7 +77,17 @@ pub(crate) async fn library_file(
     let path = q.get("path").map(String::as_str).unwrap_or("");
     let bytes = s.library.file_bytes(&slug, path).await?;
     let mime = library_mime(path);
-    Ok(([(header::CONTENT_TYPE, mime)], bytes).into_response())
+    let mut res = ([(header::CONTENT_TYPE, mime)], bytes).into_response();
+    // A Bot-written page must not run script in the person's session. `sandbox`
+    // (no allow-scripts, no allow-same-origin) does that. Images stay unsandboxed:
+    // a sandbox policy on an image response can stop the page from showing it.
+    if mime.starts_with("text/html") {
+        res.headers_mut().insert(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static("sandbox"),
+        );
+    }
+    Ok(res)
 }
 
 pub(crate) async fn connector_save(
