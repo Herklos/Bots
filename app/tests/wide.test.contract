@@ -1,0 +1,34 @@
+locale "en-US"
+
+test "a wide window replaces a chat with the group"
+  size 1440x900
+  at "/bot/fixture"
+  clock +600
+  clock data
+  expect tree has "open-bot-fixture"
+  expect tree missing "open-group-fixture"
+  tap "group-fixture"
+  clock data
+  expect text "room-title" == "Design"
+  expect tree has "open-group-fixture"
+  expect tree missing "open-bot-fixture"
+  expect tree missing "chat-title"
+  back
+  expect tree missing "room-title"
+  expect tree missing "chat-title"
+test "a wide window replaces a group with the chat"
+  size 1440x900
+  at "/group/fixture"
+  clock +600
+  clock data
+  expect tree has "open-group-fixture"
+  expect tree missing "open-bot-fixture"
+  tap "bot-fixture"
+  clock data
+  expect text "chat-title" == "Ada"
+  expect tree has "open-bot-fixture"
+  expect tree missing "open-group-fixture"
+  expect tree missing "room-title"
+  back
+  expect tree missing "chat-title"
+  expect tree missing "room-title"

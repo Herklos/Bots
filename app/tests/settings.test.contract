@@ -1,0 +1,114 @@
+locale "en-US"
+// Navigation reflects the features available today. No live gateway is used.
+test "About shows the version and changelog and no update when none is available"
+  tap "Settings"
+  clock data
+  tap "settings-domain-updates"
+  clock data
+  expect text "settings-domain-updates" == "About"
+  expect tree has "about-version"
+  expect tree has "about-changelog"
+  expect tree has "update-status"
+  expect tree missing "start-update"
+test "Settings owns the Vault and does not expose Projects"
+  expect tree missing "open-vault"
+  expect tree missing "open-projects"
+  tap "Settings"
+  clock data
+  expect tree has "user-name"
+  expect tree missing "beta-projects"
+  tap "settings-domain-access"
+  expect tree has "open-vault"
+  expect tree has "new-password"
+  expect disabled "save-password"
+  type "new-password" "a-password"
+  expect enabled "save-password"
+test "a login is reached through Settings and needs a title or website"
+  tap "Settings"
+  clock data
+  expect tree has "user-name"
+  tap "settings-domain-access"
+  tap "open-vault"
+  clock data
+  expect tree has "new-login"
+  tap "new-login"
+  clock settle
+  expect disabled "login-save"
+  expect tree missing "reveal-password"
+  type "login-title" "Mail"
+  expect enabled "login-save"
+  back
+  back
+  expect tree has "open-vault"
+  tap "settings-domain-user"
+  expect tree has "user-name"
+test "Settings counts usage and still hides Projects"
+  tap "Settings"
+  clock data
+  expect tree has "user-name"
+  tap "settings-domain-user"
+  expect tree has "usage-error"
+  expect text "usage-error" == "Can’t load usage. Check that hbots is running, then try again."
+  expect tree missing "open-projects"
+  expect tree missing "beta-projects"
+  tap "settings-domain-access"
+  expect tree has "open-vault"
+test "Settings shows the notification switch and the two timing choices"
+  tap "Settings"
+  clock data
+  expect tree has "settings-domain-notifications"
+  tap "settings-domain-notifications"
+  expect tree has "notice-enabled"
+  expect tree has "notice-when-any"
+  expect tree has "notice-when-background"
+test "mute flips on a Bot edit page and a group menu"
+  size 1200x800
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  tap "panel-edit"
+  expect text "mute-label" == "Notify"
+  expect tree has "mute-bot"
+  tap "mute-bot"
+  clock data
+  expect text "mute-label" == "Notify"
+  at "/group/fixture"
+  clock data
+  tap "group-fixture" contextmenu
+  expect text "menu-mute-fixture" == "Mute"
+  tap "menu-mute-fixture"
+  clock data
+  tap "group-fixture" contextmenu
+  expect text "menu-mute-fixture" == "Unmute"
+test "Access shows where Bots are stored"
+  tap "Settings"
+  clock data
+  tap "settings-domain-access"
+  clock data
+  expect tree has "storage-filesystem"
+  expect text "storage-filesystem" == "File system"
+  expect enabled "storage-filesystem"
+  expect tree has "storage-anytype"
+  expect disabled "storage-anytype"
+  expect text "storage-anytype-note" == "Connect Anytype below. Until that space is reachable, hbots keeps the file system."
+  expect text "storage-active" == "Active: file system"
+  expect tree has "anytype-connect"
+  expect tree has "storage-folder"
+  expect tree has "storage-save"
+  expect tree has "storage-test"
+  expect tree has "storage-copy"
+  expect text "storage-copy" == "Copy Bots here"
+  expect tree missing "storage-key"
+  expect tree missing "storage-restart"
+test "Settings saves who answers in a group"
+  tap "Settings"
+  clock data
+  tap "settings-domain-models"
+  expect tree has "group-answer-last"
+  expect text "group-answer-last" == "Last speaker"
+  expect text "group-answer-everyone" == "Everyone"
+  expect text "group-answer-chief" == "A chief"
+  tap "group-answer-everyone"
+  clock data
+  expect checked "group-answer-everyone"
+  expect tree missing "group-answer-default"

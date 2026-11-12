@@ -1,0 +1,111 @@
+locale "en-US"
+
+test "the library says when it cannot open"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-library"
+  clock data
+  expect tree has "library-error"
+  expect text "library-error" == "Can’t open this library. Check that hbots is running, then try again."
+  expect tree missing "open-projects"
+  expect tree missing "add-library"
+  expect tree missing "add-connector"
+test "the computer says when it cannot open"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-computer"
+  clock data
+  expect tree has "computer-error"
+  expect text "computer-error" == "Can’t open this Bot’s browser. Check that hbots is running, then try again."
+  expect tree missing "computer-frame"
+  expect tree missing "open-projects"
+test "the library says when it cannot open, in French"
+  locale "fr"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-library"
+  clock data
+  expect tree has "library-error"
+  expect text "library-error" == "Impossible d’ouvrir cette bibliothèque. Vérifiez qu’hbots tourne, puis réessayez."
+test "one server tab shows its title once"
+  size 340x740
+  at "/bot/page"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-computer"
+  clock data
+  expect text "computer-tab-title" == "Only"
+  expect tree missing "tab-only"
+  expect tree has "computer-take"
+  expect tree missing "computer-frame"
+test "tapping the page picture covers the screen until close"
+  size 340x740
+  at "/bot/frame"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-computer"
+  clock data
+  expect tree has "computer-frame"
+  expect tree missing "computer-overlay"
+  expect tree has "computer-take"
+  expect tree missing "tab-only"
+  expect text "computer-status" == "Frame’s screen"
+  tap "computer-frame"
+  expect tree has "computer-overlay"
+  expect tree has "computer-large"
+  expect tree has "computer-close"
+  expect tree has "computer-take"
+  tap "computer-close"
+  expect tree missing "computer-overlay"
+  expect tree has "computer-frame"
+  expect tree has "computer-take"
+test "taking control sends the picture's keys and does not open the overlay from a click"
+  size 340x740
+  at "/bot/frame"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-computer"
+  clock data
+  tap "computer-frame"
+  expect tree has "computer-overlay"
+  tap "computer-close"
+  expect tree missing "computer-overlay"
+  tap "computer-take"
+  clock data
+  expect tree has "computer-release"
+  expect tree has "computer-enlarge"
+  expect tree missing "computer-overlay"
+  tap "computer-frame" at 12 12
+  expect tree missing "computer-overlay"
+  expect tree missing "computer-error"
+  type "computer-frame" key "Enter"
+  expect tree missing "computer-error"
+  tap "computer-enlarge"
+  expect tree has "computer-overlay"
+  expect tree has "computer-large"
+  expect tree missing "tab-only"
+  tap "computer-release"
+  clock data
+  expect tree has "computer-take"
+  expect tree missing "computer-enlarge"
+  tap "computer-frame"
+  expect tree has "computer-overlay"
+test "two server tabs are listed and the second can be chosen"
+  size 340x740
+  at "/bot/tabs"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-computer"
+  clock data
+  expect tree has "tab-one"
+  expect tree has "tab-two"
+  expect text "computer-tab-title" == "One"
+  tap "tab-two"
+  clock data
+  expect text "computer-tab-title" == "Two"
