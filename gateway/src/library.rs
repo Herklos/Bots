@@ -667,7 +667,34 @@ pub(crate) fn claude_settings(existing: &Value, connectors: &[Value]) -> Value {
         .filter(|n| *n != "bot")
         .collect();
     cs["disabledMcpjsonServers"] = json!(disabled);
+    add_agents_md_hook(&mut cs);
     cs
+}
+
+/// Claude reads `CLAUDE.md` once, when a session starts. This `UserPromptSubmit` hook prints
+/// `AGENTS.md` into the turn whenever it changed since this session last saw it, so an open
+/// thread picks up the 20 second memory snapshot. The first turn only records the hash.
+const AGENTS_MD_HOOK: &str = r#"f="$CLAUDE_PROJECT_DIR/AGENTS.md"; [ -f "$f" ] || exit 0; sid=$(sed -n 's/.*"session_id" *: *"\([^"]*\)".*/\1/p' | head -n 1); [ -n "$sid" ] || exit 0; seen="${TMPDIR:-/tmp}/hbots-agents-$sid"; h=$(shasum "$f" | cut -d' ' -f1); old=$(cat "$seen" 2>/dev/null); printf %s "$h" > "$seen"; if [ -n "$old" ] && [ "$old" != "$h" ]; then echo "AGENTS.md changed. These are your current instructions:"; cat "$f"; fi"#;
+
+fn add_agents_md_hook(cs: &mut Value) {
+    let mut entries = match cs["hooks"]["UserPromptSubmit"].as_array() {
+        Some(list) => list.clone(),
+        None => Vec::new(),
+    };
+    let has_hook = entries.iter().any(|entry| {
+        entry["hooks"].as_array().is_some_and(|hooks| {
+            hooks
+                .iter()
+                .any(|h| h["command"].as_str() == Some(AGENTS_MD_HOOK))
+        })
+    });
+    if !has_hook {
+        entries.push(json!({ "hooks": [{ "type": "command", "command": AGENTS_MD_HOOK }] }));
+    }
+    if !cs["hooks"].is_object() {
+        cs["hooks"] = json!({});
+    }
+    cs["hooks"]["UserPromptSubmit"] = json!(entries);
 }
 
 pub(crate) fn codex_toml(mcp: &Value) -> String {
@@ -1103,6 +1130,25 @@ mod tests {
         let claude = claude_settings(&json!({}), servers.as_array().unwrap());
         assert_eq!(claude["enableAllProjectMcpServers"], true);
         assert_eq!(claude["disabledMcpjsonServers"], json!(["notes"]));
+    }
+
+    #[test]
+    fn claude_settings_adds_the_agents_md_hook_once() {
+        let once = claude_settings(&json!({}), &[]);
+        let twice = claude_settings(&once, &[]);
+        assert_eq!(
+            twice["hooks"]["UserPromptSubmit"].as_array().unwrap().len(),
+            1
+        );
+        let other = json!({ "hooks": { "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "true" }] }] } });
+        let merged = claude_settings(&other, &[]);
+        assert_eq!(
+            merged["hooks"]["UserPromptSubmit"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
     }
 
     #[test]
