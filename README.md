@@ -37,7 +37,7 @@ For a terminal-only setup, run `hbots up --no-service`, then `hbots serve` using
 
 ## Features
 
-- **Personal Bots:** use the guided setup to choose a name, appearance, optional template and first message. Each Bot has its own instructions and workspace; choose its model and approval mode. Claude Haiku is the default model.
+- **Personal Bots:** use the guided setup to choose a name, appearance, optional template and first message. Each Bot has its own instructions and workspace; choose its model and approval mode. Claude Haiku is the default model. Settings can cap how much approval a Bot is given. Existing Bots keep the mode already saved; the next message uses the cap, and the list shows Above the limit. hbots applies that cap itself and does not write T3's `limits.maxRuntimeMode`.
 - **Conversations:** chat with individual Bots or groups, mention Bots, attach files and voice clips, reply, react, and pin messages. In a group, an `@mention`, `@all`, or a single name chooses who answers; otherwise the last speaker does, unless the group or Settings says everyone or a chief should. Stop a run or answer an approval request from the app.
 - **Notifications:** receive unread conversation notices and mute individual Bots or groups without losing unread indicators.
 - **Bot details:** see routines, usage, child threads, and a library of files, pages and links. Manage per-Bot MCP connectors and watch or interact with a Bot's browser through T3 Code.
@@ -83,7 +83,7 @@ hbots up [--port N] [--t3-url URL] [--no-service] [--refresh-token]
                                                      Set up and start hbots. Re-issues the T3 token when it lacks preview:operate; --refresh-token re-issues it anyway
 hbots serve                                          Run the gateway in the foreground
 hbots status [--json]                                Show service and gateway status
-hbots doctor [--json]                                Show a redacted diagnostics report
+hbots doctor [--json]                                Show a redacted diagnostics report. Settings shows the same report, and can ask a Bot to read it.
 hbots update [version] [--check] [--preview] [--yes] Check or install a release
 hbots rollback                                       Restore the previous version
 hbots service install|uninstall|restart|status       Manage the background service

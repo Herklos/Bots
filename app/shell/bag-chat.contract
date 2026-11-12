@@ -92,4 +92,8 @@ members Bots
     linkLocal=pageOrigin.local,
     limits=providerLimits.providers,
     limitFocus=limitFocus,
+    switchBot=switchBot,
+    switchFrom=switchFrom,
+    switchTo=switchTo,
+    modelSavedPending=modelSavedPending,
   )

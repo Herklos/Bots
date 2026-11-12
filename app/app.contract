@@ -12,7 +12,6 @@ use LoginSheet from "./settings/settings.contract"
 use Login, Chat from "./ui/shapes.contract"
 use SideList from "./ui/root-types.contract"
 use Screen from "./ui/controls.contract"
-
 routes nav
   inbox "/"
     chat "/bot/:slug"
@@ -29,6 +28,7 @@ component Bots
   members "./computer/preview.contract"
   members "./vault/model.contract"
   members "./settings/model.contract"
+  members "./settings/extras.contract"
   members "./settings/mcp-model.contract"
   members "./bot/model.contract"
   members "./bot/memory-model.contract"

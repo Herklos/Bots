@@ -171,4 +171,4 @@ members Bots
       panelOpen = true
       panelPage = "model"
       limitFocus = instanceId
-      send modelSaved = setModel(bslug, instanceId, model, "", "", "1")
+      doPickModel(bslug, instanceId, model, "", "")

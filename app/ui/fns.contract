@@ -32,7 +32,7 @@ fn knownReact(current: string): bool = current == "👍" or current == "❤️" 
 fn reactStrip(current: string): string[] = current == "" or knownReact(current) ? ["👍", "❤️", "😂", "😮", "🎉", "🙏"] : ["👍", "❤️", "😂", "😮", "🎉", "🙏"].concat([current])
 
 // A tool line's verb. Known ids come from the string table (passed in: a top-level `fn` cannot call `t`). Anything else keeps the stored sentence.
-fn eventVerb(id: string, stored: string, sent: string, routineCreated: string, routineUpdated: string, routineDeleted: string, from: string, ran: string, started: string, providerLimit: string, providerError: string): string = id == "sent" ? sent : id == "routine-created" ? routineCreated : id == "routine-updated" ? routineUpdated : id == "routine-deleted" ? routineDeleted : id == "from" ? from : id == "ran" ? ran : id == "started" ? started : id == "provider-limit" ? providerLimit : id == "provider-error" ? providerError : stored
+fn eventVerb(id: string, stored: string, sent: string, routineCreated: string, routineUpdated: string, routineDeleted: string, from: string, ran: string, started: string, providerLimit: string, providerError: string, switched: string): string = id == "sent" ? sent : id == "routine-created" ? routineCreated : id == "routine-updated" ? routineUpdated : id == "routine-deleted" ? routineDeleted : id == "from" ? from : id == "ran" ? ran : id == "started" ? started : id == "provider-limit" ? providerLimit : id == "provider-error" ? providerError : id == "provider-switch" ? switched : stored
 
 // The open chat is clear. A hidden Bot keeps the mark until that chat is the open one.
 fn showUnread(unread: bool, open: bool, hidden: bool): bool = unread and not open and (hidden or not hidden)

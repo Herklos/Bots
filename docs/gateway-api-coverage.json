@@ -23,6 +23,20 @@
       "classification": "generated"
     },
     {
+      "path": "/api/diagnostics",
+      "method": "GET",
+      "tool": "hbots_get_diagnostics",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/diagnostics/ask",
+      "method": "POST",
+      "tool": "hbots_ask_diagnostics",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
       "path": "/api/bots",
       "method": "GET",
       "tool": "hbots_list_bots",

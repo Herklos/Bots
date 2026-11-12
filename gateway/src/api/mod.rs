@@ -32,6 +32,7 @@ mod code_api;
 #[cfg(test)]
 mod code_api_tests;
 mod computer_api;
+mod diagnostics;
 #[cfg(test)]
 mod helpers_policy_tests;
 mod library_api;
@@ -74,6 +75,8 @@ pub(crate) use chat_api::*;
 pub(crate) use code_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use computer_api::*;
+#[allow(unused_imports, reason = "siblings and old paths use these names")]
+pub(crate) use diagnostics::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use library_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]

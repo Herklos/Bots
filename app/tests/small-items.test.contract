@@ -1,0 +1,53 @@
+locale "en-US"
+
+test "Settings sets a maximum approval without rewriting the default"
+  tap "Settings"
+  clock data
+  tap "settings-domain-models"
+  clock data
+  expect tree has "cap-full-access"
+  expect text "cap-approval-required" == "Ask"
+  expect text "cap-auto" == "Auto"
+  expect text "cap-full-access" == "Full access"
+  tap "cap-approval-required"
+  clock data
+  expect state prefs.maxRuntimeMode == "approval-required"
+  expect state prefs.defaultRuntimeMode == "auto"
+
+test "a provider switch asks before it is applied"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  clock data
+  tap "model-row"
+  clock settle
+  tap "provider-codex"
+  tap "model-gpt"
+  clock data
+  expect tree has "switch-sheet"
+  expect text "switch-title" == "Switch provider"
+  expect text "switch-body" == "Ada will move from Claude to Codex. The conversation carries over as a summary of recent messages, not as the old provider's memory of it. Files and tool state do not carry over."
+  tap "switch-cancel"
+  expect tree missing "switch-sheet"
+  expect state models.current == "haiku"
+  tap "model-gpt"
+  clock data
+  tap "switch-confirm"
+  clock data
+  expect tree missing "switch-sheet"
+  expect state models.current == "gpt"
+
+test "Settings can copy, save, and ask a Bot about diagnostics"
+  tap "Settings"
+  clock data
+  tap "settings-domain-updates"
+  clock data
+  expect tree has "diagnostics"
+  expect tree has "diagnostics-text"
+  expect tree has "diagnostics-copy"
+  expect tree has "diagnostics-save"
+  expect tree has "diagnostics-ask-fixture"
+  tap "diagnostics-ask-fixture"
+  clock data
+  expect text "toast" == "Diagnostics sent"

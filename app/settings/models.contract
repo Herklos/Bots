@@ -36,6 +36,14 @@ component ModelSettings
             button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.defaultRuntimeMode == mode) press=doDefaultMode(mode) testId=`default-access-${mode}` background-color=(prefs.defaultRuntimeMode == mode ? "surface.card" : "transparent") color=(prefs.defaultRuntimeMode == mode ? "-exact-label" : "ink.muted")
               text (mode == "approval-required" ? t("model.ask") : mode == "auto" ? t("model.auto") : mode == "full-access" ? t("model.fullAccess") : t("model.independent"))
       text t("settings.defaultAccessNote") class=SettingsFoot
+    column
+      text t("settings.maxAccess") class=SectionLabel
+      column class=GroupCard padding="space.sm"
+        row class=SettingsTrack role="radiogroup" aria-label=t("settings.maxAccess")
+          for mode in ["approval-required", "auto", "full-access"] key=mode
+            button class=SettingsTab appearance="none" role="radio" aria-checked=(prefs.maxRuntimeMode == mode) press=doDefaultMode(`cap:${mode}`) testId=`cap-${mode}` background-color=(prefs.maxRuntimeMode == mode ? "surface.card" : "transparent") color=(prefs.maxRuntimeMode == mode ? "-exact-label" : "ink.muted")
+              text (mode == "approval-required" ? t("model.ask") : mode == "auto" ? t("model.auto") : t("model.fullAccess"))
+      text t("settings.maxAccessNote") class=SettingsFoot
       if prefs.defaultRuntimeMode == "independent"
         text t("model.independentNote") class=SettingsFoot testId="default-access-independent-note"
     column
