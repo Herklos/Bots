@@ -6,10 +6,12 @@
 //! harness anything.
 
 mod cache;
+mod read;
 mod signal;
 
 #[cfg(test)]
 mod tests;
 
-pub(crate) use cache::{evaluate, SignalCache};
+pub(crate) use cache::SignalCache;
+pub(crate) use read::{present, ReadCache};
 pub(crate) use signal::{mode_of, require_mode};

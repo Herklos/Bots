@@ -1,11 +1,13 @@
 use super::cache::{evaluate, Gate, SignalCache, SIGNAL_TTL};
+use super::read::{present, ReadCache};
 use super::signal::{
     mode_of, require_mode, signal, ActivityFacts, CodeMode, SignalInput, VcsStatus,
 };
 use crate::bots::Bots;
 use crate::harness::adapters::mock::MockHarness;
+use crate::harness::PullRow;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 fn facts(file_change: bool, git_command: bool) -> ActivityFacts {
     ActivityFacts {
@@ -184,4 +186,52 @@ async fn code_mode_is_stored_only_when_a_person_sets_it() {
         .unwrap_err();
     assert_eq!(refused.status, axum::http::StatusCode::BAD_REQUEST);
     assert!(bots.get("cy").await.unwrap().is_none());
+}
+
+#[tokio::test]
+async fn an_open_read_refreshes_status_after_its_ttl_and_keeps_pull_requests() {
+    let mock = MockHarness::new();
+    mock.set_is_repo(true);
+    mock.set_prs(vec![PullRow {
+        number: 3,
+        title: "Open".into(),
+        url: "https://github.com/org/repo/pull/3".into(),
+        draft: false,
+        checks: "passing".into(),
+        review: String::new(),
+        updated: String::new(),
+    }]);
+    let signals = SignalCache::default();
+    let reads = ReadCache::new(Duration::ZERO, Duration::from_secs(60));
+    let now = Instant::now();
+    let first = present(
+        &mock,
+        &signals,
+        &reads,
+        now,
+        "ada",
+        "/tmp/ada",
+        Some("project-ada"),
+        true,
+        CodeMode::On,
+        true,
+    )
+    .await;
+    let second = present(
+        &mock,
+        &signals,
+        &reads,
+        now,
+        "ada",
+        "/tmp/ada",
+        Some("project-ada"),
+        true,
+        CodeMode::On,
+        true,
+    )
+    .await;
+    assert_eq!(first["prs"][0]["number"], 3);
+    assert_eq!(second["repo"]["branch"], "main");
+    assert_eq!(mock.status_calls(), 2);
+    assert_eq!(mock.pr_calls(), 1);
 }

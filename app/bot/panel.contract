@@ -1,7 +1,7 @@
 use faceColor from "../ui/fns.contract"
 use PanelRow from "../ui/panel.contract"
 use Bot, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer from "../ui/shapes.contract"
-use PageTitle, QuietButton, TextControl, IconControl, ConversationLink, SectionLabel, Chip, IconTile, Segment from "../ui/controls.contract"
+use PageTitle, QuietButton, TextControl, IconControl, ConversationLink, SectionLabel, Chip, IconTile from "../ui/controls.contract"
 use ModelPage, UsageView from "../settings/settings.contract"
 use ProviderLimit from "../settings/limits.contract"
 use Avatar from "../face.contract"
@@ -12,6 +12,9 @@ use MemoryTab from "./memory.contract"
 use SubagentPage from "./subagent-page.contract"
 use BotShelf, ScreenCard from "../computer/computer.contract"
 use ComputerPlace from "../computer/place.contract"
+use CodeTab from "./code.contract"
+use CodeView from "./code.contract"
+use PanelTabs from "./tabs.contract"
 component BotPanel
   props
     working: bool
@@ -97,13 +100,11 @@ component BotPanel
     placesFailed: bool
     placeError: string
     doPickComputer: action
+    codeOn: bool
+    code: CodeView
   derive children = bots.filter(c => c.parentSlug == bot.slug)
-  action tabKey(k: string, event: KeyboardEvent)
-    if not event.isComposing and (k == "ArrowRight" or k == "ArrowLeft" or k == "Home" or k == "End")
-      preventDefault()
-      let next = k == "Home" ? "details" : k == "End" ? "computer" : k == "ArrowRight" ? (tab == "details" ? "library" : tab == "library" ? "computer" : "details") : (tab == "details" ? "computer" : tab == "computer" ? "library" : "details")
-      pickTab(next)
-      focus(`panel-tab-${next}`)
+  derive names = codeOn ? ["details", "library", "computer", "code"] : ["details", "library", "computer"]
+  derive active = names.includes(tab) ? tab : "details"
   action goRoot
     openPage("root")
   action goModel
@@ -163,11 +164,8 @@ component BotPanel
             Avatar(shape=bot.shape, color=faceColor(bot.color), state=(bot.hidden ? "asleep" : working ? "working" : "idle"), size=72, still=(not working), presence="")
             text bot.name font="-exact-title3" font-weight=700 letter-spacing="-0.3px" testId="details-name" text-align="center" overflow-wrap="anywhere"
             text (bot.hidden ? t("panel.hiddenInbox") : working ? t("status.working") : bot.ready ? t("status.ready") : t("status.settingUp")) color="ink.muted" font="-exact-footnote" testId="details-status"
-        row role="tablist" appearance="none" background-color="surface.canvas" aria-label=t("panel.sidebar") width="100%" box-sizing="border-box" padding="space.xs space.md space.md" gap="space.xs"
-          for t in ["details", "library", "computer"] key=t
-            button id=`panel-tab-${t}` key=tabKey tabindex=(tab == t ? 0 : -1) class=Segment appearance="none" role="tab" aria-selected=(tab == t) aria-controls=`bot-tab-${t}` press=pickTab(t) min-height=36 padding="space.xs space.sm" flex=1 min-width=0 testId=`panel-tab-${t}` background-color=(tab == t ? "surface.raised" : "transparent") color=(tab == t ? "-exact-label" : "ink.muted")
-              text (t == "details" ? t("panel.details") : t == "library" ? t("panel.library") : t("panel.computer")) font="-exact-subheadline" overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
-        column id="bot-tab-details" role="tabpanel" aria-label=t("panel.details") display=(tab == "details" ? "flex" : "none") flex=1 min-height=0
+        PanelTabs(tab=active, names=names, pickTab=pickTab)
+        column id="bot-tab-details" role="tabpanel" aria-label=t("panel.details") display=(active == "details" ? "flex" : "none") flex=1 min-height=0
           scroll id=`panel-${bot.slug}` flex=1 min-height=0
             column width="100%" box-sizing="border-box" padding="0 space.lg space.xl" gap="space.sm"
               if modelsDown
@@ -253,10 +251,14 @@ component BotPanel
                       row class=Chip
                         text line.status
               MemoryTab(name=bot.name)
-        column id="bot-tab-library" role="tabpanel" aria-label=t("panel.library") display=(tab == "library" ? "flex" : "none") flex=1 min-height=0
+        column id="bot-tab-library" role="tabpanel" aria-label=t("panel.library") display=(active == "library" ? "flex" : "none") flex=1 min-height=0
           scroll id="panel-library-scroll" flex=1 min-height=0
             BotShelf(shelf=shelf, down=shelfDown, name=bot.name)
-        column id="bot-tab-computer" role="tabpanel" aria-label=t("panel.computer") display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0
+        column id="bot-tab-computer" role="tabpanel" aria-label=t("panel.computer") display=(active == "computer" ? "flex" : "none") flex=1 min-height=0
           scroll id="panel-computer-scroll" flex=1 min-height=0
             ScreenCard(name=bot.name, computer=computer, down=computerDown, showLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=live, drive=drive, take=take, release=release, picked=picked, pick=pick, openBrowser=openBrowser, opening=opening, openError=openError, closeBrowser=closeBrowser, closing=closing, closeError=closeError)
             ComputerPlace(name=bot.name, place=places, down=placesFailed, error=placeError, pick=doPickComputer)
+        if codeOn
+          column id="bot-tab-code" role="tabpanel" aria-label=t("panel.code") display=(active == "code" ? "flex" : "none") flex=1 min-height=0
+            scroll flex=1 min-height=0
+              CodeTab(view=code)

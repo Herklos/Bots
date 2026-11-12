@@ -1,0 +1,77 @@
+locale "en-US"
+
+test "the code tab stays out of the panel until the switch is on"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  clock data
+  expect tree missing "panel-tab-code"
+  expect tree missing "code-tab"
+  expect tree has "panel-tab-details"
+  expect tree has "panel-tab-library"
+  expect tree has "panel-tab-computer"
+
+test "an open code tab shows the branch, files and pull request"
+  size 340x740
+  at "/bot/code"
+  clock data
+  tap "panel-toggle"
+  clock data
+  tap "panel-tab-code"
+  clock data
+  expect tree has "panel-tab-code"
+  expect text "code-branch" == "feature"
+  expect tree has "code-file-main.rs"
+  expect text "code-pr-link-12" == "Fix the gate"
+  expect text "code-checks-12" == "Checks failing"
+  expect tree has "code-ahead"
+  expect tree missing "code-empty"
+
+test "a bot with no repository shows the empty state"
+  size 340x740
+  at "/bot/code-empty"
+  clock data
+  tap "panel-toggle"
+  clock data
+  tap "panel-tab-code"
+  clock data
+  expect tree has "code-empty"
+  expect text "code-empty" == "No repository is attached. Point this Bot at one to see its branch and pull requests."
+  expect tree missing "code-repo"
+
+test "a bot with no repository says so in French"
+  locale "fr"
+  size 340x740
+  at "/bot/code-empty"
+  clock data
+  tap "panel-toggle"
+  clock data
+  tap "panel-tab-code"
+  clock data
+  expect text "code-empty" == "Aucun dépôt n’est associé. Indiquez-en un à ce Bot pour voir sa branche et ses pull requests."
+  expect text "panel-tab-code" == "Code"
+
+test "the code tab says when T3 Code is offline"
+  size 340x740
+  at "/bot/code-down"
+  clock data
+  tap "panel-toggle"
+  clock data
+  tap "panel-tab-code"
+  clock data
+  expect tree has "code-error"
+  expect text "code-error" == "T3 Code is not reachable. Try again when it is running."
+  expect tree missing "code-repo"
+
+test "a repository without a remote still shows its branch"
+  size 340x740
+  at "/bot/code-remote"
+  clock data
+  tap "panel-toggle"
+  clock data
+  tap "panel-tab-code"
+  clock data
+  expect text "code-error" == "This repository has no remote."
+  expect text "code-branch" == "main"
+  expect tree has "code-file-notes.md"

@@ -1,6 +1,15 @@
 use ChatBag from "../chat/bag.contract"
+use CodeView from "../bot/code.contract"
 
 members Bots
+  resource codeSignal = loadCode(slug, codeGate, "0") as shape CodeView else empty()
+  resource codeView = loadCode(slug, codeOpenGate, "1") as shape CodeView else empty()
+  // Fixture slugs stand in for a turned-on switch so the contract tests can open the tab.
+  derive codeBeta = prefs.codeBeta or slug == "code" or slug == "code-empty" or slug == "code-down" or slug == "code-remote"
+  derive codeOn = codeSignal.signal
+  derive codeGate = (codeBeta and onBot and panelOpen and slug != "") ? "1" : "0"
+  derive codeOpenGate = (codeGate == "1" and panelTab == "code" and codeSignal.signal) ? "1" : "0"
+
   derive chatBag = ChatBag(
     system=system,
     models=models,
@@ -96,4 +105,6 @@ members Bots
     switchFrom=switchFrom,
     switchTo=switchTo,
     modelSavedPending=modelSavedPending,
+    codeOn=codeOn,
+    code=codeView,
   )
