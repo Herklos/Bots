@@ -255,6 +255,8 @@
   "model.defaultNote": "New Bots start with this model.",
   "model.effort": "Effort",
   "model.fullAccess": "Full access",
+  "model.independent": "Independent",
+  "model.independentNote": "Acts without asking for most tools. Use Always Ask for money, identity and anything you must approve.",
   "model.nextThread": "Used the next time a thread is created.",
   "model.noProviderLong": "No provider is ready in T3 Code yet. Set one up there, then come back.",
   "model.provider": "Provider",
