@@ -4,6 +4,7 @@
 
 ### Improvements
 
+- Creating a group is a short walk: a name, the member faces, who answers, a kickoff, then review.
 - Creating a Bot is a short walk: name, colour, shape, an optional template, a first message, then review.
 - Add or remove one Bot at a time on an existing group. A group keeps at least two Bots.
 - An open chat stays as it is when the transcript has not changed. The read carries a tag and waits on that request until a message arrives or about 25 seconds pass.

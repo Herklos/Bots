@@ -402,7 +402,7 @@ type ChatRow = any;
 // The contract runner has no gateway: a small conversation, a writable child and a missing pin.
 // Pins are mutable so a Pin tap can toggle a row without a live gateway.
 // A room the contract runner just created. Null keeps the built-in Design room.
-let fixtureMade: { title: string; description: string; color: string; shape: string; slugs: string[] } | null = null;
+let fixtureMade: { title: string; description: string; color: string; shape: string; slugs: string[]; answerPolicy: string } | null = null;
 // Membership edits the contract runner saves without a gateway. Absent means the room's built-in roster.
 const fixtureMemberEdits = new Map<string, string[]>();
 const FIXTURE_CROWD: [string, string][] = [
@@ -1224,14 +1224,25 @@ const sources: Sources = {
         : { [field]: value };
     return reply(await call(store, `/api/rooms/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }));
   },
-  createGroup: async ([title, description, color, shape, members], store): Promise<Result<'createGroup'>> => {
+  createGroup: async ([title, description, color, shape, members, answerPolicy], store): Promise<Result<'createGroup'>> => {
     const slugs = members === '' ? [] : members.split('\n').filter((s) => s !== '');
+    const policy = answerPolicy.trim();
     // The contract runner's Bots. A real room still goes to the gateway.
+    // The answer policy has to arrive with the name: create already stores one per group.
     if (slugs.length >= 2 && slugs.every((s) => s === 'fixture' || s === 'bea')) {
-      fixtureMade = { title, description, color, shape, slugs };
+      if (title === 'Policy' && policy !== 'everyone') {
+        return { ok: false, id: '', error: 'Create was missing the answer policy.' };
+      }
+      if (policy !== 'last' && policy !== 'everyone' && policy !== 'chief' && policy !== 'default') {
+        return { ok: false, id: '', error: 'Create was missing the answer policy.' };
+      }
+      fixtureMade = { title, description, color, shape, slugs, answerPolicy: policy };
       return { ok: true, id: 'fixture', error: '' };
     }
-    const r = await call(store, '/api/rooms', { method: 'POST', body: JSON.stringify({ title, description, color, shape, members: slugs }) });
+    const r = await call(store, '/api/rooms', {
+      method: 'POST',
+      body: JSON.stringify({ title, description, color, shape, members: slugs, answerPolicy: policy }),
+    });
     return r.ok ? { ok: true, id: String(r.body.id ?? ''), error: '' } : { ok: false, id: '', error: r.error };
   },
   sendRoom: async ([id, text, messageId], store) => {
