@@ -27,6 +27,7 @@
   "chat.linkDraft": "Draft from a link",
   "chat.linkLocal": "Copied. This link only works on this device.",
   "chat.loading": "Loading your conversation…",
+  "chat.mentionChip": "Mention of {name}",
   "chat.mentions": "Mention a Bot",
   "chat.message": "Message",
   "chat.messageActions": "Message actions",

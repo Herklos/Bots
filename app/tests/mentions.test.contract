@@ -118,3 +118,29 @@ test "a mention names a Bot and leaves the group selected"
   back
   expect tree missing "chat-title"
   expect tree missing "room-title"
+test "a sent mention shows a chip inside the bubble"
+  size 1200x800
+  at "/group/fixture"
+  clock data
+  type "room-composer" "see `@ada`"
+  tap "room-send"
+  clock data
+  expect tree missing "mention-chip-ada"
+  expect text "room-text-r1" == "Hello"
+  expect text "room-text-r2" == "On it"
+  type "room-composer" "hello @ada "
+  tap "room-send"
+  clock data
+  expect tree has "mention-chip-ada"
+  type "room-composer" "@everyone "
+  tap "room-send"
+  clock data
+  expect tree has "mention-chip-everyone"
+test "a sent mention shows a chip in a Bot chat"
+  size 1200x800
+  at "/bot/fixture"
+  clock data
+  type "composer" "@bea hello"
+  tap "send"
+  clock data
+  expect tree has "mention-chip-bea"

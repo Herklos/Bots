@@ -6,6 +6,7 @@ use shapeOf, colorOf, faceColor, chromeTarget, reactStrip, eventVerb, alignAt fr
 use trayIn, emojiIn from "../ui/panel.contract"
 use Bot, Part, Row, Pin, RoomMember, MentionHit from "../ui/shapes.contract"
 use FileCard, ChoiceButton, TextControl, IconTile, Bubble, ReactionChip, Field from "../ui/controls.contract"
+use MentionText from "./mention-text.contract"
 
 component MessageParts
   props
@@ -83,6 +84,7 @@ component ChatMessage
     closeMenu: action
     noteCopied: action
     promptBot: string
+    mentions: MentionHit[]
     copyPromptLink: action
   state over = false
   state latched = false
@@ -161,13 +163,7 @@ component ChatMessage
           row gap="space.xs" align-items="center" max-width="100%"
             column position="relative" padding-bottom="6px" max-width="100%"
               if row.text != "" and row.mine
-                text row.text class=Bubble testId=textTestId box-shadow=ring
-                  background-color="brand.default"
-                  color="ink.dark"
-                  border-top-left-radius="radius.lg"
-                  border-top-right-radius="radius.lg"
-                  border-bottom-left-radius="radius.lg"
-                  border-bottom-right-radius=(row.tail ? "radius.sm" : "radius.lg")
+                MentionText(text=row.text, hits=mentions, onMine=true, testId=textTestId, ring=ring, tail=row.tail, opacity=1, maxWidth="")
               else if row.text != ""
                 MessageParts(id=row.id, parts=row.parts, tail=row.tail, textTestId=textTestId, ring=ring)
               if menuOpen
