@@ -14,6 +14,13 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 use uuid::Uuid;
 
+mod guard;
+mod journal;
+
+pub(crate) use guard::{refuse_user_change, verify_user_facts, UserWrite};
+#[cfg(test)]
+pub(crate) use journal::recover;
+
 pub(super) const USER_MEMORY_MAX: usize = 2 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -57,20 +64,22 @@ pub(super) struct UserFact {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub(super) struct UserNotice {
+    kind: String,
+    text: String,
+    at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fact_hash: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct UserState {
     version: u32,
     revision: String,
     facts: Vec<UserFact>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct JournalFile {
-    file: String,
-    before_hash: String,
-    after: String,
-    state_file: String,
-    after_state: UserState,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    notices: Vec<UserNotice>,
 }
 
 /// User block, then bot block. Each owner is newest first. A fact that does not fit is skipped.
@@ -208,6 +217,7 @@ pub(super) async fn write(root: &Path, slug: &str, facts: &[NewFact], now: &str)
         version: 1,
         revision: revision_of(&after_text),
         facts: prepared,
+        notices: before_state.notices.clone(),
     };
     let op_id = Uuid::new_v4().to_string();
     let journal_rel = format!(".botapp/memory-user/{slug}.journal/{op_id}.json");
@@ -276,6 +286,7 @@ fn blank_state(file_text: &str) -> UserState {
         version: 1,
         revision: revision_of(file_text),
         facts: facts_from_lines(file_text),
+        notices: Vec::new(),
     }
 }
 
@@ -312,108 +323,14 @@ async fn write_state(path: &Path, state: &UserState) -> io::Result<()> {
     write_atomic(path, text.as_bytes(), Some(0o600)).await
 }
 
-/// Finish journals left behind for one Bot's user facts.
-pub(super) async fn recover(root: &Path, slug: &str) -> io::Result<()> {
-    slug_ok(slug)?;
-    let _guard = lock_for(slug).lock_owned().await;
-    let dir = journal_dir(root, slug);
-    let mut names = match tokio::fs::read_dir(&dir).await {
-        Ok(mut entries) => {
-            let mut names = Vec::new();
-            while let Some(entry) = entries.next_entry().await? {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                if is_json(&name) && !name.starts_with("failed-") {
-                    names.push(name);
-                }
-            }
-            names
-        }
-        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(()),
-        Err(err) => return Err(err),
-    };
-    names.sort();
-    for name in names {
-        let path = dir.join(&name);
-        let raw = match tokio::fs::read_to_string(&path).await {
-            Ok(raw) => raw,
-            Err(err) => {
-                tracing::warn!("user memory journal {name} could not be read: {err}");
-                continue;
-            }
-        };
-        if let Err(err) = apply_journal(root, slug, &dir, &name, &raw).await {
-            tracing::warn!("user memory journal {name} was not applied: {err}");
-        }
-    }
-    Ok(())
-}
-
-async fn apply_journal(
-    root: &Path,
-    slug: &str,
-    dir: &Path,
-    name: &str,
-    raw: &str,
-) -> io::Result<()> {
-    let journal = match serde_json::from_str::<JournalFile>(raw) {
-        Ok(journal) if targets_ok(&journal, slug) => journal,
-        _ => {
-            move_failed(dir, name, raw).await;
-            tracing::info!("user memory journal {name} is unreadable and was kept for review");
-            return Ok(());
-        }
-    };
-    let file_path = checked_path(root, &file_rel(slug)).await?;
-    let state_path = checked_path(root, &state_rel(slug)).await?;
-    let current = read_text(&file_path).await?.unwrap_or_default();
-    let current_hash = revision_of(&current);
-    let after_hash = revision_of(&journal.after);
-    if current_hash == journal.before_hash {
-        write_atomic(&file_path, journal.after.as_bytes(), Some(0o644)).await?;
-        write_state(&state_path, &journal.after_state).await?;
-        remove_file(&dir.join(name)).await?;
-        tracing::info!(file = %journal.file, "user memory journal recovered");
-    } else if current_hash == after_hash {
-        write_state(&state_path, &journal.after_state).await?;
-        remove_file(&dir.join(name)).await?;
-        tracing::info!(file = %journal.file, "user memory journal completed state");
-    } else {
-        move_failed(dir, name, raw).await;
-        tracing::info!(
-            file = %journal.file,
-            "user memory journal refused: the file changed outside the store"
-        );
-    }
-    Ok(())
-}
-
-fn targets_ok(journal: &JournalFile, slug: &str) -> bool {
-    journal.file == file_rel(slug)
-        && journal.state_file == state_rel(slug)
-        && !journal.before_hash.is_empty()
-        && !journal.after_state.revision.is_empty()
-}
-
-fn is_json(name: &str) -> bool {
-    name.rsplit_once('.')
-        .is_some_and(|(_, ext)| ext.eq_ignore_ascii_case("json"))
-}
-
-async fn move_failed(dir: &Path, name: &str, raw: &str) {
-    let failed = dir.join(format!("failed-{name}"));
-    if let Err(err) = write_atomic(&failed, raw.as_bytes(), Some(0o600)).await {
-        tracing::warn!("user memory journal {name} could not be set aside: {err}");
-        return;
-    }
-    if let Err(err) = remove_file(&dir.join(name)).await {
-        tracing::warn!("user memory journal {name} could not be set aside: {err}");
-    }
-}
-
 /// The `<user-memory>` section for a snapshot. Missing, empty, or unreadable is `None`.
+/// A file that drifted from the saved state is restored before it is read.
 pub(crate) async fn snapshot_user(root: &Path, slug: &str) -> Option<MemorySection> {
     if !valid_slug(slug) {
         return None;
+    }
+    if let Err(err) = verify_user_facts(root, slug, &crate::vault::now_iso()).await {
+        tracing::warn!("user memory verify for {slug}: {err}");
     }
     let facts = match load(root, slug).await {
         Ok(facts) => facts,

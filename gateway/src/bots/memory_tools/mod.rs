@@ -41,6 +41,8 @@ pub(crate) struct Deps<'a> {
     pub turn_items: &'a [Value],
     /// Slugs whose memory changed. `call` refreshes their agents afterwards.
     pub refreshed: Option<&'a std::sync::Mutex<Vec<String>>>,
+    /// Bots root, so a write can see person-owned facts outside the Bot folder.
+    pub bots_root: Option<&'a Path>,
 }
 
 impl<'a> Deps<'a> {
@@ -51,6 +53,7 @@ impl<'a> Deps<'a> {
             roster,
             turn_items: &[],
             refreshed: None,
+            bots_root: None,
         }
     }
 }
@@ -114,6 +117,7 @@ pub(crate) async fn call(state: &AppState, name: &str, args: &Value) -> Result<V
             roster: &roster,
             turn_items: &items,
             refreshed: Some(&refreshed),
+            bots_root: Some(&state.cfg.bots_root),
         },
         name,
         args,
