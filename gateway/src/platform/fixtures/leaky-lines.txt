@@ -1,0 +1,14 @@
+2026-11-12 INFO gateway listening
+Authorization: Bearer t3tok_live_secret_value
+env T3_TOKEN=t3tok_live_secret_value
+also the bare token t3tok_live_secret_value in a message
+HBOTS_PASSWORD=hunter2-password
+BOT_PASSWORD="hunter2-password"
+login failed for hunter2-password from 10.0.0.2
+cookie bot_session=v1.1710000000000.abcdef0123456789abcdef
+body {"session_id":"sess-9f3a2c"} sessionId=sess-other
+read /home/alice/.hbots/vault/note.md: swordfish-vault-secret
+copied /home/alice/.hbots/vault.enc abcdefsecretpayload
+key file /Users/ada/.hbots/.vault-key: keymaterial-xyz
+mail the report to ada@example.com and ops@hbots.test
+data /home/alice/.hbots/bots and /Users/ada/Library
