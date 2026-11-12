@@ -1,0 +1,125 @@
+use EmptyState from "exact:content"
+use ChatLog from "../chat/log.contract"
+use MentionMenu from "../chat/mention.contract"
+use Avatar from "../face.contract"
+use Glyph from "../glyph.contract"
+use Faces, GroupPanel from "./group.contract"
+use Screen, PageTitle, HeroTitle, PageHeader, IconControl from "../ui/controls.contract"
+use shapeOf, colorOf, faceColor, memberFaces, memberCalled, quietPolicyHint from "../ui/fns.contract"
+use Prefs, Reply, Sent, PointerFacts from "../ui/root-types.contract"
+use Bot, Row, Chat, RoomMember, Room, MentionHit from "../ui/shapes.contract"
+use HeaderToggle, SendControl from "../ui/sidebar.contract"
+// GroupScreen: one route of the root view, moved out with its values and actions injected.
+component GroupScreen
+  props
+    route: number
+  inject
+    addGroupMember: action
+    answer: action
+    answerError: string
+    answerText: string
+    answered: option<Reply>
+    answeredPending: bool
+    away: bool
+    back: action
+    bots: Bot[]
+    chat: Chat
+    closeGroupAdd: action
+    closeMessageMenu: action
+    completeMention: action
+    copiedMenu: string
+    doPinMessage: action
+    doReact: action
+    dropGroup: action
+    editAnswer: action
+    editRoomText: action
+    groupBack: action
+    groupPage: string
+    groupPanel: bool
+    groupSaveError: string
+    mention: action
+    mentionHits: MentionHit[]
+    mentionIdx: number
+    messageMenu: string
+    moved: action
+    noteCopied: action
+    openGroupAdd: action
+    openGroupEdit: action
+    openMessageMenu: action
+    openReact: action
+    paintedWorkers: RoomMember[]
+    patchGroup: action
+    pointerFacts: PointerFacts
+    prefs: Prefs
+    postRoom: action
+    pull: action
+    reactFor: string
+    removeGroupMember: action
+    retry: action
+    room: Room
+    roomError: string
+    roomKey: action
+    roomPending: string
+    roomRows: Row[]
+    roomSent: option<Sent>
+    roomText: string
+    startReply: action
+    toEnd: action
+    toggleGroupPanel: action
+    wide: bool
+    roomSentPending: bool
+    roomFailed: bool
+  view
+    column class=Screen navigationKey=`${route}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
+      if messageMenu != ""
+        button appearance="none" position="absolute" inset=0 z-index=20 background-color="transparent" border="none" press=closeMessageMenu aria-label=t("common.cancel") testId="message-menu-scrim"
+      header appearance="none" class=PageHeader position="relative" testId="room-header"
+        button id="back" class=IconControl appearance="none" press=back aria-label=t("common.back") title=t("common.back") display=(wide ? "none" : "flex")
+          column rotate="180deg"
+            Glyph(name="chevron", size=20)
+        button class=HeaderToggle appearance="none" press=toggleGroupPanel aria-label=(groupPanel ? t("group.hideDetails") : t("group.showDetails")) aria-expanded=groupPanel aria-controls="group-panel" title=t("group.detailsTitle") testId="group-toggle" position="absolute" left="50%" translate="-50% 0" gap="space.sm" padding="0 space.md" max-width="75%"
+          if room.members.length > 0
+            Faces(faces=memberFaces(bots, room.members), size=28, tuck=-12)
+          text (room.title != "" ? room.title : t("group.fallback")) role="heading" aria-level=1 class=PageTitle overflow="hidden" text-overflow="ellipsis" white-space="nowrap" min-width=0 testId="room-title"
+        column flex=1
+      if roomFailed
+        EmptyState(symbol="symbol:alert", title=t("error.groupTitle"), message=t("error.hbots"))
+          button press=pull testId="room-retry"
+            text t("common.tryAgain")
+      else
+        row gap="space.sm" padding="space.sm space.lg" overflow-x="auto" flex-shrink=0 testId="room-members"
+          for m in room.members key=m.slug
+            row gap="space.sm" align-items="center" padding="4px space.md 4px 4px" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" flex-shrink=0
+              Avatar(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state=m.state, size=28, still=(m.state != "working"), presence="")
+              column
+                text m.name font="-exact-footnote" font-weight=600 testId=`member-${m.slug}-name`
+                text m.line color="ink.muted" font="-exact-caption2" testId=`member-${m.slug}-state`
+        if room.messages.length == 0 and paintedWorkers.length == 0 and roomPending == ""
+          column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="room-empty"
+            Faces(faces=memberFaces(bots, room.members), size=72, tuck=-28)
+            text t("group.emptyTitle") class=HeroTitle text-align="center"
+            text t("group.emptyBody") color="ink.muted" text-align="center" max-width="24rem"
+        else
+          column flex=1 min-height=0 justify-content="flex-end" position="relative" z-index=(messageMenu != "" ? 21 : 0) pointer-events=(messageMenu != "" ? "none" : "auto")
+            if away
+              button class=IconControl appearance="none" press=toEnd aria-label=t("chat.jump") title=t("chat.jumpShort") testId="to-end" position="absolute" left="50%" translate="-50% 0" bottom=8 z-index=1 width=32 height=32 border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line"
+                Glyph(name="arrow-down", size=16)
+            ChatLog(rows=roomRows, inRoom=true, logId="room-log", logTestId="room-log", bots=bots, slug="", pins=chat.pins, workers=paintedWorkers, hover=(pointerFacts.hover == "hover"), reactFor=reactFor, messageMenu=messageMenu, copiedMenu=copiedMenu, answerText=answerText, answerError=answerError, answering=answeredPending, react=doReact, openPicker=openReact, reply=startReply, pin=doPinMessage, openMenu=openMessageMenu, closeMenu=closeMessageMenu, noteCopied=noteCopied, answer=answer, editAnswer=editAnswer, retry=retry, scrolled=moved)
+        column width="calc(100% - 32px)" max-width="44rem" min-width=0 align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.sm" flex-shrink=0 position="relative"
+          if roomError != "" and not roomSentPending
+            text roomError color="-exact-system-red" font="-exact-footnote" testId="room-send-error"
+          row gap="space.xs" flex-wrap="wrap" width="100%" min-width=0 box-sizing="border-box" testId="mention-chips"
+            button appearance="none" press=mention("everyone") aria-label=t("group.mention", name=t("group.everyone")) title=t("group.hintEveryone") testId="mention-everyone" min-height=32 padding="0 space.md" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes("@everyone") ? "surface.soft" : "surface.card") color="-exact-label"
+              text `@everyone` font="-exact-footnote" font-weight=500
+            for m in room.members key=m.slug
+              button appearance="none" press=mention(m.slug) aria-label=t("group.mention", name=m.name) title=t("group.mention", name=m.name) testId=`mention-${m.slug}` min-height=32 padding="0 space.md 0 4px" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes(`@${m.slug}`) ? "surface.soft" : "surface.card") color="-exact-label"
+                row gap="space.xs" align-items="center"
+                  Avatar(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state="idle", size=22, still=true, presence="")
+                  text `@${m.slug}` font="-exact-footnote" font-weight=500
+          MentionMenu(hits=mentionHits, picked=mentionIdx, choose=completeMention)
+          row align-items="flex-end" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
+            textarea id="room-composer" value=roomText input=editRoomText key=roomKey outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(room.title != "" ? t("chat.messageTo", name=room.title) : t("chat.write")) aria-label=t("group.message") aria-expanded=(mentionHits.length > 0) aria-controls="mention-menu" testId="room-composer" flex=1 min-width=0 padding="space.sm space.sm" border="none" background-color="transparent" color="-exact-label"
+            button class=SendControl appearance="none" press=postRoom disabled=(roomText.trim() == "" or roomSentPending) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="room-send"
+              Glyph(name="send", size=18)
+          text (roomText.includes("@everyone") ? t("group.hintEveryone") : roomText.includes("@") ? t("group.hintMention") : quietPolicyHint(room.answerPolicyEffective, t("group.hintNoneLast"), t("group.hintNoneEveryone"), t("group.hintNoneChief", chief=memberCalled(room.members, room.chief)))) color="ink.muted" font="-exact-footnote" testId="room-hint" width="100%" min-width=0 overflow-wrap="anywhere"
+      GroupPanel(shown=groupPanel, wide=wide, page=groupPage, room=room, bots=bots, defaultPolicy=prefs.groupAnswerPolicy, closePanel=toggleGroupPanel, openEdit=openGroupEdit, goRoot=groupBack, openAdd=openGroupAdd, closeAdd=closeGroupAdd, patch=patchGroup, removeMember=removeGroupMember, addMember=addGroupMember, drop=dropGroup, error=groupSaveError)
