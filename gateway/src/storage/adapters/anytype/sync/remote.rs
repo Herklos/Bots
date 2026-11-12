@@ -166,15 +166,8 @@ fn parse_file(row: &Value) -> Option<(String, RemoteFile)> {
         return None;
     }
     let object_id = row.get("id").and_then(Value::as_str)?.to_string();
-    let created = row
-        .get("created_date")
-        .and_then(Value::as_str)
-        .unwrap_or("")
-        .to_string();
-    let modified = row
-        .get("last_modified_date")
-        .and_then(Value::as_str)
-        .map(str::to_string);
+    let created = text_at(row, "created_date").unwrap_or_default();
+    let modified = text_at(row, "last_modified_date");
     Some((
         path,
         RemoteFile {
@@ -194,10 +187,7 @@ async fn parse_object(client: &AnytypeClient, value: &Value) -> Result<Loaded, A
         .and_then(|props| props.get("hb_deleted"))
         .and_then(Value::as_bool)
         .unwrap_or(false);
-    let modified = value
-        .get("last_modified_date")
-        .and_then(Value::as_str)
-        .map(str::to_string);
+    let modified = text_at(value, "last_modified_date");
     let etag = value
         .get("etag")
         .and_then(Value::as_str)
@@ -234,8 +224,11 @@ fn first_blob(props: &Value) -> Option<String> {
 }
 
 fn text_at(row: &Value, key: &str) -> Option<String> {
+    // The app nests search fields under `properties`; the mock and a few object
+    // bodies keep system dates at the top level. Both shapes are read.
     row.get("properties")
         .and_then(|props| props.get(key))
+        .or_else(|| row.get(key))
         .and_then(Value::as_str)
         .filter(|text| !text.is_empty())
         .map(str::to_string)
