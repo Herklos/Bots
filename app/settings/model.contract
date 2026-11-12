@@ -1,5 +1,6 @@
 use requestNotificationPermission, NotificationStatus from "@exact/notifications"
 use ModelList from "../ui/shapes.contract"
+use MachineList from "./machines.contract"
 use Reply, Network, Storage, About, SystemStatus, UpdateStart, Health, Prefs, NoticeState from "../ui/root-types.contract"
 members Bots
   // Settings opens on User. Picking another domain only changes which controls are shown.
@@ -35,6 +36,8 @@ members Bots
   resource storage = loadStorage(networkGate) as shape Storage else empty()
 
   resource models = loadModels(slug, detailGate, hostTime.locale) as shape ModelList else empty()
+
+  resource machines = loadMachines(machinesGate, hostTime.locale) as shape MachineList else empty()
 
   mutation noticeAsked as shape NotificationStatus refreshes notice then afterNotice
 
@@ -89,6 +92,8 @@ members Bots
   derive storageRestartError = match storageRestarted { case some(r) => r.error, case none => "" }
 
   derive networkGate = (top(nav).name == "settings" and settingsDomain == "access") ? "1" : "0"
+
+  derive machinesGate = (top(nav).name == "settings" and settingsDomain == "computers") ? "1" : "0"
 
   derive pickedModel = providers.filter(p => p.instanceId == prefs.defaultInstance).length > 0
 

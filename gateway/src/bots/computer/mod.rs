@@ -3,11 +3,14 @@
 
 use serde_json::{json, Value};
 
+mod machines;
 mod messages;
 mod place;
 #[cfg(test)]
 mod tests;
 
+#[allow(unused_imports, reason = "the machines route reads the public view")]
+pub(crate) use machines::machines_view;
 #[allow(unused_imports, reason = "the place route reads the public view")]
 pub(crate) use place::place_view;
 

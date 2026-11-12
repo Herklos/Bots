@@ -1,0 +1,54 @@
+use SectionLabel from "../ui/controls.contract"
+use GroupCard, SettingsFoot from "../ui/sidebar.contract"
+
+shape Machine
+  id: string
+  label: string
+  local: bool
+  status: string
+  laptop: bool
+  lastSeenAt: string
+  t3Version: string
+  lastError: string
+  access: string
+
+shape MachineList
+  ok: bool
+  machines: Machine[]
+  error: string
+
+fn machineStatus(status: string, online: string, asleep: string, unreachable: string, expired: string): string = status == "online" ? online : status == "asleep" ? asleep : status == "expired" ? expired : unreachable
+
+// Linked computers. The list is read only: pairing stays in T3 Code.
+component LinkedMachines
+  props
+    list: MachineList
+    down: bool
+    loading: bool
+  view
+    column gap="space.sm" testId="machines"
+      text t("machines.title") class=SectionLabel testId="machines-title"
+      if loading and not list.ok and not down
+        text t("machines.loading") class=SettingsFoot testId="machines-loading"
+      else if down or not list.ok
+        text t("computer.placeOffline") class=SettingsFoot testId="machines-offline"
+      else
+        column class=GroupCard padding=0 testId="machines-list" role="list" aria-label=t("machines.title")
+          for machine in list.machines key=(machine.local ? "local" : machine.id)
+            row min-height=44 padding="space.sm space.md" gap="space.md" align-items="center" testId=`machine-${machine.local ? "local" : machine.id}` role="listitem"
+              column flex=1 min-width=0 gap="2px"
+                text (machine.label != "" ? machine.label : t("computer.this")) font="-exact-subheadline" font-weight=600 overflow-wrap="break-word" testId=`machine-${machine.local ? "local" : machine.id}-label`
+                if machine.t3Version != ""
+                  text machine.t3Version color="ink.muted" font="-exact-footnote" testId=`machine-${machine.local ? "local" : machine.id}-version`
+                if machine.lastSeenAt != ""
+                  text machine.lastSeenAt color="ink.muted" font="-exact-footnote"
+                if machine.lastError != ""
+                  text machine.lastError color="ink.muted" font="-exact-footnote" overflow-wrap="break-word"
+              column align-items="flex-end" gap="2px"
+                text machineStatus(machine.status, t("machines.statusOnline"), t("machines.statusAsleep"), t("machines.statusUnreachable"), t("machines.statusExpired")) color="ink.muted" font="-exact-footnote" testId=`machine-${machine.local ? "local" : machine.id}-status`
+                if machine.access == "read-only"
+                  text t("machines.accessReadOnly") color="ink.muted" font="-exact-footnote" testId=`machine-${machine.local ? "local" : machine.id}-access`
+        if list.machines.filter(m => not m.local).length == 0
+          text t("computer.placeEmpty") class=SettingsFoot testId="machines-empty"
+        else
+          text t("machines.note") class=SettingsFoot testId="machines-note"

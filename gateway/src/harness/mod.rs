@@ -16,8 +16,8 @@ pub(crate) use forks::{ForkPoint, ForkRequest, Forks, MergeRequest, SideChatRef}
 pub(crate) use adapters::t3;
 pub(crate) use error::HarnessError;
 pub(crate) use snapshot::{
-    message_id, BrowserTab, ComputerCatalog, ComputerLink, Frame, ProvisionedSend, ShellSnapshot,
-    ShellThread, ThreadSnapshot, UserMessage,
+    message_id, without_urls, BrowserTab, ComputerCatalog, ComputerLink, Frame, ProvisionedSend,
+    ShellSnapshot, ShellThread, ThreadSnapshot, UserMessage,
 };
 
 use async_trait::async_trait;

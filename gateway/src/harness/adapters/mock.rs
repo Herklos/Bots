@@ -298,6 +298,8 @@ impl Provisioning for MockHarness {
         Ok(ComputerCatalog {
             ok: true,
             local_label: "This computer".into(),
+            local_version: String::new(),
+            local_laptop: false,
             broker_id: String::new(),
             links: Vec::new(),
         })

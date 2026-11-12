@@ -37,6 +37,7 @@ mod helpers_policy_tests;
 mod library_api;
 #[cfg(test)]
 mod library_file_tests;
+mod machines_api;
 pub(crate) mod management;
 mod memory_api;
 #[cfg(test)]
@@ -75,6 +76,8 @@ pub(crate) use code_api::*;
 pub(crate) use computer_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use library_api::*;
+#[allow(unused_imports, reason = "siblings and old paths use these names")]
+pub(crate) use machines_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
 pub(crate) use memory_api::*;
 #[allow(unused_imports, reason = "siblings and old paths use these names")]
