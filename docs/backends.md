@@ -1,8 +1,14 @@
 # Multiple backends: plan
 
-Status: plan only, nothing implemented (2026-11-10). The gateway talks to one harness today, T3 Code. This plan makes the harness and the Bot folder's location swappable behind interfaces, so a second agent runtime is an addition, not a rewrite.
+Status: historical (2026-11-12). The harness trait shipped, in a different shape from the sketch below. Read [Architecture](architecture.md) and [Gateway layout](gateway-layout.md). Domain code calls the harness. `gateway/src/harness/adapters/t3/` is the only place that names T3 RPCs. `scripts/check-t3-boundary.sh` enforces that.
+
+What shipped: `AppState.harness` is `Arc<dyn Harness>`. The capabilities are transcript, turns, previews, routines, approvals, provisioning, browser, and relay. T3 Code is the runtime hbots runs. `MockHarness` is for tests. A missing capability is HTTP 501. The workspace trait covers the library and connectors. Other filesystem paths are not all on that trait. A second production runtime is not built.
+
+The rest of this file is the 2026-11-10 plan. It is historical. Do not implement that sketch as written.
 
 A linked T3 computer is specified in [the execution environment design](bot-execution-environment.md). hbots keeps this one T3 broker and selects a link T3 already has. Settings sets the default computer. A Bot's details page, and a durable child's edit sheet, set that Bot's computer and show where the conversation is running. The model list is that computer's providers. That design does not add a `Harness` implementation and does not move the Bot folder.
+
+## Historical plan
 
 ## What is T3-specific today
 
