@@ -2426,18 +2426,18 @@ component Bots
                           button appearance="none" class=ActionQuiet press=doCopyStorage disabled=(storagePath == "" or pending(storageCopied)) min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="storage-copy"
                             text t("settings.storage.copy")
                         text t("settings.storage.copyNote") color="ink.muted" font="-exact-footnote"
-                      if storageHint == "test" and storageTestError == "" and not pending(storageTested)
-                        text t("settings.storage.testOk") class=SettingsFoot testId="storage-test-ok"
-                      if storageHint == "copy" and storageCopyError == "" and not pending(storageCopied)
-                        text t("settings.storage.copyOk") class=SettingsFoot testId="storage-copy-ok"
-                      if storage.error != ""
-                        text storage.error color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-error"
-                      if storageSaveError != "" and not pending(storageSaved)
-                        text storageSaveError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-save-error"
-                      if storageTestError != "" and not pending(storageTested)
-                        text storageTestError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-test-error"
-                      if storageCopyError != "" and not pending(storageCopied)
-                        text storageCopyError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-copy-error"
+                        if storageHint == "test" and storageTestError == "" and not pending(storageTested)
+                          text t("settings.storage.testOk") color="-exact-label" font="-exact-footnote" font-weight=600 testId="storage-test-ok"
+                        if storageHint == "copy" and storageCopyError == "" and not pending(storageCopied)
+                          text t("settings.storage.copyOk") color="-exact-label" font="-exact-footnote" font-weight=600 testId="storage-copy-ok"
+                        if storage.error != ""
+                          text storage.error color="-exact-system-red" font="-exact-footnote" testId="storage-error"
+                        if storageSaveError != "" and not pending(storageSaved)
+                          text storageSaveError color="-exact-system-red" font="-exact-footnote" testId="storage-save-error"
+                        if storageTestError != "" and not pending(storageTested)
+                          text storageTestError color="-exact-system-red" font="-exact-footnote" testId="storage-test-error"
+                        if storageCopyError != "" and not pending(storageCopied)
+                          text storageCopyError color="-exact-system-red" font="-exact-footnote" testId="storage-copy-error"
                       if pending(storageRestarted)
                         text t("settings.storage.restarting") class=SettingsFoot
                       else if storage.restartRequired
