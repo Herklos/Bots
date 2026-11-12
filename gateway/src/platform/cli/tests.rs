@@ -1,4 +1,5 @@
 use super::*;
+use crate::harness::t3::setup::scopes_allow_preview;
 
 fn args(words: &[&str]) -> Vec<String> {
     words.iter().map(|w| w.to_string()).collect()
