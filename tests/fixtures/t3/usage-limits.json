@@ -1,0 +1,276 @@
+{
+  "_note": "Redacted samples for limits_of. Not a live account.",
+  "providers": [
+    {
+      "case": "missing",
+      "instanceId": "claude",
+      "driver": "claude",
+      "enabled": true,
+      "installed": true,
+      "status": "ready",
+      "availability": "available",
+      "displayName": "Claude",
+      "auth": {
+        "status": "authenticated",
+        "email": "person@example.com",
+        "label": "Work"
+      }
+    },
+    {
+      "case": "unsupported",
+      "instanceId": "antigravity",
+      "driver": "antigravity",
+      "enabled": true,
+      "installed": true,
+      "status": "ready",
+      "displayName": "Antigravity",
+      "auth": { "status": "authenticated" },
+      "usageLimits": {
+        "checkedAt": "2026-11-12T14:00:00Z",
+        "unavailable": {
+          "reason": "unsupported",
+          "message": "hidden-probe-message"
+        },
+        "windows": [
+          { "id": "5h", "kind": "session", "label": "5 hour", "usedPercent": 10 }
+        ]
+      }
+    },
+    {
+      "case": "probe-failed",
+      "instanceId": "codex",
+      "driver": "codex",
+      "enabled": true,
+      "installed": true,
+      "status": "ready",
+      "displayName": "Codex",
+      "auth": { "status": "authenticated", "email": "person@example.com" },
+      "runtimePaths": { "home": "/secret/runtime/path" },
+      "usageLimits": {
+        "checkedAt": "2026-11-12T14:00:00Z",
+        "credentialFingerprint": "fp-secret-9f3a",
+        "resetCredits": [{ "id": "credit-secret-11" }],
+        "unavailable": {
+          "reason": "probeFailed",
+          "message": "hidden-probe-message"
+        },
+        "windows": [
+          {
+            "id": "extra",
+            "kind": "other",
+            "label": "Bonus",
+            "usedPercent": 3,
+            "email": "person@example.com"
+          },
+          { "id": "month", "kind": "monthly", "label": "Month", "usedPercent": 12 },
+          {
+            "id": "week",
+            "kind": "weekly",
+            "label": "Week",
+            "usedPercent": 40,
+            "resetsAt": "2026-11-16T00:00:00Z",
+            "windowDurationMins": 10080
+          },
+          {
+            "id": "5h",
+            "kind": "session",
+            "label": "5 hour",
+            "usedPercent": 62,
+            "resetsAt": "2026-11-12T17:00:00Z"
+          },
+          { "id": "stale", "kind": "session", "label": "Stale" }
+        ]
+      }
+    },
+    {
+      "case": "out-of-range",
+      "instanceId": "grok",
+      "driver": "grok",
+      "enabled": true,
+      "installed": true,
+      "status": "ready",
+      "displayName": "Grok",
+      "auth": { "status": "authenticated" },
+      "usageLimits": {
+        "checkedAt": "2026-11-12T14:00:00Z",
+        "windows": [
+          { "id": "month", "kind": "monthly", "label": "Month", "usedPercent": 62 },
+          { "id": "high", "kind": "session", "label": "5 hour", "usedPercent": 140 },
+          { "id": "low", "kind": "weekly", "label": "Week", "usedPercent": -4 },
+          { "id": "blank", "kind": "other", "label": "Other" },
+          { "id": "text", "kind": "session", "label": "Text", "usedPercent": "40" },
+          { "id": "bad", "kind": "daily", "label": "Day", "usedPercent": 10 }
+        ]
+      }
+    },
+    {
+      "case": "secrets",
+      "instanceId": "muse",
+      "driver": "muse",
+      "enabled": true,
+      "installed": true,
+      "status": "ready",
+      "displayName": "Muse",
+      "auth": {
+        "status": "authenticated",
+        "email": "person@example.com",
+        "workspace": "ws-secret"
+      },
+      "workspace": "ws-secret",
+      "credentialFingerprint": "fp-secret-9f3a",
+      "runtimePaths": { "home": "/secret/runtime/path" },
+      "usageLimits": {
+        "checkedAt": "2026-11-12T14:00:00Z",
+        "credentialFingerprint": "fp-secret-9f3a",
+        "resetCredits": { "id": "credit-secret-11" },
+        "runtimePaths": ["/secret/runtime/path"],
+        "externalUsage": {
+          "label": "Usage",
+          "url": "https://ada:secret-token@example.com/usage",
+          "email": "person@example.com"
+        },
+        "windows": [
+          {
+            "id": "5h",
+            "kind": "session",
+            "label": "5 hour",
+            "usedPercent": 20,
+            "credentialFingerprint": "fp-secret-9f3a",
+            "email": "person@example.com"
+          }
+        ]
+      }
+    },
+    {
+      "case": "http-link",
+      "instanceId": "pi",
+      "driver": "pi",
+      "enabled": true,
+      "installed": true,
+      "status": "ready",
+      "displayName": "Pi",
+      "auth": { "status": "authenticated" },
+      "usageLimits": {
+        "externalUsage": { "label": "Usage", "url": "http://example.com/usage" }
+      }
+    },
+    {
+      "case": "script-link",
+      "instanceId": "opencode",
+      "driver": "opencode",
+      "enabled": true,
+      "installed": true,
+      "status": "ready",
+      "displayName": "OpenCode",
+      "auth": { "status": "authenticated" },
+      "usageLimits": {
+        "externalUsage": { "label": "Usage", "url": "javascript:alert(1)" }
+      }
+    },
+    {
+      "case": "file-link",
+      "instanceId": "cursor-file",
+      "driver": "cursor",
+      "enabled": true,
+      "installed": true,
+      "status": "ready",
+      "displayName": "Cursor",
+      "auth": { "status": "authenticated" },
+      "usageLimits": {
+        "externalUsage": { "label": "Usage", "url": "file:///tmp/usage" }
+      }
+    },
+    {
+      "case": "https-link",
+      "instanceId": "link",
+      "driver": "claude",
+      "enabled": true,
+      "installed": true,
+      "status": "ready",
+      "displayName": "Claude",
+      "auth": { "status": "authenticated" },
+      "usageLimits": {
+        "checkedAt": "2026-11-12T14:00:00Z",
+        "externalUsage": { "label": "Usage", "url": "https://example.com/usage" },
+        "windows": [
+          { "id": "5h", "kind": "session", "label": "5 hour", "usedPercent": 1 }
+        ]
+      }
+    },
+    {
+      "case": "signed-out",
+      "instanceId": "codex-out",
+      "driver": "codex",
+      "enabled": true,
+      "installed": true,
+      "status": "error",
+      "displayName": "Codex",
+      "auth": { "status": "unauthenticated", "email": "person@example.com" }
+    },
+    {
+      "case": "not-installed",
+      "instanceId": "cursor",
+      "driver": "cursor",
+      "enabled": false,
+      "installed": false,
+      "status": "disabled",
+      "displayName": "Cursor",
+      "auth": { "status": "unknown" }
+    },
+    {
+      "case": "turned-off",
+      "instanceId": "grok-off",
+      "driver": "grok",
+      "enabled": false,
+      "installed": true,
+      "status": "disabled",
+      "displayName": "Grok",
+      "auth": { "status": "authenticated" }
+    },
+    {
+      "case": "update-advised",
+      "instanceId": "opencode-update",
+      "driver": "opencode",
+      "enabled": true,
+      "installed": true,
+      "status": "ready",
+      "displayName": "OpenCode",
+      "auth": { "status": "authenticated" },
+      "unavailableReason": "update advised"
+    },
+    {
+      "case": "offline",
+      "instanceId": "muse-off",
+      "driver": "muse",
+      "enabled": true,
+      "installed": true,
+      "status": "ready",
+      "displayName": "Muse",
+      "auth": { "status": "authenticated" },
+      "availability": "unavailable"
+    },
+    {
+      "case": "account-down",
+      "instanceId": "pi-down",
+      "driver": "pi",
+      "enabled": true,
+      "installed": true,
+      "status": "ready",
+      "displayName": "Pi",
+      "auth": { "status": "authenticated" },
+      "usageLimits": {
+        "checkedAt": "2026-11-12T14:00:00Z",
+        "unavailable": { "reason": "account", "message": "hidden-probe-message" },
+        "windows": [
+          { "id": "week", "kind": "weekly", "label": "Week", "usedPercent": 80 }
+        ]
+      }
+    },
+    {
+      "case": "blank",
+      "displayName": "Blank",
+      "auth": { "email": "person@example.com" },
+      "runtimePaths": { "home": "/secret/runtime/path" }
+    }
+  ]
+}

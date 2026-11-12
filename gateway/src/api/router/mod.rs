@@ -53,6 +53,7 @@ pub(crate) fn app(state: Arc<AppState>) -> Router {
             post(connector_save).delete(connector_delete),
         )
         .route("/api/providers", get(providers_get))
+        .route("/api/providers/limits", get(providers_limits))
         .route("/api/suggestions", get(suggestions_get))
         .route("/api/bots/{slug}/model", get(model_get).put(model_put))
         .route("/api/bots/{slug}/usage", get(bot_usage))

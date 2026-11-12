@@ -102,6 +102,17 @@ pub(crate) async fn providers_get(State(s): S) -> ApiResult<Json<Value>> {
     Ok(Json(json!({ "ok": true, "providers": list["providers"] })))
 }
 
+/// Limit bars for each provider, from the same cached read as the model list.
+/// The normal session gate on `/api` covers this route.
+pub(crate) async fn providers_limits(State(s): S) -> ApiResult<Json<Value>> {
+    let body = s
+        .providers
+        .limits(s.harness.as_ref())
+        .await
+        .map_err(|e| ApiError::new(502, format!("T3 didn't list provider limits: {e}")))?;
+    Ok(Json(body))
+}
+
 /// A model choice from a request body, checked against T3's providers. When T3 can't be read
 /// the old character check stands, so a choice is never lost to a hiccup.
 pub(crate) async fn checked_selection(

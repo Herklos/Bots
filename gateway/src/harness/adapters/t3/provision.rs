@@ -142,14 +142,14 @@ impl Provisioning for T3 {
     }
 
     async fn provider_config(&self) -> Result<Value, HarnessError> {
-        let config = self
-            .rpc()
+        // The raw server config. The providers module caches this one read and is what
+        // turns it into the model list and the limit bars.
+        self.rpc()
             .await
             .map_err(HarnessError::unavailable)?
             .call("server.getConfig", json!({}))
             .await
-            .map_err(HarnessError::failed)?;
-        Ok(crate::harness::providers::from_config(&config))
+            .map_err(HarnessError::failed)
     }
 }
 

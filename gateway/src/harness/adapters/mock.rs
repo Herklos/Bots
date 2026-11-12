@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use axum::response::IntoResponse;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 /// One `set_model` the mock actually accepted.
@@ -25,6 +26,9 @@ pub(crate) struct MockHarness {
     typed: Mutex<HashMap<String, String>>,
     model_pushes: Mutex<Vec<ModelPush>>,
     repo: Mutex<RepoAnswer>,
+    /// Stand-in for the harness provider config. `None` is the usual "not wired" error.
+    provider_config: Mutex<Option<Value>>,
+    provider_config_reads: AtomicUsize,
 }
 
 #[derive(Debug)]
@@ -46,6 +50,8 @@ impl MockHarness {
                 calls: 0,
                 cwd: String::new(),
             }),
+            provider_config: Mutex::new(None),
+            provider_config_reads: AtomicUsize::new(0),
         }
     }
 
@@ -63,6 +69,17 @@ impl MockHarness {
 
     fn repo_answer(&self) -> std::sync::MutexGuard<'_, RepoAnswer> {
         self.repo.lock().unwrap_or_else(|err| err.into_inner())
+    }
+
+    pub(crate) fn set_provider_config(&self, config: Value) {
+        *self
+            .provider_config
+            .lock()
+            .unwrap_or_else(|err| err.into_inner()) = Some(config);
+    }
+
+    pub(crate) fn provider_config_reads(&self) -> usize {
+        self.provider_config_reads.load(Ordering::SeqCst)
     }
 
     pub(crate) fn model_pushes(&self) -> Vec<ModelPush> {
@@ -231,7 +248,12 @@ impl Provisioning for MockHarness {
     }
 
     async fn provider_config(&self) -> Result<Value, HarnessError> {
-        Err(missing("providers"))
+        self.provider_config_reads.fetch_add(1, Ordering::SeqCst);
+        self.provider_config
+            .lock()
+            .unwrap_or_else(|err| err.into_inner())
+            .clone()
+            .ok_or_else(|| missing("providers"))
     }
 }
 
