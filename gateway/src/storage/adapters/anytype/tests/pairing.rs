@@ -1,4 +1,4 @@
-use super::client::*;
+use crate::storage::adapters::anytype::{confirm_pairing, start_pairing, status};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde_json::{json, Value};
