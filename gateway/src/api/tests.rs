@@ -298,3 +298,40 @@ async fn group_answer_policy_defaults_to_last_and_put_rejects_anything_else() {
     let again = state.settings().await;
     assert_eq!(again["groupAnswerPolicy"], "chief");
 }
+
+#[tokio::test]
+async fn max_runtime_mode_defaults_to_full_access_and_put_rejects_anything_else() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = settings_state(dir.path());
+    assert_eq!(
+        AppState::settings_defaults()["maxRuntimeMode"],
+        json!("full-access")
+    );
+    assert_eq!(state.settings().await["maxRuntimeMode"], "full-access");
+    storage::write_json(
+        &state.settings_path(),
+        &json!({ "maxRuntimeMode": "nope", "userName": "Ada" }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(state.settings().await["maxRuntimeMode"], "full-access");
+    let err = put(&state, json!({ "maxRuntimeMode": "ask" }))
+        .await
+        .unwrap_err();
+    assert_eq!(err.status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        err.message,
+        "maxRuntimeMode must be approval-required, auto, or full-access"
+    );
+    let on_disk = storage::read_json(&state.settings_path()).await.unwrap();
+    assert_eq!(on_disk["maxRuntimeMode"], "nope");
+    assert_eq!(on_disk["userName"], "Ada");
+    for mode in ["approval-required", "auto", "full-access"] {
+        let next = put(&state, json!({ "maxRuntimeMode": mode }))
+            .await
+            .unwrap();
+        assert_eq!(next["maxRuntimeMode"], mode);
+        assert_eq!(next["userName"], "Ada");
+        assert_eq!(state.settings().await["maxRuntimeMode"], mode);
+    }
+}

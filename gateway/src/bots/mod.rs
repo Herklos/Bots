@@ -255,6 +255,7 @@ pub(crate) mod memory; // Bot memory files through the workspace.
 pub(crate) mod memory_tools;
 pub(crate) mod provisioner;
 pub(crate) mod roster; // What an inbox row needs: preview, working, unread.
+pub(crate) mod runtime_mode; // Approval modes, least access first, and the pure cap.
 pub(crate) mod subagent_tools;
 pub(crate) mod suggestions; // New Bot starting points.
 pub(crate) mod usage; // Local usage counts. Nothing leaves the machine. // The Bot's browser, watch first.
