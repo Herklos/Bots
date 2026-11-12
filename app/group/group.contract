@@ -101,7 +101,14 @@ component GroupPanel
               column role="radiogroup" aria-label=t("group.stepPolicy") gap="space.xs"
                 for policy in ["default", "last", "everyone", "chief"] key=policy
                   button class=ChoiceRow appearance="none" press=patch("answerPolicy", policy) role="radio" aria-checked=(room.answerPolicy == policy) testId=`group-policy-${policy}` background-color=(room.answerPolicy == policy ? "surface.raised" : "transparent")
-                    text (policy == "default" ? t("group.policyDefault") : policy == "last" ? t("group.policyLast") : policy == "everyone" ? t("group.policyEveryone") : t("group.policyChief"))
+                    text (policy == "default" ? t("group.policyDefaultNamed", policy=(room.answerPolicyEffective == "everyone" ? t("group.policyEveryone") : room.answerPolicyEffective == "chief" ? t("group.policyChief") : t("group.policyLast"))) : policy == "last" ? t("group.policyLast") : policy == "everyone" ? t("group.policyEveryone") : t("group.policyChief"))
+            if room.answerPolicyEffective == "chief"
+              column gap="space.sm"
+                text t("group.chief") class=SectionLabel
+                column role="radiogroup" aria-label=t("group.chief") gap="space.xs"
+                  for m in room.members key=m.slug
+                    button class=ChoiceRow appearance="none" press=patch("chief", m.slug) role="radio" aria-checked=(room.chief == m.slug) testId=`group-chief-${m.slug}` background-color=(room.chief == m.slug ? "surface.raised" : "transparent")
+                      text m.name
             column gap="space.sm"
               row align-items="center" gap="space.sm"
                 text t("common.bots") class=SectionLabel flex=1

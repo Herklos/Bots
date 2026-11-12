@@ -3,6 +3,9 @@ import { when, isGroupLeak, lineOf, stackFaces, initials } from './host/time.ts'
 import { REACH_GATEWAY, noteLocale, say, localize, call, read, fresh, botsBody, roomsBody, noticeHost, setNoticeHost, hostNotice, reply, sentFrom, systemChecked, setSystemChecked, madeFromBot } from './host/gateway.ts';
 import { NOT_IN_VIEW, roomMessage } from './host/markdown.ts';
 import { blankChat, PinRow, fixtureMade, setFixtureMade, fixtureMemberEdits, fixtureMemberRow, fixtureCrowdBots, fixtureSent, fixtureRoomSent, fixtureBotNotify, fixtureRoomNotify, fixtureRoomPolicy, fixtureGroupAnswer, setFixtureGroupAnswer, roomAnswer, wantsNotice, FIXTURE_SUGGESTIONS, fixtureModelList, rememberFixtureModel, savedEffort, fixturePins, quietChatView, fixtureChat, explain } from './host/fixture.ts';
+
+// A group on the machine default follows the Settings choice; fixtures use last speaker.
+const effectivePolicy = (policy: string): string => (policy === 'everyone' || policy === 'chief' ? policy : 'last');
 import { prettyModel, nextLabel, emptyReport, usageReport } from './host/report.ts';
 import { frames, threads, chatKept, roomKept, forgetChat, forgetMeta, lastMessageId, threadMeta, blank, chatRows, storeUpload, draftMap, draftRows } from './host/session.ts';
 import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, shutNotice, postUnread } from './host/notices.ts';
@@ -242,19 +245,6 @@ const sources: Sources = {
   testStorage: async ([path], store) => reply(await call(store, '/api/storage/test', { method: 'POST', body: JSON.stringify({ backend: 'filesystem', root: path }) })),
   copyStorage: async ([path], store) => reply(await call(store, '/api/storage/copy', { method: 'POST', body: JSON.stringify({ root: path }) })),
   restartStorage: async (_args, store) => reply(await call(store, '/api/storage/restart', { method: 'POST', body: '{}' })),
-  startPairing: async (_args, store): Promise<Result<'startPairing'>> => {
-    const r = await call(store, '/api/storage/anytype/pair', { method: 'POST', body: '{}' });
-    if (!r.ok) return { ok: false, error: localize(r.error), challengeId: '' };
-    const id = typeof r.body?.challengeId === 'string' ? r.body.challengeId : '';
-    return { ok: id !== '', error: '', challengeId: id };
-  },
-  confirmPairing: async ([challengeId, code], store) => reply(await call(store, '/api/storage/anytype/pair/confirm', { method: 'POST', body: JSON.stringify({ challengeId, code }) })),
-  checkAnytype: async (_args, store): Promise<Result<'checkAnytype'>> => {
-    const r = await call(store, '/api/storage/anytype/check', { method: 'POST', body: '{}' });
-    if (!r.ok) return { ok: false, error: localize(r.error), space: '', spaceFound: false, shared: false };
-    const b = r.body ?? {};
-    return { ok: b.reachable === true, error: '', space: typeof b.space === 'string' ? b.space : '', spaceFound: b.spaceFound === true, shared: b.shared === true };
-  },
   loadVault: async (_args, store): Promise<Result<'loadVault'>> => {
     const body = await read(store, '/api/vault');
     return (body.items as any[]).filter((i) => i.type === 'login').map((i) => ({
@@ -796,7 +786,7 @@ const sources: Sources = {
     return { ok: true, error: '', text: typeof r.body.text === 'string' ? r.body.text : '' };
   },
   loadRoom: async ([id], store): Promise<Result<'loadRoom'>> => {
-    if (id === '') return { id: '', title: '', description: '', color: 'brand.default', shape: 'ball', members: [], messages: [], notifications: true, answerPolicy: 'default' };
+    if (id === '') return { id: '', title: '', description: '', color: 'brand.default', shape: 'ball', members: [], messages: [], notifications: true, answerPolicy: 'default', answerPolicyEffective: 'last', chief: '' };
     if (id === 'fixture') {
       const edited = fixtureMemberEdits.get('fixture');
       if (fixtureMade && !edited) {
@@ -807,6 +797,7 @@ const sources: Sources = {
           messages: fixtureRoomSent.map((m) => roomMessage({ id: m.id, name: 'You', text: m.text, from: 'user' })),
           notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
           answerPolicy: roomAnswer('fixture', fixtureMade?.answerPolicy),
+          answerPolicyEffective: effectivePolicy(roomAnswer('fixture', fixtureMade?.answerPolicy)), chief: '',
         };
       }
       return {
@@ -822,6 +813,7 @@ const sources: Sources = {
         ],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
         answerPolicy: roomAnswer('fixture', fixtureMade?.answerPolicy),
+          answerPolicyEffective: effectivePolicy(roomAnswer('fixture', fixtureMade?.answerPolicy)), chief: '',
       };
     }
     if (id === 'fixture-crowd') {
@@ -832,6 +824,7 @@ const sources: Sources = {
         messages: [],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture-crowd')),
         answerPolicy: roomAnswer('fixture-crowd'),
+          answerPolicyEffective: effectivePolicy(roomAnswer('fixture-crowd')), chief: '',
       };
     }
     if (id === 'fixture-busy') {
@@ -848,6 +841,7 @@ const sources: Sources = {
         ],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture-busy')),
         answerPolicy: roomAnswer('fixture-busy'),
+          answerPolicyEffective: effectivePolicy(roomAnswer('fixture-busy')), chief: '',
       };
     }
     const kept = roomKept.get(id);
@@ -870,6 +864,8 @@ const sources: Sources = {
       messages: messages.map((m: any) => roomMessage(m)),
       notifications: wantsNotice(body.notifications),
       answerPolicy: body.answerPolicy === 'last' || body.answerPolicy === 'everyone' || body.answerPolicy === 'chief' ? body.answerPolicy : 'default',
+      answerPolicyEffective: body.answerPolicyEffective === 'everyone' || body.answerPolicyEffective === 'chief' ? body.answerPolicyEffective : 'last',
+      chief: String(body.chief ?? ''),
     };
     roomKept.set(id, { etag: res.etag, view });
     return view;

@@ -343,6 +343,8 @@ shape Room
   messages: RoomMessage[]
   notifications: bool
   answerPolicy: string
+  answerPolicyEffective: string
+  chief: string
 
 // One @ completion row above the composer.
 shape MentionHit

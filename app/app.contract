@@ -215,20 +215,6 @@ shape Storage
   restartRequired: bool
   canRestart: bool
   error: string
-
-// Anytype pairing. `challengeId` is the open pairing request, or empty. The key never
-// reaches the screen. `AnytypeCheck` says whether the saved key reaches the chosen space
-// and whether that space has more than one member.
-shape Pairing
-  ok: bool
-  error: string
-  challengeId: string
-shape AnytypeCheck
-  ok: bool
-  error: string
-  space: string
-  spaceFound: bool
-  shared: bool
 shape Suggestion
   name: string
   about: string
@@ -390,7 +376,7 @@ fn withPending(rows: Row[], id: string, text: string, failed: bool): Row[] = tex
 fn wordChar(c: string): bool = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".includes(c)
 fn mentionReplace(text: string, q: string, slug: string): string = `${text.slice(0, text.length - q.length)}${slug} `
 fn botMentions(bots: Bot[]): MentionHit[] = bots.filter(b => not b.hideFromSidebar).map(b => MentionHit(slug=b.slug, name=b.name, color=b.color, shape=b.shape))
-fn roomMentions(bots: Bot[], members: RoomMember[], allName: string): MentionHit[] = [MentionHit(slug="everyone", name=allName, color="brand.default", shape="ball"), MentionHit(slug="all", name=allName, color="brand.default", shape="ball")].concat(members.map(m => MentionHit(slug=m.slug, name=m.name, color=colorOf(bots, m.slug), shape=shapeOf(bots, m.slug))))
+fn roomMentions(bots: Bot[], members: RoomMember[], allName: string): MentionHit[] = [MentionHit(slug="everyone", name=allName, color="brand.default", shape=""), MentionHit(slug="all", name=allName, color="brand.default", shape="")].concat(members.map(m => MentionHit(slug=m.slug, name=m.name, color=colorOf(bots, m.slug), shape=shapeOf(bots, m.slug))))
 fn filterMentions(hits: MentionHit[], q: string): MentionHit[] = hits.filter(h => q == "" or h.slug.toLowerCase().startsWith(q) or h.name.toLowerCase().startsWith(q) or h.name.toLowerCase().replaceAll(" ", "").startsWith(q)).slice(0, 8)
 
 routes nav
@@ -456,8 +442,6 @@ component Bots
   state folderDraft = ""
   state folderEditing = false
   state storageHint = ""
-  state pairCode = ""
-  state pairStep = ""
   state botQuery = ""
   state searching = false
   state away = false
@@ -581,9 +565,6 @@ component Bots
   mutation storageTested as shape Reply then afterStorageTest
   mutation storageCopied as shape Reply then afterStorageCopy
   mutation storageRestarted as shape Reply
-  mutation pairStarted as shape Pairing then afterPairStart
-  mutation pairConfirmed as shape Reply then afterPairConfirm
-  mutation anytypeChecked as shape AnytypeCheck
   mutation loginSaved as shape Reply refreshes vault then afterLoginSave
   mutation loginRemoved as shape Reply refreshes vault then afterLoginRemove
   mutation revealed as shape Revealed
@@ -654,13 +635,6 @@ component Bots
   derive storageTestError = match storageTested { case some(r) => r.error, case none => "" }
   derive storageCopyError = match storageCopied { case some(r) => r.error, case none => "" }
   derive storageRestartError = match storageRestarted { case some(r) => r.error, case none => "" }
-  derive pairChallenge = match pairStarted { case some(r) => r.challengeId, case none => "" }
-  derive pairError = match pairStarted { case some(r) => r.error, case none => "" }
-  derive pairConfirmError = match pairConfirmed { case some(r) => r.error, case none => "" }
-  derive anytypeError = match anytypeChecked { case some(r) => r.error, case none => "" }
-  derive anytypeSpace = match anytypeChecked { case some(r) => r.space, case none => "" }
-  derive anytypeFound = match anytypeChecked { case some(r) => r.spaceFound, case none => false }
-  derive anytypeShared = match anytypeChecked { case some(r) => r.shared, case none => false }
   derive networkGate = (top(nav).name == "settings" and settingsDomain == "access") ? "1" : "0"
   derive loginError = match loginSaved { case some(r) => r.error, case none => "" }
   derive loginRemoveError = match loginRemoved { case some(r) => r.error, case none => "" }
@@ -1664,37 +1638,6 @@ component Bots
   action doRestartStorage
     if storage.canRestart and storage.restartRequired and not pending(storageRestarted)
       send storageRestarted = restartStorage()
-  // Anytype: start pairing, type the 4 digit code the app shows, then check the space.
-  action doPairStart
-    if not pending(pairStarted)
-      pairCode = ""
-      pairStep = ""
-      send pairStarted = startPairing()
-  action afterPairStart
-    match pairStarted
-      case some(r)
-        if r.ok
-          pairStep = "code"
-      case none
-        pairStep = pairStep
-  action doEditPairCode(v: string)
-    pairCode = v.trim()
-  action doPairConfirm
-    if pairChallenge != "" and pairCode.length == 4 and not pending(pairConfirmed)
-      send pairConfirmed = confirmPairing(pairChallenge, pairCode)
-  action afterPairConfirm
-    match pairConfirmed
-      case some(r)
-        if r.ok
-          pairStep = "checked"
-          pairCode = ""
-          send anytypeChecked = checkAnytype()
-      case none
-        pairStep = pairStep
-  action doAnytypeCheck
-    if not pending(anytypeChecked)
-      pairStep = "checked"
-      send anytypeChecked = checkAnytype()
 
   // Vault: a login is edited in a sheet. The password is kept unless a new one is typed.
   action doCommitLogin(id: string, title: string, website: string, username: string, password: string, hints: string)
@@ -2112,10 +2055,8 @@ component Bots
                   if roomError != "" and not pending(roomSent)
                     text roomError color="-exact-system-red" font="-exact-footnote" testId="room-send-error"
                   row gap="space.xs" flex-wrap="wrap" width="100%" min-width=0 box-sizing="border-box" testId="mention-chips"
-                    button appearance="none" press=mention("everyone") aria-label=t("group.mention", name=t("group.everyone")) title=t("group.hintEveryone") testId="mention-everyone" min-height=32 padding="0 space.md 0 4px" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes("@everyone") ? "surface.soft" : "surface.card") color="-exact-label"
-                      row gap="space.xs" align-items="center"
-                        Avatar(shape="ball", color=faceColor("brand.default"), state="idle", size=22, still=true, presence="")
-                        text `@everyone` font="-exact-footnote" font-weight=500
+                    button appearance="none" press=mention("everyone") aria-label=t("group.mention", name=t("group.everyone")) title=t("group.hintEveryone") testId="mention-everyone" min-height=32 padding="0 space.md" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes("@everyone") ? "surface.soft" : "surface.card") color="-exact-label"
+                      text `@everyone` font="-exact-footnote" font-weight=500
                     for m in room.members key=m.slug
                       button appearance="none" press=mention(m.slug) aria-label=t("group.mention", name=m.name) title=t("group.mention", name=m.name) testId=`mention-${m.slug}` min-height=32 padding="0 space.md 0 4px" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes(`@${m.slug}`) ? "surface.soft" : "surface.card") color="-exact-label"
                         row gap="space.xs" align-items="center"
@@ -2303,33 +2244,6 @@ component Bots
                         text t("settings.storage.anytypeSoon") class=SettingsFoot testId="storage-anytype-note"
                         if storage.backendLock != ""
                           text t("settings.storage.locked", variable=storage.backendLock) class=SettingsFoot testId="storage-locked-backend"
-                      text t("settings.anytype.title") class=SectionLabel
-                      column class=GroupCard padding="space.sm" gap="space.sm" testId="anytype-connect"
-                        text t("settings.anytype.intro") class=SettingsFoot
-                        row class=SettingsRow gap="space.sm" min-height=44
-                          button appearance="none" press=doPairStart disabled=pending(pairStarted) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="anytype-connect-start"
-                            text (pairStep == "" ? t("settings.anytype.connect") : t("settings.anytype.again"))
-                          button appearance="none" press=doAnytypeCheck disabled=pending(anytypeChecked) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="anytype-check"
-                            text t("settings.anytype.check")
-                        if pairStep == "code"
-                          text t("settings.anytype.approve") class=SettingsFoot testId="anytype-approve"
-                          row class=SettingsRow gap="space.sm" min-height=44
-                            input appearance="none" class=Field value=pairCode input=doEditPairCode maxlength=4 inputmode="numeric" placeholder="0000" aria-label=t("settings.anytype.code") flex=1 min-width=0 testId="anytype-code"
-                            button appearance="none" press=doPairConfirm disabled=(pairCode.length != 4 or pending(pairConfirmed)) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="anytype-confirm"
-                              text t("settings.anytype.confirm")
-                        if pairError != "" and not pending(pairStarted)
-                          text pairError color="-exact-system-red" font="-exact-footnote" testId="anytype-pair-error"
-                        if pairConfirmError != "" and not pending(pairConfirmed)
-                          text pairConfirmError color="-exact-system-red" font="-exact-footnote" testId="anytype-confirm-error"
-                        if anytypeError != "" and not pending(anytypeChecked)
-                          text anytypeError color="-exact-system-red" font="-exact-footnote" testId="anytype-check-error"
-                        if pairStep == "checked" and anytypeError == "" and not pending(anytypeChecked) and pairConfirmError == ""
-                          text t("settings.anytype.reachable") class=SettingsFoot testId="anytype-reachable"
-                          if anytypeFound
-                            text t("settings.anytype.space", name=anytypeSpace) class=SettingsFoot testId="anytype-space"
-                            text (anytypeShared ? t("settings.anytype.shared") : t("settings.anytype.private")) class=SettingsFoot testId="anytype-shared"
-                          else
-                            text t("settings.anytype.missing", name=anytypeSpace) class=SettingsFoot testId="anytype-missing"
                       text t("settings.storage.folder") class=SectionLabel
                       column class=GroupCard padding="0"
                         row class=SettingsRow min-height=44
@@ -2521,6 +2435,8 @@ component Bots
                             text t("group.stepKickoff") color="ink.muted" font="-exact-footnote"
                             text (groupAbout.trim() == "" ? t("group.noKickoff") : groupAbout) font-weight=600 testId="review-kickoff"
                           Glyph(name="chevron", size=18)
+                  if groupError != "" and not pending(groupMade)
+                    text groupError color="-exact-system-red" testId="group-error"
               row justify-content="center" padding="space.md space.lg" border-top="1px solid surface.line" box-sizing="border-box"
                 column width="100%" max-width="34rem"
                   if groupStep == "review"
@@ -2529,8 +2445,6 @@ component Bots
                   else
                     button class=PrimaryButton buttonStyle="filled" press=groupStepNext disabled=((groupStep == "name" and groupName.trim() == "") or (groupStep == "face" and groupMembers.length < 2)) width="100%" testId="group-next"
                       text t("create.next")
-                  if groupError != "" and not pending(groupMade)
-                    text groupError color="-exact-system-red" testId="group-error"
           else
             column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="new-form" position="absolute" inset=0
               header class=PageHeader
@@ -2602,6 +2516,8 @@ component Bots
                             text t("create.firstMessage") color="ink.muted" font="-exact-footnote"
                             text (newFirst.trim() == "" ? t("create.noMessage") : newFirst) font-weight=600 testId="review-first"
                           Glyph(name="chevron", size=18)
+                  if createError != "" and not pending(created)
+                    text createError color="-exact-system-red" testId="create-error"
               row justify-content="center" padding="space.md space.lg" border-top="1px solid surface.line" box-sizing="border-box"
                 column width="100%" max-width="34rem"
                   if createStep == "review"
@@ -2613,8 +2529,6 @@ component Bots
                   else
                     button class=PrimaryButton buttonStyle="filled" press=createNext disabled=(createStep == "name" and newName.trim() == "") width="100%" testId="create-next"
                       text t("create.next")
-                  if createError != "" and not pending(created)
-                    text createError color="-exact-system-red" testId="create-error"
       if computerEnlarged and not locked and onComputer and computer.image != ""
         column position="absolute" inset=0 z-index=40 align-items="center" justify-content="center" background-color="brand.black" testId="computer-overlay"
           button class=IconControl appearance="none" press=hideComputerLarge aria-label=t("computer.close") title=t("computer.close") testId="computer-close" position="absolute" top=12 right=12 z-index=1 color="ink.light" width=44 height=44

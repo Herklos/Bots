@@ -193,6 +193,9 @@ component ChatMessage
                 Glyph(name="smile", size=14)
             button id=`reply-${row.id}` class=TextControl appearance="none" press=reply(row.id, row.text) aria-label=t("chat.reply") title=t("chat.reply") min-height=24 padding="0 space.xs" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none") testId=`reply-${row.id}`
               Glyph(name="reply", size=14)
+            if row.text != ""
+              button id=`copy-${row.id}` class=TextControl appearance="none" press=chooseCopy aria-label=(copied ? t("chat.copied") : t("chat.copy")) title=(copied ? t("chat.copied") : t("chat.copy")) min-height=24 padding="0 space.xs" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none") testId=`copy-${row.id}`
+                Glyph(name=(copied ? "check" : "copy"), size=14)
         for f in row.files key=f.id
           if f.kind == "image"
             link href=f.url target="_blank" aria-label=t("common.openNamed", name=f.name) testId=`image-${f.id}`
@@ -285,9 +288,9 @@ component ChatLog
               row justify-content="center" padding="space.sm space.lg"
                 row gap="space.xs" align-items="center" padding="2px space.sm 2px 2px" border-radius="radius.full" background-color="surface.bubble" testId=`event-${m.id}`
                   Face(shape=(m.botSlug != "" ? m.botShape : shapeOf(bots, slug)), color=faceColor(m.botSlug != "" ? m.botColor : colorOf(bots, slug)), state="idle", size=18, still=true)
-                  text eventVerb(m.variant, m.text, t("event.sent"), t("event.routineCreated"), t("event.routineUpdated"), t("event.routineDeleted"), t("event.from"), t("event.ran"), t("event.started"), t("event.providerLimit"), t("event.providerError")) font="-exact-footnote" color="-exact-label" testId=`event-verb-${m.id}`
-                  if m.botName != ""
-                    text m.botName font="-exact-footnote" color="-exact-label" testId=`event-bot-${m.id}`
+                  text eventVerb(m.variant, m.text, t("event.sent"), t("event.routineCreated"), t("event.routineUpdated"), t("event.routineDeleted"), t("event.from"), t("event.ran"), t("event.started"), t("event.providerLimit"), t("event.providerError")) font="-exact-footnote" color="-exact-label" white-space="nowrap" flex-shrink=0 testId=`event-verb-${m.id}`
+                  if m.botName != "" or m.variant == "from" or m.variant == "sent"
+                    text (m.botName != "" ? m.botName : t("settings.unknown")) font="-exact-footnote" color="-exact-label" white-space="nowrap" testId=`event-bot-${m.id}`
                   if m.title != ""
                     text m.title font="-exact-footnote" color="-exact-label" testId=`event-title-${m.id}`
                   if m.resetAt != ""
@@ -356,7 +359,8 @@ component MentionMenu
         for h, i in hits key=h.slug
           button appearance="none" role="option" aria-selected=(i == picked) press=choose(h.slug) aria-label=t("group.mention", name=h.name) title=`@${h.slug}` testId=`mention-opt-${h.slug}` width="100%" box-sizing="border-box" min-height=40 padding="space.xs space.sm" border-radius="radius.sm" border="none" background-color=(i == picked ? "surface.soft" : "transparent") color="-exact-label"
             row gap="space.sm" align-items="center" width="100%" min-width=0
-              Avatar(shape=h.shape, color=faceColor(h.color), state="idle", size=24, still=true, presence="")
+              if h.shape != ""
+                Avatar(shape=h.shape, color=faceColor(h.color), state="idle", size=24, still=true, presence="")
               column flex=1 min-width=0 align-items="flex-start" gap="0"
                 text h.name font="-exact-footnote" font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" max-width="100%"
                 text `@${h.slug}` font="-exact-caption2" color="ink.muted"
