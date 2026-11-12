@@ -182,6 +182,7 @@
   "group.fallback": "Group",
   "group.hideDetails": "Hide group details",
   "group.hint": "Write @name to wake one Bot. A message with no @name goes to whoever spoke last.",
+  "group.hintEveryone": "@everyone wakes every Bot in the group.",
   "group.hintMention": "Only the Bots you mention are woken.",
   "group.hintNone": "No @mention: the Bot that spoke last answers, or everyone at first.",
   "group.mention": "Mention {name}",

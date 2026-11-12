@@ -945,7 +945,7 @@ fn withPending(rows: Row[], id: string, text: string, failed: bool): Row[] = tex
 fn wordChar(c: string): bool = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".includes(c)
 fn mentionReplace(text: string, q: string, slug: string): string = `${text.slice(0, text.length - q.length)}${slug} `
 fn botMentions(bots: Bot[]): MentionHit[] = bots.filter(b => not b.hideFromSidebar).map(b => MentionHit(slug=b.slug, name=b.name, color=b.color, shape=b.shape))
-fn roomMentions(bots: Bot[], members: RoomMember[], allName: string): MentionHit[] = [MentionHit(slug="all", name=allName, color="brand.default", shape="ball")].concat(members.map(m => MentionHit(slug=m.slug, name=m.name, color=colorOf(bots, m.slug), shape=shapeOf(bots, m.slug))))
+fn roomMentions(bots: Bot[], members: RoomMember[], allName: string): MentionHit[] = [MentionHit(slug="everyone", name=allName, color="brand.default", shape="ball"), MentionHit(slug="all", name=allName, color="brand.default", shape="ball")].concat(members.map(m => MentionHit(slug=m.slug, name=m.name, color=colorOf(bots, m.slug), shape=shapeOf(bots, m.slug))))
 fn filterMentions(hits: MentionHit[], q: string): MentionHit[] = hits.filter(h => q == "" or h.slug.toLowerCase().startsWith(q) or h.name.toLowerCase().startsWith(q) or h.name.toLowerCase().replaceAll(" ", "").startsWith(q)).slice(0, 8)
 
 keyframes dot
@@ -2715,6 +2715,10 @@ component Bots
                   if roomError != "" and not pending(roomSent)
                     text roomError color="-exact-system-red" font="-exact-footnote" testId="room-send-error"
                   row gap="space.xs" flex-wrap="wrap" width="100%" min-width=0 box-sizing="border-box" testId="mention-chips"
+                    button appearance="none" press=mention("everyone") aria-label=t("group.mention", name=t("group.everyone")) title=t("group.hintEveryone") testId="mention-everyone" min-height=32 padding="0 space.md 0 4px" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes("@everyone") ? "surface.soft" : "surface.card") color="-exact-label"
+                      row gap="space.xs" align-items="center"
+                        Avatar(shape="ball", color=faceColor("brand.default"), state="idle", size=22, still=true, presence="")
+                        text `@everyone` font="-exact-footnote" font-weight=500
                     for m in room.members key=m.slug
                       button appearance="none" press=mention(m.slug) aria-label=t("group.mention", name=m.name) title=t("group.mention", name=m.name) testId=`mention-${m.slug}` min-height=32 padding="0 space.md 0 4px" border-radius="radius.full" border="1px solid surface.line" background-color=(roomText.includes(`@${m.slug}`) ? "surface.soft" : "surface.card") color="-exact-label"
                         row gap="space.xs" align-items="center"
@@ -2725,7 +2729,7 @@ component Bots
                     textarea id="room-composer" value=roomText input=editRoomText key=roomKey outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(room.title != "" ? t("chat.messageTo", name=room.title) : t("chat.write")) aria-label=t("group.message") aria-expanded=(mentionHits.length > 0) aria-controls="mention-menu" testId="room-composer" flex=1 min-width=0 padding="space.sm space.sm" border="none" background-color="transparent" color="-exact-label"
                     button class=SendControl appearance="none" press=postRoom disabled=(roomText.trim() == "" or pending(roomSent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="room-send"
                       Glyph(name="send", size=18)
-                  text (roomText.includes("@") ? t("group.hintMention") : t("group.hintNone")) color="ink.muted" font="-exact-footnote" testId="room-hint"
+                  text (roomText.includes("@everyone") ? t("group.hintEveryone") : (roomText.includes("@") ? t("group.hintMention") : t("group.hintNone"))) color="ink.muted" font="-exact-footnote" testId="room-hint"
               GroupPanel(shown=groupPanel, wide=wide, page=groupPage, room=room, bots=bots, closePanel=toggleGroupPanel, openEdit=openGroupEdit, goRoot=groupBack, openAdd=openGroupAdd, closeAdd=closeGroupAdd, patch=patchGroup, removeMember=removeGroupMember, addMember=addGroupMember, drop=dropGroup, error=groupSaveError)
           else if e.name == "settings"
             column class=Screen navigationKey=`${e.id}` navigationScroll="settings-form" position="absolute" inset=0
