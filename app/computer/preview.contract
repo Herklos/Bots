@@ -1,0 +1,101 @@
+members Bots
+  // The large preview keeps two pictures. The one on screen stays until the next
+  // JPEG has loaded, so the black backdrop does not show through while it decodes.
+  state previewA = ""
+
+  state previewB = ""
+
+  state previewShowA = true
+
+  state previewBusy = false
+
+  state previewWant = ""
+
+  // Set when a picture comes forward. The one that left keeps its pixels until
+  // this drops, so the next JPEG cannot clear the picture still on screen.
+  state previewHold = false
+
+  // The hidden JPEG has loaded and stays behind until it has been painted.
+  state previewReady = false
+
+  derive previewShown = previewShowA ? previewA : previewB
+
+  derive previewHidden = previewShowA ? previewB : previewA
+
+  // Start the next JPEG on the hidden picture. The first one goes straight on screen.
+  task armHeldPreview when computerEnlarged and not previewHold and not previewBusy and not previewReady and ((computer.image != "" and computer.image != previewShown and computer.image != previewHidden) or (previewWant != "" and previewWant != previewShown and previewWant != previewHidden))
+    after(1, armPreview)
+
+  action armPreview
+    if not previewHold and not previewBusy and not previewReady
+      if computer.image != "" and computer.image != previewShown and computer.image != previewHidden
+        placePreview(computer.image)
+      else if previewWant != "" and previewWant != previewShown and previewWant != previewHidden
+        placePreview(previewWant)
+
+  action placePreview(next: string)
+    if next != "" and not previewBusy and not previewHold and not previewReady
+      if previewA == "" and previewB == ""
+        previewA = next
+      else if previewShowA
+        previewB = next
+      else
+        previewA = next
+      previewBusy = true
+      previewWant = ""
+
+  // A newer JPEG arrived while one is decoding, or while the swap settles. Keep only the latest.
+  task noteHeldPreview when computerEnlarged and (previewBusy or previewHold) and computer.image != "" and computer.image != previewWant and computer.image != previewShown and computer.image != previewHidden
+    after(1, notePreview)
+
+  action notePreview
+    let next = computer.image
+    if (previewBusy or previewHold) and next != "" and next != previewShown and next != previewHidden
+      previewWant = next
+
+  action previewLoadedA
+    if previewA != ""
+      if previewShowA
+        previewBusy = false
+      else
+        previewReady = true
+
+  action previewLoadedB
+    if previewB != ""
+      if not previewShowA
+        previewBusy = false
+      else
+        previewReady = true
+
+  // Load means the bitmap is decoded. The compositor still needs a paint
+  // before this picture can cover the one on screen.
+  task revealHeldPreview when computerEnlarged and previewReady
+    after(48, revealPreview)
+
+  action revealPreview
+    if previewReady
+      if previewShowA
+        previewShowA = false
+      else
+        previewShowA = true
+      previewReady = false
+      previewBusy = false
+      previewHold = true
+
+  task settleHeldPreview when computerEnlarged and previewHold
+    after(32, releasePreviewHold)
+
+  action releasePreviewHold
+    previewHold = false
+
+  task dropHeldPreview when not computerEnlarged and (previewA != "" or previewB != "" or previewWant != "" or previewBusy or previewHold or previewReady)
+    after(1, clearPreview)
+
+  action clearPreview
+    previewA = ""
+    previewB = ""
+    previewShowA = true
+    previewBusy = false
+    previewWant = ""
+    previewHold = false
+    previewReady = false

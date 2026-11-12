@@ -25,6 +25,7 @@ routes nav
 component Bots
   members "./shell/held.contract"
   members "./computer/model.contract"
+  members "./computer/preview.contract"
   members "./vault/model.contract"
   members "./settings/model.contract"
   members "./bot/model.contract"
@@ -241,6 +242,6 @@ component Bots
           else
             CreateBotScreen(route=e.id)
       if computerEnlarged and not locked and onComputer and computer.image != ""
-        ComputerOverlay()
+        ComputerOverlay(paneA=previewA, paneB=previewB, showA=previewShowA, paneLoadedA=previewLoadedA, paneLoadedB=previewLoadedB)
       if toast != ""
         ToastLine()
