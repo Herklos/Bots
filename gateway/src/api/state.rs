@@ -50,6 +50,7 @@ impl AppState {
             "beta": { "projects": false, "code": false },
             "notifications": { "enabled": false, "sound": true, "preview": "full", "when": "any" },
             "groupAnswerPolicy": "last",
+            "managementMcp": { "enabled": false },
             "maxRuntimeMode": "full-access",
         })
     }
@@ -94,6 +95,7 @@ impl AppState {
             "projects": saved["beta"]["projects"] == true,
             "code": saved["beta"]["code"] == true,
         });
+        out["managementMcp"] = json!({"enabled": saved["managementMcp"]["enabled"] == true});
         out["notifications"] = Self::notifications_view(&saved);
         out["groupAnswerPolicy"] = json!(group_answer_policy(&out).as_str());
         // Unknown or missing is full access, so the cap is off.

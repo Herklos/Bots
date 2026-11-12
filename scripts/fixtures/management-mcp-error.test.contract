@@ -1,0 +1,9 @@
+locale "en-US"
+test "MCP access does not appear disabled or allow changes when status cannot load"
+  tap "Settings"
+  clock data
+  tap "settings-domain-access"
+  clock data
+  expect disabled "mcp-enabled"
+  expect text "mcp-error" == "Could not load MCP access. Check the gateway connection and try again."
+  expect tree missing "mcp-new-token"

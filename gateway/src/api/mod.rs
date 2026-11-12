@@ -37,6 +37,7 @@ mod helpers_policy_tests;
 mod library_api;
 #[cfg(test)]
 mod library_file_tests;
+pub(crate) mod management;
 mod memory_api;
 #[cfg(test)]
 mod memory_api_tests;

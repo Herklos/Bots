@@ -27,6 +27,11 @@ jobs:
         run: cargo clippy --all-targets --locked -- -D warnings
       - name: cargo test
         run: cargo test --locked
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - name: Management MCP SDK integration
+        run: bun scripts/test-mcp-sdk.mjs
 
   contract:
     name: contract check

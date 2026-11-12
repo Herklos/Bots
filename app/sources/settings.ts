@@ -1,12 +1,30 @@
 import type { Sources, Result } from '../app.contract.d.ts';
 import { fixtureDefaultMode, fixtureGroupAnswer, setFixtureDefaultMode, setFixtureGroupAnswer, savedEffort } from '../host/fixture.ts';
-import { REACH_GATEWAY, localize, call, read, setNoticeHost, hostNotice, reply, systemChecked, setSystemChecked } from '../host/gateway.ts';
+import { REACH_GATEWAY, say, localize, call, read, setNoticeHost, hostNotice, reply, systemChecked, setSystemChecked } from '../host/gateway.ts';
 import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, postUnread } from '../host/notices.ts';
 
 const storedRuntimeMode = (mode: string): boolean =>
   mode === 'approval-required' || mode === 'auto' || mode === 'full-access' || mode === 'independent';
 
 export const settingsSources = {
+  loadManagementMcp: async ([gate], store) => {
+    if (gate !== '1') return { loaded: false, enabled: false, endpoint: '', credentials: [] };
+    const settings = await read(store, '/api/settings');
+    const credentials = await read(store, '/api/management-mcp/credentials');
+    return { loaded: true, enabled: settings.managementMcp?.enabled === true, endpoint: String(credentials.endpoint ?? ''), credentials: (credentials.credentials ?? []).map((item: any) => ({ id: String(item.id), label: String(item.label), permissions: (item.scopes ?? ['admin']).map((scope: string) => say(({ read: 'mcp.scopeRead', write: 'mcp.scopeWrite', secrets: 'mcp.scopeSecrets', computer: 'mcp.scopeComputer', admin: 'mcp.scopeAdmin' } as Record<string, string>)[scope] ?? 'mcp.permissions')).join(', ') })) };
+  },
+  setManagementMcp: async ([enabled], store) => {
+    const r = await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ managementMcp: { enabled } }) });
+    return { ...reply(r), token: '' };
+  },
+  createManagementMcpCredential: async ([label, scope], store) => {
+    const r = await call(store, '/api/management-mcp/credentials', { method: 'POST', body: JSON.stringify({ label, scopes: scope === 'admin' ? ['admin'] : scope === 'read' ? ['read'] : ['read', scope] }) });
+    return { ...reply(r), token: r.ok ? String(r.body?.token ?? '') : '' };
+  },
+  revokeManagementMcpCredential: async ([id], store) => {
+    const r = await call(store, `/api/management-mcp/credentials/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return { ...reply(r), token: '' };
+  },
   enableNotifications: async (_args, store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ notifications: { enabled: true } }) })),
   loadPrefs: async (_args, store): Promise<Result<'loadPrefs'>> => {
     let body: any = {};
@@ -204,4 +222,4 @@ export const settingsSources = {
   setDefaultModel: async ([instanceId, model, effort], store) => reply(await call(store, '/api/settings', {
     method: 'PUT', body: JSON.stringify({ defaultModel: { instanceId, model, ...(effort !== '' ? { effort } : {}) } }),
   })),
-} satisfies Pick<Sources, 'enableNotifications' | 'loadPrefs' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'setDefaultModel'>;
+} satisfies Pick<Sources, 'loadManagementMcp' | 'setManagementMcp' | 'createManagementMcpCredential' | 'revokeManagementMcpCredential' | 'enableNotifications' | 'loadPrefs' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'setDefaultModel'>;

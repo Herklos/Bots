@@ -3,7 +3,13 @@ use Bot, Convo, Provider, UsageReport from "../ui/shapes.contract"
 
 use NotificationStatus from "@exact/notifications"
 
+use McpStatus from "./mcp.contract"
+
 shape SettingsBag
+  mcpStatus: McpStatus
+  mcpToken: string
+  mcpError: string
+  mcpPending: bool
   about: About
   anytypeChecked: option<AnytypeCheck>
   anytypePrepareError: string

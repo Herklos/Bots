@@ -29,6 +29,7 @@ component Bots
   members "./computer/preview.contract"
   members "./vault/model.contract"
   members "./settings/model.contract"
+  members "./settings/mcp-model.contract"
   members "./bot/model.contract"
   members "./bot/memory-model.contract"
   members "./mentions/model.contract"
@@ -50,6 +51,11 @@ component Bots
   resource sideChat = loadChat(slug, sideThread, "side") as shape Chat else empty()
   resource sideList = loadSideChats(slug) as shape SideList else empty()
   provide
+    copyMcpToken
+    hideMcpToken
+    toggleMcp
+    createMcp
+    revokeMcp
     open
     editVaultQuery
     login

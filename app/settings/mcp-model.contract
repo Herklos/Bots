@@ -1,0 +1,27 @@
+use McpStatus, McpResult from "./mcp.contract"
+members Bots
+  derive mcpGate = (top(nav).name == "settings" and settingsDomain == "access") ? "1" : "0"
+  resource mcpStatus = loadManagementMcp(mcpGate) as shape McpStatus else empty()
+  mutation mcpChanged as shape McpResult refreshes mcpStatus
+  state mcpTokenVisible = false
+  derive mcpToken = (mcpTokenVisible and not pending(mcpChanged)) ? (match mcpChanged { case some(r) => r.token, case none => "" }) : ""
+  derive mcpError = failed(mcpStatus) ? t("mcp.loadError") : (match mcpChanged { case some(r) => r.error, case none => "" })
+  action toggleMcp
+    if not pending(mcpChanged)
+      mcpTokenVisible = false
+      send mcpChanged = setManagementMcp(not mcpStatus.enabled)
+  action createMcp(label: string, scope: string)
+    if not pending(mcpChanged)
+      mcpTokenVisible = false
+      mcpTokenVisible = true
+      send mcpChanged = createManagementMcpCredential(label, scope)
+  action revokeMcp(id: string)
+    if not pending(mcpChanged)
+      mcpTokenVisible = false
+      send mcpChanged = revokeManagementMcpCredential(id)
+  action hideMcpToken
+    mcpTokenVisible = false
+  action copyMcpToken
+    if mcpToken != ""
+      copyText(mcpToken)
+  derive mcpPending = pending(mcpChanged) or pending(mcpStatus)

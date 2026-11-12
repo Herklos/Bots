@@ -2,6 +2,10 @@ use SettingsBag from "../settings/bag.contract"
 
 members Bots
   derive settingsBag = SettingsBag(
+    mcpStatus=mcpStatus,
+    mcpToken=mcpToken,
+    mcpError=mcpError,
+    mcpPending=mcpPending,
     about=about,
     anytypeChecked=anytypeChecked,
     anytypePrepareError=anytypePrepareError,

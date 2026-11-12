@@ -141,6 +141,7 @@ members Bots
     nav = go(nav, "/settings")
 
   action pickSettingsDomain(domain: string)
+    mcpTokenVisible = false
     settingsDomain = domain
 
   action doStartUpdate

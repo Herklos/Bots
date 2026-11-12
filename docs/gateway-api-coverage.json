@@ -1,0 +1,797 @@
+{
+  "generatedBy": "scripts/generate-mcp.sh",
+  "operations": [
+    {
+      "path": "/api/config",
+      "method": "GET",
+      "tool": "hbots_config_route",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/settings",
+      "method": "GET",
+      "tool": "hbots_get_settings",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/settings",
+      "method": "PUT",
+      "tool": "hbots_put_settings",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots",
+      "method": "GET",
+      "tool": "hbots_list_bots",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots",
+      "method": "POST",
+      "tool": "hbots_create_bot",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}",
+      "method": "GET",
+      "tool": "hbots_get_bot",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}",
+      "method": "PUT",
+      "tool": "hbots_save_bot",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}",
+      "method": "DELETE",
+      "tool": "hbots_delete_bot",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/seen",
+      "method": "POST",
+      "tool": "hbots_mark_seen",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/chat",
+      "method": "GET",
+      "tool": "hbots_read_chat",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/chat",
+      "method": "POST",
+      "tool": "hbots_send_chat",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/side",
+      "method": "GET",
+      "tool": "hbots_list_side",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/side",
+      "method": "POST",
+      "tool": "hbots_open_side",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/side/merge",
+      "method": "POST",
+      "tool": "hbots_merge_side",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/voice",
+      "method": "POST",
+      "tool": "hbots_send_voice",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/stop",
+      "method": "POST",
+      "tool": "hbots_stop_chat",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/attachments",
+      "method": "GET",
+      "tool": "hbots_list",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/attachments",
+      "method": "POST",
+      "tool": "hbots_create",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/attachments/{id}",
+      "method": "GET",
+      "tool": "hbots_download",
+      "permission": "read",
+      "classification": "adapted-binary"
+    },
+    {
+      "path": "/api/bots/{slug}/attachments/{id}",
+      "method": "DELETE",
+      "tool": "hbots_remove",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/requests/{id}/respond",
+      "method": "POST",
+      "tool": "hbots_respond_request",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/library",
+      "method": "GET",
+      "tool": "hbots_library_get",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/library",
+      "method": "POST",
+      "tool": "hbots_library_save",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/library/items/{id}",
+      "method": "DELETE",
+      "tool": "hbots_library_delete",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/library/file",
+      "method": "GET",
+      "tool": "hbots_library_file",
+      "permission": "read",
+      "classification": "adapted-binary"
+    },
+    {
+      "path": "/api/bots/{slug}/shelf",
+      "method": "GET",
+      "tool": "hbots_shelf_get",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/connectors",
+      "method": "POST",
+      "tool": "hbots_connector_save",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/connectors",
+      "method": "DELETE",
+      "tool": "hbots_connector_delete",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/providers",
+      "method": "GET",
+      "tool": "hbots_providers_get",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/providers/limits",
+      "method": "GET",
+      "tool": "hbots_providers_limits",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/suggestions",
+      "method": "GET",
+      "tool": "hbots_suggestions_get",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/model",
+      "method": "GET",
+      "tool": "hbots_model_get",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/model",
+      "method": "PUT",
+      "tool": "hbots_model_put",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/usage",
+      "method": "GET",
+      "tool": "hbots_bot_usage",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/routines",
+      "method": "GET",
+      "tool": "hbots_bot_routines",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/routines",
+      "method": "POST",
+      "tool": "hbots_bot_routine_save",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/routines/enabled",
+      "method": "POST",
+      "tool": "hbots_bot_routine_enabled",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/routines/delete",
+      "method": "POST",
+      "tool": "hbots_bot_routine_delete",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/routines/run",
+      "method": "POST",
+      "tool": "hbots_bot_routine_run",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/lineage",
+      "method": "GET",
+      "tool": "hbots_lineage_get",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/code",
+      "method": "GET",
+      "tool": "hbots_code_get",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/memory",
+      "method": "GET",
+      "tool": "hbots_memory_get",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/memory",
+      "method": "PUT",
+      "tool": "hbots_memory_put",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/environment",
+      "method": "GET",
+      "tool": "hbots_environment_get",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/environment",
+      "method": "PUT",
+      "tool": "hbots_environment_put",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/computer",
+      "method": "GET",
+      "tool": "hbots_computer_get",
+      "permission": "computer",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/computer/open",
+      "method": "POST",
+      "tool": "hbots_computer_open",
+      "permission": "computer",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/computer/close",
+      "method": "POST",
+      "tool": "hbots_computer_close",
+      "permission": "computer",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/computer/control",
+      "method": "POST",
+      "tool": "hbots_computer_control",
+      "permission": "computer",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/bots/{slug}/computer/input",
+      "method": "POST",
+      "tool": "hbots_computer_input",
+      "permission": "computer",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/main-bot",
+      "method": "PUT",
+      "tool": "hbots_main_bot",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/vault",
+      "method": "GET",
+      "tool": "hbots_vault_list",
+      "permission": "secrets",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/vault",
+      "method": "POST",
+      "tool": "hbots_vault_create",
+      "permission": "secrets",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/vault/{id}",
+      "method": "GET",
+      "tool": "hbots_vault_get",
+      "permission": "secrets",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/vault/{id}",
+      "method": "PUT",
+      "tool": "hbots_vault_update",
+      "permission": "secrets",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/vault/{id}",
+      "method": "DELETE",
+      "tool": "hbots_vault_delete",
+      "permission": "secrets",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/vault/import",
+      "method": "POST",
+      "tool": "hbots_import",
+      "permission": "secrets",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/vault/import-csv",
+      "method": "POST",
+      "tool": "hbots_import_csv",
+      "permission": "secrets",
+      "classification": "adapted-binary"
+    },
+    {
+      "path": "/api/vault/export.csv",
+      "method": "GET",
+      "tool": "hbots_export",
+      "permission": "secrets",
+      "classification": "adapted-binary"
+    },
+    {
+      "path": "/api/access",
+      "method": "GET",
+      "tool": "hbots_access_status",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/access/password",
+      "method": "PUT",
+      "tool": "hbots_access_password",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/access/network",
+      "method": "PUT",
+      "tool": "hbots_access_network",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/access/network/restart",
+      "method": "POST",
+      "tool": "hbots_access_network_restart",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/storage",
+      "method": "GET",
+      "tool": "hbots_get_storage",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/storage",
+      "method": "PUT",
+      "tool": "hbots_put_storage",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/storage/test",
+      "method": "POST",
+      "tool": "hbots_test_storage",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/storage/copy",
+      "method": "POST",
+      "tool": "hbots_copy_storage",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/storage/restart",
+      "method": "POST",
+      "tool": "hbots_restart_storage",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/storage/key",
+      "method": "PUT",
+      "tool": "hbots_put_storage_key",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/storage/key",
+      "method": "DELETE",
+      "tool": "hbots_delete_storage_key",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/storage/anytype/pair",
+      "method": "POST",
+      "tool": "hbots_pair_start",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/storage/anytype/pair/confirm",
+      "method": "POST",
+      "tool": "hbots_pair_confirm",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/storage/anytype/check",
+      "method": "POST",
+      "tool": "hbots_anytype_check",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/storage/anytype/setup",
+      "method": "POST",
+      "tool": "hbots_anytype_setup",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/access/tailscale",
+      "method": "POST",
+      "tool": "hbots_access_tailscale",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/access/tunnel",
+      "method": "POST",
+      "tool": "hbots_access_tunnel",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/thread-previews",
+      "method": "POST",
+      "tool": "hbots_thread_previews",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/rooms",
+      "method": "GET",
+      "tool": "hbots_rooms_list",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/rooms",
+      "method": "POST",
+      "tool": "hbots_rooms_create",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/rooms/{id}",
+      "method": "GET",
+      "tool": "hbots_room_get",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/rooms/{id}",
+      "method": "PUT",
+      "tool": "hbots_room_update",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/rooms/{id}",
+      "method": "DELETE",
+      "tool": "hbots_room_delete",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/rooms/{id}/messages",
+      "method": "POST",
+      "tool": "hbots_room_send",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/rooms/{id}/seen",
+      "method": "POST",
+      "tool": "hbots_room_seen",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/threads/{thread}/meta",
+      "method": "GET",
+      "tool": "hbots_thread_meta_get",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/threads/{thread}/reactions",
+      "method": "POST",
+      "tool": "hbots_thread_reaction",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/threads/{thread}/pins",
+      "method": "POST",
+      "tool": "hbots_thread_pin",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/threads/{thread}/reply",
+      "method": "POST",
+      "tool": "hbots_thread_reply",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/threads/{thread}/read",
+      "method": "POST",
+      "tool": "hbots_thread_read",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/threads/{thread}/voice",
+      "method": "POST",
+      "tool": "hbots_thread_voice",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/routines",
+      "method": "GET",
+      "tool": "hbots_routines_list",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/routines",
+      "method": "PUT",
+      "tool": "hbots_routines_upsert",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/routines/enabled",
+      "method": "POST",
+      "tool": "hbots_routines_enabled",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/routines/delete",
+      "method": "POST",
+      "tool": "hbots_routines_delete",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/routines/run",
+      "method": "POST",
+      "tool": "hbots_routines_run",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/icons/{host}",
+      "method": "GET",
+      "tool": "hbots_get_icon",
+      "permission": "read",
+      "classification": "adapted-binary"
+    },
+    {
+      "path": "/api/usage",
+      "method": "GET",
+      "tool": "hbots_get_usage",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/usage/report",
+      "method": "GET",
+      "tool": "hbots_usage_report",
+      "permission": "read",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/system",
+      "method": "GET",
+      "tool": "hbots_system_status",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/system/auto-update",
+      "method": "PUT",
+      "tool": "hbots_set_auto_update",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/system/update-notice",
+      "method": "DELETE",
+      "tool": "hbots_dismiss_notice",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/system/update",
+      "method": "POST",
+      "tool": "hbots_start_update",
+      "permission": "admin",
+      "classification": "generated"
+    },
+    {
+      "path": "/api/management-mcp/credentials",
+      "method": "GET",
+      "classification": "infrastructure",
+      "reason": "First-party credential control plane"
+    },
+    {
+      "path": "/api/management-mcp/credentials",
+      "method": "POST",
+      "classification": "infrastructure",
+      "reason": "First-party credential control plane"
+    },
+    {
+      "path": "/api/management-mcp/credentials/{id}",
+      "method": "DELETE",
+      "classification": "infrastructure",
+      "reason": "First-party credential control plane"
+    },
+    {
+      "path": "/t3/{*rest}",
+      "method": "ANY",
+      "classification": "infrastructure",
+      "reason": "Harness proxy is not an unrestricted management tool"
+    },
+    {
+      "path": "/api/health",
+      "method": "GET",
+      "classification": "infrastructure",
+      "reason": "Health probe"
+    },
+    {
+      "path": "/api/session",
+      "method": "GET",
+      "classification": "infrastructure",
+      "reason": "Application authentication"
+    },
+    {
+      "path": "/api/login",
+      "method": "POST",
+      "classification": "infrastructure",
+      "reason": "Application authentication"
+    },
+    {
+      "path": "/api/logout",
+      "method": "POST",
+      "classification": "infrastructure",
+      "reason": "Application authentication"
+    },
+    {
+      "path": "/api/logout",
+      "method": "GET",
+      "classification": "infrastructure",
+      "reason": "Application authentication"
+    },
+    {
+      "path": "/mcp/bot",
+      "method": "ANY",
+      "classification": "infrastructure",
+      "reason": "Internal Bot tool transport"
+    },
+    {
+      "path": "/mcp",
+      "method": "ANY",
+      "classification": "infrastructure",
+      "reason": "Management MCP transport"
+    },
+    {
+      "path": "/api/{*rest}",
+      "method": "ANY",
+      "classification": "infrastructure",
+      "reason": "Unknown API route fallback"
+    },
+    {
+      "path": "*",
+      "method": "ANY",
+      "classification": "infrastructure",
+      "reason": "Static application and landing-page fallback"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+use McpSettings from "./mcp.contract"
 use Glyph from "../glyph.contract"
 use SectionLabel, IconTile, Field from "../ui/controls.contract"
 use Session, Network, Storage, AnytypeCheck, networkModeLabel from "../ui/root-types.contract"
@@ -215,3 +216,4 @@ component AccessSettings
               text t("settings.storage.restartNow")
       if storageRestartError != "" and not storageRestartedPending
         text storageRestartError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-restart-error"
+    McpSettings()

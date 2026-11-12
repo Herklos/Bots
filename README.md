@@ -93,6 +93,10 @@ Configuration comes from the environment or `~/.hbots/.env`. Common settings inc
 
 `HBOTS_NETWORK_ACCESS` is `local`, `lan`, or `tailscale`. When it is set, it overrides Settings → Access → Network and the control is locked. `local` listens on this device. `lan` listens on every IPv4 interface over HTTP and requires a password. `tailscale` uses the existing Tailscale Serve HTTPS route and also requires a password. `HOST=127.0.0.1`, which `hbots up` writes, does not lock the control. Any other `HOST` is a legacy bind address and does. A saved choice is used the next time the gateway starts.
 
+## Management MCP
+
+Enable the local management MCP in Settings → Access to manage Bots, groups and gateway operations from an MCP client. It is disabled by default and uses separate revocable access tokens. See the [connection guide and generated tool reference](docs/management-mcp.md).
+
 ## Development and status
 
 See [DEV.md](DEV.md) for prerequisites, the watch loop, LAN access, tests and troubleshooting. The [native builds guide](docs/native.md) describes the current macOS, iOS and Linux client status; native phone builds and distribution are not yet release artifacts.

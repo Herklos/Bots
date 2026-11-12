@@ -1,0 +1,120 @@
+use Glyph from "../glyph.contract"
+use SectionLabel, ToggleControl from "../ui/controls.contract"
+use GroupCard, SettingsFoot, FieldLabel, FieldBox, ActionMain, ActionQuiet from "../ui/sidebar.contract"
+
+shape McpCredential
+  id: string
+  label: string
+  permissions: string
+shape McpStatus
+  loaded: bool
+  enabled: bool
+  endpoint: string
+  credentials: McpCredential[]
+shape McpResult
+  ok: bool
+  error: string
+  token: string
+
+component McpSettings
+  inject
+    mcpStatus: McpStatus
+    mcpToken: string
+    mcpError: string
+    mcpPending: bool
+    toggleMcp: action
+    createMcp: action
+    revokeMcp: action
+    hideMcpToken: action
+    copyMcpToken: action
+  state creating = false
+  state credentialLabel = ""
+  state credentialScope = "read"
+  state copied = false
+  action editCredentialLabel(value: string)
+    credentialLabel = value
+  action selectScope(value: string)
+    credentialScope = value
+  action start
+    hideMcpToken()
+    credentialLabel = ""
+    credentialScope = "read"
+    copied = false
+    creating = true
+  action cancel
+    creating = false
+  action create
+    copied = false
+    createMcp(credentialLabel.trim(), credentialScope)
+  action copy
+    copyMcpToken()
+    copied = true
+  action done
+    hideMcpToken()
+    creating = false
+  view
+    column gap="space.sm" testId="mcp-section"
+      text t("mcp.title") class=SectionLabel
+      column class=GroupCard padding="space.md" gap="space.md"
+        row align-items="center" min-height=44 gap="space.md"
+          column flex=1 min-width=0 gap="space.xs"
+            text t("mcp.enable") font="-exact-subheadline" font-weight=600
+            text t("mcp.localOnly") color="ink.muted" font="-exact-footnote"
+          button class=ToggleControl appearance="none" role="switch" aria-checked=mcpStatus.enabled aria-label=t("mcp.enable") press=toggleMcp disabled=(mcpPending or not mcpStatus.loaded) testId="mcp-enabled"
+            row width=44 height=26 border-radius="radius.full" background-color=(mcpStatus.enabled ? "AccentColor" : "surface.line") align-items="center" justify-content=(mcpStatus.enabled ? "flex-end" : "flex-start")
+              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+        text t("mcp.description") class=SettingsFoot
+        if mcpStatus.enabled
+          column gap="space.xs"
+            text t("mcp.endpoint") class=FieldLabel
+            text mcpStatus.endpoint user-select="text" overflow-wrap="anywhere" font="-exact-footnote" testId="mcp-endpoint"
+      if mcpStatus.enabled
+        if mcpToken != ""
+          column class=GroupCard padding="space.lg" gap="space.md" testId="mcp-token-result" role="status"
+            row gap="space.sm" align-items="center"
+              column color="AccentColor"
+                Glyph(name="check", size=20)
+              text t("mcp.tokenReady") font="-exact-headline"
+            text t("mcp.oneTime") class=SettingsFoot
+            text mcpToken user-select="text" overflow-wrap="anywhere" padding="space.md" border-radius="radius.sm" background-color="surface.canvas" testId="mcp-token"
+            row gap="space.sm" flex-wrap="wrap"
+              button class=ActionMain appearance="none" press=copy min-height=44 padding="0 space.lg" testId="mcp-copy-token"
+                text (copied ? t("mcp.copied") : t("mcp.copyToken"))
+              button class=ActionQuiet appearance="none" press=done min-height=44 padding="0 space.lg" testId="mcp-token-done"
+                text t("mcp.done")
+        else if creating
+          column class=GroupCard padding="space.lg" gap="space.md" testId="mcp-token-form"
+            text t("mcp.newToken") font="-exact-headline"
+            column gap="space.xs"
+              text t("mcp.tokenLabel") class=FieldLabel
+              input appearance="none" class=FieldBox value=credentialLabel input=editCredentialLabel maxlength=120 placeholder=t("mcp.tokenPlaceholder") aria-label=t("mcp.tokenLabel") disabled=mcpPending testId="mcp-token-label"
+            text t("mcp.permissions") class=FieldLabel
+            column gap="space.xs" role="radiogroup" aria-label=t("mcp.permissions")
+              for scope in ["read", "write", "secrets", "computer", "admin"] key=scope
+                button appearance="none" press=selectScope(scope) role="radio" aria-checked=(credentialScope == scope) disabled=mcpPending min-height=60 padding="space.md" border-radius="radius.sm" border=(credentialScope == scope ? "2px solid AccentColor" : "2px solid transparent") background-color=(credentialScope == scope ? "surface.soft" : "surface.canvas") text-align="start" testId=`mcp-scope-${scope}`
+                  row align-items="center" gap="space.md"
+                    column flex=1 min-width=0 gap="space.xs"
+                      text (scope == "read" ? t("mcp.scopeRead") : scope == "write" ? t("mcp.scopeWrite") : scope == "secrets" ? t("mcp.scopeSecrets") : scope == "computer" ? t("mcp.scopeComputer") : t("mcp.scopeAdmin")) font="-exact-subheadline" font-weight=600
+                      text (scope == "read" ? t("mcp.scopeReadNote") : scope == "write" ? t("mcp.scopeWriteNote") : scope == "secrets" ? t("mcp.scopeSecretsNote") : scope == "computer" ? t("mcp.scopeComputerNote") : t("mcp.scopeAdminNote")) color="ink.muted" font="-exact-footnote"
+                    if credentialScope == scope
+                      column color="AccentColor"
+                        Glyph(name="check", size=18)
+            row gap="space.sm" flex-wrap="wrap"
+              button class=ActionMain appearance="none" press=create disabled=(mcpPending or credentialLabel.trim() == "") min-height=44 padding="0 space.lg" testId="mcp-create-token"
+                text (mcpPending ? t("mcp.creating") : t("mcp.createToken"))
+              button class=ActionQuiet appearance="none" press=cancel disabled=mcpPending min-height=44 padding="0 space.lg" testId="mcp-cancel-token"
+                text t("common.cancel")
+        else
+          button class=ActionQuiet appearance="none" press=start min-height=44 padding="0 space.md" align-self="flex-start" testId="mcp-new-token"
+            text t("mcp.newToken")
+      if mcpStatus.credentials.length > 0
+        column class=GroupCard padding="0" testId="mcp-credentials"
+          for credential in mcpStatus.credentials key=credential.id
+            row gap="space.md" align-items="center" padding="space.md" min-height=60
+              column flex=1 min-width=0 gap="space.xs"
+                text credential.label font="-exact-subheadline" font-weight=600 overflow-wrap="anywhere"
+                text credential.permissions color="ink.muted" font="-exact-footnote" testId=`mcp-permissions-${credential.id}`
+              button class=ActionQuiet appearance="none" press=revokeMcp(credential.id) disabled=mcpPending min-height=44 padding="0 space.sm" testId=`mcp-revoke-${credential.id}`
+                text t("mcp.revoke")
+      if mcpError != ""
+        text mcpError color="-exact-system-red" font="-exact-footnote" role="alert" testId="mcp-error"

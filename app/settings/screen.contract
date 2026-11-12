@@ -16,6 +16,11 @@ component SettingsScreen
   props
     route: number
   inject
+    copyMcpToken: action
+    hideMcpToken: action
+    toggleMcp: action
+    createMcp: action
+    revokeMcp: action
     settingsBag: SettingsBag
     doAllowNotices: action
     doAnytypeCheck: action
@@ -52,6 +57,15 @@ component SettingsScreen
     saveNoticePart: action
     saveNotifications: action
   provide
+    mcpStatus = settingsBag.mcpStatus
+    mcpToken = settingsBag.mcpToken
+    mcpError = settingsBag.mcpError
+    mcpPending = settingsBag.mcpPending
+    copyMcpToken
+    hideMcpToken
+    toggleMcp
+    createMcp
+    revokeMcp
     about = settingsBag.about
     anytypeChecked = settingsBag.anytypeChecked
     anytypeCheckedPending = settingsBag.anytypeCheckedPending

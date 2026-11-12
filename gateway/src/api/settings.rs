@@ -15,6 +15,19 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
     if !patch.is_object() {
         return Err(ApiError::bad_request("settings must be an object"));
     }
+    if let Some(mcp) = patch.get("managementMcp") {
+        let object = mcp
+            .as_object()
+            .ok_or_else(|| ApiError::bad_request("managementMcp must be an object"))?;
+        if object
+            .iter()
+            .any(|(k, v)| k != "enabled" || !v.is_boolean())
+        {
+            return Err(ApiError::bad_request(
+                "managementMcp.enabled must be true or false",
+            ));
+        }
+    }
     let current = s.settings().await;
     let mut patch = patch;
     // The default model is checked like a Bot's, and stored as T3 stores a selection.
@@ -40,6 +53,9 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
         settings_sections::require_sections(sections)?;
     }
     let mut next = storage::merge(&current, &patch);
+    if let Some(mcp) = patch.get("managementMcp") {
+        next["managementMcp"] = storage::merge(&current["managementMcp"], mcp);
+    }
     if let Some(beta) = patch.get("beta") {
         let beta = beta
             .as_object()

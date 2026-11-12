@@ -13,6 +13,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
+mod routines;
 
 /// One `set_model` the mock actually accepted.
 #[derive(Clone, Debug)]
@@ -46,6 +47,9 @@ pub(crate) struct MockHarness {
     provider_config: Mutex<Option<Value>>,
     provider_config_reads: AtomicUsize,
     forks: Mutex<ForkBook>,
+    scheduled: Mutex<std::collections::BTreeMap<String, Value>>,
+    messages: Mutex<Vec<UserMessage>>,
+    approvals: Mutex<Vec<Approval>>,
 }
 
 #[derive(Debug)]
@@ -58,6 +62,9 @@ struct RepoAnswer {
 impl MockHarness {
     pub(crate) fn new() -> Self {
         Self {
+            scheduled: Mutex::default(),
+            messages: Mutex::default(),
+            approvals: Mutex::default(),
             tabs: Vec::new(),
             busy: Vec::new(),
             typed: Mutex::new(HashMap::new()),
@@ -83,6 +90,12 @@ impl MockHarness {
         }
     }
 
+    pub(crate) fn messages(&self) -> Vec<UserMessage> {
+        self.messages.lock().unwrap().clone()
+    }
+    pub(crate) fn approvals(&self) -> Vec<Approval> {
+        self.approvals.lock().unwrap().clone()
+    }
     pub(crate) fn set_is_repo(&self, is_repo: bool) {
         self.repo_answer().is_repo = is_repo;
     }
@@ -180,6 +193,7 @@ impl Turns for MockHarness {
         }
         book.sends
             .push((message.thread_id.clone(), message.text.clone()));
+        self.messages.lock().unwrap().push(message.clone());
         Ok(())
     }
 
@@ -208,40 +222,9 @@ impl Previews for MockHarness {
 }
 
 #[async_trait]
-impl Routines for MockHarness {
-    async fn list(&self) -> Result<Value, HarnessError> {
-        Ok(json!({ "tasks": [] }))
-    }
-
-    async fn upsert(&self, task: &Value) -> Result<Value, HarnessError> {
-        Ok(json!({ "task": task }))
-    }
-
-    async fn set_enabled(&self, body: &Value) -> Result<Value, HarnessError> {
-        Ok(json!({ "task": body }))
-    }
-
-    async fn delete(&self, body: &Value) -> Result<Value, HarnessError> {
-        Ok(body.clone())
-    }
-
-    async fn run_now(&self, body: &Value) -> Result<Value, HarnessError> {
-        Ok(body.clone())
-    }
-
-    async fn watch(&self) -> Result<crate::harness::RoutineFeed, HarnessError> {
-        let (tx, rx) = tokio::sync::mpsc::channel(1);
-        tokio::spawn(async move {
-            let _ = tx.send(Ok(json!({ "tasks": [] }))).await;
-            std::future::pending::<()>().await;
-        });
-        Ok(rx)
-    }
-}
-
-#[async_trait]
 impl Approvals for MockHarness {
-    async fn answer(&self, _approval: &Approval) -> Result<Value, HarnessError> {
+    async fn answer(&self, approval: &Approval) -> Result<Value, HarnessError> {
+        self.approvals.lock().unwrap().push(approval.clone());
         Ok(json!({ "ok": true }))
     }
 }

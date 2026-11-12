@@ -2,15 +2,7 @@ use super::*;
 
 // ---------- routes ----------
 
-pub(crate) fn routes() -> Router<Arc<AppState>> {
-    Router::new()
-        .route("/api/system", get(system_status))
-        .route("/api/system/auto-update", put(set_auto_update))
-        .route("/api/system/update-notice", delete(dismiss_notice))
-        .route("/api/system/update", post(start_update))
-}
-
-pub(super) async fn system_status(
+pub(crate) async fn system_status(
     State(s): State<Arc<AppState>>,
     Query(q): Query<HashMap<String, String>>,
 ) -> ApiResult<Json<Value>> {
@@ -36,7 +28,7 @@ pub(super) async fn system_status(
     Ok(Json(out))
 }
 
-pub(super) async fn set_auto_update(State(s): State<Arc<AppState>>, body: Bytes) -> Response {
+pub(crate) async fn set_auto_update(State(s): State<Arc<AppState>>, body: Bytes) -> Response {
     let auto = serde_json::from_slice::<Value>(&body)
         .ok()
         .and_then(|v| v["auto"].as_bool());
@@ -57,11 +49,11 @@ pub(super) async fn set_auto_update(State(s): State<Arc<AppState>>, body: Bytes)
 }
 
 #[derive(Deserialize)]
-pub(super) struct NoticeAt {
+pub(crate) struct NoticeAt {
     pub(super) at: Option<String>,
 }
 
-pub(super) async fn dismiss_notice(
+pub(crate) async fn dismiss_notice(
     State(s): State<Arc<AppState>>,
     Query(q): Query<NoticeAt>,
 ) -> Json<Value> {
@@ -78,7 +70,7 @@ pub(super) async fn dismiss_notice(
     Json(s.system.auto_status().await)
 }
 
-pub(super) async fn start_update(State(s): State<Arc<AppState>>) -> ApiResult<Response> {
+pub(crate) async fn start_update(State(s): State<Arc<AppState>>) -> ApiResult<Response> {
     let exe = std::env::current_exe().unwrap_or_default();
     if !installed_runtime(&exe, &s.cfg.data_root) {
         return Err(crate::platform::error::ApiError::new(
