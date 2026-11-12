@@ -17,6 +17,7 @@ use tokio::io::AsyncReadExt;
 
 mod edit;
 mod read;
+mod reflect;
 mod suggest;
 
 #[cfg(test)]
@@ -27,12 +28,14 @@ pub(crate) const FILE_CAP: usize = 16 * 1024;
 
 const PARENT_MISSING: &str = "This subagent's parent folder is missing.";
 
-const NAMES: [&str; 6] = [
+const NAMES: [&str; 8] = [
     "memory_read",
     "memory_edit",
     "memory_forget",
     "memory_search",
     "memory_suggest",
+    "memory_reflect",
+    "memory_reflect_apply",
     "skills_read",
 ];
 
@@ -98,6 +101,7 @@ pub(crate) fn tool_defs() -> Vec<Value> {
     .into_iter()
     .chain(edit::defs(&thread))
     .chain(suggest::defs(&thread))
+    .chain(reflect::defs(&thread))
     .collect()
 }
 
@@ -108,7 +112,7 @@ pub(crate) fn is_memory_tool(name: &str) -> bool {
 /// Entry point from `mcp.rs`.
 pub(crate) async fn call(state: &AppState, name: &str, args: &Value) -> Result<Value, String> {
     let roster = state.bots.list().await.map_err(|e| e.message)?;
-    let items = if edit::needs_evidence(name) {
+    let items = if edit::needs_evidence(name) || reflect::needs_projection(name) {
         load_items(state, args).await?
     } else {
         Vec::new()
@@ -125,7 +129,7 @@ pub(crate) async fn call(state: &AppState, name: &str, args: &Value) -> Result<V
         name,
         args,
     )
-    .await?;
+    .await;
     let slugs = refreshed
         .lock()
         .unwrap_or_else(|err| err.into_inner())
@@ -135,7 +139,7 @@ pub(crate) async fn call(state: &AppState, name: &str, args: &Value) -> Result<V
             tracing::warn!(slug, "memory saved; agents refresh failed: {}", err.message);
         }
     }
-    Ok(result)
+    result
 }
 
 async fn load_items(state: &AppState, args: &Value) -> Result<Vec<Value>, String> {
@@ -161,6 +165,8 @@ pub(crate) async fn dispatch(d: &Deps<'_>, name: &str, args: &Value) -> Result<V
         "memory_forget" => edit::forget(d, args).await,
         "memory_search" => edit::search(d, args).await,
         "memory_suggest" => suggest::suggest(d, args).await,
+        "memory_reflect" => reflect::reflect(d, args).await,
+        "memory_reflect_apply" => reflect::apply(d, args).await,
         "skills_read" => read_skills(d, args).await,
         _ => Err(format!("Unknown tool {name}")),
     }

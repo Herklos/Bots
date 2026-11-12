@@ -159,6 +159,15 @@ pub(crate) async fn mutate(
     apply(store, &input, &paths).await
 }
 
+/// Like [`mutate`], for a caller that already holds this store's lock.
+pub(super) async fn mutate_locked(
+    store: &MemoryStore,
+    input: Mutation<'_>,
+) -> Result<MutateOk, MutateFail> {
+    let paths = paths_for(input.slug, input.scope);
+    apply(store, &input, &paths).await
+}
+
 async fn apply(
     store: &MemoryStore,
     input: &Mutation<'_>,
