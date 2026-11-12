@@ -597,7 +597,7 @@ pub fn outputs() -> Vec<Output> {
             text: ts_region(),
         },
         Output {
-            path: "app/app.contract",
+            path: "app/ui/shared.contract",
             region: Some("colours"),
             text: contract_region(),
         },

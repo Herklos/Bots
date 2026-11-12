@@ -1,8 +1,8 @@
 import type { Answer, Result, Sources, Storage } from './app.contract.d.ts';
 import { when, isGroupLeak, lineOf, stackFaces, initials } from './host/time.ts';
-import { REACH_GATEWAY, noteLocale, say, localize, call, read, fresh, botsBody, roomsBody, noticeHost, hostNotice, reply, sentFrom, systemChecked, madeFromBot } from './host/gateway.ts';
+import { REACH_GATEWAY, noteLocale, say, localize, call, read, fresh, botsBody, roomsBody, noticeHost, setNoticeHost, hostNotice, reply, sentFrom, systemChecked, setSystemChecked, madeFromBot } from './host/gateway.ts';
 import { NOT_IN_VIEW, roomMessage } from './host/markdown.ts';
-import { blankChat, PinRow, fixtureMade, fixtureMemberEdits, fixtureMemberRow, fixtureCrowdBots, fixtureSent, fixtureRoomSent, fixtureBotNotify, fixtureRoomNotify, fixtureRoomPolicy, fixtureGroupAnswer, roomAnswer, wantsNotice, FIXTURE_SUGGESTIONS, fixtureModelList, rememberFixtureModel, savedEffort, fixturePins, quietChatView, fixtureChat, explain } from './host/fixture.ts';
+import { blankChat, PinRow, fixtureMade, setFixtureMade, fixtureMemberEdits, fixtureMemberRow, fixtureCrowdBots, fixtureSent, fixtureRoomSent, fixtureBotNotify, fixtureRoomNotify, fixtureRoomPolicy, fixtureGroupAnswer, setFixtureGroupAnswer, roomAnswer, wantsNotice, FIXTURE_SUGGESTIONS, fixtureModelList, rememberFixtureModel, savedEffort, fixturePins, quietChatView, fixtureChat, explain } from './host/fixture.ts';
 import { prettyModel, nextLabel, emptyReport, usageReport } from './host/report.ts';
 import { frames, threads, chatKept, roomKept, forgetChat, forgetMeta, lastMessageId, threadMeta, blank, chatRows, storeUpload, draftMap, draftRows } from './host/session.ts';
 import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, shutNotice, postUnread } from './host/notices.ts';
@@ -162,7 +162,7 @@ const sources: Sources = {
   },
   loadNotice: async (): Promise<Result<'loadNotice'>> => {
     // Permission can change from Settings. Ask the host, then remember it for the poster.
-    noticeHost = null;
+    setNoticeHost(null);
     try {
       const status = await hostNotice();
       if (!status) return { available: false, state: 'unknown' };
@@ -184,10 +184,10 @@ const sources: Sources = {
     const policy = groupAnswerPolicy === 'everyone' || groupAnswerPolicy === 'chief' ? groupAnswerPolicy : 'last';
     const r = await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ groupAnswerPolicy: policy }) });
     if (!r.ok && r.error === REACH_GATEWAY) {
-      fixtureGroupAnswer = policy;
+      setFixtureGroupAnswer(policy);
       return { ok: true, error: '' };
     }
-    if (r.ok) fixtureGroupAnswer = '';
+    if (r.ok) setFixtureGroupAnswer('');
     return reply(r);
   },
   setTheme: async ([theme], store) => reply(await call(store, '/api/settings', { method: 'PUT', body: JSON.stringify({ theme }) })),
@@ -355,7 +355,7 @@ const sources: Sources = {
       if (policy !== 'last' && policy !== 'everyone' && policy !== 'chief' && policy !== 'default') {
         return { ok: false, id: '', error: 'Create was missing the answer policy.' };
       }
-      fixtureMade = { title, description, color, shape, slugs, answerPolicy: policy };
+      setFixtureMade({ title, description, color, shape, slugs, answerPolicy: policy });
       return { ok: true, id: 'fixture', error: '' };
     }
     const r = await call(store, '/api/rooms', {
@@ -420,11 +420,11 @@ const sources: Sources = {
   loadSystem: async ([gate], store): Promise<Result<'loadSystem'>> => {
     const blank: Result<'loadSystem'> = { ok: false, installed: false, service: false, version: '', latest: '', updateAvailable: false, error: '' };
     if (gate !== '1') {
-      systemChecked = false;
+      setSystemChecked(false);
       return blank;
     }
     const path = systemChecked ? '/api/system' : '/api/system?check=1';
-    systemChecked = true;
+    setSystemChecked(true);
     const r = await call(store, path);
     if (!r.ok) return blank;
     const latest = r.body.latest;

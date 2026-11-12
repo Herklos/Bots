@@ -11,33 +11,8 @@ use InboxRow from "./inbox/inbox.contract"
 use Faces, GroupPanel from "./group/group.contract"
 use FirstBot, BotPanel from "./bot/bot.contract"
 use LoginSheet, ModelPicker, UsageView from "./settings/settings.contract"
+use Screen, PageTitle, HeroTitle, PageHeader, TextControl, IconControl, ToggleControl, SwatchControl, ConversationLink, SectionLabel, IconTile, Field, PrimaryButton, Bot, Row, Chat, RoomMember, RoomMessage, Room, MentionHit, FaceBit, Convo, Login, Provider, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer, pickerColours, shapeOf, colorOf, faceColor, showUnread, memberFaces, PanelRow, ChoiceRow from "./ui/shared.contract"
 
-// Shared screen rhythm. Colours are generated from design/tokens.json.
-style Screen
-  background-color="surface.canvas"
-  color="-exact-label"
-
-style PageTitle
-  font="-exact-headline"
-  font-weight=600
-  letter-spacing="-0.2px"
-
-style HeroTitle
-  font="-exact-large-title"
-  font-weight=700
-  letter-spacing="-0.8px"
-
-style PageHeader
-  display="flex"
-  align-items="center"
-  gap="space.sm"
-  padding="space.md space.xl"
-  min-height=72
-  box-sizing="border-box"
-  background-color="surface.canvas"
-  border-bottom="1px solid surface.line"
-
-// The sidebar's top bar: search and New Bot as two quiet circles.
 style SidebarBar
   display="flex"
   align-items="center"
@@ -72,79 +47,6 @@ style TileLink
     background-color="surface.raised"
   :focus-visible
     box-shadow="0 0 0 2px AccentColor"
-
-// A file on a message: a type tile, its name and size, and a download glyph.
-style FileCard
-  display="flex"
-  min-width=240
-  padding="space.sm space.md"
-  border-radius="radius.lg"
-  background-color="surface.card"
-  border="1px solid surface.line"
-  color="-exact-label"
-  text-decoration="none"
-  :hover
-    background-color="surface.raised"
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-
-// An answer button on a request card.
-style ChoiceButton
-  min-height=32
-  padding="2px space.md"
-  border="1px solid surface.line"
-  border-radius="radius.full"
-  font="-exact-subheadline"
-  font-weight=500
-  :active
-    opacity=0.7
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-
-style QuietButton
-  min-width=44
-  min-height=44
-
-style TextControl
-  box-sizing="border-box"
-  min-height=44
-  padding="space.sm space.md"
-  border="none"
-  border-radius="radius.sm"
-  color="ink.muted"
-  background-color="transparent"
-  font="-exact-subheadline"
-  font-weight=500
-  :hover
-    background-color="surface.soft"
-  :active
-    opacity=0.7
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-
-style IconControl
-  display="flex"
-  align-items="center"
-  justify-content="center"
-  width=44
-  height=44
-  padding=0
-  border="none"
-  border-radius="radius.md"
-  color="ink.muted"
-  background-color="transparent"
-  :disabled
-    opacity=0.4
-    color="ink.muted"
-  :hover
-    background-color="surface.soft"
-  :active
-    opacity=0.7
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-
-// The composer's send: a Tide circle with Night ink, the brand's filled look.
-// The chat header's Bot name: one button that toggles the right panel.
 style HeaderToggle
   display="flex"
   align-items="center"
@@ -194,57 +96,6 @@ style StopControl
     opacity=0.7
   :focus-visible
     box-shadow="0 0 0 2px AccentColor"
-
-style ToggleControl
-  display="flex"
-  align-items="center"
-  justify-content="center"
-  width=44
-  height=32
-  padding=0
-  border="none"
-  border-radius="radius.sm"
-  background-color="transparent"
-  :checked
-    background-color="transparent"
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-  :disabled
-    opacity=0.4
-
-style SwatchControl
-  display="flex"
-  align-items="center"
-  justify-content="center"
-  width=44
-  height=44
-  box-sizing="border-box"
-  padding=0
-  border="none"
-  border-radius="radius.full"
-  background-color="transparent"
-  :checked
-    background-color="transparent"
-  :hover
-    background-color="surface.soft"
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-
-style ConversationLink
-  display="flex"
-  align-items="center"
-  width="100%"
-  box-sizing="border-box"
-  color="-exact-label"
-  text-decoration="none"
-  padding="space.md"
-  border-radius="radius.md"
-  :hover
-    background-color="surface.raised"
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-
-// A search field: a pill with a magnifier beside it.
 style SearchField
   box-sizing="border-box"
   min-height=36
@@ -253,14 +104,6 @@ style SearchField
   border-radius="radius.full"
   background-color="surface.card"
   color="-exact-label"
-
-// A section label above a grouped card, like the panel labels in Threebot.
-style SectionLabel
-  font="-exact-footnote"
-  font-weight=600
-  color="ink.muted"
-  padding="space.md space.md space.xs"
-
 style GroupCard
   background-color="surface.card"
   border="1px solid surface.line"
@@ -319,62 +162,6 @@ style SettingsFoot
   color="ink.muted"
   font="-exact-footnote"
   padding="space.xs space.md 0"
-
-// A small status chip: a dot and a word.
-style Chip
-  display="flex"
-  align-items="center"
-  gap="space.xs"
-  padding="4px space.sm"
-  border-radius="radius.full"
-  background-color="surface.soft"
-  font="-exact-footnote"
-  font-weight=500
-
-// A rounded tile behind a row's glyph.
-style IconTile
-  display="flex"
-  align-items="center"
-  justify-content="center"
-  width=36
-  height=36
-  border-radius="radius.sm"
-  background-color="surface.soft"
-
-// Segmented choices (the theme picker): one pill, filled when chosen. The
-// chosen fill is a node attribute, so the class keeps only literal states.
-style Segment
-  border="none"
-  min-height=30
-  padding="2px space.md"
-  font="-exact-footnote"
-  border-radius="radius.full"
-  background-color="transparent"
-  color="-exact-label"
-  font-weight=500
-  :hover
-    background-color="surface.soft"
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-
-// Chat bubbles. Mine is the brand fill (Tide with Night ink, 8.2:1); the
-// Bot's is a card. Fill, ink and the tail corner are node attributes.
-style Bubble
-  padding="space.sm space.lg"
-  line-height=1.55
-  white-space="pre-wrap"
-  overflow-wrap="break-word"
-
-// An applied reaction, overlapping the bubble's bottom corner.
-style ReactionChip
-  background-color="surface.raised"
-  border="1px solid surface.line"
-  border-radius="radius.full"
-  font="-exact-footnote"
-  padding="1px space.xs"
-  min-height=22
-  line-height=1.2
-
 style FileChip
   padding="space.xs space.sm"
   border-radius="radius.full"
@@ -386,36 +173,6 @@ style BotRow
   gap="space.md"
   align-items="center"
   min-height=52
-
-style Field
-  box-sizing="border-box"
-  min-height=44
-  border="none"
-  background-color="transparent"
-  padding="space.xs 0"
-  color="-exact-label"
-
-style FormList
-  background-color="surface.canvas"
-  width="100%"
-  max-width="44rem"
-  align-self="center"
-  box-sizing="border-box"
-
-style PrimaryButton
-  min-height=44
-
-routes nav
-  inbox "/"
-    chat "/bot/:slug"
-    group "/group/:id"
-    create "/new"
-    newGroup "/new-group"
-    settings "/settings"
-      vault "/vault"
-        vaultAdd "/vault/new"
-        vaultEdit "/vault/:id"
-
 shape Reply
   ok: bool
   error: string
@@ -458,80 +215,6 @@ shape Storage
   restartRequired: bool
   canRestart: bool
   error: string
-
-shape Bot
-  slug: string
-  name: string
-  label: string
-  line: string
-  time: string
-  initials: string
-  color: string
-  shape: string
-  main: bool
-  pinned: bool
-  hidden: bool
-  ready: bool
-  working: bool
-  unread: bool
-  parentSlug: string
-  hideFromSidebar: bool
-  subagent: bool
-  prompt: string
-  inheritParentPrompt: bool
-  notifications: bool
-
-// A file on a message: an image shows in place, audio plays, any other file is a card.
-shape FileRef
-  id: string
-  name: string
-  kind: string
-  size: string
-  url: string
-
-// One answer a request offers. `key` is the question it answers; `warn` is a caution to show.
-shape Choice
-  label: string
-  value: string
-  key: string
-  warn: string
-
-// One row of the transcript: a day mark, a message, a line between messages, a request the
-// Bot is waiting on, or the working line. `head` and `tail` mark a run of one sender's messages
-// for the bubble corners. `variant` is the kind of an event or a request.
-// One slice of a Bot message. `text` is markdown. A `table` has header cells, body
-// rows, and one alignment per header cell (`left`, `center`, or `right`).
-shape Part
-  kind: string
-  text: string
-  head: string[]
-  rows: string[][]
-  align: string[]
-
-shape Row
-  id: string
-  kind: string
-  mine: bool
-  text: string
-  title: string
-  time: string
-  head: bool
-  tail: bool
-  variant: string
-  files: FileRef[]
-  botSlug: string
-  botName: string
-  botColor: string
-  botShape: string
-  choices: Choice[]
-  placeholder: string
-  key: string
-  react: string
-  quote: string
-  tokens: string
-  resetAt: string
-  parts: Part[]
-
 shape Suggestion
   name: string
   about: string
@@ -563,77 +246,6 @@ shape UpdateStart
 shape Health
   ok: bool
   version: string
-
-shape Pin
-  id: string
-  text: string
-  missing: bool
-
-shape Chat
-  slug: string
-  rows: Row[]
-  working: bool
-  partial: bool
-  readOnly: bool
-  pins: Pin[]
-  threadId: string
-
-shape RoomMember
-  slug: string
-  name: string
-  line: string
-  state: string
-  ready: bool
-  working: bool
-
-shape RoomMessage
-  id: string
-  name: string
-  text: string
-  from: string
-  parts: Part[]
-
-shape Room
-  id: string
-  title: string
-  description: string
-  color: string
-  shape: string
-  members: RoomMember[]
-  messages: RoomMessage[]
-  notifications: bool
-  answerPolicy: string
-
-// One @ completion row above the composer.
-shape MentionHit
-  slug: string
-  name: string
-  color: string
-  shape: string
-
-// One face in a group's stack. Colour stays a brand token; the view maps it.
-shape FaceBit
-  shape: string
-  color: string
-  state: string
-
-// One row of the sidebar list: a Bot or a group, newest conversation first.
-shape Convo
-  kind: string
-  key: string
-  id: string
-  name: string
-  color: string
-  shape: string
-  faces: FaceBit[]
-  line: string
-  time: string
-  at: string
-  unread: bool
-  working: bool
-  ready: bool
-  notifications: bool
-
 shape Made
   ok: bool
   id: string
@@ -678,18 +290,6 @@ shape VoiceHeld
   url: string
   seconds: number
   error: string
-
-// A Vault login, as the list may see it: the password is never in this shape.
-shape Login
-  id: string
-  title: string
-  website: string
-  username: string
-  hasPassword: bool
-  hints: string
-  icon: string
-
-// The one password the person asked to see, for the login it names.
 shape Revealed
   ok: bool
   id: string
@@ -705,150 +305,6 @@ shape Usage
   attachments: number
   vaultWrites: number
   iconFetches: number
-
-// One effort level a model offers, and one model a provider lists.
-shape Effort
-  id: string
-  label: string
-
-shape ModelOption
-  slug: string
-  name: string
-  recommended: bool
-  effort: string
-  efforts: Effort[]
-
-shape Provider
-  instanceId: string
-  name: string
-  account: string
-  models: ModelOption[]
-
-// A Bot's model choice, and every provider T3 Code has ready. `efforts` are the current model's levels.
-// `runtimeMode` is approval-required, auto, or full-access.
-shape ModelList
-  ok: bool
-  error: string
-  current: string
-  instanceId: string
-  effort: string
-  runtimeMode: string
-  currentName: string
-  providerName: string
-  effortLabel: string
-  efforts: Effort[]
-  providers: Provider[]
-
-// A routine, to read: the panel does not edit them.
-shape Routine
-  id: string
-  title: string
-  paused: bool
-  schedule: string
-  next: string
-  failed: bool
-
-shape RoutineList
-  ok: bool
-  tasks: Routine[]
-  error: string
-
-shape LineRow
-  id: string
-  title: string
-  status: string
-  remote: bool
-  threadId: string
-
-shape Lineage
-  ok: bool
-  rows: LineRow[]
-  error: string
-
-// One day of a usage report: the chart bar (`px`), the sparkline bar (`spx`), and the figures as words.
-shape DayRow
-  day: string
-  label: string
-  short: string
-  tokens: string
-  input: string
-  output: string
-  cached: string
-  cacheWrite: string
-  turns: string
-  messages: string
-  px: number
-  spx: number
-
-shape ModelRow
-  name: string
-  tokens: string
-  turns: string
-  share: number
-
-shape BotShare
-  slug: string
-  name: string
-  color: string
-  shape: string
-  tokens: string
-  turns: string
-  messages: string
-  share: number
-
-shape UsageReport
-  ok: bool
-  error: string
-  period: string
-  periodLabel: string
-  messages: string
-  attachments: string
-  turns: string
-  tokens: string
-  input: string
-  output: string
-  cached: string
-  cacheWrite: string
-  hit: string
-  sentence: string
-  days: DayRow[]
-  rows: DayRow[]
-  models: ModelRow[]
-  bots: BotShare[]
-  empty: bool
-  first: string
-  last: string
-
-// What a Bot has kept: pictures, files and links, to look at.
-shape ShelfItem
-  id: string
-  title: string
-  detail: string
-  url: string
-
-shape Shelf
-  ok: bool
-  total: number
-  pictures: ShelfItem[]
-  files: ShelfItem[]
-  links: ShelfItem[]
-
-shape PageTab
-  id: string
-  title: string
-  url: string
-
-shape Computer
-  ok: bool
-  tabs: PageTab[]
-  image: string
-  error: string
-  selected: string
-
-// The tab on screen: the one the person picked, else the server's choice, else the first.
-fn tabId(tabs: PageTab[], picked: string, selected: string): string = match first(tabs.filter(t => t.id == (picked != "" ? picked : selected))) { case some(t) => t.id, case none => match first(tabs) { case some(t) => t.id, case none => "" } }
-fn tabTitle(tabs: PageTab[], id: string): string = match first(tabs.filter(t => t.id == id)) { case some(t) => t.title, case none => "" }
-// Navigation and editing keys go as keys, including with Shift, Alt or Ctrl. One character goes as text. Escape and Meta do not.
 fn pageKeyKind(k: string, ctrl: bool, meta: bool): string = meta ? "" : (k == "Enter" or k == "Tab" or k == "Backspace" or k == "Delete" or k == "ArrowLeft" or k == "ArrowUp" or k == "ArrowRight" or k == "ArrowDown" or k == "Home" or k == "End" or k == "PageUp" or k == "PageDown" ? "key" : (k.length == 1 and not ctrl ? "text" : ""))
 // Windows virtual key codes for the keys the page stream understands. Anything else is 0.
 fn pageKeyCode(k: string): number = k == "Enter" ? 13 : k == "Tab" ? 9 : k == "Backspace" ? 8 : k == "Delete" ? 46 : k == "ArrowLeft" ? 37 : k == "ArrowUp" ? 38 : k == "ArrowRight" ? 39 : k == "ArrowDown" ? 40 : k == "Home" ? 36 : k == "End" ? 35 : k == "PageUp" ? 33 : k == "PageDown" ? 34 : 0
@@ -884,13 +340,6 @@ fn firstMutedBot(bots: Bot[]): string = match first(mutedBots(bots)) { case some
 fn firstMutedGroup(convos: Convo[]): string = match first(mutedGroups(convos)) { case some(c) => c.id, case none => "" }
 fn noticeStatusLabel(available: bool, state: string, allowed: string, denied: string, unavailable: string, pending: string): string = not available ? unavailable : state == "granted" ? allowed : state == "denied" ? denied : pending
 fn networkModeLabel(mode: string, local: string, lan: string, tailscale: string): string = mode == "lan" ? lan : mode == "tailscale" ? tailscale : local
-// Colours come from design/tokens.json: change them there.
-// design:begin colours
-fn pickerColours(): string[] = ["brand.brown", "brand.red", "brand.orange", "brand.amber", "brand.green", "brand.default", "brand.blue", "brand.violet", "brand.pink", "brand.gray"]
-fn avatarInk(c: string): string = c == "brand.black" || c == "brand.brown" || c == "brand.gray" ? "ink.light" : "ink.dark"
-// design:end colours
-fn shapeOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.shape, case none => "ball" }
-fn colorOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.color, case none => "brand.default" }
 fn nText(n: number, one: string, many: string): string = n == 1 ? `1 ${one}` : `${n} ${many}`
 fn usageLine(m: number, a: number, v: number, i: number): string = `${nText(m, "message", "messages")}, ${nText(a, "attachment", "attachments")}, ${nText(v, "vault write", "vault writes")}, and ${nText(i, "icon fetch", "icon fetches")} on this machine.`
 fn attachmentName(entry: string, fallback: string): string = match entry.split("\\t").at(-1) { case some(name) => name, case none => fallback }
@@ -906,32 +355,12 @@ fn fileIdOf(row: string): string = entryId(fieldAt(row, 1))
 fn hasFileId(rows: string[], id: string): bool = id != "" and rows.filter(r => fileIdOf(r) == id).length > 0
 fn hasVoiceId(rows: string[], id: string): bool = id != "" and rows.filter(r => fieldAt(r, 2) == id).length > 0
 fn themeLabel(theme: string, system: string, dark: string, light: string): string = theme == "system" ? system : theme == "dark" ? dark : light
-// Keep the level only when the model being chosen lists it. Otherwise the gateway uses that model's default.
-fn keptEffort(levels: Effort[], current: string): string = levels.filter(e => e.id == current).length > 0 ? current : ""
-fn modelEfforts(providers: Provider[], instanceId: string, model: string): Effort[] = match first(providers.filter(p => p.instanceId == instanceId)) { case some(p) => match first(p.models.filter(m => m.slug == model)) { case some(m) => m.efforts, case none => [] }, case none => [] }
-// Face colours are plain names; Bot colours are brand.* tokens from the design package.
-fn faceColor(c: string): string = c == "brand.default" ? "teal" : c == "brand.blue" ? "blue" : c == "brand.violet" ? "violet" : c == "brand.pink" ? "pink" : c == "brand.orange" ? "orange" : c == "brand.green" ? "green" : c == "brand.black" ? "black" : c == "brand.white" ? "white" : c == "brand.brown" ? "brown" : c == "brand.red" ? "red" : c == "brand.amber" ? "amber" : c == "brand.yellow" ? "yellow" : c == "brand.cyan" ? "cyan" : c == "brand.purple" ? "purple" : c == "brand.magenta" ? "magenta" : c == "brand.gray" ? "gray" : "teal"
-// Hover chrome ids. A prefix keeps a new menu row from falling out of the focus check.
-fn chromeTarget(id: string): bool = id.startsWith("reply-") or id.startsWith("menu-") or id.startsWith("pick-")
-fn knownReact(current: string): bool = current == "👍" or current == "❤️" or current == "😂" or current == "😮" or current == "🎉" or current == "🙏"
-// The six menu emoji. A saved reaction outside that set stays on the strip so it can show the ring.
-fn reactStrip(current: string): string[] = current == "" or knownReact(current) ? ["👍", "❤️", "😂", "😮", "🎉", "🙏"] : ["👍", "❤️", "😂", "😮", "🎉", "🙏"].concat([current])
-// A tool line's verb. Known ids come from the string table (passed in: a top-level `fn` cannot call `t`). Anything else keeps the stored sentence.
-fn eventVerb(id: string, stored: string, sent: string, routineCreated: string, routineUpdated: string, routineDeleted: string, from: string, ran: string, started: string, providerLimit: string, providerError: string): string = id == "sent" ? sent : id == "routine-created" ? routineCreated : id == "routine-updated" ? routineUpdated : id == "routine-deleted" ? routineDeleted : id == "from" ? from : id == "ran" ? ran : id == "started" ? started : id == "provider-limit" ? providerLimit : id == "provider-error" ? providerError : stored
-// The open chat is clear. A hidden Bot keeps the mark until that chat is the open one.
-fn showUnread(unread: bool, open: bool, hidden: bool): bool = unread and not open and (hidden or not hidden)
-fn bitShape(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.shape, case none => "ball" }
-fn bitColor(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.color, case none => "brand.default" }
-fn bitState(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.state, case none => "idle" }
-fn memberFaces(bots: Bot[], members: RoomMember[]): FaceBit[] = members.slice(0, 3).map(m => FaceBit(shape=shapeOf(bots, m.slug), color=colorOf(bots, m.slug), state=m.state))
 fn pickedFaces(bots: Bot[], slugs: string[]): FaceBit[] = slugs.slice(0, 3).map(slug => FaceBit(shape=shapeOf(bots, slug), color=colorOf(bots, slug), state="idle"))
 fn withWorking(messages: RoomMessage[], working: bool): RoomMessage[] = working ? messages.concat([RoomMessage(id="working", name="", text="", from="", parts=[])]) : messages
 // The person's text, on the same id the room will store, until that row arrives.
 fn withRoomPending(messages: RoomMessage[], text: string, id: string): RoomMessage[] = text == "" or id == "" or messages.filter(m => m.id == id).length > 0 ? messages : messages.concat([RoomMessage(id=id, name="", text=text, from="user", parts=[])])
 // Room lines use the same row shape as the Bot transcript. The group view reads kind, mine, and the bot fields.
 fn roomLine(msg: RoomMessage): Row = Row(id=msg.id, kind=(msg.id == "working" ? "working" : "message"), mine=(msg.from == "user"), text=msg.text, title="", time="", head=true, tail=true, variant="", files=[], botSlug=(msg.from == "user" ? "" : msg.from), botName=msg.name, botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=msg.parts)
-fn alignAt(align: string[], i: number): string = match align.at(i) { case some(a) => a == "center" or a == "right" ? a : "left", case none => "left" }
-// The transcript id for a command id. A row already in that form is kept.
 fn transcriptId(id: string): string = id == "" or id.startsWith("turn-item:") ? id : `turn-item:message:${id}`
 fn knownSent(rows: Row[], id: string): bool = id != "" and rows.filter(r => r.id == id or r.id == transcriptId(id)).length > 0
 fn botCount(rows: Row[]): number = rows.filter(m => m.kind == "message" and not m.mine).length
@@ -3082,47 +2511,3 @@ component Bots
       if toast != ""
         row position="absolute" bottom=88 left="50%" translate="-50% 0" padding="space.md space.lg" border-radius="radius.full" background-color="-exact-label" color="surface.canvas" max-width="90%" box-sizing="border-box" testId="toast" role="status" aria-live="polite"
           text toast font="-exact-subheadline" font-weight=500
-
-// The three working marks. Each one lags the last. Reduced motion is the host's job.
-// Declared after Bots: the first component is the root, and it owns `routes nav`.
-
-style PanelRow
-  display="flex"
-  align-items="center"
-  gap="space.md"
-  width="100%"
-  box-sizing="border-box"
-  padding="space.md"
-  border="1px solid surface.line"
-  border-radius="radius.md"
-  background-color="surface.card"
-  color="-exact-label"
-  text-align="left"
-  :hover
-    background-color="surface.raised"
-  :active
-    opacity=0.7
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-
-// A choice in a list: a model, a shape.
-style ChoiceRow
-  display="flex"
-  align-items="center"
-  gap="space.md"
-  width="100%"
-  box-sizing="border-box"
-  min-height=40
-  padding="space.xs space.md"
-  border="none"
-  border-radius="radius.md"
-  color="-exact-label"
-  font="-exact-subheadline"
-  text-align="left"
-  :hover
-    background-color="surface.raised"
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-
-// The Bot's right panel: its Face and name, then three tabs, and pages for its model, its usage and editing it.
-// The details beside a group, as a Bot has: who is in it, and its name, look and members.
