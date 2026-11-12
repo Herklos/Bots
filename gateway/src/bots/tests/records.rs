@@ -238,6 +238,7 @@ pub(crate) fn the_managed_block_tells_a_bot_about_routines_and_other_bots() {
         None,
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert!(text.contains("schedule_task") && text.contains("t3_thread_send"));
     assert!(text.contains("Avoid Markdown tables. Prefer bullet lists."));

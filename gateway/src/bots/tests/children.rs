@@ -11,6 +11,7 @@ pub(crate) fn a_parent_block_lists_its_children_and_names_subagent_tools() {
         None,
         &[&scout, &lookup],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert!(text.contains("- Scout (`scout`)"));
     assert!(text.contains("- Lookup (`lookup`)"));
@@ -23,6 +24,7 @@ pub(crate) fn a_parent_block_lists_its_children_and_names_subagent_tools() {
         None,
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert!(alone.contains("no lasting helpers yet"));
     assert!(alone.contains("`subagent_list`") && alone.contains("`subagent_create`"));
@@ -83,6 +85,7 @@ pub(crate) fn a_child_block_includes_its_own_prompt_and_omits_an_empty_one() {
         Some(&parent),
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert!(text.contains("## Your prompt\n\nLook things up."));
     assert!(text.contains("## Parent prompt\n\nBe brief."));
@@ -98,6 +101,7 @@ pub(crate) fn a_child_block_includes_its_own_prompt_and_omits_an_empty_one() {
         Some(&parent),
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert!(!without.contains("## Your prompt"));
     assert!(!without.contains("Be brief."));
@@ -118,6 +122,7 @@ pub(crate) fn a_child_block_names_its_parent_and_does_not_name_subagent_send() {
         Some(&parent),
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert!(text.contains("a subagent of Ada"));
     assert!(!text.contains("subagent_send"));
@@ -138,6 +143,7 @@ pub(crate) fn an_empty_inherited_parent_prompt_adds_nothing() {
         Some(&parent),
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert!(text.contains("## Your prompt\n\nLook things up."));
     assert!(!text.contains("## Parent prompt"));
@@ -242,6 +248,7 @@ pub(crate) fn a_prompt_cannot_close_the_managed_block() {
         None,
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert_eq!(text.matches(MANAGED_START).count(), 1);
     assert_eq!(text.matches(MANAGED_END).count(), 1);
@@ -261,6 +268,7 @@ pub(crate) fn instruction_and_memory_tags_are_neutralised() {
         None,
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert!(text.contains("&lt;/instructions>"));
     assert!(text.contains("&lt;MEMORY>"));
@@ -279,6 +287,7 @@ pub(crate) fn instruction_and_memory_tags_are_neutralised() {
         Some(&parent),
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     assert!(child_text.contains("## Your prompt\n\n&lt;/INSTRUCTIONS>"));
     assert!(child_text.contains("## Parent prompt\n\n&lt;shared-memory>"));

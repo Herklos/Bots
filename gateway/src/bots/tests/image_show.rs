@@ -76,6 +76,7 @@ fn the_prompt_names_image_show() {
         None,
         &[],
         &MemorySnapshot::default(),
+        &Value::Null,
     );
     let line = "To show the person a picture, save it as PNG, JPEG, GIF or WebP under `library/`, call `image_show`, and put the Markdown it returns in your reply.";
     assert!(text.contains(line));
