@@ -137,3 +137,22 @@ test "Settings saves who answers in a group"
   clock data
   expect checked "group-answer-everyone"
   expect tree missing "group-answer-default"
+test "Sync shows the engine state, an import to review, and the three conflict choices"
+  tap "Settings"
+  clock data
+  tap "settings-domain-access"
+  clock data
+  expect tree has "sync-card"
+  expect text "sync-state" == "Needs your attention"
+  expect tree has "sync-note"
+  expect tree has "sync-now"
+  expect tree missing "sync-import-confirm"
+  tap "sync-import-review"
+  clock data
+  expect tree has "sync-preview"
+  expect tree has "sync-import-confirm"
+  expect tree has "sync-conflict-path"
+  expect text "sync-conflict-path" == "ada/memory/MEMORY.md"
+  expect tree has "sync-conflict-mine"
+  expect tree has "sync-conflict-anytype"
+  expect tree has "sync-conflict-both"

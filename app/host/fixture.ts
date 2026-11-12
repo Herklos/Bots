@@ -14,6 +14,29 @@ export function blankChat(slug: string) {
 export type PinRow = { id: string; text: string; missing: boolean };
 export type ChatRow = any;
 
+// The contract runner has no gateway: the Sync card's canned snapshot and the
+// canned first-import answers, shaped like `/api/sync/status` and `/api/sync/import`.
+export function fixtureSyncBody(): any {
+  return {
+    running: true,
+    state: 'needs_import',
+    phase: 'needs_import',
+    lastSync: 0,
+    outbox: 2,
+    devices: [{ slug: 'second-mac', hostname: 'Second Mac', status: 'online', lastSeen: 1, lagSecs: 120 }],
+    conflicts: [{ id: 'conf-1', path: 'ada/memory/MEMORY.md' }],
+    error: null,
+  };
+}
+
+export function fixtureSyncImport(dry: boolean): Result<'importSync'> {
+  if (dry) {
+    return { ok: true, started: false, push: 3, pull: 1, conflict: 1, minutes: 2, error: '' };
+  }
+  return { ok: true, started: true, push: 3, pull: 1, conflict: 1, minutes: 2, error: '' };
+}
+
+
 // The contract runner has no gateway: a small conversation, a writable child and a missing pin.
 // Pins are mutable so a Pin tap can toggle a row without a live gateway.
 // A room the contract runner just created. Null keeps the built-in Design room.

@@ -2,7 +2,6 @@ import type { Sources, Result } from '../app.contract.d.ts';
 import { fixtureActivity, fixtureDefaultMode, fixtureFinalOnly, fixtureGroupAnswer, fixtureMaxMode, setFixtureActivity, setFixtureDefaultMode, setFixtureFinalOnly, setFixtureGroupAnswer, setFixtureMaxMode, savedEffort } from '../host/fixture.ts';
 import { fetchLimits, refreshLimitBars } from '../host/limits.ts';
 import { REACH_GATEWAY, say, localize, call, read, noteLocale, setNoticeHost, hostNotice, reply, systemChecked, setSystemChecked } from '../host/gateway.ts';
-import { clock } from '../host/time.ts';
 import { forgetSections, offlineSections, readSections, rememberSections, sectionsFromRows } from '../host/sections.ts';
 import { FIXTURE_SLUG, NoticePrefs, noticePrefs, unsupported, postUnread } from '../host/notices.ts';
 
@@ -208,54 +207,6 @@ export const settingsSources = {
   prepareAnytype: async (_args, store) => reply(await call(store, '/api/storage/anytype/setup', { method: 'POST', body: JSON.stringify({ dryRun: false }) })),
   // The sync card. The gateway reports counts and engine words; this layer formats
   // times for the host locale from the strings table.
-  loadSync: async ([gate, locale], store): Promise<Result<'loadSync'>> => {
-    const blank: Result<'loadSync'> = { ok: false, state: 'off', lastSync: '', pending: 0, devices: [], conflicts: [], needsImport: false, error: '' };
-    if (gate !== '1') return blank;
-    noteLocale(locale);
-    const body = await read(store, '/api/sync/status');
-    const text = (value: unknown): string => (typeof value === 'string' ? value : '');
-    const numbered = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
-    const stamp = numbered(body.lastSync);
-    const seen = (secs: number): string => {
-      if (secs < 90) return say('settings.sync.seenNow');
-      const seenFill = (key: string, values: Record<string, string>): string => say(key).replace(/\{(\w+)\}/g, (_m, k: string) => values[k] ?? '');
-      if (secs < 5400) return seenFill('settings.sync.seenMinutes', { minutes: String(Math.round(secs / 60)) });
-      if (secs < 129_600) return seenFill('settings.sync.seenHours', { hours: String(Math.round(secs / 3600)) });
-      return seenFill('settings.sync.seenLong', { minutes: String(Math.round(secs / 60)) });
-    };
-    return {
-      ok: body.running === true,
-      state: text(body.state) || 'off',
-      lastSync: stamp > 0 ? clock(new Date(stamp)) : '',
-      pending: numbered(body.outbox),
-      devices: (Array.isArray(body.devices) ? body.devices : []).map((d: any) => ({
-        name: String(typeof d.hostname === 'string' && d.hostname !== '' ? d.hostname : d.slug ?? ''),
-        lastSeen: seen(numbered(d.lagSecs)),
-      })),
-      conflicts: (Array.isArray(body.conflicts) ? body.conflicts : []).map((c: any) => ({ id: String(c.id ?? ''), path: String(c.path ?? '') })),
-      needsImport: body.state === 'needs_import' || body.phase === 'needs_import',
-      error: text(body.error) !== '' ? text(body.error) : text(body.reason),
-    };
-  },
-  runSyncNow: async (_args, store) => reply(await call(store, '/api/sync/run', { method: 'POST', body: '{}' })),
-  importSync: async ([dry], store): Promise<Result<'importSync'>> => {
-    const r = await call(store, '/api/sync/import', { method: 'POST', body: JSON.stringify({ dryRun: dry === true }) });
-    if (!r.ok) return { ok: false, started: false, push: 0, pull: 0, conflict: 0, minutes: 0, error: localize(r.error) };
-    const b = r.body ?? {};
-    const p = b.preview ?? {};
-    const numbered = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
-    const secs = numbered(p.estimateSecs);
-    return {
-      ok: true,
-      started: b.started === true,
-      push: numbered(p.push),
-      pull: numbered(p.pull),
-      conflict: numbered(p.conflict),
-      minutes: secs > 0 ? Math.max(1, Math.ceil(secs / 60)) : 0,
-      error: '',
-    };
-  },
-  resolveConflict: async ([id, keep], store) => reply(await call(store, `/api/sync/conflicts/${encodeURIComponent(id)}/resolve`, { method: 'POST', body: JSON.stringify({ keep }) })),
   loadLimits: async ([gate, locale], store) => {
     noteLocale(locale);
     return fetchLimits(gate, store, locale);
@@ -337,4 +288,4 @@ export const settingsSources = {
   setDefaultModel: async ([instanceId, model, effort], store) => reply(await call(store, '/api/settings', {
     method: 'PUT', body: JSON.stringify({ defaultModel: { instanceId, model, ...(effort !== '' ? { effort } : {}) } }),
   })),
-} satisfies Pick<Sources, 'loadManagementMcp' | 'setManagementMcp' | 'createManagementMcpCredential' | 'revokeManagementMcpCredential' | 'enableNotifications' | 'loadPrefs' | 'saveSections' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setMaxMode' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadSync' | 'runSyncNow' | 'importSync' | 'resolveConflict' | 'loadLimits' | 'refreshLimits' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'loadDiagnostics' | 'askDiagnostics' | 'setDefaultModel'>;
+} satisfies Pick<Sources, 'loadManagementMcp' | 'setManagementMcp' | 'createManagementMcpCredential' | 'revokeManagementMcpCredential' | 'enableNotifications' | 'loadPrefs' | 'saveSections' | 'loadNotice' | 'setNotifications' | 'setUserName' | 'setMaxMode' | 'setDefaultMode' | 'setGroupAnswerPolicy' | 'setTheme' | 'setPassword' | 'loadNetwork' | 'setNetwork' | 'restartGateway' | 'loadStorage' | 'saveStorage' | 'saveSpace' | 'testStorage' | 'copyStorage' | 'restartStorage' | 'startPairing' | 'confirmPairing' | 'checkAnytype' | 'prepareAnytype' | 'loadLimits' | 'refreshLimits' | 'loadProviders' | 'loadAbout' | 'loadSystem' | 'startUpdate' | 'readHealth' | 'noteUnread' | 'loadDiagnostics' | 'askDiagnostics' | 'setDefaultModel'>;
