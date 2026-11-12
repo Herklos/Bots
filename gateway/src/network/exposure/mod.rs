@@ -232,7 +232,7 @@ async fn serve_landing(static_dir: &Path, path: &str, req: Request) -> Response 
     };
     match ServeFile::new(file).oneshot(req).await {
         Ok(res) => res.into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        Err(infallible) => match infallible {},
     }
 }
 

@@ -1,0 +1,56 @@
+use Reply from "../ui/root-types.contract"
+use HelpPolicy, HelpBag from "./help-shape.contract"
+
+members Bots
+  state helpWhenLasting = ""
+  state helpWhenOnce = ""
+  state helpCapLasting = ""
+  state helpCapOnce = ""
+  state helpSeed = ""
+  state helpNoted = false
+  derive onHelpers = top(nav).name == "chat" and panelOpen and panelPage == "helpers" and slug != ""
+  derive helpersGate = onHelpers ? "1" : "0"
+  resource helperPolicy = loadHelperPolicy(slug, helpersGate, hostTime.locale) as shape HelpPolicy else empty()
+  mutation helpersSaved as shape Reply refreshes helperPolicy then afterHelpersSave
+  derive helpersFailed = failed(helperPolicy)
+  derive helpersPending = pending(helperPolicy)
+  derive helpersSaving = pending(helpersSaved)
+  derive helpersError = match helpersSaved { case some(r) => (helpNoted and not r.ok) ? r.error : "", case none => "" }
+  derive helperBag = HelpBag(policy=helperPolicy, failed=helpersFailed, pending=helpersPending, saving=helpersSaving, error=helpersError, seeded=(helperPolicy.ok and helpSeed == slug), whenLasting=helpWhenLasting, whenOnce=helpWhenOnce, capLasting=helpCapLasting, capOnce=helpCapOnce)
+  task seedHelpers when helperPolicy.ok and helpSeed != slug
+    after(1, applyHelperSeed)
+  action applyHelperSeed
+    helpWhenLasting = helperPolicy.lasting.when
+    helpWhenOnce = helperPolicy.once.when
+    helpCapLasting = helperPolicy.lasting.cap
+    helpCapOnce = helperPolicy.once.cap
+    helpSeed = slug
+    helpNoted = false
+  action editHelpWhen(kind: string, text: string)
+    if kind == "lasting"
+      helpWhenLasting = text
+    else
+      helpWhenOnce = text
+  action editHelpCap(kind: string, text: string)
+    if kind == "lasting"
+      helpCapLasting = text
+    else
+      helpCapOnce = text
+  action writeHelpers(kind: string, enabled: bool, cap: string, whenText: string, mode: string, effort: string, inherit: bool, modelInstance: string, modelSlug: string, anyModel: bool, modelList: string, modes: string, efforts: string)
+    if not pending(helpersSaved)
+      helpNoted = false
+      send helpersSaved = saveHelperPolicy(slug, kind, enabled, cap, whenText, mode, effort, inherit, modelInstance, modelSlug, anyModel, modelList, modes, efforts)
+  action retryHelpers
+    helpSeed = ""
+    refresh helperPolicy
+  action afterHelpersSave
+    helpNoted = true
+    match helpersSaved
+      case some(r)
+        if r.ok and helpSeed == slug
+          helpWhenLasting = helperPolicy.lasting.when
+          helpWhenOnce = helperPolicy.once.when
+          helpCapLasting = helperPolicy.lasting.cap
+          helpCapOnce = helperPolicy.once.cap
+      case none
+        helpNoted = true

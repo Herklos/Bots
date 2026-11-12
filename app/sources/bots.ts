@@ -1,6 +1,7 @@
 import type { Sources, Result } from '../app.contract.d.ts';
 import { fixtureCrowdBots, fixtureBotNotify, fixtureBotPrompt, fixturePrompt, wantsNotice, FIXTURE_SUGGESTIONS } from '../host/fixture.ts';
-import { call, botsBody, reply, madeFromBot } from '../host/gateway.ts';
+import { call, botsBody, reply, madeFromBot, noteLocale } from '../host/gateway.ts';
+import { applyWrite, blankPolicy, fixturePolicy, loadError, localPolicy, policyBody, policyFromBot, rememberPolicy, type HelpWrite } from '../host/helpers.ts';
 import { FIXTURE_SLUG } from '../host/notices.ts';
 import { fill } from '../host/palette.ts';
 import { when, lineOf, initials, setLastNow } from '../host/time.ts';
@@ -106,6 +107,24 @@ export const botSources = {
     method: 'PUT',
     body: JSON.stringify({ name, shape, color, subagent: { prompt, inheritParentPrompt } }),
   })),
+  loadHelperPolicy: async ([slug, gate, locale], store) => {
+    noteLocale(locale);
+    if (slug === '' || gate !== '1') return blankPolicy('', false);
+    if (localPolicy(slug)) return fixturePolicy(slug);
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}`);
+    if (!r.ok) return loadError(r.error);
+    return policyFromBot(r.body);
+  },
+  saveHelperPolicy: async ([slug, kind, enabled, cap, whenText, mode, effort, inherit, modelInstance, modelSlug, anyModel, modelList, modes, efforts], store) => {
+    const input: HelpWrite = { kind, enabled, cap, whenText, mode, effort, inherit, modelInstance, modelSlug, anyModel, modelList, modes, efforts };
+    const built = policyBody(input);
+    if (!built.ok) return { ok: false, error: built.error };
+    if (localPolicy(slug)) {
+      rememberPolicy(slug, applyWrite(fixturePolicy(slug), input));
+      return { ok: true, error: '' };
+    }
+    return reply(await call(store, `/api/bots/${encodeURIComponent(slug)}`, { method: 'PUT', body: JSON.stringify(built.body) }));
+  },
   markSeen: async ([slug], store) => reply(await call(store, `/api/bots/${encodeURIComponent(slug)}/seen`, { method: 'POST', body: '{}' })),
   loadSuggestions: async (_args, store): Promise<Result<'loadSuggestions'>> => {
     const r = await call(store, '/api/suggestions');
@@ -113,4 +132,4 @@ export const botSources = {
     const rows = r.ok && Array.isArray(r.body.suggestions) && r.body.suggestions.length > 0 ? r.body.suggestions : FIXTURE_SUGGESTIONS;
     return (rows as any[]).map((s) => ({ name: String(s.name), about: String(s.about ?? ''), color: fill(s.color), shape: String(s.shape ?? 'ball'), first: String(s.firstMessage ?? '') }));
   },
-} satisfies Pick<Sources, 'loadBots' | 'setBotNotifications' | 'renameBot' | 'saveBotPrompt' | 'recolourBot' | 'hideBot' | 'makeMainBot' | 'reshapeBot' | 'pinBot' | 'deleteBot' | 'createBot' | 'createSubagent' | 'saveSubagent' | 'markSeen' | 'loadSuggestions'>;
+} satisfies Pick<Sources, 'loadBots' | 'setBotNotifications' | 'renameBot' | 'saveBotPrompt' | 'recolourBot' | 'hideBot' | 'makeMainBot' | 'reshapeBot' | 'pinBot' | 'deleteBot' | 'createBot' | 'createSubagent' | 'saveSubagent' | 'loadHelperPolicy' | 'saveHelperPolicy' | 'markSeen' | 'loadSuggestions'>;

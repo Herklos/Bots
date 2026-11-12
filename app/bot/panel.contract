@@ -1,12 +1,14 @@
-use pickerColours, faceColor from "../ui/fns.contract"
+use faceColor from "../ui/fns.contract"
 use PanelRow from "../ui/panel.contract"
 use Bot, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer from "../ui/shapes.contract"
-use PageTitle, QuietButton, TextControl, IconControl, ToggleControl, SwatchControl, ConversationLink, SectionLabel, Chip, IconTile, Segment, Field, PrimaryButton from "../ui/controls.contract"
+use PageTitle, QuietButton, TextControl, IconControl, ConversationLink, SectionLabel, Chip, IconTile, Segment from "../ui/controls.contract"
 use ModelPage, UsageView from "../settings/settings.contract"
-use shapeNames, Avatar from "../face.contract"
+use Avatar from "../face.contract"
 use Glyph from "../glyph.contract"
 use EditBotPage from "./edit.contract"
+use HelpersPage from "./helpers.contract"
 use MemoryTab from "./memory.contract"
+use SubagentPage from "./subagent-page.contract"
 use BotShelf, ScreenCard from "../computer/computer.contract"
 use ComputerPlace from "../computer/place.contract"
 component BotPanel
@@ -107,6 +109,8 @@ component BotPanel
     openPage("usage")
   action goEdit
     openPage("edit")
+  action goHelpers
+    openPage("helpers")
   view
     // On a narrow screen the panel is a full-height sheet with one identity
     // row (close, face, edit). The large Face stays for the wide side panel.
@@ -116,7 +120,7 @@ component BotPanel
           button class=IconControl appearance="none" press=goRoot aria-label=t("common.back") title=t("common.back") testId="panel-back"
             column rotate="180deg"
               Glyph(name="chevron", size=20)
-          text (page == "model" ? t("panel.model") : page == "usage" ? t("panel.usage") : page == "subagent" ? (subSlug != "" ? t("subagent.page") : t("subagent.new")) : t("panel.edit")) role="heading" aria-level=2 class=PageTitle flex=1 testId="panel-page-title"
+          text (page == "model" ? t("panel.model") : page == "usage" ? t("panel.usage") : page == "subagent" ? (subSlug != "" ? t("subagent.page") : t("subagent.new")) : page == "helpers" ? t("helpers.title") : t("panel.edit")) role="heading" aria-level=2 class=PageTitle flex=1 testId="panel-page-title"
       else if wide
         row align-items="center" gap="space.xs" padding="space.sm space.sm space.sm space.md" min-height=52 box-sizing="border-box"
           column flex=1
@@ -146,52 +150,10 @@ component BotPanel
           EditBotPage(bot=bot, error=error, rename=rename, recolour=recolour, reshape=reshape, pin=pin, hide=hide, mute=mute, makeMain=makeMain, drop=drop, savePrompt=savePrompt)
       else if page == "subagent"
         scroll flex=1 min-height=0
-          column gap="space.lg" padding="space.sm space.lg space.xl" testId="subagent-page"
-            column gap="space.sm"
-              text t("common.name") class=SectionLabel
-              input appearance="none" class=Field value=subName input=editSubName aria-label=t("common.name") placeholder=(subSlug == "" ? t("subagent.namePlaceholder") : "") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="subagent-name"
-            column gap="space.sm"
-              text t("edit.colour") class=SectionLabel
-              row gap="space.xs" flex-wrap="wrap"
-                for c in pickerColours() key=c
-                  button class=SwatchControl press=pickSubColor(c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(subColor == c) testId=`sub-colour-${c}` width=40 height=40 padding=0
-                    column width=30 height=30 box-sizing="border-box" border-radius="radius.full" background-color=c border=(subColor == c ? "3px solid AccentColor" : "3px solid transparent")
-            column gap="space.sm"
-              text t("edit.shape") class=SectionLabel
-              row gap="space.xs" flex-wrap="wrap"
-                for s in shapeNames() key=s
-                  button class=SwatchControl press=pickSubShape(s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(subShape == s) testId=`sub-shape-${s}` width=48 height=48 padding=0 border-radius="radius.md" background-color=(subShape == s ? "surface.raised" : "transparent")
-                    Avatar(shape=s, color=faceColor(subColor), state="idle", size=34, still=true, presence="")
-            column gap="space.sm"
-              text t("subagent.prompt") class=SectionLabel
-              input appearance="none" class=Field value=subPrompt input=editSubPrompt aria-label=t("subagent.prompt") placeholder=t("subagent.promptPlaceholder") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="subagent-prompt"
-            row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
-              column flex=1 gap="2px"
-                text t("subagent.inherit") font-weight=600
-                text t("subagent.inheritNote") color="ink.muted" font="-exact-footnote"
-              button class=ToggleControl appearance="none" role="switch" aria-checked=subInherit press=toggleSubInherit aria-label=t("subagent.inherit") testId="subagent-inherit"
-                row width=44 height=26 border-radius="radius.full" background-color=(subInherit ? "AccentColor" : "surface.line") align-items="center" justify-content=(subInherit ? "flex-end" : "flex-start")
-                  column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
-            if subSlug != ""
-              text t("panel.model") class=SectionLabel
-              for c in children.filter(c => c.slug == subSlug) key=c.slug
-                ModelPage(models=childModels, down=childModelsDown, bot=c, pick=pickModel, error=modelError)
-            if subError != ""
-              text subError color="-exact-system-red" testId="subagent-error"
-            if subSlug == ""
-              button class=PrimaryButton buttonStyle="filled" press=createSub disabled=creating testId="subagent-create"
-                text (creating ? t("subagent.creating") : t("subagent.create"))
-            else
-              button class=PrimaryButton buttonStyle="filled" press=saveSub disabled=saving testId="subagent-save"
-                text (saving ? t("subagent.saving") : t("common.save"))
-              button class=IconControl appearance="none" commandfor=`drop-sub-${subSlug}` command="show-modal" aria-label=t("subagent.delete") title=t("subagent.delete") color="-exact-system-red" testId="delete-subagent"
-                Glyph(name="trash", size=20)
-              dialog id=`drop-sub-${subSlug}` role="alertdialog" aria-label=t("subagent.deleteNamed", name=subName)
-                text t("subagent.deleteBody")
-                button press=dropChild(subSlug) destructive=true commandfor=`drop-sub-${subSlug}` command="close" testId="drop-sub-ok"
-                  text t("common.delete")
-                button commandfor=`drop-sub-${subSlug}` command="close" testId="drop-sub-cancel"
-                  text t("common.cancel")
+          SubagentPage(children=children, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=createSub, saveSub=saveSub, dropChild=dropChild, creating=creating, saving=saving, subError=subError, childModels=childModels, childModelsDown=childModelsDown, pickModel=pickModel, modelError=modelError)
+      else if page == "helpers"
+        scroll flex=1 min-height=0
+          HelpersPage(subagent=bot.subagent, providers=models.providers, modelsDown=modelsDown)
       else
         if wide
           column align-items="center" gap="space.xs" padding="0 space.lg space.md"
@@ -229,6 +191,13 @@ component BotPanel
                         column flex=1 height=d.spx border-radius="2px" background-color="brand.default"
                 column color="ink.muted"
                   Glyph(name="chevron", size=18)
+              if not bot.subagent
+                button class=PanelRow appearance="none" press=goHelpers testId="helpers-row" aria-label=t("helpers.open")
+                  column flex=1 gap="2px" min-width=0
+                    text t("helpers.title") font-weight=600 testId="helpers-row-title"
+                    text t("helpers.rowNote") color="ink.muted" font="-exact-footnote"
+                  column color="ink.muted"
+                    Glyph(name="chevron", size=18)
               text t("panel.routines") class=SectionLabel
               if routinesDown
                 text t("error.routines") color="-exact-system-red" padding="0 space.md" testId="routine-error"

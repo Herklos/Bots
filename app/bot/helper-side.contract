@@ -1,0 +1,172 @@
+use ChoiceRow from "../ui/panel.contract"
+use SectionLabel, Field, ToggleControl, Segment from "../ui/controls.contract"
+use Provider from "../ui/shapes.contract"
+use Glyph from "../glyph.contract"
+use HelpSide, modeOn, toggleMode, modelKey, modelOn, allModelKeys, dropKey, addKey, modeLine, effortLine, modelNames from "./help-shape.contract"
+
+component HelperSide
+  props
+    kind: string
+    side: HelpSide
+    cap: string
+    whenText: string
+    providers: Provider[]
+    modelsDown: bool
+    saving: bool
+    editWhen: action
+    editCap: action
+    write: action
+  derive lasting = kind == "lasting"
+  derive askOn = modeOn(side.modes, "approval-required")
+  derive autoOn = modeOn(side.modes, "auto")
+  derive fullOn = modeOn(side.modes, "full-access")
+  derive lowOn = modeOn(side.efforts, "low")
+  derive mediumOn = modeOn(side.efforts, "medium")
+  derive highOn = modeOn(side.efforts, "high")
+  derive modesLabel = modeLine(askOn, autoOn, fullOn, t("model.ask"), t("model.auto"), t("model.fullAccess"))
+  derive effortsLabel = effortLine(lowOn, mediumOn, highOn, t("helpers.low"), t("helpers.medium"), t("helpers.high"))
+  derive allowedNames = side.anyModel ? t("helpers.anyModel") : modelNames(providers, side.modelList, false) != "" ? modelNames(providers, side.modelList, false) : t("helpers.noModels")
+  action save(enabled: bool, nextCap: string, nextWhen: string, mode: string, effort: string, inherit: bool, modelInstance: string, modelSlug: string, anyModel: bool, modelList: string, modes: string, efforts: string)
+    write(kind, enabled, nextCap, nextWhen, mode, effort, inherit, modelInstance, modelSlug, anyModel, modelList, modes, efforts)
+  action toggleEnabled
+    save(not side.enabled, cap, whenText, side.mode, side.effort, side.inherit, side.modelInstance, side.modelSlug, side.anyModel, side.modelList, side.modes, side.efforts)
+  action toggleInherit
+    save(side.enabled, cap, whenText, side.mode, side.effort, not side.inherit, side.modelInstance, side.modelSlug, side.anyModel, side.modelList, side.modes, side.efforts)
+  action commitCap(value: string)
+    save(side.enabled, value, whenText, side.mode, side.effort, side.inherit, side.modelInstance, side.modelSlug, side.anyModel, side.modelList, side.modes, side.efforts)
+  action commitWhen(value: string)
+    save(side.enabled, cap, value, side.mode, side.effort, side.inherit, side.modelInstance, side.modelSlug, side.anyModel, side.modelList, side.modes, side.efforts)
+  action pickMode(id: string)
+    save(side.enabled, cap, whenText, id, side.effort, side.inherit, side.modelInstance, side.modelSlug, side.anyModel, side.modelList, side.modes, side.efforts)
+  action pickEffort(id: string)
+    save(side.enabled, cap, whenText, side.mode, id, side.inherit, side.modelInstance, side.modelSlug, side.anyModel, side.modelList, side.modes, side.efforts)
+  action pickModel(instance: string, model: string)
+    save(side.enabled, cap, whenText, side.mode, side.effort, side.inherit, instance, model, side.anyModel, side.modelList, side.modes, side.efforts)
+  action toggleCeilingMode(id: string)
+    let next = toggleMode(side.modes, id)
+    let mode = (side.mode == id and not modeOn(next, id)) ? "" : side.mode
+    save(side.enabled, cap, whenText, mode, side.effort, side.inherit, side.modelInstance, side.modelSlug, side.anyModel, side.modelList, next, side.efforts)
+  action toggleCeilingEffort(id: string)
+    let next = toggleMode(side.efforts, id)
+    let effort = (side.effort == id and not modeOn(next, id)) ? "" : side.effort
+    save(side.enabled, cap, whenText, side.mode, effort, side.inherit, side.modelInstance, side.modelSlug, side.anyModel, side.modelList, side.modes, next)
+  action toggleAny
+    if side.anyModel
+      if providers.length > 0
+        save(side.enabled, cap, whenText, side.mode, side.effort, side.inherit, side.modelInstance, side.modelSlug, false, allModelKeys(providers), side.modes, side.efforts)
+    else
+      save(side.enabled, cap, whenText, side.mode, side.effort, side.inherit, side.modelInstance, side.modelSlug, true, "", side.modes, side.efforts)
+  action toggleModel(instance: string, model: string)
+    let key = modelKey(instance, model)
+    let nextList = side.anyModel ? dropKey(allModelKeys(providers), key) : modelOn(side.modelList, instance, model) ? dropKey(side.modelList, key) : addKey(side.modelList, key)
+    let clear = modelKey(side.modelInstance, side.modelSlug) == key
+    save(side.enabled, cap, whenText, side.mode, side.effort, side.inherit, clear ? "" : side.modelInstance, clear ? "" : side.modelSlug, false, nextList, side.modes, side.efforts)
+  view
+    column gap="space.lg" testId=`helpers-${kind}`
+      row align-items="center" gap="space.md" min-height=56
+        column flex=1 gap="2px"
+          text (lasting ? t("helpers.lasting") : t("helpers.once")) font-weight=600 testId=`helpers-${kind}-title`
+          text (side.enabled ? t("helpers.on") : t("helpers.off")) color="ink.muted" font="-exact-footnote" testId=`helpers-${kind}-state`
+        button class=ToggleControl appearance="none" role="switch" aria-checked=side.enabled press=toggleEnabled disabled=saving aria-label=(lasting ? t("helpers.lasting") : t("helpers.once")) testId=`helpers-${kind}-enabled`
+          row width=44 height=26 border-radius="radius.full" background-color=(side.enabled ? "AccentColor" : "surface.line") align-items="center" justify-content=(side.enabled ? "flex-end" : "flex-start")
+            column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+      column gap="space.xs"
+        text (lasting ? t("helpers.cap") : t("helpers.capOnce")) class=SectionLabel
+        input appearance="none" class=Field value=cap input=editCap(kind) change=commitCap aria-label=(lasting ? t("helpers.cap") : t("helpers.capOnce")) inputmode="numeric" padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId=`helpers-${kind}-cap`
+        text (lasting ? t("helpers.capNote") : t("helpers.onceNote")) color="ink.muted" font="-exact-footnote"
+      column gap="space.xs"
+        text t("helpers.when") class=SectionLabel
+        textarea appearance="none" class=Field value=whenText input=editWhen(kind) change=commitWhen aria-label=t("helpers.when") rows=4 maxlength=2000 padding="space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId=`helpers-${kind}-when`
+      text t("helpers.defaults") class=SectionLabel
+      column gap="space.xs"
+        text t("panel.model") color="ink.muted" font="-exact-footnote"
+        button class=ChoiceRow appearance="none" role="radio" aria-checked=(side.modelSlug == "") press=pickModel("", "") disabled=saving testId=`helpers-${kind}-model-same`
+          text t("helpers.sameModel") flex=1
+          if side.modelSlug == ""
+            column color="AccentColor"
+              Glyph(name="check", size=16)
+        for p in providers key=p.instanceId
+          for m in p.models.filter(model => side.anyModel or modelOn(side.modelList, p.instanceId, model.slug)) key=m.slug
+            button class=ChoiceRow appearance="none" role="radio" aria-checked=(side.modelInstance == p.instanceId and side.modelSlug == m.slug) press=pickModel(p.instanceId, m.slug) disabled=saving testId=`helpers-${kind}-model-${m.slug}`
+              text m.name flex=1
+              if side.modelInstance == p.instanceId and side.modelSlug == m.slug
+                column color="AccentColor"
+                  Glyph(name="check", size=16)
+      column gap="space.xs"
+        text t("model.access") color="ink.muted" font="-exact-footnote"
+        row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("model.access")
+          button class=Segment appearance="none" role="radio" aria-checked=(side.mode == "") press=pickMode("") disabled=saving testId=`helpers-${kind}-mode-none` border="1px solid surface.line" background-color=(side.mode == "" ? "surface.raised" : "transparent")
+            text t("helpers.noDefault")
+          if askOn
+            button class=Segment appearance="none" role="radio" aria-checked=(side.mode == "approval-required") press=pickMode("approval-required") disabled=saving testId=`helpers-${kind}-mode-approval-required` border="1px solid surface.line" background-color=(side.mode == "approval-required" ? "surface.raised" : "transparent")
+              text t("model.ask")
+          if autoOn
+            button class=Segment appearance="none" role="radio" aria-checked=(side.mode == "auto") press=pickMode("auto") disabled=saving testId=`helpers-${kind}-mode-auto` border="1px solid surface.line" background-color=(side.mode == "auto" ? "surface.raised" : "transparent")
+              text t("model.auto")
+          if fullOn
+            button class=Segment appearance="none" role="radio" aria-checked=(side.mode == "full-access") press=pickMode("full-access") disabled=saving testId=`helpers-${kind}-mode-full-access` border="1px solid surface.line" background-color=(side.mode == "full-access" ? "surface.raised" : "transparent")
+              text t("model.fullAccess")
+      column gap="space.xs"
+        text t("model.effort") color="ink.muted" font="-exact-footnote"
+        row gap="space.xs" flex-wrap="wrap" role="radiogroup" aria-label=t("model.effort")
+          button class=Segment appearance="none" role="radio" aria-checked=(side.effort == "") press=pickEffort("") disabled=saving testId=`helpers-${kind}-effort-none` border="1px solid surface.line" background-color=(side.effort == "" ? "surface.raised" : "transparent")
+            text t("helpers.noDefault")
+          if lowOn
+            button class=Segment appearance="none" role="radio" aria-checked=(side.effort == "low") press=pickEffort("low") disabled=saving testId=`helpers-${kind}-effort-low` border="1px solid surface.line" background-color=(side.effort == "low" ? "surface.raised" : "transparent")
+              text t("helpers.low")
+          if mediumOn
+            button class=Segment appearance="none" role="radio" aria-checked=(side.effort == "medium") press=pickEffort("medium") disabled=saving testId=`helpers-${kind}-effort-medium` border="1px solid surface.line" background-color=(side.effort == "medium" ? "surface.raised" : "transparent")
+              text t("helpers.medium")
+          if highOn
+            button class=Segment appearance="none" role="radio" aria-checked=(side.effort == "high") press=pickEffort("high") disabled=saving testId=`helpers-${kind}-effort-high` border="1px solid surface.line" background-color=(side.effort == "high" ? "surface.raised" : "transparent")
+              text t("helpers.high")
+        text (side.effort == "low" ? t("helpers.low") : side.effort == "medium" ? t("helpers.medium") : side.effort == "high" ? t("helpers.high") : t("helpers.noDefault")) color="ink.muted" font="-exact-footnote" testId=`helpers-${kind}-default-effort`
+      if lasting
+        row align-items="center" gap="space.md" min-height=56
+          column flex=1 gap="2px"
+            text t("helpers.inherit") font-weight=600
+            text t("helpers.inheritNote") color="ink.muted" font="-exact-footnote"
+            text (side.inherit ? t("helpers.on") : t("helpers.off")) color="ink.muted" font="-exact-footnote" testId=`helpers-${kind}-inherit-state`
+          button class=ToggleControl appearance="none" role="switch" aria-checked=side.inherit press=toggleInherit disabled=saving aria-label=t("helpers.inherit") testId=`helpers-${kind}-inherit`
+            row width=44 height=26 border-radius="radius.full" background-color=(side.inherit ? "AccentColor" : "surface.line") align-items="center" justify-content=(side.inherit ? "flex-end" : "flex-start")
+              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+      text t("helpers.ceiling") class=SectionLabel
+      row align-items="center" gap="space.md" min-height=44
+        column flex=1 gap="2px"
+          text t("helpers.anyModel") font-weight=600
+          text allowedNames color="ink.muted" font="-exact-footnote" testId=`helpers-${kind}-models`
+        button class=ToggleControl appearance="none" role="switch" aria-checked=side.anyModel press=toggleAny disabled=(saving or (side.anyModel and providers.length == 0)) aria-label=t("helpers.anyModel") testId=`helpers-${kind}-any`
+          row width=44 height=26 border-radius="radius.full" background-color=(side.anyModel ? "AccentColor" : "surface.line") align-items="center" justify-content=(side.anyModel ? "flex-end" : "flex-start")
+            column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
+      if modelsDown
+        text t("helpers.modelsDown") color="ink.muted" font="-exact-footnote" testId=`helpers-${kind}-models-down`
+      if not side.anyModel
+        column gap="2px"
+          text t("helpers.allowedModels") color="ink.muted" font="-exact-footnote"
+          for p in providers key=p.instanceId
+            for m in p.models key=m.slug
+              button class=ChoiceRow appearance="none" role="checkbox" aria-checked=modelOn(side.modelList, p.instanceId, m.slug) press=toggleModel(p.instanceId, m.slug) disabled=saving testId=`helpers-${kind}-allow-${m.slug}`
+                text m.name flex=1
+                if modelOn(side.modelList, p.instanceId, m.slug)
+                  column color="AccentColor"
+                    Glyph(name="check", size=16)
+      column gap="space.xs"
+        text t("helpers.allowedModes") color="ink.muted" font="-exact-footnote"
+        row gap="space.xs" flex-wrap="wrap"
+          button class=Segment appearance="none" role="checkbox" aria-checked=askOn press=toggleCeilingMode("approval-required") disabled=saving testId=`helpers-${kind}-ceiling-approval-required` border="1px solid surface.line" background-color=(askOn ? "surface.raised" : "transparent")
+            text t("model.ask")
+          button class=Segment appearance="none" role="checkbox" aria-checked=autoOn press=toggleCeilingMode("auto") disabled=saving testId=`helpers-${kind}-ceiling-auto` border="1px solid surface.line" background-color=(autoOn ? "surface.raised" : "transparent")
+            text t("model.auto")
+          button class=Segment appearance="none" role="checkbox" aria-checked=fullOn press=toggleCeilingMode("full-access") disabled=saving testId=`helpers-${kind}-ceiling-full-access` border="1px solid surface.line" background-color=(fullOn ? "surface.raised" : "transparent")
+            text t("model.fullAccess")
+        text modesLabel color="ink.muted" font="-exact-footnote" testId=`helpers-${kind}-modes`
+      column gap="space.xs"
+        text t("helpers.allowedEfforts") color="ink.muted" font="-exact-footnote"
+        row gap="space.xs" flex-wrap="wrap"
+          button class=Segment appearance="none" role="checkbox" aria-checked=lowOn press=toggleCeilingEffort("low") disabled=saving testId=`helpers-${kind}-ceiling-low` border="1px solid surface.line" background-color=(lowOn ? "surface.raised" : "transparent")
+            text t("helpers.low")
+          button class=Segment appearance="none" role="checkbox" aria-checked=mediumOn press=toggleCeilingEffort("medium") disabled=saving testId=`helpers-${kind}-ceiling-medium` border="1px solid surface.line" background-color=(mediumOn ? "surface.raised" : "transparent")
+            text t("helpers.medium")
+          button class=Segment appearance="none" role="checkbox" aria-checked=highOn press=toggleCeilingEffort("high") disabled=saving testId=`helpers-${kind}-ceiling-high` border="1px solid surface.line" background-color=(highOn ? "surface.raised" : "transparent")
+            text t("helpers.high")
+        text effortsLabel color="ink.muted" font="-exact-footnote" testId=`helpers-${kind}-efforts`

@@ -75,7 +75,7 @@ pub(crate) async fn static_files(State(s): S, uri: Uri, req: Request) -> Respons
         .await
     {
         Ok(res) => res.into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        Err(infallible) => match infallible {},
     }
 }
 
