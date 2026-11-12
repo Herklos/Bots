@@ -20,7 +20,7 @@ pub(crate) async fn t3_route(
             "/ws" => {
                 let mut u = format!(
                     "{}/ws?orchestrationProtocol=2&clientSurface=web&clientAppVersion=bots-rs",
-                    crate::harness::t3::ws_base(relay.http_base())
+                    relay.ws_base()
                 );
                 if let Some(q) = uri.query() {
                     u.push('&');
@@ -29,10 +29,7 @@ pub(crate) async fn t3_route(
                 u
             }
             "/api/preview-stream/ws" => {
-                format!(
-                    "{}{rest}{query}",
-                    crate::harness::t3::ws_base(relay.http_base())
-                )
+                format!("{}{rest}{query}", relay.ws_base())
             }
             _ => return ApiError::not_found("not found").into_response(),
         };

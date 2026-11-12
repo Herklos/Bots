@@ -117,6 +117,20 @@ pub struct UserMessage {
     pub attachments: Vec<Value>,
 }
 
+/// A short token the client chose, or a new id. The transcript row is `turn-item:message:` plus this.
+pub(crate) fn message_id(supplied: Option<&str>) -> String {
+    let id = supplied.unwrap_or("").trim();
+    if (1..=80).contains(&id.len())
+        && id
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    {
+        id.to_string()
+    } else {
+        uuid::Uuid::new_v4().to_string()
+    }
+}
+
 impl UserMessage {
     pub(crate) fn new(
         thread_id: &str,

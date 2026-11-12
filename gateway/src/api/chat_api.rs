@@ -173,35 +173,20 @@ pub(crate) async fn send_chat(
     if text.is_empty() && files.is_empty() {
         return Err(ApiError::bad_request("Write a message first."));
     }
-    let parent = main_thread(&s, &slug).await?;
     let asked = body["child"]
         .as_str()
         .map(str::trim)
         .filter(|id| !id.is_empty());
     // Resolve before any reply is stored or any command is dispatched. A refused child
     // builds no command, so the parent thread is not written.
-    let message_id = crate::harness::t3::transcript::message_id(body["messageId"].as_str());
-    let command = if let Some(child) = asked {
-        let rows = parent_rows(&s, &parent).await?;
-        crate::harness::t3::transcript::child_send_with(
-            &rows,
-            &parent,
-            child,
-            &text,
-            &files,
-            &message_id,
-        )
-        .map_err(ApiError::bad_request)?
-    } else {
-        crate::harness::t3::transcript::command_with(&parent, &text, &files, &message_id)
-    };
-    let thread = command["threadId"].as_str().unwrap_or(&parent).to_string();
+    let message_id = crate::harness::message_id(body["messageId"].as_str());
+    let thread = resolve_chat_thread(&s, &slug, asked).await?;
     let turns = s.harness.turns().map_err(|err| err.api())?;
     if let Some(reply_to) = body["replyTo"].as_str().filter(|id| !id.is_empty()) {
         s.threads
             .set_reply(
                 Some(&thread),
-                command["messageId"].as_str(),
+                Some(&message_id),
                 Some(reply_to),
                 body["quote"].as_str(),
             )
@@ -210,18 +195,16 @@ pub(crate) async fn send_chat(
     turns
         .send_user(&crate::harness::UserMessage::new(
             &thread,
-            command["messageId"].as_str().unwrap_or(""),
-            command["text"].as_str().unwrap_or(""),
-            command["attachments"].as_array().unwrap_or(&Vec::new()),
+            &message_id,
+            &text,
+            &files,
         ))
         .await
         .map_err(|err| err.api())?;
     s.usage
         .note_for(&slug, crate::bots::usage::Event::Message)
         .await;
-    Ok(Json(
-        json!({ "ok": true, "messageId": command["messageId"] }),
-    ))
+    Ok(Json(json!({ "ok": true, "messageId": message_id })))
 }
 
 pub(crate) async fn send_voice(

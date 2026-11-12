@@ -209,6 +209,14 @@ impl Browser for MockHarness {
         Err(missing("browser stream"))
     }
 
+    async fn held_input(&self, _slug: &str, _tab_id: &str, _messages: &[Value]) -> Option<Vec<u8>> {
+        None
+    }
+
+    async fn release(&self, _slug: &str) -> bool {
+        false
+    }
+
     async fn edit(
         &self,
         _thread_id: &str,
@@ -243,6 +251,10 @@ impl Browser for MockHarness {
 impl Relay for MockHarness {
     fn http_base(&self) -> &str {
         ""
+    }
+
+    fn ws_base(&self) -> String {
+        String::new()
     }
 
     async fn proxy_http(
