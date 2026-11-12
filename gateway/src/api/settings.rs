@@ -1,5 +1,10 @@
 use super::*;
 
+#[path = "settings_sections.rs"]
+mod settings_sections;
+
+pub(crate) use settings_sections::sections_view;
+
 pub(crate) async fn get_settings(State(s): S) -> Json<Value> {
     Json(s.settings().await)
 }
@@ -30,6 +35,9 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
     }
     if let Some(mode) = patch.get("maxRuntimeMode") {
         require_runtime_mode("maxRuntimeMode", mode)?;
+    }
+    if let Some(sections) = patch.get("sections") {
+        settings_sections::require_sections(sections)?;
     }
     let mut next = storage::merge(&current, &patch);
     if let Some(beta) = patch.get("beta") {
