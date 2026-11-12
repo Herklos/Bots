@@ -99,6 +99,8 @@ impl AppState {
         // Unknown or missing is full access, so the cap is off.
         out["maxRuntimeMode"] = json!(max_runtime_mode(&out).as_str());
         crate::bots::runtime_mode::apply_default_cap(&mut out);
+        // Missing stays []. Invalid becomes [] so one bad value cannot blank Settings.
+        out["sections"] = super::settings::sections_view(&saved);
         out
     }
 }
