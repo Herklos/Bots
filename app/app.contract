@@ -1123,6 +1123,8 @@ component Bots
       createStep = "template"
     else if createStep == "review"
       createStep = "message"
+  action goCreateStep(s: string)
+    createStep = s
   action createNext
     if createStep == "name"
       if newName.trim() != ""
@@ -1161,6 +1163,8 @@ component Bots
     groupAbout = v
   action pickGroupPolicy(p: string)
     groupPolicy = p
+  action goGroupStep(s: string)
+    groupStep = s
   action toggleGroupMember(m: string)
     groupMembers = groupMembers.includes(m) ? groupMembers.filter(x => x != m) : groupMembers.concat([m])
   action groupStepBack
@@ -2448,19 +2452,12 @@ component Bots
           else if e.name == "newGroup"
             column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="group-form" position="absolute" inset=0
               header class=PageHeader
-                if groupStep == "name"
-                  button id="back" class=TextControl appearance="none" press=back testId="group-cancel"
-                    text t("common.cancel")
-                else
+                if groupStep != "name"
                   button id="back" class=TextControl appearance="none" press=groupStepBack testId="group-back"
                     text t("common.back")
                 text t("group.new") role="heading" aria-level=1 class=PageTitle flex=1
-                if groupStep == "review"
-                  button buttonStyle="filled" press=makeGroup disabled=(not canMakeGroup) testId="group-create"
-                    text (pending(groupMade) ? t("common.creating") : t("group.create"))
-                else
-                  button buttonStyle="filled" press=groupStepNext disabled=((groupStep == "name" and groupName.trim() == "") or (groupStep == "face" and groupMembers.length < 2)) testId="group-next"
-                    text t("create.next")
+                button class=IconControl appearance="none" press=back aria-label=t("common.close") title=t("common.close") testId="group-close"
+                  Glyph(name="close", size=20)
               scroll id="group-form" flex=1 min-height=0
                 column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.lg" gap="space.lg"
                   if groupStep == "face" or groupStep == "review"
@@ -2469,11 +2466,11 @@ component Bots
                       text (groupMembers.length == 0 ? t("group.pickFaces") : t("group.face")) color="ink.muted" font="-exact-footnote" text-align="center"
                   if groupStep == "name"
                     column gap="space.sm"
-                      text t("common.name") font="-exact-subheadline" font-weight=600 testId="step-group-name"
+                      text t("group.askName") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-group-name"
                       input appearance="none" class=Field value=groupName input=editGroupName submit=groupStepNext placeholder=t("group.namePlaceholder") aria-label=t("group.name") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-name"
                   else if groupStep == "face"
                     column gap="space.sm"
-                      text t("group.stepFace") font="-exact-subheadline" font-weight=600 testId="step-group-face"
+                      text t("group.askFace") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-group-face"
                       row align-items="baseline" gap="space.sm"
                         text t("common.bots") font="-exact-subheadline" font-weight=600 flex=1
                         text (groupMembers.length < 2 ? t("group.pickMore", n=groupMembers.length) : t("group.picked", n=groupMembers.length)) color="ink.muted" font="-exact-footnote" testId="group-count"
@@ -2488,7 +2485,7 @@ component Bots
                                   Glyph(name="check", size=14)
                   else if groupStep == "policy"
                     column gap="space.sm" width="100%"
-                      text t("group.stepPolicy") font="-exact-subheadline" font-weight=600 testId="step-group-policy"
+                      text t("group.askPolicy") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-group-policy"
                       button class=ChoiceRow appearance="none" press=pickGroupPolicy("last") role="radio" aria-checked=(groupPolicy == "last") testId="policy-last"
                         column flex=1 gap="2px" min-width=0 align-items="flex-start"
                           text t("group.policyLast") font-weight=600
@@ -2503,60 +2500,71 @@ component Bots
                           text t("group.policyChiefAbout") color="ink.muted" font="-exact-footnote"
                   else if groupStep == "kickoff"
                     column gap="space.sm"
-                      text t("group.stepKickoff") font="-exact-subheadline" font-weight=600 testId="step-group-kickoff"
+                      text t("group.askKickoff") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-group-kickoff"
                       textarea appearance="none" class=Field value=groupAbout input=editGroupAbout placeholder=t("group.kickoffPlaceholder") aria-label=t("group.stepKickoff") rows=4 maxlength=2000 padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="group-about"
                   else
                     column gap="space.sm" testId="step-group-review"
-                      text t("create.review") font="-exact-subheadline" font-weight=600
-                      text groupName font-weight=600 testId="review-group-name"
-                      text (groupPolicy == "everyone" ? t("group.policyEveryone") : groupPolicy == "chief" ? t("group.policyChief") : t("group.policyLast")) testId="review-policy"
-                      text (groupAbout.trim() == "" ? t("group.noKickoff") : groupAbout) testId="review-kickoff"
+                      text t("create.review") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2
+                      column class=GroupCard padding="0"
+                        button class=SettingsRow appearance="none" press=goGroupStep("name") min-height=56 padding="space.sm space.md" testId="review-edit-name"
+                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
+                            text t("common.name") color="ink.muted" font="-exact-footnote"
+                            text groupName font-weight=600 testId="review-group-name"
+                          Glyph(name="chevron", size=18)
+                        button class=SettingsRow appearance="none" press=goGroupStep("policy") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-policy"
+                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
+                            text t("group.stepPolicy") color="ink.muted" font="-exact-footnote"
+                            text (groupPolicy == "everyone" ? t("group.policyEveryone") : groupPolicy == "chief" ? t("group.policyChief") : t("group.policyLast")) font-weight=600 testId="review-policy"
+                          Glyph(name="chevron", size=18)
+                        button class=SettingsRow appearance="none" press=goGroupStep("kickoff") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-kickoff"
+                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
+                            text t("group.stepKickoff") color="ink.muted" font="-exact-footnote"
+                            text (groupAbout.trim() == "" ? t("group.noKickoff") : groupAbout) font-weight=600 testId="review-kickoff"
+                          Glyph(name="chevron", size=18)
+              row justify-content="center" padding="space.md space.lg" border-top="1px solid surface.line" box-sizing="border-box"
+                column width="100%" max-width="34rem"
+                  if groupStep == "review"
+                    button class=PrimaryButton buttonStyle="filled" press=makeGroup disabled=(not canMakeGroup) width="100%" testId="group-create"
+                      text (pending(groupMade) ? t("common.creating") : t("group.create"))
+                  else
+                    button class=PrimaryButton buttonStyle="filled" press=groupStepNext disabled=((groupStep == "name" and groupName.trim() == "") or (groupStep == "face" and groupMembers.length < 2)) width="100%" testId="group-next"
+                      text t("create.next")
                   if groupError != "" and not pending(groupMade)
                     text groupError color="-exact-system-red" testId="group-error"
           else
             column class=Screen navigationKey=`${e.id}` navigationPresentation="modal" navigationScroll="new-form" position="absolute" inset=0
               header class=PageHeader
-                if createStep == "name"
-                  button id="back" class=TextControl appearance="none" press=back testId="new-cancel"
-                    text t("common.cancel")
-                else
+                if createStep != "name"
                   button id="back" class=TextControl appearance="none" press=createBack testId="create-back"
                     text t("common.back")
                 text t("inbox.newBot") role="heading" aria-level=1 class=PageTitle flex=1
-                if createStep == "review"
-                  button buttonStyle="filled" press=create disabled=(newName.trim() == "" or pending(created)) testId="create"
-                    text (pending(created) ? t("common.creating") : t("create.start"))
-                else if createStep == "template"
-                  button buttonStyle="filled" press=createNext testId="create-skip"
-                    text t("create.skip")
-                else
-                  button buttonStyle="filled" press=createNext disabled=(createStep == "name" and newName.trim() == "") testId="create-next"
-                    text t("create.next")
+                button class=IconControl appearance="none" press=back aria-label=t("common.close") title=t("common.close") testId="new-close"
+                  Glyph(name="close", size=20)
               scroll id="new-form" flex=1 min-height=0
                 column width="100%" max-width="34rem" box-sizing="border-box" margin="0 auto" padding="space.lg" gap="space.lg"
                   column align-items="center" gap="space.md" testId="create-face"
                     Avatar(shape=newShape, color=faceColor(newColor), state="idle", size=96, still=false, presence="")
                   if createStep == "name"
                     column gap="space.sm"
-                      text t("common.name") font="-exact-subheadline" font-weight=600 testId="step-name"
+                      text t("create.askName") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-name"
                       input appearance="none" class=Field value=newName input=editName submit=createNext placeholder=t("create.namePlaceholder") aria-label=t("common.name") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-name"
                   else if createStep == "colour"
-                    column gap="space.sm" align-items="center"
-                      text t("edit.colour") font="-exact-subheadline" font-weight=600 testId="step-colour"
+                    column gap="space.sm"
+                      text t("create.askColour") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-colour"
                       row gap="space.xs" flex-wrap="wrap" justify-content="center"
                         for c in pickerColours() key=c
                           button class=SwatchControl press=pick(c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(newColor == c) testId=`colour-${c}` width=44 height=44 padding=0
                             column width=32 height=32 box-sizing="border-box" border-radius="radius.full" background-color=c border=(newColor == c ? "3px solid AccentColor" : "3px solid transparent")
                   else if createStep == "shape"
-                    column gap="space.sm" align-items="center"
-                      text t("edit.shape") font="-exact-subheadline" font-weight=600 testId="step-shape"
+                    column gap="space.sm"
+                      text t("create.askShape") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-shape"
                       row gap="space.xs" flex-wrap="wrap" justify-content="center"
                         for s in shapeNames() key=s
                           button class=SwatchControl press=pickShape(s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(newShape == s) testId=`shape-${s}` width=44 height=44 padding=0 border-radius="radius.md" background-color=(newShape == s ? "surface.raised" : "transparent")
                             Avatar(shape=s, color=faceColor(newColor), state="idle", size=30, still=true, presence="")
                   else if createStep == "template"
                     column gap="space.sm" width="100%"
-                      text t("create.template") font="-exact-subheadline" font-weight=600 testId="step-template"
+                      text t("create.askTemplate") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-template"
                       text t("create.or") color="ink.muted"
                       if suggestions.length > 0
                         column gap="space.sm"
@@ -2568,15 +2576,43 @@ component Bots
                                 text s.about color="ink.muted" font="-exact-footnote"
                   else if createStep == "message"
                     column gap="space.sm"
-                      text t("create.firstMessage") font="-exact-subheadline" font-weight=600 testId="step-message"
+                      text t("create.askMessage") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-message"
                       textarea appearance="none" class=Field value=newFirst input=editFirst placeholder=t("create.messagePlaceholder") aria-label=t("create.firstMessage") rows=4 maxlength=2000 padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-first"
                   else
                     column gap="space.sm" testId="step-review"
-                      text t("create.review") font="-exact-subheadline" font-weight=600
-                      text newName font-weight=600 testId="review-name"
-                      text t("edit.colourNamed", name=faceColor(newColor)) testId="review-colour"
-                      text t("edit.shapeNamed", name=newShape) testId="review-shape"
-                      text (newFirst.trim() == "" ? t("create.noMessage") : newFirst) testId="review-first"
+                      text t("create.review") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2
+                      column class=GroupCard padding="0"
+                        button class=SettingsRow appearance="none" press=goCreateStep("name") min-height=56 padding="space.sm space.md" testId="review-edit-name"
+                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
+                            text t("common.name") color="ink.muted" font="-exact-footnote"
+                            text newName font-weight=600 testId="review-name"
+                          Glyph(name="chevron", size=18)
+                        button class=SettingsRow appearance="none" press=goCreateStep("colour") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-colour"
+                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
+                            text t("edit.colour") color="ink.muted" font="-exact-footnote"
+                            text faceColor(newColor) font-weight=600 testId="review-colour"
+                          Glyph(name="chevron", size=18)
+                        button class=SettingsRow appearance="none" press=goCreateStep("shape") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-shape"
+                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
+                            text t("edit.shape") color="ink.muted" font="-exact-footnote"
+                            text newShape font-weight=600 testId="review-shape"
+                          Glyph(name="chevron", size=18)
+                        button class=SettingsRow appearance="none" press=goCreateStep("message") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-message"
+                          column flex=1 min-width=0 gap="2px" align-items="flex-start"
+                            text t("create.firstMessage") color="ink.muted" font="-exact-footnote"
+                            text (newFirst.trim() == "" ? t("create.noMessage") : newFirst) font-weight=600 testId="review-first"
+                          Glyph(name="chevron", size=18)
+              row justify-content="center" padding="space.md space.lg" border-top="1px solid surface.line" box-sizing="border-box"
+                column width="100%" max-width="34rem"
+                  if createStep == "review"
+                    button class=PrimaryButton buttonStyle="filled" press=create disabled=(newName.trim() == "" or pending(created)) width="100%" testId="create"
+                      text (pending(created) ? t("common.creating") : t("create.start"))
+                  else if createStep == "template"
+                    button class=PrimaryButton buttonStyle="filled" press=createNext width="100%" testId="create-skip"
+                      text t("create.skip")
+                  else
+                    button class=PrimaryButton buttonStyle="filled" press=createNext disabled=(createStep == "name" and newName.trim() == "") width="100%" testId="create-next"
+                      text t("create.next")
                   if createError != "" and not pending(created)
                     text createError color="-exact-system-red" testId="create-error"
       if computerEnlarged and not locked and onComputer and computer.image != ""
