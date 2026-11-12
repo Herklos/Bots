@@ -215,6 +215,20 @@ shape Storage
   restartRequired: bool
   canRestart: bool
   error: string
+
+// Anytype pairing. `challengeId` is the open pairing request, or empty. The key never
+// reaches the screen. `AnytypeCheck` says whether the saved key reaches the chosen space
+// and whether that space has more than one member.
+shape Pairing
+  ok: bool
+  error: string
+  challengeId: string
+shape AnytypeCheck
+  ok: bool
+  error: string
+  space: string
+  spaceFound: bool
+  shared: bool
 shape Suggestion
   name: string
   about: string
@@ -442,6 +456,8 @@ component Bots
   state folderDraft = ""
   state folderEditing = false
   state storageHint = ""
+  state pairCode = ""
+  state pairStep = ""
   state botQuery = ""
   state searching = false
   state away = false
@@ -565,6 +581,9 @@ component Bots
   mutation storageTested as shape Reply then afterStorageTest
   mutation storageCopied as shape Reply then afterStorageCopy
   mutation storageRestarted as shape Reply
+  mutation pairStarted as shape Pairing then afterPairStart
+  mutation pairConfirmed as shape Reply then afterPairConfirm
+  mutation anytypeChecked as shape AnytypeCheck
   mutation loginSaved as shape Reply refreshes vault then afterLoginSave
   mutation loginRemoved as shape Reply refreshes vault then afterLoginRemove
   mutation revealed as shape Revealed
@@ -635,6 +654,13 @@ component Bots
   derive storageTestError = match storageTested { case some(r) => r.error, case none => "" }
   derive storageCopyError = match storageCopied { case some(r) => r.error, case none => "" }
   derive storageRestartError = match storageRestarted { case some(r) => r.error, case none => "" }
+  derive pairChallenge = match pairStarted { case some(r) => r.challengeId, case none => "" }
+  derive pairError = match pairStarted { case some(r) => r.error, case none => "" }
+  derive pairConfirmError = match pairConfirmed { case some(r) => r.error, case none => "" }
+  derive anytypeError = match anytypeChecked { case some(r) => r.error, case none => "" }
+  derive anytypeSpace = match anytypeChecked { case some(r) => r.space, case none => "" }
+  derive anytypeFound = match anytypeChecked { case some(r) => r.spaceFound, case none => false }
+  derive anytypeShared = match anytypeChecked { case some(r) => r.shared, case none => false }
   derive networkGate = (top(nav).name == "settings" and settingsDomain == "access") ? "1" : "0"
   derive loginError = match loginSaved { case some(r) => r.error, case none => "" }
   derive loginRemoveError = match loginRemoved { case some(r) => r.error, case none => "" }
@@ -1634,6 +1660,37 @@ component Bots
   action doRestartStorage
     if storage.canRestart and storage.restartRequired and not pending(storageRestarted)
       send storageRestarted = restartStorage()
+  // Anytype: start pairing, type the 4 digit code the app shows, then check the space.
+  action doPairStart
+    if not pending(pairStarted)
+      pairCode = ""
+      pairStep = ""
+      send pairStarted = startPairing()
+  action afterPairStart
+    match pairStarted
+      case some(r)
+        if r.ok
+          pairStep = "code"
+      case none
+        pairStep = pairStep
+  action doEditPairCode(v: string)
+    pairCode = v.trim()
+  action doPairConfirm
+    if pairChallenge != "" and pairCode.length == 4 and not pending(pairConfirmed)
+      send pairConfirmed = confirmPairing(pairChallenge, pairCode)
+  action afterPairConfirm
+    match pairConfirmed
+      case some(r)
+        if r.ok
+          pairStep = "checked"
+          pairCode = ""
+          send anytypeChecked = checkAnytype()
+      case none
+        pairStep = pairStep
+  action doAnytypeCheck
+    if not pending(anytypeChecked)
+      pairStep = "checked"
+      send anytypeChecked = checkAnytype()
 
   // Vault: a login is edited in a sheet. The password is kept unless a new one is typed.
   action doCommitLogin(id: string, title: string, website: string, username: string, password: string, hints: string)
@@ -2242,6 +2299,33 @@ component Bots
                         text t("settings.storage.anytypeSoon") class=SettingsFoot testId="storage-anytype-note"
                         if storage.backendLock != ""
                           text t("settings.storage.locked", variable=storage.backendLock) class=SettingsFoot testId="storage-locked-backend"
+                      text t("settings.anytype.title") class=SectionLabel
+                      column class=GroupCard padding="space.sm" gap="space.sm" testId="anytype-connect"
+                        text t("settings.anytype.intro") class=SettingsFoot
+                        row class=SettingsRow gap="space.sm" min-height=44
+                          button appearance="none" press=doPairStart disabled=pending(pairStarted) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="anytype-connect-start"
+                            text (pairStep == "" ? t("settings.anytype.connect") : t("settings.anytype.again"))
+                          button appearance="none" press=doAnytypeCheck disabled=pending(anytypeChecked) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="anytype-check"
+                            text t("settings.anytype.check")
+                        if pairStep == "code"
+                          text t("settings.anytype.approve") class=SettingsFoot testId="anytype-approve"
+                          row class=SettingsRow gap="space.sm" min-height=44
+                            input appearance="none" class=Field value=pairCode input=doEditPairCode maxlength=4 inputmode="numeric" placeholder="0000" aria-label=t("settings.anytype.code") flex=1 min-width=0 testId="anytype-code"
+                            button appearance="none" press=doPairConfirm disabled=(pairCode.length != 4 or pending(pairConfirmed)) min-height=44 padding="0 space.sm" border="none" background-color="transparent" color="AccentColor" font="-exact-subheadline" font-weight=500 testId="anytype-confirm"
+                              text t("settings.anytype.confirm")
+                        if pairError != "" and not pending(pairStarted)
+                          text pairError color="-exact-system-red" font="-exact-footnote" testId="anytype-pair-error"
+                        if pairConfirmError != "" and not pending(pairConfirmed)
+                          text pairConfirmError color="-exact-system-red" font="-exact-footnote" testId="anytype-confirm-error"
+                        if anytypeError != "" and not pending(anytypeChecked)
+                          text anytypeError color="-exact-system-red" font="-exact-footnote" testId="anytype-check-error"
+                        if pairStep == "checked" and anytypeError == "" and not pending(anytypeChecked) and pairConfirmError == ""
+                          text t("settings.anytype.reachable") class=SettingsFoot testId="anytype-reachable"
+                          if anytypeFound
+                            text t("settings.anytype.space", name=anytypeSpace) class=SettingsFoot testId="anytype-space"
+                            text (anytypeShared ? t("settings.anytype.shared") : t("settings.anytype.private")) class=SettingsFoot testId="anytype-shared"
+                          else
+                            text t("settings.anytype.missing", name=anytypeSpace) class=SettingsFoot testId="anytype-missing"
                       text t("settings.storage.folder") class=SectionLabel
                       column class=GroupCard padding="0"
                         row class=SettingsRow min-height=44

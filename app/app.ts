@@ -242,6 +242,19 @@ const sources: Sources = {
   testStorage: async ([path], store) => reply(await call(store, '/api/storage/test', { method: 'POST', body: JSON.stringify({ backend: 'filesystem', root: path }) })),
   copyStorage: async ([path], store) => reply(await call(store, '/api/storage/copy', { method: 'POST', body: JSON.stringify({ root: path }) })),
   restartStorage: async (_args, store) => reply(await call(store, '/api/storage/restart', { method: 'POST', body: '{}' })),
+  startPairing: async (_args, store): Promise<Result<'startPairing'>> => {
+    const r = await call(store, '/api/storage/anytype/pair', { method: 'POST', body: '{}' });
+    if (!r.ok) return { ok: false, error: localize(r.error), challengeId: '' };
+    const id = typeof r.body?.challengeId === 'string' ? r.body.challengeId : '';
+    return { ok: id !== '', error: '', challengeId: id };
+  },
+  confirmPairing: async ([challengeId, code], store) => reply(await call(store, '/api/storage/anytype/pair/confirm', { method: 'POST', body: JSON.stringify({ challengeId, code }) })),
+  checkAnytype: async (_args, store): Promise<Result<'checkAnytype'>> => {
+    const r = await call(store, '/api/storage/anytype/check', { method: 'POST', body: '{}' });
+    if (!r.ok) return { ok: false, error: localize(r.error), space: '', spaceFound: false, shared: false };
+    const b = r.body ?? {};
+    return { ok: b.reachable === true, error: '', space: typeof b.space === 'string' ? b.space : '', spaceFound: b.spaceFound === true, shared: b.shared === true };
+  },
   loadVault: async (_args, store): Promise<Result<'loadVault'>> => {
     const body = await read(store, '/api/vault');
     return (body.items as any[]).filter((i) => i.type === 'login').map((i) => ({

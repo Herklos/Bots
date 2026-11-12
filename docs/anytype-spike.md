@@ -10,3 +10,5 @@ Live run against the desktop app (`127.0.0.1:31009`, API `2025-11-08`). One appr
 - The key can reach several spaces if several are ticked in the dialog. Tick only the hbots space.
 
 Gateway routes built on this: `POST /api/storage/anytype/pair`, `.../pair/confirm`, `.../check`. S2 to S8 are not run.
+
+Settings connect flow (2026-11-12): run through the gateway routes against Anytype Desktop. `pair` opened the approval dialog, `pair/confirm` with the 4 digit code returned `keySet: true` and wrote `~/.hbots/anytype-key` (mode 600, never returned), and `check` returned `reachable: true`, `scoped: true`, `permission: readwrite`. The key reached one space, `Test-AnyBot`, not the default `hbots`, so `spaceFound` was false. Settings shows that as a missing space.
