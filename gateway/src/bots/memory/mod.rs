@@ -22,6 +22,17 @@ mod mutate_tests;
 mod search;
 mod skills;
 mod state;
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "write and journal recovery are covered by tests; the Memory tab and boot call them in a later phase"
+    )
+)]
+mod user;
+#[cfg(test)]
+#[path = "user_tests.rs"]
+mod user_tests;
 #[cfg(test)]
 mod tests;
 
@@ -316,6 +327,7 @@ pub(crate) use evidence::{
 pub(crate) use facts::{FACT_CHARS, FULL_NOTE_CHARS, MEMORY_CHARS, NOTE_CHARS};
 pub(crate) use mutate::{mutate, Coded, MutateFail, MutateOk, Mutation, Op, Scope};
 pub(crate) use search::{document, list_notes, read_note, search as search_memory, Hit, NoteInfo};
+pub(crate) use user::{snapshot_user, user_memory_path};
 
 fn cap_prefix(bytes: &[u8], cap: usize) -> (String, bool) {
     if bytes.len() <= cap {

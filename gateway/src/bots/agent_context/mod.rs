@@ -24,6 +24,8 @@ pub(crate) const SHARED_MEMORY_MAX: usize = 2 * 1024;
 
 pub(crate) const PARENT_MEMORY_MAX: usize = 2 * 1024;
 
+const USER_MEMORY_NOTE: &str = "Lines in <user-memory> were written by the person. Do not contradict them. To change one, ask the person.\n\n";
+
 const LINE_WINDOW: usize = 200;
 
 const POLL_EVERY: Duration = Duration::from_secs(20);
@@ -46,6 +48,7 @@ pub(crate) struct MemorySection {
 /// One read of the memory files that belong in the managed block.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct MemorySnapshot {
+    pub user: Option<MemorySection>,
     pub memory: Option<MemorySection>,
     pub log: Option<MemorySection>,
     pub shared: Option<MemorySection>,
@@ -54,7 +57,8 @@ pub(crate) struct MemorySnapshot {
 
 impl MemorySnapshot {
     pub(crate) fn is_empty(&self) -> bool {
-        self.memory.is_none()
+        self.user.is_none()
+            && self.memory.is_none()
             && self.log.is_none()
             && self.shared.is_none()
             && self.parent.is_none()
@@ -70,6 +74,7 @@ pub(crate) struct FileStamp {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct BotFiles {
     pub slug: String,
+    pub user: Option<FileStamp>,
     pub memory: Option<FileStamp>,
     pub log: Option<FileStamp>,
     /// Set when this Bot inherits its parent's prompt, and so its parent's memory.
@@ -84,6 +89,7 @@ pub(crate) struct FileWatch {
 
 const TAG_PREFIXES: &[&str] = &[
     "instructions",
+    "user-memory",
     "memory-log",
     "shared-memory",
     "parent-memory",
@@ -147,6 +153,10 @@ pub(crate) fn render_snapshot(memory: &MemorySnapshot) -> String {
         return String::new();
     }
     let mut out = format!("\n{CONTEXT_NOTE}\n\n{SNAPSHOT_NOTE}\n\n");
+    if let Some(section) = &memory.user {
+        out.push_str(USER_MEMORY_NOTE);
+        out.push_str(&render_tag("user-memory", &[], section));
+    }
     if let Some(section) = &memory.memory {
         out.push_str(&render_tag("memory", &[], section));
     }
@@ -181,6 +191,7 @@ fn render_tag(name: &str, extra: &[(&str, &str)], section: &MemorySection) -> St
 
 /// Slugs whose memory files moved. A shared-file change lists every Bot.
 /// A parent's `MEMORY.md` also lists children that inherit it. A log change does not.
+/// A user-memory file lists that Bot only.
 pub(crate) fn changed(prev: &FileWatch, now: &FileWatch) -> Vec<String> {
     if prev.shared != now.shared {
         let mut slugs: Vec<String> = now.bots.iter().map(|bot| bot.slug.clone()).collect();
@@ -190,9 +201,10 @@ pub(crate) fn changed(prev: &FileWatch, now: &FileWatch) -> Vec<String> {
     let mut out = BTreeSet::new();
     for bot in &now.bots {
         let old = prev.bots.iter().find(|other| other.slug == bot.slug);
+        let user_moved = old.is_none_or(|other| other.user != bot.user);
         let memory_moved = old.is_none_or(|other| other.memory != bot.memory);
         let log_moved = old.is_none_or(|other| other.log != bot.log);
-        if memory_moved || log_moved {
+        if user_moved || memory_moved || log_moved {
             out.insert(bot.slug.clone());
         }
         if memory_moved {
@@ -239,6 +251,11 @@ async fn scan(state: &crate::AppState) -> FileWatch {
         let dir = state.cfg.bots_root.join(slug);
         watch.bots.push(BotFiles {
             slug: slug.to_string(),
+            user: stamp_file(&crate::bots::memory::user_memory_path(
+                &state.cfg.bots_root,
+                slug,
+            ))
+            .await,
             memory: stamp_file(&dir.join("memory").join("MEMORY.md")).await,
             log: stamp_file(&dir.join("memory").join("log.md")).await,
             inherit_parent: inherit_parent(&bot),
@@ -352,7 +369,9 @@ pub(crate) async fn read_snapshot(
     } else {
         None
     };
+    let user = crate::bots::memory::snapshot_user(root, slug).await;
     MemorySnapshot {
+        user,
         memory,
         log,
         shared,
