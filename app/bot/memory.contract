@@ -1,4 +1,4 @@
-use Field, PrimaryButton, TextControl from "../ui/controls.contract"
+use Field, PrimaryButton, TextControl, SectionLabel from "../ui/controls.contract"
 
 // One Bot's memory/MEMORY.md, as GET /api/memory returns it.
 shape MemoryFile
@@ -41,48 +41,49 @@ component MemoryTab
     saveMemory: action
     reloadMemory: action
     overwriteMemory: action
+  // A file holding only its title line is the template a new Bot starts with.
+  derive bare = memoryBag.file.text.trim() == "" or (memoryBag.file.text.trim().startsWith("#") and memoryBag.file.text.trim().split("\n").length == 1)
   view
-    scroll flex=1 min-height=0
-      column gap="space.md" padding="0 space.lg space.xl" testId="memory-tab"
-        if memoryBag.file.path != ""
-          text memoryBag.file.path color="ink.muted" font="-exact-footnote" testId="memory-path"
-        if memoryBag.failed
-          text t("error.memory") color="-exact-system-red" testId="memory-error"
-          button class=PrimaryButton buttonStyle="bordered" press=pull testId="memory-retry"
-            text t("common.tryAgain")
-        else if memoryBag.pending and memoryBag.file.revision == ""
-          text t("memory.loading") color="ink.muted" testId="memory-loading"
-        else if memoryBag.editing
-          if memoryBag.conflict
-            column gap="space.sm" padding="space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.raised" testId="memory-conflict"
-              text t("memory.conflict", name=name) testId="memory-conflict-text"
-              if memoryBag.serverText != ""
-                text memoryBag.serverText color="ink.muted" font="-exact-footnote" white-space="pre-wrap" testId="memory-server"
-              row gap="space.sm" flex-wrap="wrap"
-                button class=PrimaryButton buttonStyle="filled" press=reloadMemory testId="memory-reload"
-                  text t("memory.reload")
-                button class=PrimaryButton buttonStyle="bordered" commandfor="memory-overwrite" command="show-modal" testId="memory-overwrite"
-                  text t("memory.overwrite")
-          textarea appearance="none" class=Field value=memoryBag.draft input=editMemoryDraft aria-label=t("panel.memory") rows=12 maxlength=200000 padding="space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" white-space="pre-wrap" testId="memory-draft"
-          if memoryBag.error != ""
-            text memoryBag.error color="-exact-system-red" testId="memory-save-error"
-          row gap="space.sm" flex-wrap="wrap"
-            button class=PrimaryButton buttonStyle="bordered" press=cancelMemory testId="memory-cancel"
-              text t("memory.cancel")
-            if not memoryBag.conflict
-              button class=PrimaryButton buttonStyle="filled" press=saveMemory disabled=memoryBag.saving testId="memory-save"
-                text (memoryBag.saving ? t("memory.saving") : t("memory.save"))
-          dialog id="memory-overwrite" role="alertdialog" aria-label=t("memory.overwrite")
-            text t("memory.overwriteBody")
-            button press=overwriteMemory destructive=true commandfor="memory-overwrite" command="close" testId="memory-overwrite-ok"
-              text t("memory.overwrite")
-            button commandfor="memory-overwrite" command="close" testId="memory-overwrite-cancel"
-              text t("common.cancel")
-        else if memoryBag.file.text.trim() == ""
-          text t("memory.empty") color="ink.muted" testId="memory-empty"
-          button class=PrimaryButton buttonStyle="filled" press=beginMemoryEdit testId="memory-edit"
+    column gap="space.xs" width="100%" testId="memory-tab"
+      row align-items="center" gap="space.sm" min-height=28
+        text t("panel.memory") class=SectionLabel flex=1 role="heading" aria-level=3 testId="memory-heading"
+        if not memoryBag.failed and not memoryBag.editing and not (memoryBag.pending and memoryBag.file.revision == "")
+          button class=TextControl appearance="none" press=beginMemoryEdit min-height=28 padding="0 space.xs" font="-exact-footnote" color="AccentColor" testId="memory-edit"
             text t("memory.edit")
-        else
-          text memoryBag.file.text markup="markdown" white-space="normal" testId="memory-body"
-          button class=PrimaryButton buttonStyle="filled" press=beginMemoryEdit testId="memory-edit"
-            text t("memory.edit")
+      if memoryBag.failed
+        text t("error.memory") color="-exact-system-red" font="-exact-footnote" padding="0 space.md" testId="memory-error"
+        button class=TextControl appearance="none" press=pull min-height=28 padding="0" font="-exact-footnote" color="AccentColor" testId="memory-retry"
+          text t("common.tryAgain")
+      else if memoryBag.pending and memoryBag.file.revision == ""
+        text t("memory.loading") color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="memory-loading"
+      else if memoryBag.editing
+        if memoryBag.conflict
+          column gap="space.sm" padding="space.sm" border="1px solid surface.line" border-radius="radius.sm" background-color="surface.raised" testId="memory-conflict"
+            text t("memory.conflict", name=name) font="-exact-footnote" testId="memory-conflict-text"
+            if memoryBag.serverText != ""
+              text memoryBag.serverText color="ink.muted" font="-exact-footnote" white-space="pre-wrap" testId="memory-server"
+            row gap="space.sm" flex-wrap="wrap"
+              button class=PrimaryButton buttonStyle="filled" press=reloadMemory testId="memory-reload"
+                text t("memory.reload")
+              button class=PrimaryButton buttonStyle="bordered" commandfor="memory-overwrite" command="show-modal" testId="memory-overwrite"
+                text t("memory.overwrite")
+        textarea appearance="none" class=Field value=memoryBag.draft input=editMemoryDraft aria-label=t("panel.memory") rows=8 maxlength=200000 padding="space.sm" border="1px solid surface.line" border-radius="radius.sm" background-color="surface.card" white-space="pre-wrap" font="-exact-footnote" testId="memory-draft"
+        if memoryBag.error != ""
+          text memoryBag.error color="-exact-system-red" font="-exact-footnote" testId="memory-save-error"
+        row gap="space.sm" flex-wrap="wrap"
+          button class=PrimaryButton buttonStyle="bordered" press=cancelMemory testId="memory-cancel"
+            text t("memory.cancel")
+          if not memoryBag.conflict
+            button class=PrimaryButton buttonStyle="filled" press=saveMemory disabled=memoryBag.saving testId="memory-save"
+              text (memoryBag.saving ? t("memory.saving") : t("memory.save"))
+        dialog id="memory-overwrite" role="alertdialog" aria-label=t("memory.overwrite")
+          text t("memory.overwriteBody")
+          button press=overwriteMemory destructive=true commandfor="memory-overwrite" command="close" testId="memory-overwrite-ok"
+            text t("memory.overwrite")
+          button commandfor="memory-overwrite" command="close" testId="memory-overwrite-cancel"
+            text t("common.cancel")
+      else if bare
+        text t("memory.empty") color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="memory-empty"
+      else
+        column max-height="11rem" overflow="auto" padding="0 space.md"
+          text memoryBag.file.text markup="markdown" white-space="normal" font="-exact-footnote" testId="memory-body"

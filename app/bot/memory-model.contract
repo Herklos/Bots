@@ -10,7 +10,7 @@ members Bots
   state memoryServerRevision = ""
   // True after a save settles, so a cancelled edit does not keep the last error.
   state memoryNoted = false
-  derive onMemory = top(nav).name == "chat" and panelOpen and panelTab == "memory"
+  derive onMemory = top(nav).name == "chat" and panelOpen and panelTab == "details"
   derive memoryGate = (onMemory and slug != "") ? "1" : "0"
   resource memory = loadMemory(slug, memoryGate) as shape MemoryFile else empty()
   mutation memorySaved as shape MemorySave refreshes memory then afterMemorySave
