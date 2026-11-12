@@ -218,6 +218,7 @@ fn merge_never_prints_a_disabled_secret_into_mcp() {
         ],
         "http://127.0.0.1/mcp/bot",
         "tok",
+        "ada",
     );
     let text = mcp.to_string();
     assert!(!text.contains("s3cret"));
@@ -383,6 +384,7 @@ fn harness_files_sort_servers_and_disable_only_what_is_off() {
         ],
         "http://127.0.0.1/mcp/bot",
         "tok",
+        "ada",
     );
     let toml = codex_toml(&mcp);
     let bot_at = toml.find("[mcp_servers.bot]").unwrap();

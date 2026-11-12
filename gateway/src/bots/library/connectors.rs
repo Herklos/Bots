@@ -1,4 +1,5 @@
 use super::*;
+use crate::bots::mcp_identity::bot_mcp_url;
 
 pub(crate) fn validate_connector_name(name: &str) -> ApiResult<()> {
     let ok = !name.is_empty()
@@ -32,11 +33,13 @@ pub(crate) fn validate_connector_url(url: &str) -> ApiResult<()> {
 
 /// `bot` stays. An enabled connector is written. A disabled one is removed.
 /// A secret never appears in a response; it is only placed in the file the harness reads.
+/// `slug` is added to the `bot` URL so `tools/list` can apply that Bot's `toolAllow`.
 pub(crate) fn merge_mcp(
     existing: &Value,
     connectors: &[Value],
     bot_url: &str,
     bot_token: &str,
+    slug: &str,
 ) -> Value {
     let mut mcp = existing.clone();
     if !mcp.is_object() {
@@ -47,7 +50,7 @@ pub(crate) fn merge_mcp(
         "bot".into(),
         json!({
             "type": "http",
-            "url": bot_url,
+            "url": bot_mcp_url(bot_url, slug),
             "headers": { "Authorization": format!("Bearer {bot_token}") },
         }),
     );
@@ -217,7 +220,7 @@ impl Library {
             Ok(bytes) => serde_json::from_slice(&bytes).unwrap_or_else(|_| json!({})),
             Err(_) => json!({}),
         };
-        let mcp = merge_mcp(&existing, connectors, &self.mcp_url, &self.mcp_token);
+        let mcp = merge_mcp(&existing, connectors, &self.mcp_url, &self.mcp_token, slug);
         let claude = claude_settings(&claude_existing, connectors);
         #[cfg(unix)]
         {
