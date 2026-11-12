@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.4
+
+This release adds memory editing tools, safer Bot replies and more control over Bot instructions and approval modes.
+
+### New features
+
+- Edit, forget and search Bot memory through tools, with revision history and journals for recovery. Subagents write to their own memory store.
+- Set a Bot's instructions when creating or editing it, and cap the approval mode used for Bot runs.
+- Prepare the hbots schema in an Anytype space. Bot storage continues to use the file system; schema preparation does not enable an Anytype storage backend.
+- Show eligible library images in Bot replies while removing other image references.
+
+### Improvements
+
+- Route chat, browser and other T3 operations through the harness boundary, and read Bot memory through the shared workspace.
+- Split client screens and tests into smaller modules and document planned work separately from shipped features.
+
+### Bug fixes
+
+- Sandbox HTML pages served from the Bot library to protect the user's session.
+- Save Bot instructions from the field's blur event and remove a duplicate creation-wizard binding.
+
 ## 0.3.2
 
 This release corrects a group setting label and continues organizing the client and T3 integration for future work.
