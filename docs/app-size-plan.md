@@ -1,6 +1,6 @@
 # Plan: bring every app file under 300 lines, then split the rest of app/
 
-Status: in progress. Written for an agent that starts from a clean checkout. Read the whole plan before running anything.
+Status: step A (rebase onto main) is done; the vault, computer overlay, lock, toast, inbox and chat screens are extracted; phases 4 to 7 remain. The e2e run stops at the same point on `main` and on this tree (the new Bot's chat, section 7). Written for an agent that starts from a clean checkout. Read the whole plan before running anything.
 
 ## 0. Decisions (recorded by the owner)
 
