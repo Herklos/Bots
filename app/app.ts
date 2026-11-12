@@ -216,7 +216,7 @@ const sources: Sources = {
   restartGateway: async (_args, store) => reply(await call(store, '/api/access/network/restart', { method: 'POST', body: '{}' })),
   loadStorage: async ([gate], store): Promise<Result<'loadStorage'>> => {
     const fallback = '~/.hbots/bots';
-    const blank = { backend: 'filesystem', root: fallback, backendLock: '', rootLock: '', restartRequired: false, canRestart: false, error: '' };
+    const blank = { backend: 'filesystem', root: fallback, backendLock: '', rootLock: '', restartRequired: false, canRestart: false, error: '', keySet: false };
     if (gate !== '1') return blank;
     const body = await read(store, '/api/storage');
     const saved = body.saved ?? {};
@@ -226,25 +226,39 @@ const sources: Sources = {
     const lock = (value: unknown, variable: string): string => (typeof value === 'string' && value.trim() !== '' ? value.trim() : value === true ? variable : '');
     const savedRoot = text(saved.root);
     return {
-      backend: text(effective.backend) || text(saved.backend) || 'filesystem',
+      backend: text(saved.backend) || text(effective.backend) || 'filesystem',
       root: savedRoot || fallback,
       backendLock: lock(locked.backend, 'HBOTS_STORAGE'),
       rootLock: lock(locked.root, 'HBOTS_ROOT'),
       restartRequired: body.restartRequired === true,
       canRestart: body.canRestart === true,
       error: text(body.error),
+      keySet: effective.keySet === true || saved.keySet === true,
     };
   },
-  saveStorage: async ([path, sendBackend, sendRoot], store) => reply(await call(store, '/api/storage', {
+  saveStorage: async ([path, backend, sendRoot], store) => reply(await call(store, '/api/storage', {
     method: 'PUT',
     body: JSON.stringify({
-      ...(sendBackend === '1' ? { backend: 'filesystem' } : {}),
+      ...(backend === 'filesystem' || backend === 'anytype' ? { backend } : {}),
       ...(sendRoot === '1' ? { root: path } : {}),
     }),
   })),
   testStorage: async ([path], store) => reply(await call(store, '/api/storage/test', { method: 'POST', body: JSON.stringify({ backend: 'filesystem', root: path }) })),
   copyStorage: async ([path], store) => reply(await call(store, '/api/storage/copy', { method: 'POST', body: JSON.stringify({ root: path }) })),
   restartStorage: async (_args, store) => reply(await call(store, '/api/storage/restart', { method: 'POST', body: '{}' })),
+  startPairing: async (_args, store): Promise<Result<'startPairing'>> => {
+    const r = await call(store, '/api/storage/anytype/pair', { method: 'POST', body: '{}' });
+    if (!r.ok) return { ok: false, error: localize(r.error), challengeId: '' };
+    const id = typeof r.body?.challengeId === 'string' ? r.body.challengeId : '';
+    return { ok: id !== '', error: '', challengeId: id };
+  },
+  confirmPairing: async ([challengeId, code], store) => reply(await call(store, '/api/storage/anytype/pair/confirm', { method: 'POST', body: JSON.stringify({ challengeId, code }) })),
+  checkAnytype: async (_args, store): Promise<Result<'checkAnytype'>> => {
+    const r = await call(store, '/api/storage/anytype/check', { method: 'POST', body: '{}' });
+    if (!r.ok) return { ok: false, error: localize(r.error), space: '', spaceFound: false, shared: false };
+    const b = r.body ?? {};
+    return { ok: b.reachable === true && b.spaceFound === true, error: '', space: typeof b.space === 'string' ? b.space : '', spaceFound: b.spaceFound === true, shared: b.shared === true };
+  },
   loadVault: async (_args, store): Promise<Result<'loadVault'>> => {
     const body = await read(store, '/api/vault');
     return (body.items as any[]).filter((i) => i.type === 'login').map((i) => ({

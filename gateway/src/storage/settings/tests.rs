@@ -1,6 +1,8 @@
 use super::*;
 
 use axum::http::StatusCode;
+use axum::routing::get;
+use axum::{Json, Router};
 
 fn env_root(path: &Path) -> ProcessEnv {
     ProcessEnv {
@@ -165,12 +167,12 @@ async fn saving_a_new_folder_asks_for_a_restart_and_does_not_move_files() {
 }
 
 #[tokio::test]
-async fn anytype_is_stored_and_reported_unavailable() {
+async fn anytype_stays_on_the_file_system_until_the_space_is_reachable() {
     let dir = tempfile::tempdir().unwrap();
     let home = dir.path().join("hbots");
     let running = home.join("bots");
     std::fs::create_dir_all(&running).unwrap();
-    let body = save(
+    let missing = save(
         &home,
         &running,
         &ProcessEnv::default(),
@@ -182,21 +184,81 @@ async fn anytype_is_stored_and_reported_unavailable() {
         }),
     )
     .await
+    .unwrap_err();
+    assert_eq!(missing.status, StatusCode::CONFLICT);
+    assert!(!storage_path(&home).exists());
+
+    let host = anytype_mock().await;
+    write_key(&home, &ProcessEnv::default(), "anytype_secret")
+        .await
+        .unwrap();
+    let body = save(
+        &home,
+        &running,
+        &ProcessEnv::default(),
+        false,
+        &json!({ "backend": "anytype", "host": host, "space": "hbots" }),
+    )
+    .await
     .unwrap();
-    assert_eq!(body["effective"]["backend"], "filesystem");
     assert_eq!(body["saved"]["backend"], "anytype");
-    assert_eq!(body["saved"]["host"], DEFAULT_HOST);
-    assert_eq!(body["available"], json!(["filesystem"]));
-    assert_eq!(body["anytype"]["available"], false);
-    assert_eq!(body["anytype"]["status"], "unavailable");
+    assert_eq!(body["saved"]["host"], host);
+    assert_eq!(body["effective"]["backend"], "filesystem");
+    assert!(!body.to_string().contains("anytype_secret"));
     let on_disk: Value =
         serde_json::from_str(&std::fs::read_to_string(storage_path(&home)).unwrap()).unwrap();
     assert_eq!(on_disk["backend"], "anytype");
-    assert_eq!(on_disk["root"], Value::Null);
     assert_eq!(on_disk["anytype"]["keyName"], "hbots");
+    let absent = save(
+        &home,
+        &running,
+        &ProcessEnv::default(),
+        false,
+        &json!({ "backend": "anytype", "space": "missing" }),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(absent.status, StatusCode::BAD_REQUEST);
+    let still: Value =
+        serde_json::from_str(&std::fs::read_to_string(storage_path(&home)).unwrap()).unwrap();
+    assert_eq!(still["backend"], "anytype");
     let rejected =
         test_choice(&home, &json!({ "host": "http://127.0.0.1:31009/space" })).unwrap_err();
     assert_eq!(rejected.status, StatusCode::BAD_REQUEST);
+}
+
+/// A local Anytype stand-in: one private space named `hbots`.
+async fn anytype_mock() -> String {
+    let app = Router::new()
+        .route(
+            "/v2/auth/whoami",
+            get(|| async {
+                Json(json!({
+                    "api": { "version": "2025-11-08" },
+                    "key": { "name": "hbots" },
+                    "grant": { "scoped": true, "restricted": true, "permission": "readwrite" }
+                }))
+            }),
+        )
+        .route(
+            "/v2/spaces",
+            get(|| async {
+                Json(json!({
+                    "has_not_granted_spaces": false,
+                    "data": [{ "id": "s1", "name": "hbots" }]
+                }))
+            }),
+        )
+        .route(
+            "/v2/spaces/{id}/members",
+            get(|| async { Json(json!({ "data": [{ "name": "me" }] })) }),
+        );
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    format!("http://{addr}")
 }
 
 #[tokio::test]

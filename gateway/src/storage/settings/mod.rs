@@ -1,12 +1,14 @@
-//! Where Bots are stored. The running gateway uses the file system. A saved
-//! `anytype` choice is kept and reported unavailable.
+//! Where Bots are stored. The running gateway still reads the file system.
+//! A saved `anytype` choice is kept. Saving that choice requires a key and a
+//! reachable space (`POST /api/storage/anytype/check`). Responses never include
+//! an Anytype key.
 //!
 //! `~/.hbots/storage.json` (the hbots home, outside the Bots root) holds the choice.
 //! Environment variables win and lock the field they set, the same way
 //! `HBOTS_NETWORK_ACCESS` locks network access. A bad saved folder does not stop
 //! startup: the process uses the file-system default and `GET /api/storage` says why.
 //! Changing the folder does not move data. Copying checks hashes and leaves the
-//! old folder in place. Responses never include an Anytype key.
+//! old folder in place.
 
 use crate::network::exposure::Surface;
 use crate::platform::error::{ApiError, ApiResult};
