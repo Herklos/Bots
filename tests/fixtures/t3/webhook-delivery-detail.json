@@ -1,0 +1,30 @@
+{
+ "_note": "W0.6 Phase 0 spike: scheduledTasks.getWebhookDelivery for a POST sent with authorization and cookie headers plus x-custom-header. Header names arrive lowercased; T3 returns authorization and cookie as \"[redacted]\" (shown here as \"<redacted>\"); the body is logged verbatim as a string. Captured live 2026-11-12; task deleted afterwards.",
+ "delivery": {
+  "id": "delivery:ff6efe95-afc1-43cb-8425-d9b3b1811e82",
+  "taskId": "scheduled-task:e8bbe91d-9db9-4e49-96b6-adee08c02581",
+  "receivedAt": "2026-11-12T20:21:16.707Z",
+  "method": "POST",
+  "contentType": "application/json",
+  "bodyBytes": 16,
+  "outcome": "accepted",
+  "signatureVerified": false,
+  "pendingWindow": false,
+  "missingFields": [],
+  "error": null,
+  "query": "",
+  "headers": {
+   "host": "127.0.0.1:3773",
+   "user-agent": "curl/8.7.1",
+   "accept": "*/*",
+   "content-type": "application/json",
+   "x-custom-header": "FooBar",
+   "authorization": "<redacted>",
+   "cookie": "<redacted>",
+   "content-length": "16"
+  },
+  "body": "{\"w0\":\"headers\"}",
+  "bodyTruncated": false,
+  "renderedPrompt": "A webhook arrived. Reply with one short sentence only."
+ }
+}

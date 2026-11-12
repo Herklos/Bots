@@ -1,0 +1,50 @@
+{
+ "_note": "W0.1/W0.7 Phase 0 spike: scheduledTasks.upsert reply for a webhook task with signature {header, encoding, prefix, secret}. The reply echoes only header, encoding and prefix, and the task row shows hasSecret true; the secret is not returned. Probes: correct HMAC over the exact bytes -> 202 accepted, the same JSON re-encoded with a space and the old signature -> 401 rejected_signature, so the check needs the raw bytes byte for byte. Captured live 2026-11-12; task deleted afterwards.",
+ "task": {
+  "id": "scheduled-task:aa390d48-e8c4-49fd-bd46-d28c88d0a1e9",
+  "title": "Phase 0 spike signature",
+  "prompt": "Signed webhook. Reply with one short sentence only.",
+  "enabled": true,
+  "schedule": {
+   "type": "webhook",
+   "signature": {
+    "header": "x-hub-signature-256",
+    "encoding": "hex",
+    "prefix": "sha256="
+   },
+   "maxDeliveryAgeMinutes": null
+  },
+  "projectId": "580de739-e22a-491a-b6ad-088583e2b7bc",
+  "threadId": "86083684-4051-41d6-8f29-76b9516081da",
+  "threadMode": "continue",
+  "workspaceStrategy": {
+   "type": "root"
+  },
+  "modelSelection": {
+   "instanceId": "claudeAgent",
+   "model": "claude-haiku-5-5",
+   "options": [
+    {
+     "id": "effort",
+     "value": "medium"
+    }
+   ]
+  },
+  "runtimeMode": "approval-required",
+  "interactionMode": "default",
+  "createdBy": "user",
+  "creationSource": "web",
+  "createdAt": "2026-11-12T20:21:22.843Z",
+  "updatedAt": "2026-11-12T20:21:22.843Z",
+  "nextRunAt": null,
+  "lastRunAt": null,
+  "lastRunStatus": "never",
+  "lastRunError": null,
+  "runCount": 0,
+  "webhook": {
+   "path": "/api/hooks/scheduled-task%3Aaa390d48-e8c4-49fd-bd46-d28c88d0a1e9/<redacted-token>",
+   "url": null,
+   "hasSecret": true
+  }
+ }
+}
