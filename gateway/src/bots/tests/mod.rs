@@ -2,6 +2,7 @@ use super::*;
 use crate::bots::agent_context::MemorySnapshot;
 
 mod children;
+mod image_show;
 mod managed_block;
 mod prompts;
 mod records;
