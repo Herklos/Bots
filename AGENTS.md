@@ -4,7 +4,7 @@
 
 Bots use **Claude Haiku** (`claude-haiku-5-5` via `claudeAgent`). Do not pick Opus or Sonnet for bot threads or hbots-related T3 delegates unless the user asks.
 
-Default is set in `gateway/src/provisioner.rs` (`default_model`) and live settings `defaultModel`.
+Default is set in `gateway/src/bots/provisioner/mod.rs` (`default_model`) and live settings `defaultModel`.
 
 Where a Bot runs is specified in [docs/bot-execution-environment.md](docs/bot-execution-environment.md). Keep the local T3 as the broker and select among links it already has. Settings sets the default computer. A Bot's details page, and a durable child's edit sheet, show the current computer and can change the setting. The model list follows that computer. Do not send `environmentId` on an RPC this T3 build does not accept. Do not change `default_model()` unless the user asks.
 
@@ -80,6 +80,17 @@ Exact is not in this repo. Path is in **`.exact-path`** (gitignored):
 - `EXACT_DIR_REL` — relative to repo root (`../../contrib/exact`)
 
 Contract colour docs: `$EXACT_DIR/docs/contract-for-agents.md`.
+
+## Gateway layout
+
+`gateway/src` is split by domain. Each domain folder holds its logic, one file per concern, and backend-specific code in dedicated files. Implementations of a backend live under that domain's `adapters/` folder.
+
+- `main.rs`: entry point only. `api/`: HTTP handlers and the router, one file per area.
+- `storage/`: `workspace.rs` is the trait the rest of the gateway uses. `settings/` is the saved choice, with `filesystem.rs` and `anytype.rs` for each backend. `adapters/` has `filesystem/`, `anytype/` and `memory`.
+- `harness/`: the agent runtime. `adapters/t3.rs` is the T3 Code client; `providers` lists its models.
+- `bots/`, `chat/`, `projects/`, `vault/`, `network/`, `platform/`: the other domains. T3-specific code inside them sits in files named `t3.rs` or `browser.rs`.
+
+**File length rule:** a `.rs` file is at most 500 lines, tests included. Move tests to a sibling `tests.rs` (or `tests/` with one file per topic), and split a large module into a folder with one file per concern. `scripts/check-rs-length.sh` enforces it in CI. Do not raise the limit or add an allowlist; split the file.
 
 ## Chrome strings
 

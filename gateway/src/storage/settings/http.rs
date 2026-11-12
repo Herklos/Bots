@@ -58,7 +58,8 @@ pub(crate) fn can_restart(home: &Path) -> bool {
         return false;
     }
     let os = std::env::consts::OS;
-    crate::service::supported(os) && crate::service::installed(&crate::cli::service_spec(home), os)
+    crate::platform::service::supported(os)
+        && crate::platform::service::installed(&crate::platform::cli::service_spec(home), os)
 }
 
 pub(crate) fn surface_of(surface: Option<Extension<Surface>>) -> Option<Surface> {
@@ -137,9 +138,11 @@ pub(crate) async fn restart_storage(
     let home = state.cfg.data_root.clone();
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-        let spec = crate::cli::service_spec(&home);
+        let spec = crate::platform::cli::service_spec(&home);
         let os = std::env::consts::OS;
-        match tokio::task::spawn_blocking(move || crate::service::restart(&spec, os)).await {
+        match tokio::task::spawn_blocking(move || crate::platform::service::restart(&spec, os))
+            .await
+        {
             Ok(Ok(())) => {}
             Ok(Err(error)) => tracing::error!("restarting hbots: {error:#}"),
             Err(error) => tracing::error!("restarting hbots: {error}"),

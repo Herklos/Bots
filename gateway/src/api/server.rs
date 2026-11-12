@@ -11,7 +11,8 @@ pub(crate) fn service_can_restart(home: &std::path::Path) -> bool {
         return false;
     }
     let os = std::env::consts::OS;
-    service::supported(os) && service::installed(&cli::service_spec(home), os)
+    crate::platform::service::supported(os)
+        && crate::platform::service::installed(&crate::platform::cli::service_spec(home), os)
 }
 
 /// Ctrl-C or SIGTERM: the gateway stops its tunnel before it exits.

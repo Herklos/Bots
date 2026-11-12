@@ -14,7 +14,7 @@ pub(crate) async fn usage_report(
         .clamp(-840, 840);
     let which = q.get("bot").map(String::as_str).unwrap_or("all");
     let now_ms = i64::try_from(unix_now()).unwrap_or(i64::MAX) * 1000;
-    let range = usage::period_days(period, now_ms, offset)
+    let range = crate::bots::usage::period_days(period, now_ms, offset)
         .ok_or_else(|| ApiError::bad_request("Pick today, 7d, 30d or all."))?;
     let bots: Vec<Value> = s
         .bots
@@ -44,15 +44,21 @@ pub(crate) async fn usage_report(
             }
             None => Vec::new(),
         };
-        let own = usage::report(&mine, &usage::activity_by_day(&doc, slug), range, offset);
+        let own = crate::bots::usage::report(
+            &mine,
+            &crate::bots::usage::activity_by_day(&doc, slug),
+            range,
+            offset,
+        );
         by_bot.push(json!({
             "slug": slug, "name": bot["name"], "color": bot["color"], "shape": bot["shape"],
             "tokens": own["totals"]["tokens"], "turns": own["totals"]["turns"], "messages": own["totals"]["messages"],
         }));
         turns.extend(mine);
     }
-    let activity = usage::activity_by_day(&doc, if which == "all" { "" } else { which });
-    let mut out = usage::report(&turns, &activity, range, offset);
+    let activity =
+        crate::bots::usage::activity_by_day(&doc, if which == "all" { "" } else { which });
+    let mut out = crate::bots::usage::report(&turns, &activity, range, offset);
     out["period"] = json!(period);
     out["error"] = json!(error);
     out["byBot"] = json!(if which == "all" { by_bot } else { Vec::new() });
@@ -63,19 +69,19 @@ pub(crate) async fn bot_usage(State(s): S, Path(slug): Path<String>) -> ApiResul
     let bot = require_bot(&s, &slug).await?;
     let (messages, attachments) = s.usage.bot_activity(&slug).await?;
     let Some(thread) = bot["mainThreadId"].as_str().filter(|t| !t.is_empty()) else {
-        return Ok(Json(usage::bot_payload(
+        return Ok(Json(crate::bots::usage::bot_payload(
             messages,
             attachments,
-            &usage::TokenTotals::default(),
+            &crate::bots::usage::TokenTotals::default(),
             false,
             "This Bot is still getting set up.",
         )));
     };
     let Ok(rpc) = s.t3.rpc().await else {
-        return Ok(Json(usage::bot_payload(
+        return Ok(Json(crate::bots::usage::bot_payload(
             messages,
             attachments,
-            &usage::TokenTotals::default(),
+            &crate::bots::usage::TokenTotals::default(),
             false,
             "Open T3 Code, then try again.",
         )));
@@ -89,17 +95,17 @@ pub(crate) async fn bot_usage(State(s): S, Path(slug): Path<String>) -> ApiResul
     {
         Ok(projection) => projection,
         Err(_) => {
-            return Ok(Json(usage::bot_payload(
+            return Ok(Json(crate::bots::usage::bot_payload(
                 messages,
                 attachments,
-                &usage::TokenTotals::default(),
+                &crate::bots::usage::TokenTotals::default(),
                 false,
                 "Open T3 Code, then try again.",
             )));
         }
     };
-    let (totals, known) = usage::tokens_from_projection(&projection);
-    Ok(Json(usage::bot_payload(
+    let (totals, known) = crate::bots::usage::tokens_from_projection(&projection);
+    Ok(Json(crate::bots::usage::bot_payload(
         messages,
         attachments,
         &totals,

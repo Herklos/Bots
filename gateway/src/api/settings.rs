@@ -19,7 +19,7 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
         patch["defaultModel"] = chosen;
     }
     if let Some(policy) = patch.get("groupAnswerPolicy") {
-        if rooms::AnswerPolicy::parse(policy.as_str()).is_none() {
+        if crate::chat::rooms::AnswerPolicy::parse(policy.as_str()).is_none() {
             return Err(ApiError::bad_request(
                 "groupAnswerPolicy must be last, everyone, or chief",
             ));

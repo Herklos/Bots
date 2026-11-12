@@ -120,7 +120,7 @@ pub(crate) fn family() -> Value {
 
 #[test]
 pub(crate) fn a_child_dispatch_uses_the_child_thread_and_a_refusal_does_not_write_the_parent() {
-    let rows = crate::lineage::rows(&family());
+    let rows = crate::bots::lineage::rows(&family());
     let sent = child_send(&rows, "parent-thread", "child-thread", "hello", &[]).unwrap();
     assert_eq!(sent["type"], "message.dispatch");
     assert_eq!(sent["threadId"], "child-thread");

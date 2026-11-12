@@ -17,6 +17,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - name: rust file length
+        run: sh scripts/check-rs-length.sh
       - name: cargo fmt
         run: cargo fmt --all -- --check
       - name: cargo clippy

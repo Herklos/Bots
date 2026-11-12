@@ -5,7 +5,7 @@ description: Implement or debug hbots gateway integration with the T3 Code harne
 
 # T3 integration
 
-Start with the relevant gateway implementation and tests: `gateway/src/t3.rs` for transport, `chat.rs` and `lineage.rs` for threads, `routines.rs` for scheduled tasks, `approvals.rs` for requests, and `provisioner.rs` for Bot setup. Check actual T3 contracts or existing fixtures before changing payloads; distinguish observed protocol behavior from assumptions.
+Start with the relevant gateway implementation and tests: `gateway/src/harness/adapters/t3.rs` for transport, `chat/` and `bots/lineage/` for threads, `chat/routines/` for scheduled tasks, `chat/approvals.rs` for requests, and `bots/provisioner/` for Bot setup. Check actual T3 contracts or existing fixtures before changing payloads; distinguish observed protocol behavior from assumptions.
 
 Long-lived `orchestration.subscribeShell` and `scheduledTasks.subscribe` reads need a snapshot and must interrupt the subscription. In particular, preserve the update safeguard that waits when a busy-thread snapshot fails or returns `snapshot-required`. Keep remote child environment and thread identities distinct from local and parent threads.
 

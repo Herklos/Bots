@@ -1,7 +1,7 @@
 use super::*;
 
 pub(crate) async fn routines_list(State(s): S) -> ApiResult<Json<Value>> {
-    let mut listed = routines::list(&s.t3).await?;
+    let mut listed = crate::chat::routines::list(&s.t3).await?;
     if let Some(obj) = listed.as_object_mut() {
         obj.insert("history".into(), s.routine_history.recent().await);
     }
@@ -15,11 +15,11 @@ pub(crate) async fn routines_upsert(
 ) -> ApiResult<Json<Value>> {
     require_json(&h)?;
     Ok(Json(
-        routines::change(
+        crate::chat::routines::change(
             &s.t3,
             &s.routine_history,
             "upsert",
-            routines::UPSERT,
+            crate::chat::routines::UPSERT,
             parse(&body)?,
         )
         .await?,
@@ -33,11 +33,11 @@ pub(crate) async fn routines_enabled(
 ) -> ApiResult<Json<Value>> {
     require_json(&h)?;
     Ok(Json(
-        routines::change(
+        crate::chat::routines::change(
             &s.t3,
             &s.routine_history,
             "enabled",
-            routines::SET_ENABLED,
+            crate::chat::routines::SET_ENABLED,
             parse(&body)?,
         )
         .await?,
@@ -51,11 +51,11 @@ pub(crate) async fn routines_delete(
 ) -> ApiResult<Json<Value>> {
     require_json(&h)?;
     Ok(Json(
-        routines::change(
+        crate::chat::routines::change(
             &s.t3,
             &s.routine_history,
             "delete",
-            routines::DELETE,
+            crate::chat::routines::DELETE,
             parse(&body)?,
         )
         .await?,
@@ -65,11 +65,11 @@ pub(crate) async fn routines_delete(
 pub(crate) async fn routines_run(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Json<Value>> {
     require_json(&h)?;
     Ok(Json(
-        routines::change(
+        crate::chat::routines::change(
             &s.t3,
             &s.routine_history,
             "run",
-            routines::RUN_NOW,
+            crate::chat::routines::RUN_NOW,
             parse(&body)?,
         )
         .await?,
@@ -85,12 +85,12 @@ pub(crate) async fn bot_routines(State(s): S, Path(slug): Path<String>) -> ApiRe
             "error": "This Bot is still getting set up.",
         })));
     };
-    let listed = routines::list(&s.t3)
+    let listed = crate::chat::routines::list(&s.t3)
         .await
         .map_err(|e| ApiError::new(502, format!("T3 didn't list routines: {}", e.message)))?;
-    let tasks: Vec<Value> = routines::tasks_for_thread(&listed, thread)
+    let tasks: Vec<Value> = crate::chat::routines::tasks_for_thread(&listed, thread)
         .iter()
-        .map(routines::task_row)
+        .map(crate::chat::routines::task_row)
         .collect();
     Ok(Json(json!({ "ok": true, "tasks": tasks, "error": "" })))
 }
@@ -104,7 +104,7 @@ pub(crate) async fn bot_routine_save(
     require_json(&h)?;
     let bot = require_bot(&s, &slug).await?;
     let body = parse(&body)?;
-    let task = routines::new_routine(
+    let task = crate::chat::routines::new_routine(
         &bot,
         body["title"].as_str().unwrap_or(""),
         body["kind"].as_str().unwrap_or("hour"),
@@ -112,15 +112,22 @@ pub(crate) async fn bot_routine_save(
     )
     .map_err(ApiError::bad_request)?;
     Ok(Json(
-        routines::change(&s.t3, &s.routine_history, "upsert", routines::UPSERT, task).await?,
+        crate::chat::routines::change(
+            &s.t3,
+            &s.routine_history,
+            "upsert",
+            crate::chat::routines::UPSERT,
+            task,
+        )
+        .await?,
     ))
 }
 
 pub(crate) async fn owned_routine(s: &AppState, slug: &str, id: &str) -> ApiResult<()> {
     let bot = require_bot(s, slug).await?;
     let thread = bot["mainThreadId"].as_str().unwrap_or("");
-    let listed = routines::list(&s.t3).await?;
-    if routines::tasks_for_thread(&listed, thread)
+    let listed = crate::chat::routines::list(&s.t3).await?;
+    if crate::chat::routines::tasks_for_thread(&listed, thread)
         .iter()
         .any(|t| t["id"] == id)
     {
@@ -141,11 +148,11 @@ pub(crate) async fn bot_routine_enabled(
     let id = body["id"].as_str().unwrap_or("");
     owned_routine(&s, &slug, id).await?;
     Ok(Json(
-        routines::change(
+        crate::chat::routines::change(
             &s.t3,
             &s.routine_history,
             "enabled",
-            routines::SET_ENABLED,
+            crate::chat::routines::SET_ENABLED,
             json!({ "id": id, "enabled": body["enabled"] == true }),
         )
         .await?,
@@ -162,11 +169,11 @@ pub(crate) async fn bot_routine_delete(
     let id = parse(&body)?["id"].as_str().unwrap_or("").to_string();
     owned_routine(&s, &slug, &id).await?;
     Ok(Json(
-        routines::change(
+        crate::chat::routines::change(
             &s.t3,
             &s.routine_history,
             "delete",
-            routines::DELETE,
+            crate::chat::routines::DELETE,
             json!({ "id": id }),
         )
         .await?,
@@ -183,11 +190,11 @@ pub(crate) async fn bot_routine_run(
     let id = parse(&body)?["id"].as_str().unwrap_or("").to_string();
     owned_routine(&s, &slug, &id).await?;
     Ok(Json(
-        routines::change(
+        crate::chat::routines::change(
             &s.t3,
             &s.routine_history,
             "run",
-            routines::RUN_NOW,
+            crate::chat::routines::RUN_NOW,
             json!({ "id": id }),
         )
         .await?,

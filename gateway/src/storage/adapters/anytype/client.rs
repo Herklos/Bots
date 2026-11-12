@@ -2,7 +2,7 @@
 //! space check behind Settings → Storage. Pairing and key checks need no MCP and no
 //! Node. Nothing here returns or logs the API key.
 
-use crate::error::{ApiError, ApiResult};
+use crate::platform::error::{ApiError, ApiResult};
 use serde_json::{json, Value};
 use std::time::Duration;
 

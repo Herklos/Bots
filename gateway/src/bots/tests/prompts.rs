@@ -87,7 +87,7 @@ pub(crate) async fn a_real_claude_md_file_receives_the_managed_block() {
 pub(crate) async fn a_prompt_over_16_kib_is_rejected() {
     let dir = tempfile::tempdir().unwrap();
     let bots = Bots::new(dir.path().to_path_buf(), String::new(), String::new());
-    let too_long = "x".repeat(agent_context::PROMPT_MAX + 1);
+    let too_long = "x".repeat(crate::bots::agent_context::PROMPT_MAX + 1);
     let err = bots
         .create(&json!({ "name": "Ada", "prompt": too_long }))
         .await
@@ -98,7 +98,7 @@ pub(crate) async fn a_prompt_over_16_kib_is_rejected() {
     let err = bots
         .save(
             "ada",
-            &json!({ "prompt": "y".repeat(agent_context::PROMPT_MAX + 1) }),
+            &json!({ "prompt": "y".repeat(crate::bots::agent_context::PROMPT_MAX + 1) }),
             false,
         )
         .await
@@ -110,13 +110,13 @@ pub(crate) async fn a_prompt_over_16_kib_is_rejected() {
         .create(&json!({
             "parentSlug": "ada",
             "name": "Scout",
-            "subagent": { "prompt": "z".repeat(agent_context::PROMPT_MAX + 1) }
+            "subagent": { "prompt": "z".repeat(crate::bots::agent_context::PROMPT_MAX + 1) }
         }))
         .await
         .unwrap_err();
     assert_eq!(err.status.as_u16(), 400);
     assert_eq!(err.message, "prompt is too long (max 16 KiB)");
-    let exact = "q".repeat(agent_context::PROMPT_MAX);
+    let exact = "q".repeat(crate::bots::agent_context::PROMPT_MAX);
     assert!(bots
         .save("ada", &json!({ "prompt": exact }), false)
         .await
@@ -169,7 +169,7 @@ pub(crate) async fn a_memory_edit_refreshes_the_snapshot_and_inheritance_follows
     let created = std::fs::read_to_string(&agents).unwrap();
     assert!(!created.contains("<memory "));
     assert!(created.contains("## Child threads"));
-    assert!(created.contains(agent_context::CHILD_THREADS));
+    assert!(created.contains(crate::bots::agent_context::CHILD_THREADS));
     std::fs::write(dir.path().join("ada/memory/MEMORY.md"), "Likes tea\n").unwrap();
     bots.refresh_agents("ada").await.unwrap();
     let refreshed = std::fs::read_to_string(&agents).unwrap();

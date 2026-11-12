@@ -55,17 +55,18 @@ pub(crate) fn search_messages(messages: &[Value], query: &str, partial: bool) ->
 pub(crate) async fn store_voice_send(
     root: &std::path::Path,
     slug: &str,
-    threads: &crate::thread_meta::ThreadMeta,
+    threads: &crate::chat::thread_meta::ThreadMeta,
     thread: &str,
     bytes: &[u8],
     seconds: f64,
     at: &str,
-) -> crate::error::ApiResult<Value> {
-    let meta = crate::attachments::write_file(root, slug, "voice.m4a", "audio/mp4", bytes).await?;
+) -> crate::platform::error::ApiResult<Value> {
+    let meta =
+        crate::chat::attachments::write_file(root, slug, "voice.m4a", "audio/mp4", bytes).await?;
     let seen = threads
         .add_voice_call(Some(thread), Some(&json!(seconds)), at)
         .await?;
-    let command = send_command(thread, "", &[crate::attachments::command_part(&meta)]);
+    let command = send_command(thread, "", &[crate::chat::attachments::command_part(&meta)]);
     Ok(json!({
         "attachment": meta,
         "voiceCalls": seen["voiceCalls"],
@@ -80,26 +81,26 @@ pub(crate) const VOICE_TYPES: &[&str] = &["audio/mp4", "audio/webm", "audio/mpeg
 pub(crate) async fn dispatch_stored_voice(
     root: &std::path::Path,
     slug: &str,
-    threads: &crate::thread_meta::ThreadMeta,
+    threads: &crate::chat::thread_meta::ThreadMeta,
     thread: &str,
     attachment_id: &str,
     seconds: f64,
     at: &str,
-) -> crate::error::ApiResult<Value> {
-    let (meta, _) = crate::attachments::read_file(root, slug, attachment_id).await?;
+) -> crate::platform::error::ApiResult<Value> {
+    let (meta, _) = crate::chat::attachments::read_file(root, slug, attachment_id).await?;
     let media = meta["mediaType"]
         .as_str()
         .unwrap_or("")
         .to_ascii_lowercase();
     if !VOICE_TYPES.contains(&media.as_str()) {
-        return Err(crate::error::ApiError::bad_request(
+        return Err(crate::platform::error::ApiError::bad_request(
             "That file is not a voice clip.",
         ));
     }
     let seen = threads
         .add_voice_call(Some(thread), Some(&json!(seconds)), at)
         .await?;
-    let command = send_command(thread, "", &[crate::attachments::command_part(&meta)]);
+    let command = send_command(thread, "", &[crate::chat::attachments::command_part(&meta)]);
     Ok(json!({
         "attachment": meta,
         "voiceCalls": seen["voiceCalls"],

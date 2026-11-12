@@ -26,13 +26,13 @@ pub(crate) fn app(state: Arc<AppState>) -> Router {
         .route("/api/bots/{slug}/stop", post(stop_chat))
         .route(
             "/api/bots/{slug}/attachments",
-            get(attachments::list)
-                .post(attachments::create)
+            get(crate::chat::attachments::list)
+                .post(crate::chat::attachments::create)
                 .layer(axum::extract::DefaultBodyLimit::max(12 << 20)),
         )
         .route(
             "/api/bots/{slug}/attachments/{id}",
-            get(attachments::download).delete(attachments::remove),
+            get(crate::chat::attachments::download).delete(crate::chat::attachments::remove),
         )
         .route(
             "/api/bots/{slug}/requests/{id}/respond",
@@ -81,13 +81,18 @@ pub(crate) fn app(state: Arc<AppState>) -> Router {
         // T2 hook: CSV import and export (vault_csv.rs). Import bodies are up to 8 MB, as in hbots.
         .route(
             "/api/vault/import",
-            post(vault_csv::import).layer(axum::extract::DefaultBodyLimit::max(8 << 20)),
+            post(crate::vault::vault_csv::import)
+                .layer(axum::extract::DefaultBodyLimit::max(8 << 20)),
         )
         .route(
             "/api/vault/import-csv",
-            post(vault_csv::import_csv).layer(axum::extract::DefaultBodyLimit::max(8 << 20)),
+            post(crate::vault::vault_csv::import_csv)
+                .layer(axum::extract::DefaultBodyLimit::max(8 << 20)),
         )
-        .route("/api/vault/export.csv", get(vault_csv::export))
+        .route(
+            "/api/vault/export.csv",
+            get(crate::vault::vault_csv::export),
+        )
         .route("/api/access", get(access_status))
         .route("/api/access/password", put(access_password))
         .route("/api/access/network", put(access_network))
@@ -138,10 +143,10 @@ pub(crate) fn app(state: Arc<AppState>) -> Router {
         .route("/api/routines/enabled", post(routines_enabled))
         .route("/api/routines/delete", post(routines_delete))
         .route("/api/routines/run", post(routines_run))
-        .route("/api/icons/{host}", get(icons::get_icon))
-        .route("/api/usage", get(usage::get_usage))
+        .route("/api/icons/{host}", get(crate::bots::icons::get_icon))
+        .route("/api/usage", get(crate::bots::usage::get_usage))
         .route("/api/usage/report", get(usage_report))
-        .merge(release::routes())
+        .merge(crate::platform::release::routes())
         .route("/t3/{*rest}", any(t3_route))
         .layer(middleware::from_fn_with_state(state.clone(), require_login));
     let routed = Router::new()

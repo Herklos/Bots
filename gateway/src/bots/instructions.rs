@@ -59,7 +59,7 @@ pub(crate) fn render_agents_md(
         .unwrap_or_else(|| "its parent".into());
     let goal = bot["goal"]
         .as_str()
-        .map(|text| agent_context::prompt_section("Goal", text))
+        .map(|text| crate::bots::agent_context::prompt_section("Goal", text))
         .unwrap_or_default();
     let intro = if child {
         format!("You are {name}, a subagent of {parent_name}. {parent_name} assigns your work.")
@@ -74,7 +74,7 @@ pub(crate) fn render_agents_md(
         ""
     };
     let own_prompt = if child {
-        agent_context::prompt_section(
+        crate::bots::agent_context::prompt_section(
             "Your prompt",
             bot["subagent"]["prompt"].as_str().unwrap_or(""),
         )
@@ -82,19 +82,22 @@ pub(crate) fn render_agents_md(
         String::new()
     };
     let inherited = if child && bot["subagent"]["inheritParentPrompt"] == true {
-        agent_context::prompt_section(
+        crate::bots::agent_context::prompt_section(
             "Parent prompt",
             parent.and_then(|p| p["prompt"].as_str()).unwrap_or(""),
         )
     } else {
         String::new()
     };
-    let snapshot = agent_context::render_snapshot(memory);
-    let child_threads = agent_context::child_threads_section();
+    let snapshot = crate::bots::agent_context::render_snapshot(memory);
+    let child_threads = crate::bots::agent_context::child_threads_section();
     let instructions = if child {
         String::new()
     } else {
-        agent_context::prompt_section("Instructions", bot["prompt"].as_str().unwrap_or(""))
+        crate::bots::agent_context::prompt_section(
+            "Instructions",
+            bot["prompt"].as_str().unwrap_or(""),
+        )
     };
     let subagents = if child {
         String::new()
@@ -151,14 +154,15 @@ impl Bots {
         let connectors = read_connector_list(&dir.join(".bot").join("connectors.json")).await?;
         let mcp_path = dir.join(".mcp.json");
         let existing = read_json(&mcp_path).await.unwrap_or_else(|| json!({}));
-        let mcp = crate::library::merge_mcp(&existing, &connectors, &self.mcp_url, &self.mcp_token);
+        let mcp =
+            crate::bots::library::merge_mcp(&existing, &connectors, &self.mcp_url, &self.mcp_token);
         crate::storage::write_atomic(
             &mcp_path,
             (serde_json::to_string_pretty(&mcp).unwrap_or_default() + "\n").as_bytes(),
             Some(0o600),
         )
         .await?;
-        let toml = crate::library::codex_toml(&mcp);
+        let toml = crate::bots::library::codex_toml(&mcp);
         crate::storage::write_atomic(
             &dir.join(".codex").join("config.toml"),
             toml.as_bytes(),
@@ -169,7 +173,7 @@ impl Bots {
         let cs_existing = read_json(&claude_settings)
             .await
             .unwrap_or_else(|| json!({}));
-        let cs = crate::library::claude_settings(&cs_existing, &connectors);
+        let cs = crate::bots::library::claude_settings(&cs_existing, &connectors);
         write_json(&claude_settings, &cs).await?;
 
         let agents = dir.join("AGENTS.md");
@@ -195,7 +199,7 @@ impl Bots {
             });
             children
         };
-        let memory = agent_context::read_snapshot(&self.root, bot, parent).await;
+        let memory = crate::bots::agent_context::read_snapshot(&self.root, bot, parent).await;
         let block = render_agents_md(bot, &self.root, parent, &children, &memory);
         let merged = merge_managed(&existing_agents, &block);
         if merged != existing_agents {

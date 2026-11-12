@@ -3,7 +3,7 @@ use super::*;
 #[tokio::test]
 pub(crate) async fn a_short_clip_stays_an_attachment_the_player_can_use() {
     let dir = tempfile::tempdir().unwrap();
-    let threads = crate::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
+    let threads = crate::chat::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
     let bytes = b"short-clip";
     let out = store_voice_send(
         dir.path(),
@@ -17,7 +17,7 @@ pub(crate) async fn a_short_clip_stays_an_attachment_the_player_can_use() {
     .await
     .unwrap();
     let id = out["attachment"]["id"].as_str().unwrap();
-    let (_meta, disk) = crate::attachments::read_file(dir.path(), "ada", id)
+    let (_meta, disk) = crate::chat::attachments::read_file(dir.path(), "ada", id)
         .await
         .unwrap();
     assert_eq!(disk, bytes);
@@ -33,10 +33,11 @@ pub(crate) async fn a_short_clip_stays_an_attachment_the_player_can_use() {
 #[tokio::test]
 pub(crate) async fn a_stored_audio_file_is_dispatched_without_a_second_copy() {
     let dir = tempfile::tempdir().unwrap();
-    let threads = crate::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
-    let meta = crate::attachments::write_file(dir.path(), "ada", "voice.m4a", "audio/mp4", b"once")
-        .await
-        .unwrap();
+    let threads = crate::chat::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
+    let meta =
+        crate::chat::attachments::write_file(dir.path(), "ada", "voice.m4a", "audio/mp4", b"once")
+            .await
+            .unwrap();
     let id = meta["id"].as_str().unwrap().to_string();
     let out = dispatch_stored_voice(
         dir.path(),
@@ -50,7 +51,7 @@ pub(crate) async fn a_stored_audio_file_is_dispatched_without_a_second_copy() {
     .await
     .unwrap();
     assert_eq!(
-        crate::attachments::read_dir(dir.path(), "ada")
+        crate::chat::attachments::read_dir(dir.path(), "ada")
             .await
             .unwrap()
             .len(),
@@ -68,10 +69,11 @@ pub(crate) async fn a_stored_audio_file_is_dispatched_without_a_second_copy() {
 #[tokio::test]
 pub(crate) async fn a_non_audio_file_is_refused_as_a_voice_clip() {
     let dir = tempfile::tempdir().unwrap();
-    let threads = crate::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
-    let meta = crate::attachments::write_file(dir.path(), "ada", "note.txt", "text/plain", b"hi")
-        .await
-        .unwrap();
+    let threads = crate::chat::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
+    let meta =
+        crate::chat::attachments::write_file(dir.path(), "ada", "note.txt", "text/plain", b"hi")
+            .await
+            .unwrap();
     let id = meta["id"].as_str().unwrap();
     let err = dispatch_stored_voice(
         dir.path(),
@@ -96,7 +98,7 @@ pub(crate) fn a_computer_open_turn_stays_out_of_the_one_to_one_chat() {
     let p = json!({ "turnItems": [
         { "id": "1", "type": "user_message", "text": "hi", "status": "completed" },
         { "id": "2", "type": "assistant_message", "text": "hello", "status": "completed" },
-        { "id": "3", "type": "user_message", "text": crate::computer::OPEN_PROMPT, "status": "completed" },
+        { "id": "3", "type": "user_message", "text": crate::bots::computer::OPEN_PROMPT, "status": "completed" },
         { "id": "4", "type": "assistant_message", "text": "Opening Google.", "status": "completed" },
         { "id": "5", "type": "dynamic_tool", "toolName": "preview_open", "status": "completed" },
         { "id": "6", "type": "user_message", "text": "thanks", "status": "completed" },

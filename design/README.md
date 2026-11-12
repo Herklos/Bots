@@ -32,7 +32,7 @@ cargo test -p hbots-design              # the brand's rules, and the drift check
 | `app/app.contract` (between `design:begin colours`) | `pickerColours()` and `avatarInk()` |
 | `app/face.contract` (between `design:begin colours`) | The Face's fill and edge functions |
 | `app/app.json` | `theme_color`, `background_color` |
-| `gateway/src/bots.rs` | The default Bot colour (`hbots_design::tokens().avatar.default`) |
+| `gateway/src/bots/names.rs` | The default Bot colour (`hbots_design::tokens().avatar.default`) |
 | `gateway/src/main.rs` | The favicon fallback when a web build has no icon |
 | `app/assets/icon-1024.png` | The app icon, rendered by `scripts/render.cjs` |
 

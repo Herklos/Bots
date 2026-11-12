@@ -8,7 +8,7 @@
 //! Items stay as JSON objects, so fields this module does not know about survive a re-save.
 
 use crate::{
-    error::{ApiError, ApiResult},
+    platform::error::{ApiError, ApiResult},
     storage::write_atomic,
     vault::now_iso,
 };
@@ -151,3 +151,5 @@ impl Projects {
         Ok(json!({ "version": state["version"], "removed": gone }))
     }
 }
+
+pub(crate) mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-origin check.

@@ -14,9 +14,9 @@ pub(crate) async fn computer_get(
         .call("preview.list", json!({ "threadId": thread }))
         .await
         .map_err(|e| ApiError::new(502, format!("T3 didn't list pages: {e}")))?;
-    let tabs = computer::tabs_for_screen(&listed);
+    let tabs = crate::bots::computer::tabs_for_screen(&listed);
     let asked = q.get("tab").map(String::as_str);
-    let selected = computer::frame_tab(&tabs, asked)
+    let selected = crate::bots::computer::frame_tab(&tabs, asked)
         .and_then(|tab| tab.get("id"))
         .and_then(Value::as_str)
         .unwrap_or("")
@@ -26,7 +26,7 @@ pub(crate) async fn computer_get(
     // A held page keeps the JPEG from its interactive session. Watching that
     // same tab does not open a second socket.
     let held = {
-        let sessions = computer::sessions()
+        let sessions = crate::bots::computer::sessions()
             .lock()
             .unwrap_or_else(|poison| poison.into_inner());
         sessions.picture(&slug, &selected)
@@ -35,19 +35,19 @@ pub(crate) async fn computer_get(
         Some(frame) => image = frame,
         None if !selected.is_empty() => {
             let size = if q.get("view").is_some_and(|view| view == "large") {
-                computer::WatchSize::Large
+                crate::bots::computer::WatchSize::Large
             } else {
-                computer::WatchSize::Card
+                crate::bots::computer::WatchSize::Card
             };
-            match computer::one_frame(&s.t3, &thread, &selected, size).await {
-                Ok(bytes) => image = library::encode_file(&bytes),
+            match crate::bots::computer::one_frame(&s.t3, &thread, &selected, size).await {
+                Ok(bytes) => image = crate::bots::library::encode_file(&bytes),
                 Err(reason) => error = reason,
             }
         }
         None => {}
     }
     // A frame the app already has is not sent again.
-    let tag = computer::etag(&image);
+    let tag = crate::bots::computer::etag(&image);
     let unchanged = !image.is_empty() && q.get("since").is_some_and(|s| *s == tag);
     Ok(Json(json!({
         "ok": true,
@@ -62,7 +62,7 @@ pub(crate) async fn computer_get(
 
 /// Steers the Bot to open a server browser tab. Does not wait for the tab to appear.
 pub(crate) async fn computer_open(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
-    computer_steer(&s, &slug, computer::open_command).await
+    computer_steer(&s, &slug, crate::bots::computer::open_command).await
 }
 
 /// Steers the Bot to close its server browser tabs. Does not wait for them to go.
@@ -70,7 +70,7 @@ pub(crate) async fn computer_close(
     State(s): S,
     Path(slug): Path<String>,
 ) -> ApiResult<Json<Value>> {
-    computer_steer(&s, &slug, computer::close_command).await
+    computer_steer(&s, &slug, crate::bots::computer::close_command).await
 }
 
 pub(crate) async fn computer_steer(
@@ -107,12 +107,12 @@ pub(crate) async fn computer_control(
         return Err(ApiError::bad_request("Pick a page first."));
     }
     let frame = match action {
-        "take" => hold::take(&s.t3, &thread, &slug, tab).await,
-        "release" if hold::release(&slug).await => Ok(Vec::new()),
-        _ => computer::send_control(&s.t3, &thread, tab, action).await,
+        "take" => crate::bots::computer::hold::take(&s.t3, &thread, &slug, tab).await,
+        "release" if crate::bots::computer::hold::release(&slug).await => Ok(Vec::new()),
+        _ => crate::bots::computer::send_control(&s.t3, &thread, tab, action).await,
     }
     .map_err(ApiError::bad_request)?;
-    let mut sessions = computer::sessions()
+    let mut sessions = crate::bots::computer::sessions()
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
     match action {
@@ -121,8 +121,8 @@ pub(crate) async fn computer_control(
             let height = u32::try_from(body["height"].as_u64().unwrap_or(0)).unwrap_or(0);
             sessions.take(&slug, tab, width, height);
             if !frame.is_empty() {
-                sessions.note_image(&slug, &library::encode_file(&frame));
-                if let Some((w, h)) = computer::jpeg_size(&frame) {
+                sessions.note_image(&slug, &crate::bots::library::encode_file(&frame));
+                if let Some((w, h)) = crate::bots::computer::jpeg_size(&frame) {
                     sessions.remember_size(&slug, w, h);
                 }
             }
@@ -140,13 +140,13 @@ pub(crate) async fn held_input(
     thread: &str,
     tab: &str,
     messages: &[Value],
-) -> Result<computer::Driven, String> {
-    match hold::input(slug, tab, messages).await {
-        Some(image) => Ok(computer::Driven {
+) -> Result<crate::bots::computer::Driven, String> {
+    match crate::bots::computer::hold::input(slug, tab, messages).await {
+        Some(image) => Ok(crate::bots::computer::Driven {
             image,
             clipboard: String::new(),
         }),
-        None => computer::send_input(&s.t3, thread, tab, messages).await,
+        None => crate::bots::computer::send_input(&s.t3, thread, tab, messages).await,
     }
 }
 
@@ -160,7 +160,7 @@ pub(crate) async fn computer_input(
     let thread = main_thread(&s, &slug).await?;
     let body = parse(&body)?;
     let hold = {
-        let sessions = computer::sessions()
+        let sessions = crate::bots::computer::sessions()
             .lock()
             .unwrap_or_else(|poison| poison.into_inner());
         sessions.get(&slug).cloned()
@@ -181,7 +181,7 @@ pub(crate) async fn computer_input(
     let box_w = num(&body, "boxW");
     let box_h = num(&body, "boxH");
     let (x, y) = if box_w > 0.0 && box_h > 0.0 {
-        match computer::contain_fractions(
+        match crate::bots::computer::contain_fractions(
             num(&body, "x"),
             num(&body, "y"),
             box_w,
@@ -199,24 +199,31 @@ pub(crate) async fn computer_input(
     let kind = body["kind"].as_str().unwrap_or("");
     let driven = match kind {
         "click" => {
-            let messages =
-                computer::click_messages(x, y, width, height).map_err(ApiError::bad_request)?;
+            let messages = crate::bots::computer::click_messages(x, y, width, height)
+                .map_err(ApiError::bad_request)?;
             held_input(&s, &slug, &thread, &hold.tab, &messages)
                 .await
                 .map_err(ApiError::bad_request)?
         }
         "wheel" => {
-            let messages = vec![
-                computer::wheel_message(x, y, width, height, num(&body, "deltaY"))
-                    .map_err(ApiError::bad_request)?,
-            ];
+            let messages = vec![crate::bots::computer::wheel_message(
+                x,
+                y,
+                width,
+                height,
+                num(&body, "deltaY"),
+            )
+            .map_err(ApiError::bad_request)?];
             held_input(&s, &slug, &thread, &hold.tab, &messages)
                 .await
                 .map_err(ApiError::bad_request)?
         }
         "text" => {
-            let messages = vec![computer::text_message(body["text"].as_str().unwrap_or(""))
-                .map_err(ApiError::bad_request)?];
+            let messages =
+                vec![
+                    crate::bots::computer::text_message(body["text"].as_str().unwrap_or(""))
+                        .map_err(ApiError::bad_request)?,
+                ];
             held_input(&s, &slug, &thread, &hold.tab, &messages)
                 .await
                 .map_err(ApiError::bad_request)?
@@ -228,8 +235,9 @@ pub(crate) async fn computer_input(
                     .as_i64()
                     .ok_or_else(|| ApiError::bad_request("Those modifiers are not sent."))?,
             };
-            let message = computer::key_message(body["key"].as_str().unwrap_or(""), modifiers)
-                .map_err(ApiError::bad_request)?;
+            let message =
+                crate::bots::computer::key_message(body["key"].as_str().unwrap_or(""), modifiers)
+                    .map_err(ApiError::bad_request)?;
             if let Some(sent) = body.get("keyCode").filter(|value| !value.is_null()) {
                 let sent = sent
                     .as_i64()
@@ -243,12 +251,13 @@ pub(crate) async fn computer_input(
                 .await
                 .map_err(ApiError::bad_request)?
         }
-        "copy" | "cut" => computer::send_edit(&s.t3, &thread, &hold.tab, kind)
+        "copy" | "cut" => crate::bots::computer::send_edit(&s.t3, &thread, &hold.tab, kind)
             .await
             .map_err(ApiError::bad_request)?,
         "selectAll" => {
             let messages =
-                vec![computer::edit_message("selectAll").map_err(ApiError::bad_request)?];
+                vec![crate::bots::computer::edit_message("selectAll")
+                    .map_err(ApiError::bad_request)?];
             held_input(&s, &slug, &thread, &hold.tab, &messages)
                 .await
                 .map_err(ApiError::bad_request)?
@@ -259,7 +268,7 @@ pub(crate) async fn computer_input(
             ))
         }
     };
-    let mut sessions = computer::sessions()
+    let mut sessions = crate::bots::computer::sessions()
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
     if sessions.get(&slug).is_some() {
@@ -267,8 +276,8 @@ pub(crate) async fn computer_input(
             sessions.take(&slug, &hold.tab, width, height);
         }
         if !driven.image.is_empty() {
-            sessions.note_image(&slug, &library::encode_file(&driven.image));
-            if let Some((w, h)) = computer::jpeg_size(&driven.image) {
+            sessions.note_image(&slug, &crate::bots::library::encode_file(&driven.image));
+            if let Some((w, h)) = crate::bots::computer::jpeg_size(&driven.image) {
                 sessions.remember_size(&slug, w, h);
             }
         }

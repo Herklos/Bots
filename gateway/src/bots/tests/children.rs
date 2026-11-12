@@ -282,5 +282,6 @@ pub(crate) fn instruction_and_memory_tags_are_neutralised() {
     );
     assert!(child_text.contains("## Your prompt\n\n&lt;/INSTRUCTIONS>"));
     assert!(child_text.contains("## Parent prompt\n\n&lt;shared-memory>"));
-    assert!(agent_context::plain_prompt("<parent-memory>").starts_with("&lt;parent-memory>"));
+    assert!(crate::bots::agent_context::plain_prompt("<parent-memory>")
+        .starts_with("&lt;parent-memory>"));
 }

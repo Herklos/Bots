@@ -11,7 +11,7 @@ pub(crate) async fn shelf_get(State(s): S, Path(slug): Path<String>) -> ApiResul
     require_bot(&s, &slug).await?;
     let messages = library_messages(&s, &slug).await;
     let view = s.library.view(&slug, &messages, unix_now()).await?;
-    Ok(Json(library::shelf_from(&slug, &view)))
+    Ok(Json(crate::bots::library::shelf_from(&slug, &view)))
 }
 
 pub(crate) async fn library_messages(s: &AppState, slug: &str) -> Vec<Value> {

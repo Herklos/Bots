@@ -25,7 +25,7 @@ impl Bots {
                 let Some(text) = prompt.as_str() else {
                     return Err(ApiError::bad_request("prompt must be a string"));
                 };
-                agent_context::ensure_prompt_limit(text)?;
+                crate::bots::agent_context::ensure_prompt_limit(text)?;
             }
             if let Some(mode) = patch.get("runtimeMode") {
                 if !matches!(
@@ -209,7 +209,7 @@ impl Bots {
             Some(Value::String(text)) => text.clone(),
             Some(_) => return Err(ApiError::bad_request("prompt must be a string")),
         };
-        agent_context::ensure_prompt_limit(&prompt)?;
+        crate::bots::agent_context::ensure_prompt_limit(&prompt)?;
         let runtime_mode = match input.get("runtimeMode") {
             None | Some(Value::Null) => None,
             Some(Value::String(mode))
@@ -240,7 +240,7 @@ impl Bots {
             Some(Value::Array(items)) if items.is_empty() => None,
             Some(Value::Array(items)) => {
                 for item in items {
-                    crate::routines::validate_pending_routine(item)
+                    crate::chat::routines::validate_pending_routine(item)
                         .map_err(ApiError::bad_request)?;
                 }
                 Some(Value::Array(items.clone()))

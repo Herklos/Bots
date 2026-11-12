@@ -17,7 +17,7 @@ pub(crate) async fn t3_route(
             "/ws" => {
                 let mut u = format!(
                     "{}/ws?orchestrationProtocol=2&clientSurface=web&clientAppVersion=bots-rs",
-                    t3::ws_base(&s.t3.base_url)
+                    crate::harness::t3::ws_base(&s.t3.base_url)
                 );
                 if let Some(q) = uri.query() {
                     u.push('&');
@@ -25,17 +25,22 @@ pub(crate) async fn t3_route(
                 }
                 u
             }
-            "/api/preview-stream/ws" => format!("{}{rest}{query}", t3::ws_base(&s.t3.base_url)),
+            "/api/preview-stream/ws" => format!(
+                "{}{rest}{query}",
+                crate::harness::t3::ws_base(&s.t3.base_url)
+            ),
             _ => return ApiError::not_found("not found").into_response(),
         };
         let token = s.t3.token.clone();
         let close_sockets = s.auth.close_sockets.clone();
-        return ws.on_upgrade(move |socket| t3::proxy_ws(socket, target, token, close_sockets));
+        return ws.on_upgrade(move |socket| {
+            crate::harness::t3::proxy_ws(socket, target, token, close_sockets)
+        });
     }
     if !rest.starts_with("/api/") {
         return ApiError::not_found("not found").into_response();
     }
-    t3::proxy_http(&s.t3, method, &format!("{rest}{query}"), &h, body).await
+    crate::harness::t3::proxy_http(&s.t3, method, &format!("{rest}{query}"), &h, body).await
 }
 
 // ---------- the Bots' tool server ----------
@@ -59,7 +64,7 @@ pub(crate) async fn mcp_route(
         return ApiError::new(403, "The Bot tool server only accepts local requests.")
             .into_response();
     }
-    if !bearer(&h).is_some_and(|b| auth::safe_equal(b, &s.mcp_token)) {
+    if !bearer(&h).is_some_and(|b| crate::network::auth::safe_equal(b, &s.mcp_token)) {
         return (
             StatusCode::UNAUTHORIZED,
             [(header::WWW_AUTHENTICATE, "Bearer")],
@@ -81,7 +86,7 @@ pub(crate) async fn mcp_route(
     let batch = msg.is_array();
     let mut replies = Vec::new();
     for m in msg.as_array().cloned().unwrap_or_else(|| vec![msg]) {
-        if let Some(r) = mcp::handle(&s, &m).await {
+        if let Some(r) = crate::platform::mcp::handle(&s, &m).await {
             replies.push(r);
         }
     }

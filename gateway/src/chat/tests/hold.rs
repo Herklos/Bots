@@ -121,7 +121,7 @@ pub(crate) fn a_token_line_is_attached_only_for_a_shared_id() {
 #[tokio::test]
 pub(crate) async fn a_voice_send_stores_bytes_as_an_attachment_and_a_duration() {
     let dir = tempfile::tempdir().unwrap();
-    let threads = crate::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
+    let threads = crate::chat::thread_meta::ThreadMeta::new(dir.path().join("thread-meta.json"));
     let bytes = b"fake-audio-bytes";
     let out = store_voice_send(
         dir.path(),
@@ -135,7 +135,7 @@ pub(crate) async fn a_voice_send_stores_bytes_as_an_attachment_and_a_duration() 
     .await
     .unwrap();
     let id = out["attachment"]["id"].as_str().unwrap();
-    let (_meta, disk) = crate::attachments::read_file(dir.path(), "ada", id)
+    let (_meta, disk) = crate::chat::attachments::read_file(dir.path(), "ada", id)
         .await
         .unwrap();
     assert_eq!(disk, bytes);
@@ -150,7 +150,7 @@ pub(crate) async fn a_voice_send_stores_bytes_as_an_attachment_and_a_duration() 
     assert_eq!(out["command"]["type"], "message.dispatch");
     assert_eq!(out["attachment"]["mediaType"], "audio/mp4");
     assert_eq!(
-        crate::attachments::read_dir(dir.path(), "ada")
+        crate::chat::attachments::read_dir(dir.path(), "ada")
             .await
             .unwrap()
             .len(),

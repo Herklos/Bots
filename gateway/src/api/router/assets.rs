@@ -2,16 +2,17 @@ use super::*;
 
 /// The app as the tailnet listener serves it.
 pub(crate) fn tailnet_app(s: &Arc<AppState>) -> Router {
-    exposure::on_tailnet(app(s.clone()))
+    crate::network::exposure::on_tailnet(app(s.clone()))
 }
 
 // ---------- app API ----------
 
 pub(crate) async fn config_route(
     State(s): S,
-    surface: Option<Extension<exposure::Surface>>,
+    surface: Option<Extension<crate::network::exposure::Surface>>,
 ) -> Json<Value> {
-    let on_tailnet = surface.is_some_and(|Extension(x)| x == exposure::Surface::Tailnet);
+    let on_tailnet =
+        surface.is_some_and(|Extension(x)| x == crate::network::exposure::Surface::Tailnet);
     Json(json!({
         "botsRoot": s.cfg.bots_root,
         "accessLogout": s.access.is_some() && !on_tailnet,

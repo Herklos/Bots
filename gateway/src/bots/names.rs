@@ -87,7 +87,7 @@ pub(crate) fn check_subagent_keys(fields: &Map<String, Value>) -> ApiResult<()> 
         let Some(text) = prompt.as_str() else {
             return Err(ApiError::bad_request("subagent.prompt must be a string"));
         };
-        agent_context::ensure_prompt_limit(text)?;
+        crate::bots::agent_context::ensure_prompt_limit(text)?;
     }
     if fields
         .get("inheritParentPrompt")

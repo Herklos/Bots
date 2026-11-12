@@ -2,8 +2,8 @@
 //! choice in `bots/.botapp/main-bot.json`, deleted Bots under `bots/.botapp/trash`.
 
 use crate::{
-    agent_context::{self, MemorySnapshot},
-    error::{ApiError, ApiResult},
+    bots::agent_context::MemorySnapshot,
+    platform::error::{ApiError, ApiResult},
     storage::{read_json, write_json},
     vault::now_iso,
 };
@@ -217,3 +217,26 @@ impl Bots {
         self.reconcile().await
     }
 }
+
+pub(crate) mod agent_context; // The managed block of AGENTS.md: prompt text, and later a memory snapshot.
+#[allow(
+    clippy::map_err_ignore,
+    reason = "the client sees a fixed browser-stream failure, never the socket error or the bearer token"
+)]
+// `computer.rs` is intentionally left unchanged. `pub` in that private module is
+// still meaningless to other crates; the allow stays until that file is edited.
+#[allow(
+    unreachable_pub,
+    reason = "computer.rs is left unchanged; its pub items are not part of another crate's API"
+)]
+pub(crate) mod computer;
+pub(crate) mod face_icon; // The Bot face written into the workspace for the thread list.
+pub(crate) mod icons; // Site icons cached under HBOTS_HOME/icons.
+pub(crate) mod library; // Files and records through the workspace adapter.
+pub(crate) mod lineage; // Subagents and delegated threads of one Bot.
+pub(crate) mod memory_tools;
+pub(crate) mod provisioner;
+pub(crate) mod roster; // What an inbox row needs: preview, working, unread.
+pub(crate) mod subagent_tools;
+pub(crate) mod suggestions; // New Bot starting points.
+pub(crate) mod usage; // Local usage counts. Nothing leaves the machine. // The Bot's browser, watch first.

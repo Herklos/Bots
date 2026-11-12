@@ -70,7 +70,7 @@ fn library_mime_ignores_extension_case() {
 
 fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
     let app_dir = dir.join("bots/.botapp");
-    let cfg = config::Config {
+    let cfg = crate::platform::config::Config {
         host: "127.0.0.1".into(),
         port: 0,
         t3_url: "http://127.0.0.1:1".into(),
@@ -89,10 +89,10 @@ fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
         access_emails: vec![],
         storage: storage::settings::ProcessEnv::default(),
     };
-    let tailnet = Arc::new(exposure::Tailnet::new());
+    let tailnet = Arc::new(crate::network::exposure::Tailnet::new());
     Arc::new(AppState {
-        auth: auth::Auth::load(&app_dir, String::new(), vec![]).unwrap(),
-        t3: t3::T3::new(cfg.t3_url.clone(), cfg.t3_token.clone()),
+        auth: crate::network::auth::Auth::load(&app_dir, String::new(), vec![]).unwrap(),
+        t3: crate::harness::t3::T3::new(cfg.t3_url.clone(), cfg.t3_token.clone()),
         bots: bots::Bots::new(
             cfg.bots_root.clone(),
             cfg.bot_mcp_url.clone(),
@@ -100,27 +100,29 @@ fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
         ),
         vault: vault::Vault::new(cfg.vault_file.clone(), cfg.vault_key_file.clone()),
         projects: projects::Projects::new(app_dir.join("projects.json")),
-        threads: thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
-        roster: roster::Roster::default(),
-        providers: providers::Providers::default(),
-        rooms: rooms::Rooms::new(app_dir.join("groups.json")),
-        room_working: Mutex::new(rooms::WorkingBook::default()),
-        routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
-        icons: icons::Icons::new(dir.join("icons")),
-        usage: usage::Usage::new(app_dir.join("usage.json")),
-        library: library::Library::new(
+        threads: crate::chat::thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
+        roster: crate::bots::roster::Roster::default(),
+        providers: crate::harness::providers::Providers::default(),
+        rooms: crate::chat::rooms::Rooms::new(app_dir.join("groups.json")),
+        room_working: Mutex::new(crate::chat::rooms::WorkingBook::default()),
+        routine_history: crate::chat::routines::RoutineHistory::new(
+            app_dir.join("routine-history.json"),
+        ),
+        icons: crate::bots::icons::Icons::new(dir.join("icons")),
+        usage: crate::bots::usage::Usage::new(app_dir.join("usage.json")),
+        library: crate::bots::library::Library::new(
             Arc::new(storage::LocalDisk::new(cfg.bots_root.clone())),
             cfg.bot_mcp_url.clone(),
             "fixture-only".into(),
         ),
-        system: release::System::new(cfg.data_root.clone(), cfg.app_dir()),
+        system: crate::platform::release::System::new(cfg.data_root.clone(), cfg.app_dir()),
         mcp_token: "fixture-only".into(),
         provision_now: tokio::sync::Notify::new(),
         holds: chat::HeldReads::new(),
         access: None,
-        exposure: exposure::Exposure::from_env(|_| None),
-        remote: Arc::new(remote_access::RemoteAccess::new(
-            remote_access::RemoteConfig {
+        exposure: crate::network::exposure::Exposure::from_env(|_| None),
+        remote: Arc::new(crate::network::remote_access::RemoteAccess::new(
+            crate::network::remote_access::RemoteConfig {
                 home: dir.to_path_buf(),
                 store_file: app_dir.join("access.json"),
                 url_file: app_dir.join("tunnel-url"),

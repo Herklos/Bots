@@ -17,7 +17,9 @@ pub(crate) async fn guard(State(s): S, req: Request, next: Next) -> Response {
         .and_then(|o| o.to_str().ok())
         .map(String::from);
     let cors = origin.clone().filter(|o| {
-        config::dev_allow_any_origin() || loopback_origin(o) || s.cfg.allowed_origins.contains(o)
+        crate::platform::config::dev_allow_any_origin()
+            || loopback_origin(o)
+            || s.cfg.allowed_origins.contains(o)
     });
     if req.method() == Method::OPTIONS {
         let mut res = StatusCode::NO_CONTENT.into_response();
@@ -28,7 +30,10 @@ pub(crate) async fn guard(State(s): S, req: Request, next: Next) -> Response {
     }
     let path = req.uri().path();
     let guarded = path.starts_with("/api/") || path.starts_with("/t3/");
-    if guarded && auth::needs_origin_check(req.method()) && !s.auth.same_origin(req.headers()) {
+    if guarded
+        && crate::network::auth::needs_origin_check(req.method())
+        && !s.auth.same_origin(req.headers())
+    {
         return ApiError::new(403, "cross-site request refused").into_response();
     }
     let mut res = next.run(req).await;
@@ -67,30 +72,35 @@ pub(crate) fn bearer(h: &HeaderMap) -> Option<&str> {
 /// Who may use the app on this listener: the signed-in Tailscale user on the tailnet
 /// listener; elsewhere a valid Cloudflare Access token, or a session when a password is set; with
 /// neither, open only when Cloudflare Access isn't configured either.
-pub(crate) async fn authed(s: &AppState, h: &HeaderMap, surface: exposure::Surface) -> bool {
-    if surface == exposure::Surface::Tailnet {
-        return exposure::tailnet_user_allowed(h, &s.tailnet.users());
+pub(crate) async fn authed(
+    s: &AppState,
+    h: &HeaderMap,
+    surface: crate::network::exposure::Surface,
+) -> bool {
+    if surface == crate::network::exposure::Surface::Tailnet {
+        return crate::network::exposure::tailnet_user_allowed(h, &s.tailnet.users());
     }
     if let Some(access) = &s.access {
-        if let Some(token) = access::token_from(h) {
+        if let Some(token) = crate::network::access::token_from(h) {
             if access.verify(&token).await.is_some() {
                 return true;
             }
         }
     }
     if s.remote.password_required() {
-        return auth::cookie(h, auth::COOKIE).is_some_and(|c| s.auth.valid_session(&c))
+        return crate::network::auth::cookie(h, crate::network::auth::COOKIE)
+            .is_some_and(|c| s.auth.valid_session(&c))
             || bearer(h).is_some_and(|b| s.auth.valid_session(b));
     }
     // No password is set (BOT_PASSWORD and Settings both empty), so `Auth::authed` is true here.
     s.access.is_none() && s.auth.authed(h)
 }
 
-pub(crate) fn surface_of(req: &Request) -> exposure::Surface {
+pub(crate) fn surface_of(req: &Request) -> crate::network::exposure::Surface {
     req.extensions()
-        .get::<exposure::Surface>()
+        .get::<crate::network::exposure::Surface>()
         .copied()
-        .unwrap_or(exposure::Surface::Public)
+        .unwrap_or(crate::network::exposure::Surface::Public)
 }
 
 pub(crate) async fn require_login(State(s): S, req: Request, next: Next) -> Response {
@@ -128,10 +138,10 @@ pub(crate) fn parse(body: &Bytes) -> ApiResult<Value> {
 
 pub(crate) async fn session(
     State(s): S,
-    surface: Option<Extension<exposure::Surface>>,
+    surface: Option<Extension<crate::network::exposure::Surface>>,
     h: HeaderMap,
 ) -> Json<Value> {
-    let surface = surface.map_or(exposure::Surface::Public, |Extension(x)| x);
+    let surface = surface.map_or(crate::network::exposure::Surface::Public, |Extension(x)| x);
     let needs_password = s.remote.password_required();
     // Cloudflare's login only helps requests that came through Cloudflare; on this machine or the LAN, use the password.
     let access_login = s.access.is_some() && !(needs_password && !h.contains_key("cf-ray"));
@@ -181,7 +191,10 @@ pub(crate) async fn login(
     let https = h.get("x-forwarded-proto").is_some_and(|v| v == "https");
     // Browsers keep the cookie; native apps keep `token` in the Keychain and send it as a bearer.
     Ok((
-        [(header::SET_COOKIE, auth::session_cookie(&token, https))],
+        [(
+            header::SET_COOKIE,
+            crate::network::auth::session_cookie(&token, https),
+        )],
         Json(json!({ "ok": true, "token": token })),
     )
         .into_response())
@@ -191,7 +204,7 @@ pub(crate) async fn logout() -> Response {
     (
         [(
             header::SET_COOKIE,
-            format!("{}=; Path=/; Max-Age=0", auth::COOKIE),
+            format!("{}=; Path=/; Max-Age=0", crate::network::auth::COOKIE),
         )],
         Json(json!({ "ok": true })),
     )

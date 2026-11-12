@@ -2,29 +2,29 @@ use super::*;
 
 #[derive(Debug)]
 pub struct AppState {
-    pub cfg: config::Config,
-    pub auth: auth::Auth,
-    pub t3: t3::T3,
+    pub cfg: crate::platform::config::Config,
+    pub auth: crate::network::auth::Auth,
+    pub t3: crate::harness::t3::T3,
     pub bots: bots::Bots,
     pub vault: vault::Vault,
     pub projects: projects::Projects,
     // T4 remote access: Cloudflare Access, the Tailscale listener, the tunnel, the password in access.json.
-    pub access: Option<access::Access>,
-    pub exposure: exposure::Exposure,
-    pub tailnet: Arc<exposure::Tailnet>,
-    pub remote: Arc<remote_access::RemoteAccess>,
-    pub threads: thread_meta::ThreadMeta,
-    pub roster: roster::Roster,
-    pub providers: providers::Providers,
-    pub rooms: rooms::Rooms,
+    pub access: Option<crate::network::access::Access>,
+    pub exposure: crate::network::exposure::Exposure,
+    pub tailnet: Arc<crate::network::exposure::Tailnet>,
+    pub remote: Arc<crate::network::remote_access::RemoteAccess>,
+    pub threads: crate::chat::thread_meta::ThreadMeta,
+    pub roster: crate::bots::roster::Roster,
+    pub providers: crate::harness::providers::Providers,
+    pub rooms: crate::chat::rooms::Rooms,
     /// Last known working flag per group thread, and the short grace after a dispatch.
     /// Not written to `groups.json`.
-    pub(crate) room_working: Mutex<rooms::WorkingBook>,
-    pub routine_history: routines::RoutineHistory,
-    pub system: release::System,
-    pub icons: icons::Icons,
-    pub usage: usage::Usage,
-    pub library: library::Library,
+    pub(crate) room_working: Mutex<crate::chat::rooms::WorkingBook>,
+    pub routine_history: crate::chat::routines::RoutineHistory,
+    pub system: crate::platform::release::System,
+    pub icons: crate::bots::icons::Icons,
+    pub usage: crate::bots::usage::Usage,
+    pub library: crate::bots::library::Library,
     pub mcp_token: String,
     pub provision_now: tokio::sync::Notify,
     /// One held chat or group read at a time. Shutdown wakes it.
@@ -89,9 +89,9 @@ impl AppState {
     }
 }
 
-pub(crate) fn group_answer_policy(settings: &Value) -> rooms::AnswerPolicy {
-    rooms::AnswerPolicy::parse(settings["groupAnswerPolicy"].as_str())
-        .unwrap_or(rooms::AnswerPolicy::Last)
+pub(crate) fn group_answer_policy(settings: &Value) -> crate::chat::rooms::AnswerPolicy {
+    crate::chat::rooms::AnswerPolicy::parse(settings["groupAnswerPolicy"].as_str())
+        .unwrap_or(crate::chat::rooms::AnswerPolicy::Last)
 }
 
 pub(crate) type S = State<Arc<AppState>>;

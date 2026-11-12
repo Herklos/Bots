@@ -5,6 +5,7 @@
 //! settings, the Vault, the Projects board and the Bots' own MCP tool server. Home is
 //! `~/.hbots`.
 
+use crate::platform::error::{ApiError, ApiResult};
 use axum::{
     body::Bytes,
     extract::{ConnectInfo, Path, Query, Request, State, WebSocketUpgrade},
@@ -14,7 +15,6 @@ use axum::{
     routing::{any, delete, get, post, put},
     Extension, Json, Router,
 };
-use error::{ApiError, ApiResult};
 use serde_json::{json, Value};
 use std::{
     collections::HashMap,

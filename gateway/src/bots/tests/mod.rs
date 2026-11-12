@@ -1,5 +1,5 @@
 use super::*;
-use crate::agent_context::{self, MemorySnapshot};
+use crate::bots::agent_context::MemorySnapshot;
 
 mod children;
 mod managed_block;

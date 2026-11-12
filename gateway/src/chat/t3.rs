@@ -303,13 +303,13 @@ pub(crate) fn projection_partial(projection: &Value) -> bool {
         || projection["partial"] == true
 }
 
-/// Adds a token line only where [`crate::usage::turn_token_line`] finds a shared id.
+/// Adds a token line only where [`crate::bots::usage::turn_token_line`] finds a shared id.
 pub(crate) fn with_tokens(mut transcript: Value, projection: &Value) -> Value {
     if let Some(messages) = transcript.get_mut("messages").and_then(Value::as_array_mut) {
         for message in messages.iter_mut() {
             let id = message["id"].as_str().unwrap_or("");
             message["tokens"] =
-                crate::usage::turn_token_line(projection, id).unwrap_or(Value::Null);
+                crate::bots::usage::turn_token_line(projection, id).unwrap_or(Value::Null);
         }
     }
     transcript["partial"] = json!(projection_partial(projection));
@@ -317,7 +317,7 @@ pub(crate) fn with_tokens(mut transcript: Value, projection: &Value) -> Value {
 }
 
 /// The command a phone send dispatches.
-/// `attachments` is the gateway's file records (`attachments::command_part`).
+/// `attachments` is the gateway's file records (`crate::chat::attachments::command_part`).
 pub(crate) fn send_command(thread: &str, text: &str, attachments: &[Value]) -> Value {
     command_with(thread, text, attachments, &uuid::Uuid::new_v4().to_string())
 }
@@ -372,6 +372,6 @@ pub(crate) fn child_send_with(
     attachments: &[Value],
     id: &str,
 ) -> Result<Value, &'static str> {
-    let thread = crate::lineage::thread_for(rows, parent, Some(asked))?;
+    let thread = crate::bots::lineage::thread_for(rows, parent, Some(asked))?;
     Ok(command_with(&thread, text, attachments, id))
 }

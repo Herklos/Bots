@@ -17,58 +17,15 @@
     clippy::multiple_crate_versions,
     reason = "base64 0.22/0.23, cpufeatures 0.2/0.3, and getrandom 0.2/0.3/0.4 are upstream pins this repo cannot collapse, and the same graph keeps the other duplicate crates"
 )]
-mod access; // T4: Cloudflare Access JWTs.
-mod agent_context; // The managed block of AGENTS.md: prompt text, and later a memory snapshot.
-mod approvals; // T5: answering a pending request.
-mod attachments; // Chat files stored on the Bot.
-mod auth;
+mod api;
 mod bots;
 mod chat;
-mod cli;
-// Fixed strings for the browser stream. The socket error can name the T3 address,
-// and the bearer-header error can echo the token.
-mod api;
-#[allow(
-    clippy::map_err_ignore,
-    reason = "the client sees a fixed browser-stream failure, never the socket error or the bearer token"
-)]
-// `computer.rs` is intentionally left unchanged. `pub` in that private module is
-// still meaningless to other crates; the allow stays until that file is edited.
-#[allow(
-    unreachable_pub,
-    reason = "computer.rs is left unchanged; its pub items are not part of another crate's API"
-)]
-mod computer; // The Bot's browser, watch first.
-mod config;
-mod error;
-mod exposure; // T4: Tailscale listener and the publish commands.
-mod face_icon; // The Bot face written into the workspace for the thread list.
-mod hold; // One preview socket for a held browser page.
-mod icons; // Site icons cached under HBOTS_HOME/icons.
-mod library; // Files and records through the workspace adapter.
-mod lineage; // Subagents and delegated threads of one Bot.
-mod mcp;
-mod memory_tools;
+mod harness; // The agent runtime: T3 Code today.
 mod network; // Where the gateway listens: this device, the local network, or Tailscale.
+mod platform; // Config, errors, the CLI, the service, and self-update.
 mod projects;
-mod projects_tools; // PROJECTS-HOOK (T3): the Projects MCP tools and the same-origin check.
-mod providers; // The providers and models T3 Code offers.
-mod provisioner;
-mod release; // T6b: self-update and rollback.
-mod remote_access; // T4: the scrypt password in access.json.
-mod rooms; // Local rooms. A send is stored here, then dispatched to each member's main thread.
-mod roster; // What an inbox row needs: preview, working, unread.
-mod routines; // T5: T3 scheduled tasks.
-mod service; // T6b: install and remove the background service.
 mod storage; // Where Bots live: the Workspace trait, saved choice, and backend adapters.
-mod subagent_tools;
-mod suggestions; // New Bot starting points.
-mod t3;
-mod thread_meta; // T5: reactions, voice calls, roster previews.
-mod usage; // Local usage counts. Nothing leaves the machine.
 mod vault;
-mod vault_csv; // T2: CSV import and export (hook)
-mod vault_tools;
 
 pub use api::AppState;
 use api::*;
@@ -85,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if let Some(code) = cli::run(&args).await {
+    if let Some(code) = crate::platform::cli::run(&args).await {
         std::process::exit(code);
     }
     // Snapshot HOST before dotenv. `hbots up` writes HOST=127.0.0.1 into ~/.hbots/.env, and that
@@ -94,7 +51,7 @@ async fn main() -> anyhow::Result<()> {
     let process_network = std::env::var("HBOTS_NETWORK_ACCESS")
         .ok()
         .filter(|v| !v.is_empty());
-    let cfg = config::Config::from_env()?;
+    let cfg = crate::platform::config::Config::from_env()?;
     let network_env = process_network.or_else(|| {
         std::env::var("HBOTS_NETWORK_ACCESS")
             .ok()
@@ -117,15 +74,16 @@ async fn main() -> anyhow::Result<()> {
         Some(t) if !t.trim().is_empty() => t.trim().to_string(),
         _ => {
             let t = hex::encode(rand::random::<[u8; 32]>());
-            auth::write_private(&token_path, &(t.clone() + "\n"))?;
+            crate::network::auth::write_private(&token_path, &(t.clone() + "\n"))?;
             t
         }
     };
-    let exposure_cfg =
-        exposure::Exposure::from_env(|k| std::env::var(k).ok().filter(|v| !v.is_empty()));
-    let tailnet = Arc::new(exposure::Tailnet::new());
-    let remote = Arc::new(remote_access::RemoteAccess::new(
-        remote_access::RemoteConfig {
+    let exposure_cfg = crate::network::exposure::Exposure::from_env(|k| {
+        std::env::var(k).ok().filter(|v| !v.is_empty())
+    });
+    let tailnet = Arc::new(crate::network::exposure::Tailnet::new());
+    let remote = Arc::new(crate::network::remote_access::RemoteAccess::new(
+        crate::network::remote_access::RemoteConfig {
             home: cfg.data_root.clone(),
             store_file: app_dir.join("access.json"),
             url_file: app_dir.join("tunnel-url"),
@@ -133,14 +91,14 @@ async fn main() -> anyhow::Result<()> {
             env_password: cfg.password.clone(),
             env_tailnet: exposure_cfg.tailnet_port > 0,
             env_tailnet_users: exposure_cfg.tailnet_users.clone(),
-            tailscale_bin: remote_access::find_tailscale(),
+            tailscale_bin: crate::network::remote_access::find_tailscale(),
             network_env,
             process_host,
             merged_host,
         },
         tailnet.clone(),
     ));
-    let access = access::Access::from_env(
+    let access = crate::network::access::Access::from_env(
         &cfg.access_team,
         &cfg.access_aud,
         &cfg.access_emails.join(","),
@@ -150,8 +108,12 @@ async fn main() -> anyhow::Result<()> {
         exposure: exposure_cfg,
         tailnet: tailnet.clone(),
         remote: remote.clone(),
-        auth: auth::Auth::load(&app_dir, cfg.password.clone(), cfg.allowed_origins.clone())?,
-        t3: t3::T3::new(cfg.t3_url.clone(), cfg.t3_token.clone()),
+        auth: crate::network::auth::Auth::load(
+            &app_dir,
+            cfg.password.clone(),
+            cfg.allowed_origins.clone(),
+        )?,
+        t3: crate::harness::t3::T3::new(cfg.t3_url.clone(), cfg.t3_token.clone()),
         bots: bots::Bots::new(
             cfg.bots_root.clone(),
             cfg.bot_mcp_url.clone(),
@@ -159,16 +121,18 @@ async fn main() -> anyhow::Result<()> {
         ),
         vault: vault::Vault::new(cfg.vault_file.clone(), cfg.vault_key_file.clone()),
         projects: projects::Projects::new(app_dir.join("projects.json")),
-        threads: thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
-        roster: roster::Roster::default(),
-        providers: providers::Providers::default(),
-        rooms: rooms::Rooms::new(app_dir.join("groups.json")),
-        room_working: Mutex::new(rooms::WorkingBook::default()),
-        routine_history: routines::RoutineHistory::new(app_dir.join("routine-history.json")),
-        system: release::System::new(cfg.data_root.clone(), app_dir.clone()),
-        icons: icons::Icons::new(cfg.data_root.join("icons")),
-        usage: usage::Usage::new(app_dir.join("usage.json")),
-        library: library::Library::new(
+        threads: crate::chat::thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
+        roster: crate::bots::roster::Roster::default(),
+        providers: crate::harness::providers::Providers::default(),
+        rooms: crate::chat::rooms::Rooms::new(app_dir.join("groups.json")),
+        room_working: Mutex::new(crate::chat::rooms::WorkingBook::default()),
+        routine_history: crate::chat::routines::RoutineHistory::new(
+            app_dir.join("routine-history.json"),
+        ),
+        system: crate::platform::release::System::new(cfg.data_root.clone(), app_dir.clone()),
+        icons: crate::bots::icons::Icons::new(cfg.data_root.join("icons")),
+        usage: crate::bots::usage::Usage::new(app_dir.join("usage.json")),
+        library: crate::bots::library::Library::new(
             Arc::new(storage::LocalDisk::new(cfg.bots_root.clone())),
             cfg.bot_mcp_url.clone(),
             mcp_token.clone(),
@@ -197,14 +161,14 @@ async fn main() -> anyhow::Result<()> {
             tracing::warn!("refreshing instructions for {}: {}", bot["slug"], e.message);
         }
     }
-    provisioner::start(state.clone());
-    agent_context::start(state.clone());
-    release::start(state.clone()).await;
+    crate::bots::provisioner::start(state.clone());
+    crate::bots::agent_context::start(state.clone());
+    crate::platform::release::start(state.clone()).await;
 
     let applied = network::apply(
         &state.remote.network_choice(),
         state.remote.password_required(),
-        config::dev_allow_any_origin(),
+        crate::platform::config::dev_allow_any_origin(),
     );
     let (bound, bind_error, listener) = match bind_gateway(&applied.bind, state.cfg.port).await {
         Ok(listener) => (applied.bind.clone(), applied.error.clone(), listener),
@@ -231,7 +195,7 @@ async fn main() -> anyhow::Result<()> {
     // The tailnet listener from HBOTS_TAILNET_PORT starts first; Settings' Tailscale and tunnel choices
     // come back in the background.
     if state.exposure.tailnet_port > 0 {
-        let router = exposure::on_tailnet(app(state.clone()));
+        let router = crate::network::exposure::on_tailnet(app(state.clone()));
         state
             .tailnet
             .open(
@@ -243,7 +207,7 @@ async fn main() -> anyhow::Result<()> {
     }
     let booting = state.clone();
     tokio::spawn(async move {
-        let router = exposure::on_tailnet(app(booting.clone()));
+        let router = crate::network::exposure::on_tailnet(app(booting.clone()));
         booting.remote.boot(router).await;
     });
     let stopping = state.clone();
@@ -270,7 +234,7 @@ async fn main() -> anyhow::Result<()> {
     }
     axum::serve(
         listener,
-        exposure::on_public(app(state.clone()), state.clone())
+        crate::network::exposure::on_public(app(state.clone()), state.clone())
             .into_make_service_with_connect_info::<SocketAddr>(),
     )
     .await?;

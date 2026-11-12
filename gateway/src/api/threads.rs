@@ -89,7 +89,7 @@ pub(crate) async fn thread_voice(
         .as_str()
         .filter(|s| !s.is_empty())
         .map(str::to_string)
-        .unwrap_or_else(routines::stamped);
+        .unwrap_or_else(crate::chat::routines::stamped);
     Ok(Json(
         s.threads
             .add_voice_call(Some(&thread), body.get("seconds"), &at)
@@ -107,8 +107,9 @@ pub(crate) async fn respond_request(
     let body = parse(&body)?;
     let thread = resolve_chat_thread(&s, &slug, body["child"].as_str()).await?;
     let kind = body["kind"].as_str().unwrap_or("");
-    let outbound = approvals::outbound(kind, &thread, &id, &body).map_err(ApiError::bad_request)?;
-    Ok(Json(approvals::send(&s.t3, outbound).await?))
+    let outbound = crate::chat::approvals::outbound(kind, &thread, &id, &body)
+        .map_err(ApiError::bad_request)?;
+    Ok(Json(crate::chat::approvals::send(&s.t3, outbound).await?))
 }
 
 pub(crate) async fn thread_previews(State(s): S, h: HeaderMap, body: Bytes) -> ApiResult<Response> {

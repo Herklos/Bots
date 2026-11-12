@@ -8,8 +8,8 @@
 //! Changing the folder does not move data. Copying checks hashes and leaves the
 //! old folder in place. Responses never include an Anytype key.
 
-use crate::error::{ApiError, ApiResult};
-use crate::exposure::Surface;
+use crate::network::exposure::Surface;
+use crate::platform::error::{ApiError, ApiResult};
 use crate::storage::adapters::filesystem::copy::*;
 use crate::storage::adapters::filesystem::folder::*;
 use crate::AppState;

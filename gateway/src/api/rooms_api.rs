@@ -19,7 +19,7 @@ pub(crate) async fn rooms_list(State(s): S) -> ApiResult<Json<Value>> {
         .zip(&prepared)
         .map(|(room, members)| {
             let working = working_slugs(members, &reads, &mut book, now);
-            rooms::summary(room, &working)
+            crate::chat::rooms::summary(room, &working)
         })
         .collect();
     Ok(Json(json!({ "rooms": rooms })))
@@ -90,7 +90,7 @@ pub(crate) async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
                 &members,
                 &text,
                 &uuid::Uuid::new_v4().to_string(),
-                &routines::stamped(),
+                &crate::chat::routines::stamped(),
                 policy,
             )
             .await?;
@@ -99,7 +99,7 @@ pub(crate) async fn rooms_create(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
     } else {
         room
     };
-    Ok(Json(rooms::present(&room, &members, policy)))
+    Ok(Json(crate::chat::rooms::present(&room, &members, policy)))
 }
 
 pub(crate) async fn room_document(s: &AppState, id: &str) -> ApiResult<Value> {
@@ -112,7 +112,7 @@ pub(crate) async fn room_document(s: &AppState, id: &str) -> ApiResult<Value> {
     if let Err(err) = dispatch_room(s, &wake).await {
         tracing::warn!("group wake-up failed: {}", err.message);
     }
-    Ok(rooms::present(&room, &members, policy))
+    Ok(crate::chat::rooms::present(&room, &members, policy))
 }
 
 pub(crate) async fn room_get(
@@ -169,14 +169,14 @@ pub(crate) async fn room_update(
     let room = s.rooms.update(&id, &body, &known).await?;
     let policy = group_answer_policy(&s.settings().await);
     let (members, _) = room_snapshot(&s, &room, false).await?;
-    Ok(Json(rooms::present(&room, &members, policy)))
+    Ok(Json(crate::chat::rooms::present(&room, &members, policy)))
 }
 
 pub(crate) async fn room_seen(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>> {
     let room = s.rooms.seen(&id).await?;
     let policy = group_answer_policy(&s.settings().await);
     let (members, _) = room_snapshot(&s, &room, false).await?;
-    Ok(Json(rooms::present(&room, &members, policy)))
+    Ok(Json(crate::chat::rooms::present(&room, &members, policy)))
 }
 
 pub(crate) async fn room_delete(State(s): S, Path(id): Path<String>) -> ApiResult<Json<Value>> {
@@ -203,7 +203,7 @@ pub(crate) async fn room_send(
             &members,
             &text,
             &message_id,
-            &routines::stamped(),
+            &crate::chat::routines::stamped(),
             group_answer_policy(&s.settings().await),
         )
         .await?;
@@ -212,7 +212,7 @@ pub(crate) async fn room_send(
     Ok(Json(json!({
         "ok": true,
         "messageId": message_id,
-        "room": rooms::present(&stored, &members, policy),
+        "room": crate::chat::rooms::present(&stored, &members, policy),
         "dispatched": dispatched,
     })))
 }
@@ -220,7 +220,7 @@ pub(crate) async fn room_send(
 /// Sends each dispatch to its member's main thread and counts it as that Bot's message.
 pub(crate) async fn dispatch_room(
     s: &AppState,
-    dispatches: &[rooms::Dispatch],
+    dispatches: &[crate::chat::rooms::Dispatch],
 ) -> ApiResult<Vec<String>> {
     let mut sent = Vec::new();
     if dispatches.is_empty() {
@@ -229,11 +229,16 @@ pub(crate) async fn dispatch_room(
     let Ok(rpc) = s.t3.rpc().await else {
         return Ok(sent);
     };
-    for (item, command) in dispatches.iter().zip(rooms::dispatch_commands(dispatches)) {
+    for (item, command) in dispatches
+        .iter()
+        .zip(crate::chat::rooms::dispatch_commands(dispatches))
+    {
         rpc.call("orchestration.dispatchCommand", command)
             .await
             .map_err(|err| ApiError::new(502, err.to_string()))?;
-        s.usage.note_for(&item.slug, usage::Event::Message).await;
+        s.usage
+            .note_for(&item.slug, crate::bots::usage::Event::Message)
+            .await;
         {
             let mut book = s
                 .room_working
@@ -246,7 +251,9 @@ pub(crate) async fn dispatch_room(
     Ok(sent)
 }
 
-pub(crate) fn room_thread_ids<'a>(members: impl Iterator<Item = &'a rooms::Member>) -> Vec<String> {
+pub(crate) fn room_thread_ids<'a>(
+    members: impl Iterator<Item = &'a crate::chat::rooms::Member>,
+) -> Vec<String> {
     members
         .filter(|member| !member.thread_id.is_empty())
         .map(|member| member.thread_id.clone())
@@ -254,9 +261,9 @@ pub(crate) fn room_thread_ids<'a>(members: impl Iterator<Item = &'a rooms::Membe
 }
 
 pub(crate) fn working_slugs(
-    members: &[rooms::Member],
-    reads: &HashMap<String, (rooms::MemberProbe, Vec<Value>)>,
-    book: &mut rooms::WorkingBook,
+    members: &[crate::chat::rooms::Member],
+    reads: &HashMap<String, (crate::chat::rooms::MemberProbe, Vec<Value>)>,
+    book: &mut crate::chat::rooms::WorkingBook,
     now: Instant,
 ) -> Vec<String> {
     members
@@ -265,7 +272,7 @@ pub(crate) fn working_slugs(
             let probe = reads
                 .get(&member.thread_id)
                 .map(|(probe, _)| *probe)
-                .unwrap_or(rooms::MemberProbe::Failed);
+                .unwrap_or(crate::chat::rooms::MemberProbe::Failed);
             !member.thread_id.is_empty() && book.decide(&member.thread_id, probe, now)
         })
         .map(|member| member.slug.clone())
@@ -275,9 +282,9 @@ pub(crate) fn working_slugs(
 pub(crate) async fn read_room_threads(
     s: &AppState,
     thread_ids: Vec<String>,
-) -> HashMap<String, (rooms::MemberProbe, Vec<Value>)> {
+) -> HashMap<String, (crate::chat::rooms::MemberProbe, Vec<Value>)> {
     let rpc = s.t3.rpc().await.ok();
-    rooms::read_group_threads(thread_ids, |thread| {
+    crate::chat::rooms::read_group_threads(thread_ids, |thread| {
         let rpc = rpc.clone();
         async move {
             let rpc = rpc.ok_or_else(|| anyhow::anyhow!("T3 unavailable"))?;
@@ -301,7 +308,7 @@ pub(crate) async fn room_snapshot(
     room: &Value,
     ensure: bool,
 ) -> ApiResult<(
-    Vec<rooms::Member>,
+    Vec<crate::chat::rooms::Member>,
     std::collections::HashMap<String, Vec<Value>>,
 )> {
     let bots = s.bots.list().await?;
@@ -318,14 +325,16 @@ pub(crate) async fn room_snapshot(
             member.working = false;
             continue;
         }
-        if let Some((rooms::MemberProbe::Read { .. }, messages)) = reads.get(&member.thread_id) {
+        if let Some((crate::chat::rooms::MemberProbe::Read { .. }, messages)) =
+            reads.get(&member.thread_id)
+        {
             // This thread is the group, so the one-to-one filter would drop the anchor and the reply.
             threads.insert(member.slug.clone(), messages.clone());
         }
         let probe = reads
             .get(&member.thread_id)
             .map(|(probe, _)| *probe)
-            .unwrap_or(rooms::MemberProbe::Failed);
+            .unwrap_or(crate::chat::rooms::MemberProbe::Failed);
         member.working = book.decide(&member.thread_id, probe, now);
     }
     Ok((members, threads))
@@ -339,7 +348,7 @@ pub(crate) async fn room_members(
     room: &Value,
     bots: &[Value],
     ensure: bool,
-) -> ApiResult<Vec<rooms::Member>> {
+) -> ApiResult<Vec<crate::chat::rooms::Member>> {
     let rpc = s.t3.rpc().await.ok();
     let room_id = room["id"].as_str().unwrap_or("").to_string();
     let settings = if ensure {
@@ -358,7 +367,7 @@ pub(crate) async fn room_members(
         let main = bot["mainThreadId"].as_str().unwrap_or("");
         let provisioned = !main.is_empty();
         let mut thread = room["threads"][&slug].as_str().unwrap_or("").to_string();
-        if rooms::Rooms::group_thread_missing(&thread, main) {
+        if crate::chat::rooms::Rooms::group_thread_missing(&thread, main) {
             thread.clear();
         }
         if thread.is_empty() && ensure && provisioned {
@@ -367,7 +376,7 @@ pub(crate) async fn room_members(
                     .into_iter()
                     .find(|m| m.is_object())
                     .cloned()
-                    .unwrap_or_else(provisioner::default_model);
+                    .unwrap_or_else(crate::bots::provisioner::default_model);
                 let id = uuid::Uuid::new_v4().to_string();
                 let launched = rpc
                     .call(
@@ -375,7 +384,7 @@ pub(crate) async fn room_members(
                         json!({
                             "commandId": uuid::Uuid::new_v4().to_string(), "threadId": id, "projectId": project,
                             "title": room["title"], "modelSelection": model,
-                            "runtimeMode": provisioner::launch_runtime_mode(bot, &settings),
+                            "runtimeMode": crate::bots::provisioner::launch_runtime_mode(bot, &settings),
                             "interactionMode": "default", "workspaceStrategy": { "type": "root" },
                         }),
                     )
@@ -389,7 +398,7 @@ pub(crate) async fn room_members(
                 }
             }
         }
-        members.push(rooms::Member {
+        members.push(crate::chat::rooms::Member {
             slug,
             title: bot["name"].as_str().unwrap_or("Bot").to_string(),
             thread_id: thread,

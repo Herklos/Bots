@@ -25,7 +25,7 @@ pub(crate) async fn parent_rows(s: &AppState, parent: &str) -> ApiResult<Vec<Val
         )
         .await
         .map_err(|e| ApiError::new(502, e.to_string()))?;
-    Ok(lineage::rows(&projection))
+    Ok(crate::bots::lineage::rows(&projection))
 }
 
 /// Parent thread, or a resolved local child. A remote child or the parent id is an error
@@ -41,7 +41,7 @@ pub(crate) async fn resolve_chat_thread(
         return Ok(parent);
     }
     let rows = parent_rows(s, &parent).await?;
-    lineage::thread_for(&rows, &parent, child).map_err(ApiError::bad_request)
+    crate::bots::lineage::thread_for(&rows, &parent, child).map_err(ApiError::bad_request)
 }
 
 /// `send_body` is the 200. A match that did not change is a 304 with an empty body and the same tag.
@@ -77,8 +77,12 @@ pub(crate) async fn chat_view(s: &AppState, slug: &str, asked: Option<&str>) -> 
             )
             .await
             .map_err(|e| ApiError::new(502, e.to_string()))?;
-        let id = lineage::thread_for(&lineage::rows(&parent_projection), &parent, Some(child))
-            .map_err(ApiError::bad_request)?;
+        let id = crate::bots::lineage::thread_for(
+            &crate::bots::lineage::rows(&parent_projection),
+            &parent,
+            Some(child),
+        )
+        .map_err(ApiError::bad_request)?;
         // A resolved local child is the thread the person is in, and they can send on it.
         (id, false)
     } else {
@@ -188,7 +192,7 @@ pub(crate) async fn send_chat(
         .map(str::trim)
         .unwrap_or("")
         .to_string();
-    let files = attachments::for_send(&s.cfg.bots_root, &slug, &body).await?;
+    let files = crate::chat::attachments::for_send(&s.cfg.bots_root, &slug, &body).await?;
     if text.is_empty() && files.is_empty() {
         return Err(ApiError::bad_request("Write a message first."));
     }
@@ -225,7 +229,9 @@ pub(crate) async fn send_chat(
     rpc.call("orchestration.dispatchCommand", command.clone())
         .await
         .map_err(|e| ApiError::new(502, e.to_string()))?;
-    s.usage.note_for(&slug, usage::Event::Message).await;
+    s.usage
+        .note_for(&slug, crate::bots::usage::Event::Message)
+        .await;
     Ok(Json(
         json!({ "ok": true, "messageId": command["messageId"] }),
     ))
@@ -259,7 +265,7 @@ pub(crate) async fn send_voice(
                 &thread,
                 &id,
                 seconds,
-                &routines::stamped(),
+                &crate::chat::routines::stamped(),
             )
             .await?,
             false,
@@ -288,7 +294,7 @@ pub(crate) async fn send_voice(
                 &thread,
                 &bytes,
                 seconds,
-                &routines::stamped(),
+                &crate::chat::routines::stamped(),
             )
             .await?,
             true,
@@ -301,9 +307,13 @@ pub(crate) async fn send_voice(
     rpc.call("orchestration.dispatchCommand", stored["command"].clone())
         .await
         .map_err(|e| ApiError::new(502, e.to_string()))?;
-    s.usage.note_for(&slug, usage::Event::Message).await;
+    s.usage
+        .note_for(&slug, crate::bots::usage::Event::Message)
+        .await;
     if wrote {
-        s.usage.note_for(&slug, usage::Event::Attachment).await;
+        s.usage
+            .note_for(&slug, crate::bots::usage::Event::Attachment)
+            .await;
     }
     Ok(Json(json!({
         "ok": true,
