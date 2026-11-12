@@ -43,6 +43,7 @@ mod config;
 mod error;
 mod exposure; // T4: Tailscale listener and the publish commands.
 mod face_icon; // The Bot face written into the workspace for the thread list.
+mod hold; // One preview socket for a held browser page.
 mod icons; // Site icons cached under HBOTS_HOME/icons.
 mod library; // Files and records through the workspace adapter.
 mod lineage; // Subagents and delegated threads of one Bot.
@@ -2161,9 +2162,12 @@ async fn computer_control(
     if tab.is_empty() {
         return Err(ApiError::bad_request("Pick a page first."));
     }
-    let frame = computer::send_control(&s.t3, &thread, tab, action)
-        .await
-        .map_err(ApiError::bad_request)?;
+    let frame = match action {
+        "take" => hold::take(&s.t3, &thread, &slug, tab).await,
+        "release" if hold::release(&slug).await => Ok(Vec::new()),
+        _ => computer::send_control(&s.t3, &thread, tab, action).await,
+    }
+    .map_err(ApiError::bad_request)?;
     let mut sessions = computer::sessions()
         .lock()
         .unwrap_or_else(|poison| poison.into_inner());
@@ -2183,6 +2187,23 @@ async fn computer_control(
         _ => {}
     }
     Ok(Json(json!({ "ok": true })))
+}
+
+/// Input on the held socket; a fresh socket only when none is live.
+async fn held_input(
+    s: &AppState,
+    slug: &str,
+    thread: &str,
+    tab: &str,
+    messages: &[Value],
+) -> Result<computer::Driven, String> {
+    match hold::input(slug, tab, messages).await {
+        Some(image) => Ok(computer::Driven {
+            image,
+            clipboard: String::new(),
+        }),
+        None => computer::send_input(&s.t3, thread, tab, messages).await,
+    }
 }
 
 async fn computer_input(
@@ -2236,7 +2257,7 @@ async fn computer_input(
         "click" => {
             let messages =
                 computer::click_messages(x, y, width, height).map_err(ApiError::bad_request)?;
-            computer::send_input(&s.t3, &thread, &hold.tab, &messages)
+            held_input(&s, &slug, &thread, &hold.tab, &messages)
                 .await
                 .map_err(ApiError::bad_request)?
         }
@@ -2245,14 +2266,14 @@ async fn computer_input(
                 computer::wheel_message(x, y, width, height, num(&body, "deltaY"))
                     .map_err(ApiError::bad_request)?,
             ];
-            computer::send_input(&s.t3, &thread, &hold.tab, &messages)
+            held_input(&s, &slug, &thread, &hold.tab, &messages)
                 .await
                 .map_err(ApiError::bad_request)?
         }
         "text" => {
             let messages = vec![computer::text_message(body["text"].as_str().unwrap_or(""))
                 .map_err(ApiError::bad_request)?];
-            computer::send_input(&s.t3, &thread, &hold.tab, &messages)
+            held_input(&s, &slug, &thread, &hold.tab, &messages)
                 .await
                 .map_err(ApiError::bad_request)?
         }
@@ -2274,7 +2295,7 @@ async fn computer_input(
                 }
             }
             let messages = vec![message];
-            computer::send_input(&s.t3, &thread, &hold.tab, &messages)
+            held_input(&s, &slug, &thread, &hold.tab, &messages)
                 .await
                 .map_err(ApiError::bad_request)?
         }
@@ -2284,7 +2305,7 @@ async fn computer_input(
         "selectAll" => {
             let messages =
                 vec![computer::edit_message("selectAll").map_err(ApiError::bad_request)?];
-            computer::send_input(&s.t3, &thread, &hold.tab, &messages)
+            held_input(&s, &slug, &thread, &hold.tab, &messages)
                 .await
                 .map_err(ApiError::bad_request)?
         }
