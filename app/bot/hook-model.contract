@@ -18,6 +18,8 @@ members Bots
   derive hookBusy = pending(hookRead) or pending(hookRotate)
   derive hookBag = HookBag(routineId=hookFor, url=hookUrl, source=hookSource, stable=hookStable, error=hookError, busy=hookBusy, openId=hookOpen, list=hookList, listDown=(failed(hookList) or (not pending(hookList) and not hookList.ok)), listPending=pending(hookList), detailOpen=(hookDelivery != ""), detail=hookDetail, detailDown=(failed(hookDetail) or (hookDelivery != "" and not pending(hookDetail) and not hookDetail.ok)), detailPending=pending(hookDetail))
   task forgetHook when hookSlug != slug
+    after(1, clearHook)
+  action clearHook
     hookSlug = slug
     hookFor = ""
     hookUrl = ""
