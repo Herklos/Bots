@@ -22,6 +22,10 @@ mod mutate_tests;
 mod search;
 mod skills;
 mod state;
+mod suggest;
+#[cfg(test)]
+#[path = "suggest_tests.rs"]
+mod suggest_tests;
 #[cfg(test)]
 mod tests;
 #[cfg_attr(
@@ -336,6 +340,7 @@ pub(crate) use facts::{FACT_CHARS, FULL_NOTE_CHARS, MEMORY_CHARS, NOTE_CHARS};
 pub(crate) use mutate::{mutate, Coded, MutateFail, MutateOk, Mutation, Op, Scope};
 pub(crate) use search::{document, list_notes, read_note, search as search_memory, Hit, NoteInfo};
 pub(crate) use state::revision_of;
+pub(crate) use suggest::{propose, Proposal, ProposalResult};
 pub(crate) use user::{snapshot_user, user_memory_path, verify_user_facts};
 
 fn cap_prefix(bytes: &[u8], cap: usize) -> (String, bool) {

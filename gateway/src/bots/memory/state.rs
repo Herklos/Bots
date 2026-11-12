@@ -15,6 +15,9 @@ pub(super) struct Provenance {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quote: Option<String>,
     pub at: String,
+    /// `accepted-suggestion` when the person accepted a Bot proposal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -144,6 +147,7 @@ fn provenance_map(value: &Value) -> BTreeMap<String, Provenance> {
                     source_message_id: item["sourceMessageId"].as_str().map(str::to_string),
                     quote: item["quote"].as_str().map(str::to_string),
                     at: item["at"].as_str().unwrap_or("").to_string(),
+                    via: item["via"].as_str().map(str::to_string),
                 },
             ))
         })

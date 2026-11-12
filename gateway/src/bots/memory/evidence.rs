@@ -235,8 +235,30 @@ pub(crate) fn pick_message<'a>(
         });
     }
     messages.last().ok_or_else(|| {
-        "I couldn't find a user message to use as evidence. Ask the user to state the fact in their own words.".to_string()
+        "I couldn't find a user message to use as evidence. Propose the fact with memory_suggest, and the person can accept it.".to_string()
     })
+}
+
+/// How a memory write shows it is allowed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum EvidenceKind {
+    /// Words the person typed.
+    OwnerQuote,
+    /// The person accepted a suggestion. No typed quote is required.
+    Accepted,
+}
+
+pub(crate) const ACCEPTED_VIA: &str = "accepted-suggestion";
+
+pub(crate) fn accepted_quote(now: &str) -> String {
+    format!("accepted by the person at {now}")
+}
+
+pub(crate) fn is_accepted_quote(quote: &str) -> bool {
+    quote
+        .trim()
+        .strip_prefix("accepted by the person at ")
+        .is_some_and(|at| !at.trim().is_empty())
 }
 
 fn refusal(code: &'static str, message: impl Into<String>) -> EvidenceRefusal {
