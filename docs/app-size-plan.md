@@ -2,7 +2,13 @@
 
 Status: in progress. Written for an agent that starts from a clean checkout. Read the whole plan before running anything.
 
-## 0. Rules
+## 0. Decisions (recorded by the owner)
+
+1. New Bot composer: keep the current app behaviour and the current e2e expectation until the product owner decides. No change to either in this work.
+2. Screen-only state: may move into screen components, one state at a time, with the owner's approval recorded in the PR description for each.
+3. Push a feature branch for review as work completes. Do not push to `main` until the section 6 gates pass on the rebased result and the owner approves.
+
+## 0a. Rules
 
 - Work in your own git worktree. Never edit the main checkout.
 - Do not push to `main` until the verification gates in section 6 pass on the rebased result, and the owner has approved the push. Push a feature branch first.
