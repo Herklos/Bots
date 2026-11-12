@@ -9,7 +9,7 @@ pub(crate) const WORKING_GRACE: Duration = Duration::from_secs(2);
 /// How long a failed projection keeps the last successful answer.
 pub(crate) const WORKING_TTL: Duration = Duration::from_secs(5);
 
-/// What one `orchestration.getThreadProjection` told us. A failure is not "idle".
+/// What one thread read told us. A failure is not "idle".
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MemberProbe {
     Read { working: bool },

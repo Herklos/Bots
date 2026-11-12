@@ -17,7 +17,7 @@ pub(crate) struct Tab {
     pub url: String,
 }
 
-/// The server-browser tabs in a `preview.list` result (other runtimes are left out).
+/// The server-browser tabs in a preview list (other runtimes are left out).
 pub(crate) fn server_tabs(result: &Value) -> Vec<Tab> {
     result["sessions"]
         .as_array()

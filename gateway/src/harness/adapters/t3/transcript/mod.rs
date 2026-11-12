@@ -17,6 +17,8 @@ pub(crate) use project::{
     command_with, group_transcript, send_command, transcript, transcript_for, with_tokens,
 };
 
+pub(crate) const SHELL: &str = "orchestration.subscribeShell";
+
 use super::T3;
 use crate::harness::{HarnessError, ShellSnapshot, ShellThread, ThreadSnapshot, Transcript};
 use async_trait::async_trait;
@@ -63,7 +65,7 @@ async fn read_shell_with(
     busy: bool,
 ) -> anyhow::Result<ShellSnapshot> {
     let item = client
-        .read_until(crate::platform::release::SHELL, json!({}), |item| {
+        .read_until(SHELL, json!({}), |item| {
             let kind = item.get("kind").and_then(Value::as_str);
             kind == Some("snapshot") || (busy && kind == Some("snapshot-required"))
         })
