@@ -214,6 +214,7 @@ async fn a_bot_reply_gains_a_file_and_the_next_poll_is_the_same() {
     assert_eq!(body["messages"][0]["files"][0]["kind"], "image");
     assert_eq!(body["messages"][0]["files"][0]["path"], "library/chart.png");
     assert_eq!(body["messages"][0]["files"][0]["name"], "chart.png");
+    assert_eq!(body["messages"][0]["files"][0]["alt"], "chart");
     assert_eq!(
         user["messages"][0]["text"],
         "![mine](https://example.test/a.png)"

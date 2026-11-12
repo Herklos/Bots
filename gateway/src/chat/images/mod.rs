@@ -92,7 +92,7 @@ pub(crate) async fn attach(
             seen.push(path.to_string());
             if let Ok(image) = resolver.resolve(ws, slug, path, at, now_ms).await {
                 shown.insert(path.to_string());
-                files.push(image_json(&image));
+                files.push(image_json(&image, &mark.alt));
             }
         }
         message["text"] = json!(strip(&text, &found, &shown));
@@ -100,10 +100,11 @@ pub(crate) async fn attach(
     }
 }
 
-fn image_json(image: &ImageFile) -> Value {
+fn image_json(image: &ImageFile, alt: &str) -> Value {
     json!({
         "id": image.id,
         "name": image.name,
+        "alt": alt,
         "mime": image.mime,
         "bytes": image.bytes,
         "kind": "image",

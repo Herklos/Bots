@@ -23,12 +23,15 @@ shape Bot
   aboveLimit: bool
 
 // A file on a message: an image shows in place, audio plays, any other file is a card.
+// width and height are the image pixels. Both stay 0 when the size is unknown.
 shape FileRef
   id: string
   name: string
   kind: string
   size: string
   url: string
+  width: number
+  height: number
 
 // One answer a request offers. `key` is the question it answers; `warn` is a caution to show.
 shape Choice
