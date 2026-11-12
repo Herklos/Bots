@@ -206,9 +206,8 @@ mod tests {
         assert_eq!(cs["hooks"]["SessionStart"].as_array().unwrap().len(), 1);
     }
 
-    fn tool_dir() -> std::path::PathBuf {
-        let dir = std::env::temp_dir().join(format!("hbots-hook-tools-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
+    fn tool_dir() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
         for name in ["sed", "cksum", "cat", "mkdir", "rm", "find"] {
             let mut found = None;
             for root in ["/bin", "/usr/bin"] {
@@ -219,9 +218,11 @@ mod tests {
                 }
             }
             let found = found.unwrap_or_else(|| panic!("{name} is not in /bin or /usr/bin"));
-            let link = dir.join(name);
-            if !link.exists() {
-                std::os::unix::fs::symlink(found, link).unwrap();
+            let link = dir.path().join(name);
+            match std::os::unix::fs::symlink(&found, &link) {
+                Ok(()) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(err) => panic!("link {name}: {err}"),
             }
         }
         dir
@@ -238,11 +239,12 @@ mod tests {
             perms.set_mode(0o755);
             fs::set_permissions(&script, perms).unwrap();
         }
+        let tools = tool_dir();
         let mut child = Command::new("/bin/sh")
             .arg(&script)
             .arg(mode)
             .env("CLAUDE_PROJECT_DIR", root)
-            .env("PATH", tool_dir())
+            .env("PATH", tools.path())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -284,7 +286,7 @@ mod tests {
             );
             assert_eq!((code, out.as_str()), (0, ""), "{sid}");
         }
-        assert!(!tool_dir().join("shasum").exists());
+        assert!(!tool_dir().path().join("shasum").exists());
     }
 
     const POINTER: &str = "AGENTS.md changed. Re-read AGENTS.md.\n";
