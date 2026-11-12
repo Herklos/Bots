@@ -28,25 +28,15 @@ impl Turns for T3 {
     }
 
     async fn steer(&self, thread_id: &str, text: &str) -> Result<String, HarnessError> {
-        let id = uuid::Uuid::new_v4().to_string();
+        let command = crate::bots::computer::steer_command(thread_id, text);
+        let id = command["messageId"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
         let rpc = self.rpc().await.map_err(HarnessError::unavailable)?;
-        rpc.call(
-            "orchestration.dispatchCommand",
-            json!({
-                "commandId": id,
-                "type": "message.dispatch",
-                "threadId": thread_id,
-                "messageId": id,
-                "text": text,
-                "attachments": [],
-                "createdBy": "user",
-                "creationSource": "web",
-                "deliveryIntent": "steer",
-                "dispatchMode": { "type": "start_immediately" },
-            }),
-        )
-        .await
-        .map_err(HarnessError::failed)?;
+        rpc.call("orchestration.dispatchCommand", command)
+            .await
+            .map_err(HarnessError::failed)?;
         Ok(id)
     }
 }

@@ -44,7 +44,7 @@ async fn read_shell_with(
     busy: bool,
 ) -> anyhow::Result<ShellSnapshot> {
     let item = client
-        .read_until("orchestration.subscribeShell", json!({}), |item| {
+        .read_until(crate::platform::release::SHELL, json!({}), |item| {
             let kind = item.get("kind").and_then(Value::as_str);
             kind == Some("snapshot") || (busy && kind == Some("snapshot-required"))
         })
@@ -53,16 +53,19 @@ async fn read_shell_with(
         return Ok(ShellSnapshot {
             threads: Vec::new(),
             http_required: true,
+            busy_count: 0,
         });
     }
     let snapshot = item.get("snapshot").cloned().unwrap_or(Value::Null);
     Ok(ShellSnapshot {
         threads: shell_threads(&snapshot),
         http_required: false,
+        busy_count: crate::platform::release::busy_in_snapshot(&snapshot),
     })
 }
 
 fn shell_threads(snapshot: &Value) -> Vec<ShellThread> {
+    let facts = crate::bots::roster::facts_in(snapshot);
     ["threads", "archivedThreads"]
         .into_iter()
         .flat_map(|key| {
@@ -74,11 +77,21 @@ fn shell_threads(snapshot: &Value) -> Vec<ShellThread> {
                 .flatten()
                 .filter_map(|thread| {
                     let id = thread["id"].as_str()?.to_string();
+                    let fact = facts.get(&id);
+                    let working = if inbox {
+                        fact.is_some_and(|fact| fact.working)
+                    } else {
+                        crate::platform::release::thread_is_busy(thread)
+                            || thread["activeRunId"].is_string()
+                    };
+                    let updated_at = if inbox {
+                        fact.map(|fact| fact.stamp.clone()).unwrap_or_default()
+                    } else {
+                        thread["updatedAt"].as_str().unwrap_or("").to_string()
+                    };
                     Some(ShellThread {
-                        working: crate::platform::release::thread_is_busy(thread)
-                            || thread["activeRunId"].is_string(),
-                        busy: crate::platform::release::thread_is_busy(thread),
-                        updated_at: thread["updatedAt"].as_str().unwrap_or("").to_string(),
+                        working,
+                        updated_at,
                         inbox,
                         id,
                     })

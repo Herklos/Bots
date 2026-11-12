@@ -50,6 +50,7 @@ impl Transcript for MockHarness {
         Ok(ShellSnapshot {
             threads: Vec::new(),
             http_required: false,
+            busy_count: 0,
         })
     }
 

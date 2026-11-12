@@ -58,7 +58,12 @@ pub(crate) async fn computer_get(
 
 /// Steers the Bot to open a server browser tab. Does not wait for the tab to appear.
 pub(crate) async fn computer_open(State(s): S, Path(slug): Path<String>) -> ApiResult<Json<Value>> {
-    computer_steer(&s, &slug, crate::bots::computer::OPEN_PROMPT).await
+    let thread = main_thread(&s, &slug).await?;
+    let text = crate::bots::computer::open_command(&thread)["text"]
+        .as_str()
+        .unwrap_or(crate::bots::computer::OPEN_PROMPT)
+        .to_string();
+    steer_text(&s, &thread, &text).await
 }
 
 /// Steers the Bot to close its server browser tabs. Does not wait for them to go.
@@ -66,16 +71,20 @@ pub(crate) async fn computer_close(
     State(s): S,
     Path(slug): Path<String>,
 ) -> ApiResult<Json<Value>> {
-    computer_steer(&s, &slug, crate::bots::computer::CLOSE_PROMPT).await
+    let thread = main_thread(&s, &slug).await?;
+    let text = crate::bots::computer::close_command(&thread)["text"]
+        .as_str()
+        .unwrap_or(crate::bots::computer::CLOSE_PROMPT)
+        .to_string();
+    steer_text(&s, &thread, &text).await
 }
 
-pub(crate) async fn computer_steer(s: &AppState, slug: &str, text: &str) -> ApiResult<Json<Value>> {
-    let thread = main_thread(s, slug).await?;
+async fn steer_text(s: &AppState, thread: &str, text: &str) -> ApiResult<Json<Value>> {
     let message_id = s
         .harness
         .turns()
         .map_err(|err| err.api())?
-        .steer(&thread, text)
+        .steer(thread, text)
         .await
         .map_err(|err| err.api())?;
     Ok(Json(json!({ "ok": true, "messageId": message_id })))

@@ -21,6 +21,10 @@ impl HarnessError {
         Self::Failed(err.to_string())
     }
 
+    #[allow(
+        dead_code,
+        reason = "a runtime other than T3 returns this when it lacks a capability"
+    )]
     pub(crate) fn unsupported(what: &'static str) -> Self {
         Self::Unsupported(what)
     }

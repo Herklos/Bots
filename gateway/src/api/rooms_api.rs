@@ -229,13 +229,17 @@ pub(crate) async fn dispatch_room(
     let Ok(turns) = s.harness.turns() else {
         return Ok(sent);
     };
-    for item in dispatches {
+    let commands = crate::chat::rooms::dispatch_commands(dispatches);
+    for (item, command) in dispatches.iter().zip(commands) {
         turns
             .send_user(&crate::harness::UserMessage::new(
-                &item.thread_id,
-                &item.message_id,
-                &item.text,
-                &[],
+                command["threadId"].as_str().unwrap_or(&item.thread_id),
+                command["messageId"].as_str().unwrap_or(&item.message_id),
+                command["text"].as_str().unwrap_or(&item.text),
+                command["attachments"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[]),
             ))
             .await
             .map_err(|err| err.api())?;

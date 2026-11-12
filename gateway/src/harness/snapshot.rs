@@ -74,7 +74,6 @@ pub struct ShellThread {
     pub id: String,
     pub updated_at: String,
     pub working: bool,
-    pub busy: bool,
     /// Present on the live thread list the inbox reads. Archived threads are only for the busy count.
     pub inbox: bool,
 }
@@ -84,6 +83,7 @@ pub struct ShellSnapshot {
     pub threads: Vec<ShellThread>,
     /// The runtime asked for an HTTP snapshot before the stream. Auto-update waits.
     pub http_required: bool,
+    pub(crate) busy_count: usize,
 }
 
 impl ShellSnapshot {
@@ -101,7 +101,7 @@ impl ShellSnapshot {
     }
 
     pub(crate) fn busy_count(&self) -> usize {
-        self.threads.iter().filter(|thread| thread.busy).count()
+        self.busy_count
     }
 }
 
