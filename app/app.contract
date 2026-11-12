@@ -32,6 +32,7 @@ component Bots
   members "./settings/mcp-model.contract"
   members "./bot/model.contract"
   members "./bot/memory-model.contract"
+  members "./bot/helpers-model.contract"
   members "./mentions/model.contract"
   members "./chat/model.contract"
   members "./chat/side.contract"
@@ -169,6 +170,11 @@ component Bots
     reloadMemory
     overwriteMemory
     memoryBag
+    helperBag
+    editHelpWhen
+    editHelpCap
+    writeHelpers
+    retryHelpers
     pick
     doRename
     doSavePrompt

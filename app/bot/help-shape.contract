@@ -1,0 +1,62 @@
+use Provider from "../ui/shapes.contract"
+
+// One side of the Helpers panel. `cap` is the ceiling count as text.
+// `mode` and `effort` are empty when the owner set no default.
+// `anyModel` means the model ceiling is open. `modelList` is `instanceId`, tab, `model`, one per line.
+shape HelpSide
+  enabled: bool
+  cap: string
+  when: string
+  mode: string
+  effort: string
+  inherit: bool
+  modelInstance: string
+  modelSlug: string
+  anyModel: bool
+  modelList: string
+  modes: string
+  efforts: string
+
+shape HelpPolicy
+  ok: bool
+  error: string
+  lasting: HelpSide
+  once: HelpSide
+
+shape HelpBag
+  policy: HelpPolicy
+  failed: bool
+  pending: bool
+  saving: bool
+  error: string
+  seeded: bool
+  whenLasting: string
+  whenOnce: string
+  capLasting: string
+  capOnce: string
+
+fn modeOn(modes: string, id: string): bool = modes.split(",").filter(part => part != "").includes(id)
+
+fn toggleMode(modes: string, id: string): string = modeOn(modes, id) ? modes.split(",").filter(part => part != "" and part != id).join(",") : modes.split(",").filter(part => part != "").concat([id]).join(",")
+
+fn modelKey(instance: string, model: string): string = `${instance}\t${model}`
+
+fn modelOn(list: string, instance: string, model: string): bool = list.split("\n").filter(part => part != "").includes(modelKey(instance, model))
+
+fn keysOf(provider: Provider): string = provider.models.map(model => modelKey(provider.instanceId, model.slug)).join("\n")
+
+fn allModelKeys(providers: Provider[]): string = providers.map(provider => keysOf(provider)).filter(line => line != "").join("\n")
+
+fn dropKey(list: string, key: string): string = list.split("\n").filter(part => part != "" and part != key).join("\n")
+
+fn addKey(list: string, key: string): string = list.split("\n").filter(part => part != "").includes(key) ? list : list.split("\n").filter(part => part != "").concat([key]).join("\n")
+
+fn joinLabel(on: bool, label: string, rest: string): string = (not on or label == "") ? rest : rest == "" ? label : `${rest}, ${label}`
+
+fn modeLine(ask: bool, auto: bool, full: bool, askLabel: string, autoLabel: string, fullLabel: string): string = joinLabel(full, fullLabel, joinLabel(auto, autoLabel, joinLabel(ask, askLabel, "")))
+
+fn effortLine(low: bool, medium: bool, high: bool, lowLabel: string, mediumLabel: string, highLabel: string): string = joinLabel(high, highLabel, joinLabel(medium, mediumLabel, joinLabel(low, lowLabel, "")))
+
+fn namesOf(provider: Provider, list: string, anyModel: bool): string = provider.models.filter(model => anyModel or modelOn(list, provider.instanceId, model.slug)).map(model => model.name).join(", ")
+
+fn modelNames(providers: Provider[], list: string, anyModel: bool): string = providers.map(provider => namesOf(provider, list, anyModel)).filter(line => line != "").join(", ")

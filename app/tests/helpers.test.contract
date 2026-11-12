@@ -1,0 +1,101 @@
+locale "en-US"
+
+test "the Helpers panel sets lasting helpers, one-off help, and ceilings"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  clock data
+  expect tree has "helpers-row"
+  expect text "helpers-row-title" == "Helpers"
+  tap "helpers-row"
+  clock data
+  clock settle
+  expect text "panel-page-title" == "Helpers"
+  expect text "helpers-lasting-title" == "Lasting helpers"
+  expect text "helpers-once-title" == "One-off help"
+  expect text "helpers-lasting-state" == "On"
+  expect text "helpers-once-state" == "On"
+  expect text "helpers-lasting-cap" == "8"
+  expect text "helpers-once-cap" == "4"
+  expect text "helpers-lasting-when" == "Create a lasting helper when the work will outlive this turn and needs its own notes, skills, or ongoing thread. Prefer a one-off child thread for work that ends with this turn."
+  expect text "helpers-once-when" == "Start a child thread for parallel or specialised work that ends with this turn. Do not create a lasting Subagent for that."
+  expect text "helpers-lasting-models" == "Any model"
+  expect text "helpers-lasting-modes" == "Ask, Auto, Full access"
+  expect text "helpers-lasting-efforts" == "Low, Medium, High"
+  expect text "helpers-lasting-default-effort" == "No default"
+  expect text "helpers-lasting-inherit-state" == "Off"
+  tap "helpers-lasting-enabled"
+  clock data
+  expect text "helpers-lasting-state" == "Off"
+  tap "helpers-lasting-enabled"
+  clock data
+  expect text "helpers-lasting-state" == "On"
+  type "helpers-lasting-cap" "3"
+  tap "helpers-once-cap"
+  clock data
+  expect text "helpers-lasting-cap" == "3"
+  type "helpers-lasting-cap" "8"
+  tap "helpers-once-cap"
+  clock data
+  expect text "helpers-lasting-cap" == "8"
+  tap "helpers-lasting-effort-high"
+  clock data
+  expect text "helpers-lasting-default-effort" == "High"
+  tap "helpers-lasting-effort-none"
+  clock data
+  expect text "helpers-lasting-default-effort" == "No default"
+  tap "helpers-lasting-ceiling-approval-required"
+  clock data
+  expect text "helpers-lasting-modes" == "Auto, Full access"
+  expect tree missing "helpers-lasting-mode-approval-required"
+  tap "helpers-lasting-ceiling-approval-required"
+  clock data
+  expect text "helpers-lasting-modes" == "Ask, Auto, Full access"
+  tap "helpers-lasting-any"
+  clock data
+  expect text "helpers-lasting-models" == "Haiku, Sonnet"
+  expect tree has "helpers-lasting-allow-haiku"
+  tap "helpers-lasting-allow-sonnet"
+  clock data
+  expect text "helpers-lasting-models" == "Haiku"
+  tap "helpers-lasting-model-haiku"
+  clock data
+  tap "helpers-lasting-model-same"
+  clock data
+  tap "helpers-lasting-any"
+  clock data
+  expect text "helpers-lasting-models" == "Any model"
+  tap "helpers-lasting-inherit"
+  clock data
+  expect text "helpers-lasting-inherit-state" == "On"
+  tap "helpers-lasting-inherit"
+  clock data
+  expect text "helpers-lasting-inherit-state" == "Off"
+  tap "helpers-once-enabled"
+  clock data
+  expect text "helpers-once-state" == "Off"
+  tap "helpers-once-enabled"
+  clock data
+  expect text "helpers-once-state" == "On"
+  type "helpers-once-cap" "40"
+  tap "helpers-lasting-cap"
+  clock data
+  expect text "helpers-save-error" == "Enter a whole number inside the limit."
+  expect text "helpers-once-cap" == "40"
+test "the Helpers panel speaks French"
+  locale "fr"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  clock data
+  expect text "helpers-row-title" == "Aides"
+  tap "helpers-row"
+  clock data
+  clock settle
+  expect text "panel-page-title" == "Aides"
+  expect text "helpers-lasting-title" == "Aides durables"
+  expect text "helpers-once-title" == "Aide ponctuelle"
+  expect text "helpers-lasting-modes" == "Demander, Auto, Accès complet"
+  expect text "helpers-lasting-efforts" == "Faible, Moyen, Élevé"

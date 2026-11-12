@@ -1,0 +1,31 @@
+use PrimaryButton from "../ui/controls.contract"
+use Provider from "../ui/shapes.contract"
+use HelpBag from "./help-shape.contract"
+use HelperSide from "./helper-side.contract"
+
+component HelpersPage
+  props
+    subagent: bool
+    providers: Provider[]
+    modelsDown: bool
+  inject
+    helperBag: HelpBag
+    editHelpWhen: action
+    editHelpCap: action
+    writeHelpers: action
+    retryHelpers: action
+  view
+    column gap="space.xl" padding="space.sm space.lg space.xl" testId="helpers-page"
+      if subagent
+        text t("helpers.none") color="ink.muted" testId="helpers-none"
+      else if helperBag.failed or (not helperBag.pending and not helperBag.policy.ok)
+        text (helperBag.policy.error != "" ? helperBag.policy.error : t("error.helpers")) color="-exact-system-red" testId="helpers-error"
+        button class=PrimaryButton buttonStyle="bordered" press=retryHelpers testId="helpers-retry"
+          text t("common.tryAgain")
+      else if not helperBag.seeded
+        text t("helpers.loading") color="ink.muted" testId="helpers-loading"
+      else
+        HelperSide(kind="lasting", side=helperBag.policy.lasting, cap=helperBag.capLasting, whenText=helperBag.whenLasting, providers=providers, modelsDown=modelsDown, saving=helperBag.saving, editWhen=editHelpWhen, editCap=editHelpCap, write=writeHelpers)
+        HelperSide(kind="once", side=helperBag.policy.once, cap=helperBag.capOnce, whenText=helperBag.whenOnce, providers=providers, modelsDown=modelsDown, saving=helperBag.saving, editWhen=editHelpWhen, editCap=editHelpCap, write=writeHelpers)
+        if helperBag.error != ""
+          text helperBag.error color="-exact-system-red" testId="helpers-save-error"
