@@ -115,7 +115,7 @@ fn type_label(table: &Table) -> String {
 }
 
 fn type_body(table: &Table) -> Value {
-    json!({ "name": table.name, "key": table.key, "layout": table.layout })
+    json!({ "name": table.name, "api_key": table.key, "layout": table.layout })
 }
 
 fn property_body(column: &Column) -> Value {
@@ -244,9 +244,12 @@ async fn write_meta(
         return Ok(false);
     }
     let id = object["id"].as_str().unwrap_or("");
-    let etag = object["etag"].as_str().unwrap_or("1");
+    let fetched = client.get_object(id).await?;
+    let etag = fetched["etag"].as_str().unwrap_or("");
     let body = json!({ "ops": [{ "op": "set_properties", "set": properties }] });
-    client.patch_object(id, &body, etag, &idem(&body)).await?;
+    client
+        .patch_object(id, &body, Some(etag), &idem(&body))
+        .await?;
     Ok(true)
 }
 

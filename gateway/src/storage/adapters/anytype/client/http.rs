@@ -1,13 +1,16 @@
 //! Shared HTTP: version header, bearer auth, idempotency, If-Match, and error mapping.
 //! The legacy helpers keep the pairing messages Settings already shows.
+//!
+//! GET carries the etag on the `ETag` header only. When the body has no `etag`
+//! member, the client copies that header in so callers can send `If-Match`.
 
 use super::error::AnytypeError;
 use super::limiter::Limiter;
 use super::AnytypeClient;
 use crate::platform::error::{ApiError, ApiResult};
-use reqwest::header::{HeaderMap, RETRY_AFTER};
+use reqwest::header::{HeaderMap, ETAG, RETRY_AFTER};
 use reqwest::StatusCode;
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::time::Duration;
 
 pub(super) const API_VERSION: &str = "2025-11-08";
@@ -60,13 +63,17 @@ pub(super) struct JsonCall<'a> {
     pub idem_key: Option<&'a str>,
     pub etag: Option<&'a str>,
     pub body: Option<&'a Value>,
+    /// Object, type, and property writes wait on the limiter. Reads do not.
+    pub limited: bool,
 }
 
 pub(super) async fn send_json(
     client: &AnytypeClient,
     call: JsonCall<'_>,
 ) -> Result<Value, AnytypeError> {
-    client.limiter.acquire().await;
+    if call.limited {
+        client.limiter.acquire().await;
+    }
     let mut request = client
         .http
         .request(call.method, format!("{}{}", client.host, call.path))
@@ -75,7 +82,7 @@ pub(super) async fn send_json(
     if let Some(key) = call.idem_key {
         request = request.header("Idempotency-Key", key);
     }
-    if let Some(etag) = call.etag {
+    if let Some(etag) = call.etag.filter(|etag| !etag.is_empty()) {
         request = request.header("If-Match", etag);
     }
     if let Some(body) = call.body {
@@ -88,6 +95,7 @@ pub(super) async fn send_json(
     read_value(response, &client.limiter).await
 }
 
+/// File bytes. Not counted by the write limiter: uploads were not throttled live.
 pub(super) async fn send_raw(
     client: &AnytypeClient,
     method: reqwest::Method,
@@ -96,7 +104,6 @@ pub(super) async fn send_raw(
     content_type: &str,
     body: Vec<u8>,
 ) -> Result<Value, AnytypeError> {
-    client.limiter.acquire().await;
     let mut request = client
         .http
         .request(method, format!("{}{path}", client.host))
@@ -117,13 +124,17 @@ pub(super) async fn send_raw(
 pub(super) async fn send_bytes(
     client: &AnytypeClient,
     path: &str,
+    range: Option<&str>,
 ) -> Result<Vec<u8>, AnytypeError> {
-    client.limiter.acquire().await;
-    let response = client
+    let mut request = client
         .http
         .get(format!("{}{path}", client.host))
         .header("Anytype-Version", API_VERSION)
-        .bearer_auth(&client.key)
+        .bearer_auth(&client.key);
+    if let Some(range) = range {
+        request = request.header(reqwest::header::RANGE, range);
+    }
+    let response = request
         .send()
         .await
         .map_err(|_error| AnytypeError::Unreachable)?;
@@ -140,7 +151,7 @@ pub(super) async fn send_bytes(
         .map_err(|_error| AnytypeError::Unreachable)
 }
 
-fn require_key(idem_key: &str) -> Result<(), AnytypeError> {
+pub(super) fn require_idempotency(idem_key: &str) -> Result<(), AnytypeError> {
     if idem_key.is_empty() {
         return Err(AnytypeError::Bad {
             status: 400,
@@ -148,10 +159,6 @@ fn require_key(idem_key: &str) -> Result<(), AnytypeError> {
         });
     }
     Ok(())
-}
-
-pub(super) fn require_idempotency(idem_key: &str) -> Result<(), AnytypeError> {
-    require_key(idem_key)
 }
 
 async fn read_value(response: reqwest::Response, limiter: &Limiter) -> Result<Value, AnytypeError> {
@@ -164,7 +171,14 @@ async fn read_value(response: reqwest::Response, limiter: &Limiter) -> Result<Va
     if !status.is_success() {
         return Err(map_failure(status, &headers, &text, limiter));
     }
-    serde_json::from_str(&text).map_err(|_error| AnytypeError::ApiChanged)
+    let mut value: Value =
+        serde_json::from_str(&text).map_err(|_error| AnytypeError::ApiChanged)?;
+    if let Some(etag) = header_etag(&headers) {
+        if let Some(object) = value.as_object_mut() {
+            object.entry("etag").or_insert(Value::String(etag));
+        }
+    }
+    Ok(value)
 }
 
 fn map_failure(
@@ -185,18 +199,32 @@ fn map_failure(
                 retry_after: retry_after(headers),
             }
         }
-        409 if code == "object_archived" || body["archived"] == json!(true) => {
-            AnytypeError::ObjectArchived
-        }
-        409 if code == "etag_mismatch" || body.get("etag").is_some() => {
-            AnytypeError::EtagMismatch {
-                current: body["etag"].as_str().map(str::to_string),
-            }
-        }
+        409 if code == "object_archived" => AnytypeError::ObjectArchived,
+        409 if code == "etag_mismatch" => AnytypeError::EtagMismatch {
+            current: etag_from_message(&message),
+        },
         _ => AnytypeError::Bad {
             status: status.as_u16(),
             message,
         },
+    }
+}
+
+/// Live 409 text: `current etag is "2a74aec0"`.
+fn etag_from_message(message: &str) -> Option<String> {
+    let marker = "current etag is \"";
+    let start = message.find(marker)? + marker.len();
+    let rest = message.get(start..)?;
+    let end = rest.find('"')?;
+    Some(rest[..end].to_string())
+}
+
+fn header_etag(headers: &HeaderMap) -> Option<String> {
+    let raw = headers.get(ETAG)?.to_str().ok()?.trim().trim_matches('"');
+    if raw.is_empty() {
+        None
+    } else {
+        Some(raw.to_string())
     }
 }
 
