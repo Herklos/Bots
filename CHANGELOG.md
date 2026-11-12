@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.5
+
+This release adds diagnostics and image tools, strengthens memory ownership, and improves browser control.
+
+### New features
+
+- Run `hbots doctor` or `hbots doctor --json` for a redacted report on the installation, gateway, T3 connection, providers, storage and recent logs.
+- Let Bots use `image_show` to copy supported local pictures into their library for a reply. Library images display inline at a stable size.
+- Keep person-owned facts outside Bot folders and include them before Bot memory. Bot tools reject changes to those facts and restore a tampered user memory file.
+
+### Improvements
+
+- Update the Computer preview while control is held, without waiting for release.
+- Require a separate confirmation before changing a Bot to a different model provider.
+- Add groundwork for Bot-authored routine review and a default-off code gate; the routine review watcher and user controls are not yet implemented.
+
 ## 0.3.4
 
 This release adds memory editing tools, safer Bot replies and more control over Bot instructions and approval modes.
