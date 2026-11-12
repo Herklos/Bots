@@ -212,6 +212,13 @@
       "classification": "generated"
     },
     {
+      "path": "/api/providers/refresh",
+      "method": "POST",
+      "tool": "hbots_providers_refresh",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
       "path": "/api/suggestions",
       "method": "GET",
       "tool": "hbots_suggestions_get",
