@@ -70,8 +70,27 @@ export function fileUrl(slug: string, file: { id?: unknown; path?: unknown }): s
   const parts = path.split('/');
   const local = parts[0] === 'library' && parts.length > 1 && !path.includes('\\') && !path.includes('://')
     && parts.every((part) => part !== '' && part !== '.' && part !== '..' && !part.startsWith('.'));
-  if (local) return `${API}/api/bots/${encodeURIComponent(slug)}/library/file?path=${encodeURIComponent(path)}`;
+  if (local) return `${API}${libraryPath(slug, path)}`;
   return `${API}/api/bots/${encodeURIComponent(slug)}/attachments/${encodeURIComponent(String(file.id ?? ''))}`;
+}
+
+// The library route, without the gateway host. The fixture uses this so the picture stays on the app origin.
+export function libraryPath(slug: string, path: string): string {
+  return `/api/bots/${encodeURIComponent(slug)}/library/file?path=${encodeURIComponent(path)}`;
+}
+
+// The name a screen reader hears. The Markdown alt wins when the reply gave one.
+export function fileName(file: { name?: unknown; alt?: unknown }): string {
+  const alt = typeof file.alt === 'string' ? file.alt.trim() : '';
+  if (alt !== '') return alt;
+  return String(file.name ?? '');
+}
+
+// Pixels for the image box. Missing or unusable sizes stay 0, which keeps the old layout.
+export function fileDim(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(n);
 }
 
 // The transcript as rows: day marks, messages in runs, the lines between them, what the Bot is
@@ -106,8 +125,8 @@ export function chatRows(slug: string, body: any, now: number, reactions: Record
     const mine = item.role === 'user' && !item.from;
     const who = `${mine}:${item.from?.slug ?? ''}`;
     const files = ((item.files ?? []) as any[]).map((f) => ({
-      id: String(f.id), name: String(f.name), kind: String(f.kind), size: fileSize(Number(f.bytes ?? 0)),
-      url: fileUrl(slug, f),
+      id: String(f.id), name: fileName(f), kind: String(f.kind), size: fileSize(Number(f.bytes ?? 0)),
+      url: fileUrl(slug, f), width: fileDim(f.width), height: fileDim(f.height),
     }));
     const text = String(item.text ?? '');
     const row = { ...blank, ...peer(item.from), id: String(item.id), kind: 'message', mine, text, parts: mine ? [] : splitTables(text), react: ((reactions[String(item.id)] ?? []) as string[]).join(' '), quote: quoteOf(replyTo, String(item.id)), tokens: tokenText(item.tokens), files, head: !(prev && prev.who === who && t - prev.t < 5 * 60_000), tail: true,

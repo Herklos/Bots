@@ -198,7 +198,10 @@ component ChatMessage
               button id=`copy-${row.id}` class=TextControl appearance="none" press=chooseCopy aria-label=(copied ? t("chat.copied") : t("chat.copy")) title=(copied ? t("chat.copied") : t("chat.copy")) min-height=24 padding="0 space.xs" opacity=(showChrome ? 1 : 0) pointer-events=(showChrome ? "auto" : "none") testId=`copy-${row.id}`
                 Glyph(name=(copied ? "check" : "copy"), size=14)
         for f in row.files key=f.id
-          if f.kind == "image"
+          if f.kind == "image" and f.width > 0 and f.height > 0
+            link href=f.url target="_blank" aria-label=t("common.openNamed", name=f.name) testId=`image-${f.id}` display="block" width="20rem" max-width="100%" aspect-ratio=`${f.width} / ${f.height}` overflow="hidden" border-radius="radius.lg" background-color="surface.raised"
+              image f.url aria-label=f.name width="100%" height="100%" object-fit="contain"
+          else if f.kind == "image"
             link href=f.url target="_blank" aria-label=t("common.openNamed", name=f.name) testId=`image-${f.id}`
               image f.url aria-label=f.name max-width="20rem" width="100%" border-radius="radius.lg"
           else if f.kind == "audio" and f.url != ""

@@ -1,4 +1,4 @@
-import { blank } from './session.ts';
+import { blank, fileName, fileSize, libraryPath } from './session.ts';
 import { transcriptRowId } from './gateway.ts';
 import { NOT_IN_VIEW } from './markdown.ts';
 import type { Result } from '../app.contract.d.ts';
@@ -151,6 +151,19 @@ export function quietChatView(): Result<'loadChat'> {
   return quietChat;
 }
 
+// A picture on a message. `alt` is the Markdown alt and becomes the name.
+function shownImage(id: string, name: string, alt: string, url: string, bytes: number, width: number, height: number) {
+  return {
+    id,
+    name: fileName({ name, alt }),
+    kind: 'image',
+    size: fileSize(bytes),
+    url,
+    width,
+    height,
+  };
+}
+
 export function fixtureChat(child: string) {
   const row = (r: Record<string, unknown>) => {
     const text = String(r.text ?? '');
@@ -171,7 +184,9 @@ export function fixtureChat(child: string) {
       row({ id: 'm2', time: '9:00 AM', text: 'Hi there', react: '🔥', quote: 'Hello', tokens: '12 in, 3 out, 4 read from cache, 1 written to cache.', head: true }),
       row({ id: 'm3', time: '9:01 AM', text: 'No tokens here', head: false }),
       row({ id: 'm4', time: '9:02 AM', text: '| Item | Count |\n| :--- | ---: |\n| apple | 2 |', head: true }),
-      row({ id: 'voice1', mine: true, files: [{ id: 'voice', name: 'voice.m4a', kind: 'audio', size: '1 KB', url: '/api/bots/fixture/attachments/voice' }] }),
+      row({ id: 'voice1', mine: true, files: [{ id: 'voice', name: 'voice.m4a', kind: 'audio', size: '1 KB', url: '/api/bots/fixture/attachments/voice', width: 0, height: 0 }] }),
+      row({ id: 'img1', text: 'Here is the chart.', files: [shownImage('libchart', 'chart.png', 'Sales chart', libraryPath('fixture', 'library/chart.png'), 48210, 1200, 800)] }),
+      row({ id: 'img2', files: [shownImage('libmissing', 'missing.png', 'Missing chart', libraryPath('fixture', 'library/missing.png'), 0, 800, 600)] }),
       ...fixtureSent.map((m) => row({ id: transcriptRowId(m.id), mine: true, text: m.text })),
       { ...blank, id: 'e1', kind: 'event', mine: false, text: 'Created routine', title: 'Morning', head: true, tail: true, variant: 'routine-created' },
       { ...blank, id: 'e2', kind: 'event', mine: false, text: 'Messaged', botName: 'Inbox', botSlug: 'inbox', botShape: 'hex', botColor: 'brand.pink', head: true, tail: true, variant: 'sent' },
