@@ -8,7 +8,7 @@ use std::{sync::Arc, time::Duration};
 #[cfg(test)]
 mod tests;
 
-/// The mode `orchestration.launchThread` already accepts. A missing or unknown field keeps
+/// The mode a launch already accepts. A missing or unknown field keeps
 /// today's launch: `autoReview == false` is full access, otherwise auto. A stored choice wins.
 pub(crate) fn launch_runtime_mode(bot: &Value, settings: &Value) -> &'static str {
     match bot
@@ -105,7 +105,7 @@ pub(crate) fn face_in_sync(project: Option<&Value>, name: &str, favicon: &str) -
         && project["projectIcon"].is_null()
 }
 
-/// `projects.mutate` payload that sets the project title and favicon to this Bot's face.
+/// Payload that sets the project title and favicon to this Bot's face.
 pub(crate) fn project_face_update(project_id: &str, name: &str, favicon: &str) -> Value {
     json!({
         "type": "project.update",
