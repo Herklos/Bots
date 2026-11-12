@@ -1,0 +1,245 @@
+use Reply, Sent, Attached, dropKey, putText, entryId, hasFileId, hasVoiceId, knownSent, botCount from "../ui/root-types.contract"
+members Bots
+  state lastText = ""
+
+  state failedText = ""
+
+  // The command id of the send on screen. The row key is `turn-item:message:` plus this.
+  state sentId = ""
+
+  state answerText = ""
+
+  state chatSearching = false
+
+  state messageQuery = ""
+
+  state marksOn = true
+
+  state reactFor = ""
+
+  state messageMenu = ""
+
+  state copiedMenu = ""
+
+  state replyTo = ""
+
+  state replyQuote = ""
+
+  state childThread = ""
+
+  mutation reacted as shape Reply refreshes chat
+
+  mutation messagePinned as shape Reply refreshes chat
+
+  mutation sent as shape Sent refreshes chat then afterSend
+
+  mutation answered as shape Reply refreshes chat then afterAnswer
+
+  mutation stopped as shape Reply refreshes chat
+
+  mutation attached as shape Attached then afterAttach
+
+  derive sendError = match sent { case some(r) => r.error, case none => "" }
+
+  derive qtext = messageQuery.trim().toLowerCase()
+
+  derive pendingText = pending(sent) and lastText != "" ? lastText : (failedText != "" and not pending(sent) ? failedText : "")
+
+  derive pendingFailed = failedText != "" and not pending(sent)
+
+  derive attachError = match attached { case some(r) => r.error, case none => "" }
+
+  derive answerError = match answered { case some(r) => r.error, case none => "" }
+
+  action editChatQuery(v: string)
+    messageQuery = v
+
+  action toggleShownMark
+    let next = not marksOn
+    marksOn = next
+
+  action toggleChatSearch
+    let next = not chatSearching
+    chatSearching = next
+    messageQuery = ""
+    if next
+      focus("chat-search")
+
+  action edit(v: string)
+    let next = v.slice(0, 8000)
+    draftTexts = putText(draftTexts, dkey, next)
+    noteDraft()
+    syncMention(next)
+
+  action pickFiles
+    showPicker("chat-attach")
+
+  action filesPicked(files: Picked[])
+    if slug != "" and not pending(attached) and files.length > 0
+      match files.at(0)
+        case some(f)
+          send attached = uploadAttachment(slug, f.path, f.name, f.type, hostTime.locale)
+        case none
+
+  action afterAttach
+    match attached
+      case some(r)
+        if r.ok and r.id != "" and dkey != "" and pendingAttaches.length < 8
+          draftFiles = draftFiles.concat([`${dkey}\u001f${r.id}\\t${r.name}`])
+          noteDraft()
+      case none
+
+  action dropPending(entry: string)
+    let id = entryId(entry)
+    let next = draftFiles.filter(f => f != `${dkey}\u001f${entry}`)
+    draftFiles = next
+    noteDraft()
+    if id != "" and not hasFileId(next, id) and not hasVoiceId(draftVoices, id) and slug != "fixture" and slug != ""
+      send voiceDropped = dropVoice(slug, id)
+
+  action post
+    if canSend and not pending(sent)
+      messageQuery = ""
+      away = false
+      stickToEnd = true
+      let id = `m-${sendTick + 1}`
+      sendTick = sendTick + 1
+      sentId = id
+      botMark = botCount(chat.rows)
+      holdWork = true
+      // pendingAttaches entries are `id\\tname`; the data module keeps the ids.
+      lastText = draft.trim()
+      failedText = ""
+      // Pass the local. A state read in this same action still sees the value from before the write.
+      send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"), childThread, replyTo, replyQuote, id)
+      clearMention()
+      edit("")
+      writeDrafts()
+    focus("composer")
+
+  action composerKey(k: string, event: KeyboardEvent)
+    if mentionOn and mentionHits.length > 0 and (k == "ArrowDown" or k == "ArrowUp" or k == "Enter" or k == "Tab" or k == "Escape")
+      preventDefault()
+      if k == "Escape"
+        clearMention()
+      else if k == "ArrowDown"
+        mentionIdx = mentionIdx + 1 >= mentionHits.length ? 0 : mentionIdx + 1
+      else if k == "ArrowUp"
+        mentionIdx = mentionIdx <= 0 ? mentionHits.length - 1 : mentionIdx - 1
+      else if not event.repeat
+        match mentionHits.at(mentionIdx)
+          case some(h)
+            completeMention(h.slug)
+          case none
+    else if k == "Enter" and not event.shiftKey and not event.isComposing
+      preventDefault()
+      if not event.repeat
+        post()
+
+  action afterSend
+    if sendError == ""
+      draftFiles = dropKey(draftFiles, dkey)
+      noteDraft()
+      writeDrafts()
+      if knownSent(chat.rows, sentId)
+        lastText = ""
+      replyTo = ""
+      replyQuote = ""
+      // A search filter hides the new row, so the jump waits until this is empty.
+      messageQuery = ""
+    else
+      failedText = lastText
+      holdWork = false
+
+  action forgetSentText
+    if knownSent(chat.rows, sentId)
+      lastText = ""
+
+  action dropWork
+    if not pending(sent) and (laterBot or not chat.working)
+      holdWork = false
+
+  action retry
+    if failedText != "" and not pending(sent)
+      messageQuery = ""
+      away = false
+      stickToEnd = true
+      let id = `m-${sendTick + 1}`
+      sendTick = sendTick + 1
+      sentId = id
+      botMark = botCount(chat.rows)
+      holdWork = true
+      let again = failedText
+      lastText = again
+      failedText = ""
+      send sent = sendMessage(slug, again, "", childThread, replyTo, replyQuote, id)
+
+  action startReply(id: string, text: string)
+    if top(nav).name == "chat"
+      replyTo = id
+      replyQuote = text.slice(0, 500)
+
+  action cancelReply
+    replyTo = ""
+    replyQuote = ""
+
+  action doPinMessage(id: string, text: string)
+    if top(nav).name == "chat" and chat.threadId != "" and not pending(messagePinned)
+      send messagePinned = pinMessage(slug, chat.threadId, id, text)
+
+  action doReact(item: string, emoji: string)
+    reactFor = ""
+    if top(nav).name == "chat"
+      send reacted = reactTo(slug, item, emoji)
+
+  action openReact(item: string)
+    reactFor = (reactFor == item ? "" : item)
+
+  action openMessageMenu(id: string)
+    messageMenu = id
+    focus(`menu-reply-${id}`)
+
+  action closeMessageMenu()
+    let id = messageMenu
+    messageMenu = ""
+    if id != ""
+      focus(`bubble-${id}`)
+
+  action noteCopied(id: string)
+    copiedMenu = id
+    toast = t("chat.copied")
+
+  action finishCopy()
+    let id = copiedMenu
+    copiedMenu = ""
+    messageMenu = ""
+    if id != ""
+      focus(`bubble-${id}`)
+
+  action filesDropped(e: DragEvent)
+    if slug != "" and not pending(attached) and e.files.length > 0
+      match e.files.at(0)
+        case some(f)
+          send attached = uploadAttachment(slug, f, "", "", hostTime.locale)
+        case none
+
+  action editAnswer(v: string)
+    answerText = v
+
+  action answer(rid: string, kind: string, key: string, value: string)
+    if not pending(answered)
+      send answered = respondRequest(slug, rid, kind, key, value, childThread)
+
+  action afterAnswer
+    answerText = ""
+
+  action stop
+    send stopped = stopRun(slug, childThread)
+
+  action pasted(e: ClipboardEvent)
+    if slug != "" and not pending(attached) and pendingAttaches.length < 8 and e.files.length > 0
+      preventDefault()
+      match e.files.at(0)
+        case some(f)
+          send attached = uploadAttachment(slug, f, "", "", hostTime.locale)
+        case none

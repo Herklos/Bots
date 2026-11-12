@@ -1,0 +1,19 @@
+use faceColor from "../ui/fns.contract"
+use MentionHit from "../ui/shapes.contract"
+use Avatar from "../face.contract"
+component MentionMenu
+  props
+    hits: MentionHit[]
+    picked: number
+    choose: action
+  view
+    if hits.length > 0
+      column id="mention-menu" role="listbox" aria-label=t("chat.mentions") position="absolute" left=0 right=0 bottom="100%" margin-bottom="space.xs" z-index=12 max-height=220 overflow-y="auto" box-sizing="border-box" padding="space.xs" gap="2px" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" box-shadow="0 8px 24px rgba(0,0,0,0.18)" testId="mention-menu"
+        for h, i in hits key=h.slug
+          button appearance="none" role="option" aria-selected=(i == picked) press=choose(h.slug) aria-label=t("group.mention", name=h.name) title=`@${h.slug}` testId=`mention-opt-${h.slug}` width="100%" box-sizing="border-box" min-height=40 padding="space.xs space.sm" border-radius="radius.sm" border="none" background-color=(i == picked ? "surface.soft" : "transparent") color="-exact-label"
+            row gap="space.sm" align-items="center" width="100%" min-width=0
+              if h.shape != ""
+                Avatar(shape=h.shape, color=faceColor(h.color), state="idle", size=24, still=true, presence="")
+              column flex=1 min-width=0 align-items="flex-start" gap="0"
+                text h.name font="-exact-footnote" font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" max-width="100%"
+                text `@${h.slug}` font="-exact-caption2" color="ink.muted"

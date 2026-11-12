@@ -1,0 +1,54 @@
+use Login from "../ui/shapes.contract"
+use Reply, Revealed from "../ui/root-types.contract"
+members Bots
+  state vaultQuery = ""
+
+  resource vault = loadVault() as shape Login[] else empty()
+
+  mutation loginSaved as shape Reply refreshes vault then afterLoginSave
+
+  mutation loginRemoved as shape Reply refreshes vault then afterLoginRemove
+
+  mutation revealed as shape Revealed
+
+  derive vquery = vaultQuery.trim().toLowerCase()
+
+  derive shownVault = vault.filter(v => vquery == "" or v.title.toLowerCase().includes(vquery) or v.username.toLowerCase().includes(vquery) or v.website.toLowerCase().includes(vquery))
+
+  derive loginError = match loginSaved { case some(r) => r.error, case none => "" }
+
+  derive loginRemoveError = match loginRemoved { case some(r) => r.error, case none => "" }
+
+  derive revealedFor = match revealed { case some(r) => r.id, case none => "" }
+
+  derive revealedText = match revealed { case some(r) => (r.ok ? r.password : ""), case none => "" }
+
+  action editVaultQuery(v: string)
+    vaultQuery = v
+
+  // Vault: a login is edited in a sheet. The password is kept unless a new one is typed.
+  action doCommitLogin(id: string, title: string, website: string, username: string, password: string, hints: string)
+    if (title.trim() != "" or website.trim() != "") and not pending(loginSaved)
+      send loginSaved = saveLogin(id, title.trim(), website.trim(), username.trim(), password, hints.trim())
+
+  action afterLoginSave
+    if loginError == ""
+      nav = back(nav)
+
+  action doDropLogin(id: string)
+    send loginRemoved = deleteLogin(id)
+
+  action afterLoginRemove
+    if loginRemoveError == ""
+      nav = back(nav)
+
+  action doReveal(id: string)
+    if not pending(revealed)
+      send revealed = revealPassword(id)
+
+  action doHideReveal
+    revealed = none
+
+  action doCloseLogin
+    revealed = none
+    nav = back(nav)

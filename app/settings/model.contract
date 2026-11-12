@@ -1,0 +1,266 @@
+use requestNotificationPermission, NotificationStatus from "@exact/notifications"
+use ModelList from "../ui/shapes.contract"
+use Reply, Network, Storage, About, SystemStatus, UpdateStart, Health, Prefs, NoticeState from "../ui/root-types.contract"
+members Bots
+  // Settings opens on User. Picking another domain only changes which controls are shown.
+  state settingsDomain = "user"
+
+  // Set once POST /api/system/update accepts, until the new version answers or the wait gives up.
+  state updateTo = ""
+
+  state updateFrom = ""
+
+  state updatePolls = 0
+
+  state updateStuck = false
+
+  state newPassword = ""
+
+  state folderDraft = ""
+
+  state folderEditing = false
+
+  state storageHint = ""
+
+  resource about = loadAbout() as shape About else empty()
+
+  resource system = loadSystem(systemGate) as shape SystemStatus else empty()
+
+  resource prefs = loadPrefs() as shape Prefs else empty()
+
+  resource notice = loadNotice() as shape NoticeState else empty()
+
+  resource network = loadNetwork(networkGate) as shape Network else empty()
+
+  resource storage = loadStorage(networkGate) as shape Storage else empty()
+
+  resource models = loadModels(slug, detailGate, hostTime.locale) as shape ModelList else empty()
+
+  mutation noticeAsked as shape NotificationStatus refreshes notice then afterNotice
+
+  mutation noticeEnabled as shape Reply refreshes prefs
+
+  mutation noticeSaved as shape Reply refreshes prefs
+
+  mutation prefsSaved as shape Reply refreshes prefs
+
+  mutation passwordSet as shape Reply refreshes session, network then afterPassword
+
+  mutation updateStarted as shape UpdateStart then afterUpdateStart
+
+  mutation healthRead as shape Health then afterHealth
+
+  mutation networkSet as shape Reply refreshes network
+
+  mutation networkRestarted as shape Reply
+
+  mutation storageSaved as shape Reply refreshes storage
+
+  mutation storageTested as shape Reply then afterStorageTest
+
+  mutation storageCopied as shape Reply then afterStorageCopy
+
+  mutation storageRestarted as shape Reply
+
+  mutation modelSaved as shape Reply refreshes models then afterModel
+
+  mutation defaultSaved as shape Reply refreshes prefs, models
+
+  derive prefsError = match prefsSaved { case some(r) => r.error, case none => "" }
+
+  derive passwordError = match passwordSet { case some(r) => r.error, case none => "" }
+
+  derive networkError = match networkSet { case some(r) => r.error, case none => "" }
+
+  derive networkRestartError = match networkRestarted { case some(r) => r.error, case none => "" }
+
+  derive storagePath = folderEditing ? folderDraft : (storage.root != "" ? storage.root : "~/.hbots/bots")
+
+  derive storageSaveError = match storageSaved { case some(r) => r.error, case none => "" }
+
+  derive storageTestError = match storageTested { case some(r) => r.error, case none => "" }
+
+  derive storageCopyError = match storageCopied { case some(r) => r.error, case none => "" }
+
+  derive storageRestartError = match storageRestarted { case some(r) => r.error, case none => "" }
+
+  derive networkGate = (top(nav).name == "settings" and settingsDomain == "access") ? "1" : "0"
+
+  derive pickedModel = providers.filter(p => p.instanceId == prefs.defaultInstance).length > 0
+
+  derive systemGate = (top(nav).name == "settings" and settingsDomain == "updates") ? "1" : "0"
+
+  derive updateError = match updateStarted { case some(r) => r.ok ? "" : r.error, case none => "" }
+
+  derive canUpdate = system.ok and system.installed and system.service and system.updateAvailable and system.error == "" and updateTo == "" and not updateStuck
+
+  derive updateNeedsService = system.ok and system.installed and not system.service and system.updateAvailable and system.error == "" and updateTo == "" and not updateStuck
+
+  derive modelError = match modelSaved { case some(r) => r.error, case none => "" }
+
+  // Notices follow the roster, the open chat, and whether this window is in front.
+  // A poll does not post them again, and does not read settings or permission again.
+  derive noticeStamp = pending(convos) or pending(prefs) or pending(notice) or failed(convos) ? "" : convos.map(c => c.kind + "\t" + c.id + "\t" + c.line + "\t" + c.at + "\t" + (c.unread ? "1" : "0") + "\t" + (c.notifications ? "1" : "0")).join("\n") + "\n" + bots.map(b => b.slug + "\t" + b.line + "\t" + (b.unread ? "1" : "0") + "\t" + (b.notifications ? "1" : "0") + "\t" + (b.hideFromSidebar ? "1" : "0") + "\t" + (b.subagent ? "1" : "0") + "\t" + (b.hidden ? "1" : "0")).join("\n") + "\n" + page.visibilityState + "\t" + (page.hasFocus ? "1" : "0") + "\t" + (notice.available ? "1" : "0") + "\t" + notice.state + "\t" + (prefs.noticeEnabled ? "1" : "0") + "\t" + (prefs.noticeEnabledMissing ? "1" : "0") + "\t" + (prefs.noticeSound ? "1" : "0") + "\t" + prefs.noticePreview + "\t" + prefs.noticeWhen + "\t" + slug + "\t" + roomId
+
+  action editPassword(v: string)
+    password = v
+
+  action afterNotice
+    match noticeAsked
+      case some(status)
+        if status.state == "granted"
+          send noticeEnabled = enableNotifications()
+      case none
+
+  action saveNotifications(enabled: bool, sound: bool, preview: string, noticeWhen: string)
+    send noticeSaved = setNotifications(enabled ? "on" : "off", sound, preview, noticeWhen)
+
+  action saveNoticePart(sound: bool, preview: string, noticeWhen: string)
+    if prefs.noticeEnabledMissing
+      send noticeSaved = setNotifications("", sound, preview, noticeWhen)
+    else if prefs.noticeEnabled
+      send noticeSaved = setNotifications("on", sound, preview, noticeWhen)
+    else
+      send noticeSaved = setNotifications("off", sound, preview, noticeWhen)
+
+  action doAllowNotices
+    send noticeAsked = requestNotificationPermission()
+
+  // Settings: name, theme, usage, the default model, Vault, the remote password, storage, and about.
+  action openSettings
+    writeDrafts()
+    settingsDomain = "user"
+    computerEnlarged = false
+    childThread = ""
+    panelPage = "root"
+    computerTab = ""
+    nav = go(nav, "/settings")
+
+  action pickSettingsDomain(domain: string)
+    settingsDomain = domain
+
+  action doStartUpdate
+    if canUpdate and not pending(updateStarted)
+      send updateStarted = startUpdate()
+
+  action afterUpdateStart
+    match updateStarted
+      case some(r)
+        if r.ok and r.version != ""
+          updateTo = r.version
+          updateFrom = system.version
+          updatePolls = 0
+          updateStuck = false
+      case none
+        updatePolls = updatePolls
+
+  action askHealth
+    if updateTo != "" and not updateStuck and not pending(healthRead)
+      updatePolls = updatePolls + 1
+      send healthRead = readHealth()
+
+  action afterHealth
+    let target = updateTo
+    let polls = updatePolls
+    let arrived = match healthRead { case some(h) => h.ok and h.version == target and target != "", case none => false }
+    if arrived
+      updateTo = ""
+      reload()
+    else if target != "" and polls >= 300
+      updateStuck = true
+
+  action doEditName(v: string)
+    nameDraft = v
+    nameEditing = true
+
+  action doSaveName(v: string)
+    nameEditing = false
+    if v.trim() != "" and v.trim() != prefs.userName
+      send prefsSaved = setUserName(v.trim())
+
+  action doPickTheme(t: string)
+    setScheme(t)
+    send prefsSaved = setTheme(t)
+
+  action editNewPassword(v: string)
+    newPassword = v
+
+  action doSavePassword
+    if newPassword != "" and not pending(passwordSet)
+      send passwordSet = setPassword(newPassword)
+
+  action afterPassword
+    if passwordError == ""
+      newPassword = ""
+
+  action doSetNetwork(mode: string)
+    if not network.locked and mode != network.mode and not pending(networkSet)
+      send networkSet = setNetwork(mode)
+
+  action doRestartNetwork
+    if network.canRestart and network.restartRequired and not pending(networkRestarted)
+      send networkRestarted = restartGateway()
+
+  action doEditFolder(v: string)
+    folderDraft = v
+    folderEditing = true
+
+  action doSaveStorage
+    let path = storagePath
+    if (storage.rootLock == "" or storage.backendLock == "") and path != "" and not pending(storageSaved)
+      storageHint = ""
+      folderEditing = false
+      send storageSaved = saveStorage(path, "", storage.rootLock == "" ? "1" : "0")
+
+  action doTestStorage
+    let path = storagePath
+    if path != "" and not pending(storageTested)
+      storageHint = ""
+      send storageTested = testStorage(path)
+
+  action afterStorageTest
+    match storageTested
+      case some(r)
+        if r.ok
+          storageHint = "test"
+      case none
+        storageHint = storageHint
+
+  action doCopyStorage
+    let path = storagePath
+    if path != "" and not pending(storageCopied)
+      storageHint = ""
+      send storageCopied = copyStorage(path)
+
+  action afterStorageCopy
+    match storageCopied
+      case some(r)
+        if r.ok
+          storageHint = "copy"
+      case none
+        storageHint = storageHint
+
+  action doRestartStorage
+    if storage.canRestart and storage.restartRequired and not pending(storageRestarted)
+      send storageRestarted = restartStorage()
+
+  // Projects: a board of items by kind, edited in a sheet.
+  action doPickModel(bslug: string, instanceId: string, model: string, effort: string, mode: string)
+    if not pending(modelSaved)
+      send modelSaved = setModel(bslug, instanceId, model, effort, mode)
+
+  action afterModel
+    if modelError == ""
+      toast = t("toast.modelSaved")
+
+  action doDefaultMode(mode: string)
+    if not pending(prefsSaved)
+      send prefsSaved = setDefaultMode(mode)
+
+  action doGroupAnswer(policy: string)
+    if not pending(prefsSaved)
+      send prefsSaved = setGroupAnswerPolicy(policy)
+
+  action doMakeDefault(instanceId: string, model: string, effort: string)
+    if not pending(defaultSaved)
+      send defaultSaved = setDefaultModel(instanceId, model, effort)

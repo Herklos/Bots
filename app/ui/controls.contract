@@ -1,0 +1,232 @@
+use Face from "../face.contract"
+
+// Shared screen rhythm. Colours are generated from design/tokens.json.
+style Screen
+  background-color="surface.canvas"
+  color="-exact-label"
+
+style PageTitle
+  font="-exact-headline"
+  font-weight=600
+  letter-spacing="-0.2px"
+
+style HeroTitle
+  font="-exact-large-title"
+  font-weight=700
+  letter-spacing="-0.8px"
+
+style PageHeader
+  display="flex"
+  align-items="center"
+  gap="space.sm"
+  padding="space.md space.xl"
+  min-height=72
+  box-sizing="border-box"
+  background-color="surface.canvas"
+  border-bottom="1px solid surface.line"
+
+// The sidebar's top bar: search and New Bot as two quiet circles.
+
+// A file on a message: a type tile, its name and size, and a download glyph.
+style FileCard
+  display="flex"
+  min-width=240
+  padding="space.sm space.md"
+  border-radius="radius.lg"
+  background-color="surface.card"
+  border="1px solid surface.line"
+  color="-exact-label"
+  text-decoration="none"
+  :hover
+    background-color="surface.raised"
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+// An answer button on a request card.
+style ChoiceButton
+  min-height=32
+  padding="2px space.md"
+  border="1px solid surface.line"
+  border-radius="radius.full"
+  font="-exact-subheadline"
+  font-weight=500
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+style QuietButton
+  min-width=44
+  min-height=44
+
+style TextControl
+  box-sizing="border-box"
+  min-height=44
+  padding="space.sm space.md"
+  border="none"
+  border-radius="radius.sm"
+  color="ink.muted"
+  background-color="transparent"
+  font="-exact-subheadline"
+  font-weight=500
+  :hover
+    background-color="surface.soft"
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+style IconControl
+  display="flex"
+  align-items="center"
+  justify-content="center"
+  width=44
+  height=44
+  padding=0
+  border="none"
+  border-radius="radius.md"
+  color="ink.muted"
+  background-color="transparent"
+  :disabled
+    opacity=0.4
+    color="ink.muted"
+  :hover
+    background-color="surface.soft"
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+// The composer's send: a Tide circle with Night ink, the brand's filled look.
+// The chat header's Bot name: one button that toggles the right panel.
+
+style ToggleControl
+  display="flex"
+  align-items="center"
+  justify-content="center"
+  width=44
+  height=32
+  padding=0
+  border="none"
+  border-radius="radius.sm"
+  background-color="transparent"
+  :checked
+    background-color="transparent"
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+  :disabled
+    opacity=0.4
+
+style SwatchControl
+  display="flex"
+  align-items="center"
+  justify-content="center"
+  width=44
+  height=44
+  box-sizing="border-box"
+  padding=0
+  border="none"
+  border-radius="radius.full"
+  background-color="transparent"
+  :checked
+    background-color="transparent"
+  :hover
+    background-color="surface.soft"
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+style ConversationLink
+  display="flex"
+  align-items="center"
+  width="100%"
+  box-sizing="border-box"
+  color="-exact-label"
+  text-decoration="none"
+  padding="space.md"
+  border-radius="radius.md"
+  :hover
+    background-color="surface.raised"
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+// A search field: a pill with a magnifier beside it.
+
+// A section label above a grouped card, like the panel labels in Threebot.
+style SectionLabel
+  font="-exact-footnote"
+  font-weight=600
+  color="ink.muted"
+  padding="space.md space.md space.xs"
+
+// A small status chip: a dot and a word.
+style Chip
+  display="flex"
+  align-items="center"
+  gap="space.xs"
+  padding="4px space.sm"
+  border-radius="radius.full"
+  background-color="surface.soft"
+  font="-exact-footnote"
+  font-weight=500
+
+// A rounded tile behind a row's glyph.
+style IconTile
+  display="flex"
+  align-items="center"
+  justify-content="center"
+  width=36
+  height=36
+  border-radius="radius.sm"
+  background-color="surface.soft"
+
+// Segmented choices (the theme picker): one pill, filled when chosen. The
+// chosen fill is a node attribute, so the class keeps only literal states.
+style Segment
+  border="none"
+  min-height=30
+  padding="2px space.md"
+  font="-exact-footnote"
+  border-radius="radius.full"
+  background-color="transparent"
+  color="-exact-label"
+  font-weight=500
+  :hover
+    background-color="surface.soft"
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+// Chat bubbles. Mine is the brand fill (Tide with Night ink, 8.2:1); the
+// Bot's is a card. Fill, ink and the tail corner are node attributes.
+style Bubble
+  padding="space.sm space.lg"
+  line-height=1.55
+  white-space="pre-wrap"
+  overflow-wrap="break-word"
+
+// An applied reaction, overlapping the bubble's bottom corner.
+style ReactionChip
+  background-color="surface.raised"
+  border="1px solid surface.line"
+  border-radius="radius.full"
+  font="-exact-footnote"
+  padding="1px space.xs"
+  min-height=22
+  line-height=1.2
+
+style Field
+  box-sizing="border-box"
+  min-height=44
+  border="none"
+  background-color="transparent"
+  padding="space.xs 0"
+  color="-exact-label"
+
+style FormList
+  background-color="surface.canvas"
+  width="100%"
+  max-width="44rem"
+  align-self="center"
+  box-sizing="border-box"
+
+style PrimaryButton
+  min-height=44

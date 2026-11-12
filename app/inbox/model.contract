@@ -1,0 +1,67 @@
+use holdWorking, withPending from "../ui/root-types.contract"
+members Bots
+  state botQuery = ""
+
+  state searching = false
+
+  state hiddenOpen = false
+
+  // One inbox row menu. The menu itself lives on the row, so it leaves with that row.
+  state rowMenu = ""
+
+  derive firstRun = bots.length == 0 and not pending(bots) and not failed(bots)
+
+  derive filteredRows = chat.rows.filter(m => m.kind != "message" or qtext == "" or m.text.toLowerCase().includes(qtext))
+
+  derive shownRows = holdWorking(withPending(filteredRows, sentId, pendingText, pendingFailed), holdWork)
+
+  derive searchNote = qtext != "" and chat.partial ? t("chat.searchPartial") : ""
+
+  derive visibleBots = bots.filter(b => not b.hidden and not b.hideFromSidebar and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
+
+  derive tiles = visibleBots.filter(b => query == "" and (b.main or b.pinned))
+
+  derive openUnread = bots.filter(b => b.slug == slug and b.unread).length > 0
+
+  derive hiddenBots = bots.filter(b => b.hidden and not b.hideFromSidebar and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
+
+  derive pickableBots = bots.filter(b => not b.hideFromSidebar)
+
+  action openHidden(bslug: string)
+    writeDrafts()
+    panelTab = "details"
+    panelPage = "root"
+    panelOpen = true
+    nav = wide and (top(nav).name == "chat" or top(nav).name == "group") ? replace(nav, path("chat", bslug)) : go(nav, path("chat", bslug))
+
+  action editBotQuery(v: string)
+    botQuery = v
+
+  action openSearch
+    searching = true
+    focus("bot-search")
+
+  action closeSearch
+    searching = false
+    botQuery = ""
+
+  action toggleHidden
+    hiddenOpen = not hiddenOpen
+
+  action openRowMenu(key: string)
+    rowMenu = key
+
+  action closeRowMenu()
+    rowMenu = ""
+
+  // Edit from the row menu opens the same page as the panel's edit control.
+  action editBotFromRow(bslug: string)
+    open(path("chat", bslug))
+    panelTab = "details"
+    panelPage = "edit"
+    panelOpen = true
+
+  action editGroupFromRow(id: string)
+    open(path("group", id))
+    groupPanel = true
+    groupPage = "edit"

@@ -1,0 +1,296 @@
+
+shape Bot
+  slug: string
+  name: string
+  label: string
+  line: string
+  time: string
+  initials: string
+  color: string
+  shape: string
+  main: bool
+  pinned: bool
+  hidden: bool
+  ready: bool
+  working: bool
+  unread: bool
+  parentSlug: string
+  hideFromSidebar: bool
+  subagent: bool
+  prompt: string
+  inheritParentPrompt: bool
+  notifications: bool
+
+// A file on a message: an image shows in place, audio plays, any other file is a card.
+shape FileRef
+  id: string
+  name: string
+  kind: string
+  size: string
+  url: string
+
+// One answer a request offers. `key` is the question it answers; `warn` is a caution to show.
+shape Choice
+  label: string
+  value: string
+  key: string
+  warn: string
+
+// One row of the transcript: a day mark, a message, a line between messages, a request the
+// Bot is waiting on, or the working line. `head` and `tail` mark a run of one sender's messages
+// for the bubble corners. `variant` is the kind of an event or a request.
+// One slice of a Bot message. `text` is markdown. A `table` has header cells, body
+// rows, and one alignment per header cell (`left`, `center`, or `right`).
+shape Part
+  kind: string
+  text: string
+  head: string[]
+  rows: string[][]
+  align: string[]
+
+shape Row
+  id: string
+  kind: string
+  mine: bool
+  text: string
+  title: string
+  time: string
+  head: bool
+  tail: bool
+  variant: string
+  files: FileRef[]
+  botSlug: string
+  botName: string
+  botColor: string
+  botShape: string
+  choices: Choice[]
+  placeholder: string
+  key: string
+  react: string
+  quote: string
+  tokens: string
+  resetAt: string
+  parts: Part[]
+
+shape Pin
+  id: string
+  text: string
+  missing: bool
+
+shape Chat
+  slug: string
+  rows: Row[]
+  working: bool
+  partial: bool
+  readOnly: bool
+  pins: Pin[]
+  threadId: string
+
+shape RoomMember
+  slug: string
+  name: string
+  line: string
+  state: string
+  ready: bool
+  working: bool
+
+shape RoomMessage
+  id: string
+  name: string
+  text: string
+  from: string
+  parts: Part[]
+
+shape Room
+  id: string
+  title: string
+  description: string
+  color: string
+  shape: string
+  members: RoomMember[]
+  messages: RoomMessage[]
+  notifications: bool
+  answerPolicy: string
+  answerPolicyEffective: string
+  chief: string
+
+// One @ completion row above the composer.
+shape MentionHit
+  slug: string
+  name: string
+  color: string
+  shape: string
+
+// One face in a group's stack. Colour stays a brand token; the view maps it.
+shape FaceBit
+  shape: string
+  color: string
+  state: string
+
+// One row of the sidebar list: a Bot or a group, newest conversation first.
+shape Convo
+  kind: string
+  key: string
+  id: string
+  name: string
+  color: string
+  shape: string
+  faces: FaceBit[]
+  line: string
+  time: string
+  at: string
+  unread: bool
+  working: bool
+  ready: bool
+  notifications: bool
+
+// A Vault login, as the list may see it: the password is never in this shape.
+shape Login
+  id: string
+  title: string
+  website: string
+  username: string
+  hasPassword: bool
+  hints: string
+  icon: string
+
+// The one password the person asked to see, for the login it names.
+
+// One effort level a model offers, and one model a provider lists.
+shape Effort
+  id: string
+  label: string
+
+shape ModelOption
+  slug: string
+  name: string
+  recommended: bool
+  effort: string
+  efforts: Effort[]
+
+shape Provider
+  instanceId: string
+  name: string
+  account: string
+  models: ModelOption[]
+
+// A Bot's model choice, and every provider T3 Code has ready. `efforts` are the current model's levels.
+// `runtimeMode` is approval-required, auto, or full-access.
+shape ModelList
+  ok: bool
+  error: string
+  current: string
+  instanceId: string
+  effort: string
+  runtimeMode: string
+  currentName: string
+  providerName: string
+  effortLabel: string
+  efforts: Effort[]
+  providers: Provider[]
+
+// A routine, to read: the panel does not edit them.
+shape Routine
+  id: string
+  title: string
+  paused: bool
+  schedule: string
+  next: string
+  failed: bool
+
+shape RoutineList
+  ok: bool
+  tasks: Routine[]
+  error: string
+
+shape LineRow
+  id: string
+  title: string
+  status: string
+  remote: bool
+  threadId: string
+
+shape Lineage
+  ok: bool
+  rows: LineRow[]
+  error: string
+
+// One day of a usage report: the chart bar (`px`), the sparkline bar (`spx`), and the figures as words.
+shape DayRow
+  day: string
+  label: string
+  short: string
+  tokens: string
+  input: string
+  output: string
+  cached: string
+  cacheWrite: string
+  turns: string
+  messages: string
+  px: number
+  spx: number
+
+shape ModelRow
+  name: string
+  tokens: string
+  turns: string
+  share: number
+
+shape BotShare
+  slug: string
+  name: string
+  color: string
+  shape: string
+  tokens: string
+  turns: string
+  messages: string
+  share: number
+
+shape UsageReport
+  ok: bool
+  error: string
+  period: string
+  periodLabel: string
+  messages: string
+  attachments: string
+  turns: string
+  tokens: string
+  input: string
+  output: string
+  cached: string
+  cacheWrite: string
+  hit: string
+  sentence: string
+  days: DayRow[]
+  rows: DayRow[]
+  models: ModelRow[]
+  bots: BotShare[]
+  empty: bool
+  first: string
+  last: string
+
+// What a Bot has kept: pictures, files and links, to look at.
+shape ShelfItem
+  id: string
+  title: string
+  detail: string
+  url: string
+
+shape Shelf
+  ok: bool
+  total: number
+  pictures: ShelfItem[]
+  files: ShelfItem[]
+  links: ShelfItem[]
+
+shape PageTab
+  id: string
+  title: string
+  url: string
+
+shape Computer
+  ok: bool
+  tabs: PageTab[]
+  image: string
+  error: string
+  selected: string

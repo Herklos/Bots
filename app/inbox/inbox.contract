@@ -1,6 +1,8 @@
 use Avatar from "../face.contract"
-use TextControl, ConversationLink, Bot, Convo, faceColor, showUnread from "../ui/shared.contract"
 use Faces from "../group/group.contract"
+use faceColor, showUnread from "../ui/fns.contract"
+use Bot, Convo from "../ui/shapes.contract"
+use TextControl, ConversationLink from "../ui/controls.contract"
 
 component InboxRow
   props

@@ -1,0 +1,275 @@
+use shapeOf, colorOf from "./fns.contract"
+use Bot, Row, RoomMember, RoomMessage, MentionHit, FaceBit, Convo from "./shapes.contract"
+
+shape Reply
+  ok: bool
+  error: string
+
+// A chat or group send. `messageId` is the command id. The transcript row is that id
+// with `turn-item:message:` in front. Other mutations stay on Reply.
+shape Sent
+  ok: bool
+  error: string
+  messageId: string
+
+// A drive turn may return clipboard text after copy or cut.
+shape DriveReply
+  ok: bool
+  error: string
+  text: string
+
+shape Session
+  authenticated: bool
+  passwordRequired: bool
+
+// Where hbots listens. `mode` is local, lan, or tailscale. `urls` is one address per line.
+shape Network
+  mode: string
+  locked: bool
+  restartRequired: bool
+  canRestart: bool
+  listening: string
+  urls: string
+  error: string
+  http: bool
+
+// Where Bots are stored. `backendLock` and `rootLock` are the environment
+// variable that locks that control, or empty. The screen does not read a key.
+shape Storage
+  backend: string
+  root: string
+  backendLock: string
+  rootLock: string
+  restartRequired: bool
+  canRestart: bool
+  error: string
+  keySet: bool
+  space: string
+  spaceLock: string
+
+// Anytype pairing. `challengeId` is the open pairing request, or empty. The key never
+// reaches the screen. `AnytypeCheck` says whether the saved key reaches the chosen space
+// and whether that space has more than one member.
+shape Pairing
+  ok: bool
+  error: string
+  challengeId: string
+
+shape AnytypeCheck
+  ok: bool
+  error: string
+  space: string
+  spaceFound: bool
+  shared: bool
+
+shape Suggestion
+  name: string
+  about: string
+  color: string
+  shape: string
+  first: string
+
+shape About
+  ok: bool
+  version: string
+  harness: string
+  connected: bool
+
+// The update card. A failed read is a blank (ok false), the same as About.
+shape SystemStatus
+  ok: bool
+  installed: bool
+  service: bool
+  version: string
+  latest: string
+  updateAvailable: bool
+  error: string
+
+shape UpdateStart
+  ok: bool
+  version: string
+  error: string
+
+shape Health
+  ok: bool
+  version: string
+
+shape Made
+  ok: bool
+  id: string
+  error: string
+
+shape Prefs
+  userName: string
+  theme: string
+  defaultInstance: string
+  defaultModel: string
+  defaultEffort: string
+  defaultRuntimeMode: string
+  noticeEnabled: bool
+  noticeSound: bool
+  noticePreview: string
+  noticeWhen: string
+  noticeEnabledMissing: bool
+  groupAnswerPolicy: string
+
+// The host page, as the poster reads it. `hidden` or an unfocused window is background.
+shape PageState
+  visibilityState: string
+  hasFocus: bool
+
+// Whether this host can post, and the permission it already has.
+shape NoticeState
+  available: bool
+  state: string
+
+// Result of uploading one chat attachment to the gateway.
+shape Attached
+  ok: bool
+  id: string
+  name: string
+  error: string
+
+// A clip stored once, ready to hear and then send on the voice route.
+shape VoiceHeld
+  ok: bool
+  id: string
+  name: string
+  url: string
+  seconds: number
+  error: string
+
+shape Revealed
+  ok: bool
+  id: string
+  password: string
+  error: string
+
+// Counts on this machine. `ok` is false until a read succeeds, so an empty
+// fallback is not "nothing counted yet".
+shape Usage
+  ok: bool
+  error: string
+  messages: number
+  attachments: number
+  vaultWrites: number
+  iconFetches: number
+
+fn pageKeyKind(k: string, ctrl: bool, meta: bool): string = meta ? "" : (k == "Enter" or k == "Tab" or k == "Backspace" or k == "Delete" or k == "ArrowLeft" or k == "ArrowUp" or k == "ArrowRight" or k == "ArrowDown" or k == "Home" or k == "End" or k == "PageUp" or k == "PageDown" ? "key" : (k.length == 1 and not ctrl ? "text" : ""))
+
+// Windows virtual key codes for the keys the page stream understands. Anything else is 0.
+fn pageKeyCode(k: string): number = k == "Enter" ? 13 : k == "Tab" ? 9 : k == "Backspace" ? 8 : k == "Delete" ? 46 : k == "ArrowLeft" ? 37 : k == "ArrowUp" ? 38 : k == "ArrowRight" ? 39 : k == "ArrowDown" ? 40 : k == "Home" ? 36 : k == "End" ? 35 : k == "PageUp" ? 33 : k == "PageDown" ? 34 : 0
+
+// CDP bits: Alt 1, Ctrl 2, Shift 8. Meta is the copy, cut and select-all path.
+fn pageModifiers(shift: bool, alt: bool, ctrl: bool): number = (shift ? 8 : 0) + (alt ? 1 : 0) + (ctrl ? 2 : 0)
+
+// ⌘/Ctrl chords that the held page understands. Paste uses the paste event instead.
+fn pageChord(k: string, meta: bool, ctrl: bool): string = meta or ctrl ? (k.toLowerCase() == "c" ? "copy" : k.toLowerCase() == "x" ? "cut" : k.toLowerCase() == "a" ? "selectAll" : "") : ""
+
+// One kept conversation: its text, the files waiting with it, and a held clip.
+shape DraftPack
+  stamp: string
+  texts: string[]
+  files: string[]
+  voices: string[]
+
+// The host locale, so the data module can pick the same string table as t().
+shape HostTime
+  locale: string
+
+// Whether the primary pointer can hover. A phone is "none"; a mouse is "hover".
+shape PointerFacts
+  hover: string
+
+fn nameOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.name, case none => "" }
+
+fn labelOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.ready ? (b.label != "" ? b.label : "Ready to chat") : "Getting set up…", case none => "" }
+
+fn initialsOf(name: string): string = name.trim().split(" ").filter(w => w != "").slice(0, 2).map(w => w.slice(0, 1).toUpperCase()).join("")
+
+fn botCountLabel(n: number, one: string, many: string): string = n == 1 ? one : many
+
+fn settingsDomainLabel(domain: string, user: string, notifications: string, models: string, access: string, updates: string): string = domain == "user" ? user : domain == "notifications" ? notifications : domain == "models" ? models : domain == "access" ? access : updates
+
+fn noticeOn(missing: bool, enabled: bool, state: string): bool = missing ? state == "granted" : enabled
+
+fn mutedBots(bots: Bot[]): Bot[] = bots.filter(b => not b.notifications and not b.subagent)
+
+fn mutedGroups(convos: Convo[]): Convo[] = convos.filter(c => c.kind == "group" and not c.notifications)
+
+fn firstMutedBot(bots: Bot[]): string = match first(mutedBots(bots)) { case some(b) => b.slug, case none => "" }
+
+fn firstMutedGroup(convos: Convo[]): string = match first(mutedGroups(convos)) { case some(c) => c.id, case none => "" }
+
+fn noticeStatusLabel(available: bool, state: string, allowed: string, denied: string, unavailable: string, pending: string): string = not available ? unavailable : state == "granted" ? allowed : state == "denied" ? denied : pending
+
+fn networkModeLabel(mode: string, local: string, lan: string, tailscale: string): string = mode == "lan" ? lan : mode == "tailscale" ? tailscale : local
+
+fn nText(n: number, one: string, many: string): string = n == 1 ? `1 ${one}` : `${n} ${many}`
+
+fn usageLine(m: number, a: number, v: number, i: number): string = `${nText(m, "message", "messages")}, ${nText(a, "attachment", "attachments")}, ${nText(v, "vault write", "vault writes")}, and ${nText(i, "icon fetch", "icon fetches")} on this machine.`
+
+fn attachmentName(entry: string, fallback: string): string = match entry.split("\\t").at(-1) { case some(name) => name, case none => fallback }
+
+// A draft key is the Bot, or that Bot and a child thread. A room keeps none.
+fn convoKey(slug: string, child: string): string = slug == "" ? "" : (child == "" ? slug : `${slug}/${child}`)
+
+fn dropKey(rows: string[], key: string): string[] = key == "" ? rows : rows.filter(r => not r.startsWith(`${key}\u001f`))
+
+fn putText(rows: string[], key: string, value: string): string[] = key == "" ? rows : (value == "" ? dropKey(rows, key) : dropKey(rows, key).concat([`${key}\u001f${value}`]))
+
+fn putVoice(rows: string[], key: string, hold: string, id: string, preview: string, seconds: number): string[] = key == "" ? rows : ((hold == "" and id == "") ? dropKey(rows, key) : dropKey(rows, key).concat([`${key}\u001f${hold}\u001f${id}\u001f${preview}\u001f${seconds}`]))
+
+fn fieldAt(pack: string, n: number): string = match pack.split("\u001f").at(n) { case some(s) => s, case none => "" }
+
+fn voiceNumber(pack: string): number = match parseNumber(fieldAt(pack, 3)) { case some(n) => n, case none => 0 }
+
+fn entryId(entry: string): string = match entry.split("\\t").at(0) { case some(id) => id, case none => "" }
+
+fn fileIdOf(row: string): string = entryId(fieldAt(row, 1))
+
+fn hasFileId(rows: string[], id: string): bool = id != "" and rows.filter(r => fileIdOf(r) == id).length > 0
+
+fn hasVoiceId(rows: string[], id: string): bool = id != "" and rows.filter(r => fieldAt(r, 2) == id).length > 0
+
+fn themeLabel(theme: string, system: string, dark: string, light: string): string = theme == "system" ? system : theme == "dark" ? dark : light
+
+fn pickedFaces(bots: Bot[], slugs: string[]): FaceBit[] = slugs.slice(0, 3).map(slug => FaceBit(shape=shapeOf(bots, slug), color=colorOf(bots, slug), state="idle"))
+
+fn withWorking(messages: RoomMessage[], working: bool): RoomMessage[] = working ? messages.concat([RoomMessage(id="working", name="", text="", from="", parts=[])]) : messages
+
+// The person's text, on the same id the room will store, until that row arrives.
+fn withRoomPending(messages: RoomMessage[], text: string, id: string): RoomMessage[] = text == "" or id == "" or messages.filter(m => m.id == id).length > 0 ? messages : messages.concat([RoomMessage(id=id, name="", text=text, from="user", parts=[])])
+
+// Room lines use the same row shape as the Bot transcript. The group view reads kind, mine, and the bot fields.
+fn roomLine(msg: RoomMessage): Row = Row(id=msg.id, kind=(msg.id == "working" ? "working" : "message"), mine=(msg.from == "user"), text=msg.text, title="", time="", head=true, tail=true, variant="", files=[], botSlug=(msg.from == "user" ? "" : msg.from), botName=msg.name, botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=msg.parts)
+
+fn transcriptId(id: string): string = id == "" or id.startsWith("turn-item:") ? id : `turn-item:message:${id}`
+
+fn knownSent(rows: Row[], id: string): bool = id != "" and rows.filter(r => r.id == id or r.id == transcriptId(id)).length > 0
+
+fn botCount(rows: Row[]): number = rows.filter(m => m.kind == "message" and not m.mine).length
+
+// A local row for text that is still sending or failed. A send uses the transcript id so the
+// real row replaces it without a new key. A failure keeps the retry bubble.
+fn pendingRow(id: string, text: string, failed: bool): Row = Row(id=transcriptId(id), kind=(failed ? "pending" : "message"), mine=true, text=text, title="", time="", head=true, tail=true, variant=(failed ? "failed" : ""), files=[], botSlug="", botName="", botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=[])
+
+fn withoutWorking(rows: Row[]): Row[] = rows.filter(r => r.id != "working")
+
+fn workingOnly(): Row = Row(id="working", kind="working", mine=false, text="", title="", time="", head=true, tail=true, variant="", files=[], botSlug="", botName="", botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=[])
+
+// One working row, after the person's line. `hold` keeps it when a poll says the turn stopped.
+fn holdWorking(rows: Row[], hold: bool): Row[] = (hold or rows.filter(r => r.id == "working").length > 0) ? withoutWorking(rows).concat([workingOnly()]) : rows
+
+fn withPending(rows: Row[], id: string, text: string, failed: bool): Row[] = text == "" or id == "" or knownSent(rows, id) ? rows : rows.concat([pendingRow(id, text, failed)])
+
+// True when the last character can continue a word, so `joe@mail` is not a mention.
+fn wordChar(c: string): bool = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".includes(c)
+
+fn mentionReplace(text: string, q: string, slug: string): string = `${text.slice(0, text.length - q.length)}${slug} `
+
+fn botMentions(bots: Bot[]): MentionHit[] = bots.filter(b => not b.hideFromSidebar).map(b => MentionHit(slug=b.slug, name=b.name, color=b.color, shape=b.shape))
+
+fn roomMentions(bots: Bot[], members: RoomMember[], allName: string): MentionHit[] = [MentionHit(slug="everyone", name=allName, color="brand.default", shape=""), MentionHit(slug="all", name=allName, color="brand.default", shape="")].concat(members.map(m => MentionHit(slug=m.slug, name=m.name, color=colorOf(bots, m.slug), shape=shapeOf(bots, m.slug))))
+
+fn filterMentions(hits: MentionHit[], q: string): MentionHit[] = hits.filter(h => q == "" or h.slug.toLowerCase().startsWith(q) or h.name.toLowerCase().startsWith(q) or h.name.toLowerCase().replaceAll(" ", "").startsWith(q)).slice(0, 8)

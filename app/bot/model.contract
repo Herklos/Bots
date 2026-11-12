@@ -1,0 +1,285 @@
+use requestNotificationPermission from "@exact/notifications"
+use shapeOf, colorOf from "../ui/fns.contract"
+use Reply, Made from "../ui/root-types.contract"
+members Bots
+  state newName = ""
+
+  state newColor = "brand.default"
+
+  state newShape = "ball"
+
+  state newFirst = ""
+
+  // The new-Bot walk: name, colour, shape, an optional template, a first message, then review.
+  state createStep = "name"
+
+  // Set once when the roster becomes empty, so a poll does not wipe a half-typed name.
+  state welcomed = false
+
+  state nameDraft = ""
+
+  state nameEditing = false
+
+  // Wide windows show the Bot's panel beside the chat, like Threebot's desktop.
+  state wide = false
+
+  // The right panel (the Bot's settings) opens and closes from the chat header's
+  // Bot name. It opens by default when the window turns wide.
+  state panelOpen = false
+
+  state panelTab = "details"
+
+  state panelPage = "root"
+
+  state subSlug = ""
+
+  state subName = ""
+
+  state subShape = "ball"
+
+  state subColor = "brand.default"
+
+  state subPrompt = ""
+
+  state subInherit = false
+
+  mutation created as shape Made refreshes bots then afterCreate
+
+  mutation subCreated as shape Reply refreshes bots then afterSubCreate
+
+  mutation subSaved as shape Reply refreshes bots then afterSubSave
+
+  mutation childRemoved as shape Reply refreshes bots then afterChildRemove
+
+  mutation seen as shape Reply refreshes bots
+
+  mutation renamed as shape Reply refreshes bots
+
+  mutation recoloured as shape Reply refreshes bots
+
+  mutation reshaped as shape Reply refreshes bots
+
+  mutation pinned as shape Reply refreshes bots
+
+  mutation botMuted as shape Reply refreshes bots, convos
+
+  mutation hidSaved as shape Reply refreshes bots
+
+  mutation mainSaved as shape Reply refreshes bots
+
+  mutation botRemoved as shape Reply refreshes bots then afterBotRemove
+
+  derive createError = match created { case some(r) => r.error, case none => "" }
+
+  derive renameError = match renamed { case some(r) => r.error, case none => "" }
+
+  derive colourError = match recoloured { case some(r) => r.error, case none => "" }
+
+  derive hideError = match hidSaved { case some(r) => r.error, case none => "" }
+
+  derive mainError = match mainSaved { case some(r) => r.error, case none => "" }
+
+  derive reshapeError = match reshaped { case some(r) => r.error, case none => "" }
+
+  derive pinError = match pinned { case some(r) => r.error, case none => "" }
+
+  derive botError = renameError != "" ? renameError : colourError != "" ? colourError : reshapeError != "" ? reshapeError : pinError != "" ? pinError : hideError != "" ? hideError : mainError
+
+  derive botRemoveError = match botRemoved { case some(r) => r.error, case none => "" }
+
+  derive subError = match subCreated { case some(r) => r.error, case none => "" }
+
+  derive subSaveError = match subSaved { case some(r) => r.error, case none => "" }
+
+  derive childRemoveError = match childRemoved { case some(r) => r.error, case none => "" }
+
+  action togglePanel
+    computerEnlarged = false
+    let next = not panelOpen
+    panelOpen = next
+    if not next
+      writeDrafts()
+    if next and panelTab == "details"
+      refresh models
+      refresh routines
+      refresh lineage
+      refresh report
+
+  action retryDetails
+    refresh models
+    refresh routines
+    refresh lineage
+    refresh report
+
+  action pickPanelTab(tab: string)
+    computerEnlarged = false
+    panelTab = tab
+
+  action openNew
+    writeDrafts()
+    plusOpen = false
+    newName = ""
+    newColor = "brand.default"
+    newShape = "ball"
+    newFirst = ""
+    createStep = "name"
+    nav = push(nav, "/new")
+
+  action beginWelcome
+    newName = ""
+    newColor = "brand.default"
+    newShape = "ball"
+    newFirst = ""
+    createStep = "name"
+    plusOpen = false
+    welcomed = true
+
+  action forgetWelcome
+    welcomed = false
+
+  action editName(v: string)
+    newName = v
+
+  action pick(c: string)
+    newColor = c
+
+  action pickShape(s: string)
+    newShape = s
+
+  action editFirst(v: string)
+    newFirst = v
+
+  action useStart(name: string, color: string, shape: string, first: string)
+    newName = name
+    newColor = color
+    newShape = shape
+    newFirst = first
+    createStep = "message"
+
+  action createBack
+    if createStep == "colour"
+      createStep = "name"
+    else if createStep == "shape"
+      createStep = "colour"
+    else if createStep == "template"
+      createStep = "shape"
+    else if createStep == "message"
+      createStep = "template"
+    else if createStep == "review"
+      createStep = "message"
+
+  action createNext
+    if createStep == "name"
+      if newName.trim() != ""
+        createStep = "colour"
+    else if createStep == "colour"
+      createStep = "shape"
+    else if createStep == "shape"
+      createStep = "template"
+    else if createStep == "template"
+      createStep = "message"
+    else if createStep == "message"
+      createStep = "review"
+
+  action create
+    if newName.trim() != "" and not pending(created)
+      send created = createBot(newName.trim(), newColor, newShape, newFirst)
+
+  action afterCreate
+    match created
+      case some(r)
+        if r.ok and r.id != ""
+          nav = push(top(nav).name == "create" ? back(nav) : nav, path("chat", r.id))
+        else if r.ok and top(nav).name == "create"
+          nav = back(nav)
+      case none
+
+  // Bot details: a Bot's name, colour, visibility and main status, and its deletion.
+  action doRename(bslug: string, name: string)
+    if name.trim() != ""
+      send renamed = renameBot(bslug, name.trim())
+
+  action doRecolour(bslug: string, color: string)
+    send recoloured = recolourBot(bslug, color)
+
+  action doHide(bslug: string, on: bool)
+    if on and bslug != "fixture" and bslug != "bea" and bslug != "tabs"
+      send noticeAsked = requestNotificationPermission()
+    send hidSaved = hideBot(bslug, on)
+
+  action doMute(bslug: string, on: bool)
+    send botMuted = setBotNotifications(bslug, on)
+
+  action doMain(bslug: string)
+    send mainSaved = makeMainBot(bslug)
+
+  action doDropBot(bslug: string)
+    send botRemoved = deleteBot(bslug)
+
+  action afterBotRemove
+    if botRemoveError == ""
+      nav = go(nav, "/")
+
+  action openNewSub
+    subSlug = ""
+    subName = ""
+    subShape = shapeOf(bots, slug)
+    subColor = colorOf(bots, slug)
+    subPrompt = ""
+    subInherit = false
+    panelPage = "subagent"
+
+  action editSub(bslug: string, name: string, shape: string, color: string, prompt: string, inherit: bool)
+    subSlug = bslug
+    subName = name
+    subShape = shape
+    subColor = color
+    subPrompt = prompt
+    subInherit = inherit
+    panelPage = "subagent"
+
+  action editSubName(v: string)
+    subName = v
+
+  action editSubPrompt(v: string)
+    subPrompt = v
+
+  action pickSubColor(c: string)
+    subColor = c
+
+  action pickSubShape(s: string)
+    subShape = s
+
+  action toggleSubInherit
+    subInherit = not subInherit
+
+  action doCreateSub
+    if not pending(subCreated)
+      send subCreated = createSubagent(slug, subName.trim(), subShape, subColor, subPrompt, subInherit)
+
+  action afterSubCreate
+    if subError == ""
+      panelPage = "root"
+      subSlug = ""
+
+  action doSaveSub
+    if subSlug != "" and not pending(subSaved)
+      send subSaved = saveSubagent(subSlug, subName.trim(), subShape, subColor, subPrompt, subInherit)
+
+  action afterSubSave
+    if subSaveError == ""
+      panelPage = "root"
+
+  action doDropChild(bslug: string)
+    send childRemoved = deleteBot(bslug)
+
+  action afterChildRemove
+    if childRemoveError == ""
+      panelPage = "root"
+      subSlug = ""
+
+  action doReshape(bslug: string, shape: string)
+    send reshaped = reshapeBot(bslug, shape)
+
+  action doPin(bslug: string, on: bool)
+    send pinned = pinBot(bslug, on)

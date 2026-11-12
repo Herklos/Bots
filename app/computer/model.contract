@@ -1,0 +1,185 @@
+use Computer from "../ui/shapes.contract"
+use Reply, DriveReply, pageKeyKind, pageKeyCode, pageModifiers, pageChord from "../ui/root-types.contract"
+members Bots
+  // The page the person is driving. Cleared after Release, including when they leave.
+  state wantHold = false
+
+  state heldTab = ""
+
+  // Empty follows the server's selected tab. A pick refetches that page.
+  state computerTab = ""
+
+  state computerEnlarged = false
+
+  // Set while a silent Open browser request is in flight or waiting for a tab.
+  state wantOpen = false
+
+  // Set while a silent Close browser request is in flight or waiting for tabs to clear.
+  state wantClose = false
+
+  resource computer = loadComputer(slug, computerGate, hostTime.locale, computerTab, computerEnlarged ? "large" : "") as shape Computer else empty()
+
+  mutation controlled as shape Reply refreshes computer then afterControl
+
+  mutation driven as shape DriveReply refreshes computer then afterDrive
+
+  mutation openedBrowser as shape Reply refreshes computer then afterOpen
+
+  mutation closedBrowser as shape Reply refreshes computer then afterClose
+
+  derive onComputer = top(nav).name == "chat" and panelOpen and panelTab == "computer"
+
+  derive computerGate = (onComputer and slug != "") ? "1" : "0"
+
+  derive controlError = match controlled { case some(r) => r.error, case none => "" }
+
+  derive openError = match openedBrowser { case some(r) => r.error, case none => "" }
+
+  derive openingBrowser = wantOpen and computer.tabs.length == 0
+
+  derive closeError = match closedBrowser { case some(r) => r.error, case none => "" }
+
+  derive closingBrowser = wantClose and computer.tabs.length > 0
+
+  derive driveError = match driven { case some(r) => r.error, case none => "" }
+
+  derive holding = wantHold and controlError == "" and not pending(controlled)
+
+  action doTake(tab: string)
+    wantHold = true
+    heldTab = tab
+    computerEnlarged = true
+    send controlled = computerControl(slug, tab, "take")
+
+  action doRelease
+    wantHold = false
+    computerEnlarged = false
+    if heldTab != ""
+      send controlled = computerControl(slug, heldTab, "release")
+
+  // Choosing another page drops the one being driven. It does not take the new one.
+  action pickComputerTab(id: string)
+    if id != "" and id != computerTab
+      if heldTab != "" and heldTab != id
+        wantHold = false
+        computerEnlarged = false
+        send controlled = computerControl(slug, heldTab, "release")
+      computerTab = id
+
+  action releaseHeld
+    wantHold = false
+    computerEnlarged = false
+    if heldTab != ""
+      send controlled = computerControl(slug, heldTab, "release")
+
+  action afterControl
+    if not wantHold
+      heldTab = ""
+
+  action afterDrive
+    match driven
+      case some(r)
+        if r.ok and r.text != ""
+          copyText(r.text)
+      case none
+    if holding and computerEnlarged
+      focus("computer-large")
+    else if holding
+      focus("computer-frame")
+
+  // Clicks, the wheel and keys reach the page only while this take is held.
+  action doDrive(kind: string, x: number, y: number, boxW: number, boxH: number, delta: number, text: string, keyCode: number, modifiers: number)
+    if holding and heldTab != "" and kind != ""
+      send driven = computerInput(slug, kind, x, y, boxW, boxH, delta, text, keyCode, modifiers)
+
+  action doOpenBrowser
+    if slug != "" and not pending(openedBrowser) and not wantOpen
+      wantOpen = true
+      wantClose = false
+      send openedBrowser = openComputer(slug)
+
+  action afterOpen
+    match openedBrowser
+      case some(r)
+        if not r.ok
+          wantOpen = false
+      case none
+
+  task clearWantOpen when wantOpen and computer.tabs.length > 0
+    after(1, dropWantOpen)
+
+  action dropWantOpen
+    wantOpen = false
+
+  action doCloseBrowser
+    if slug != "" and not pending(closedBrowser) and not wantClose and computer.tabs.length > 0
+      if holding
+        doRelease()
+      wantClose = true
+      wantOpen = false
+      computerEnlarged = false
+      send closedBrowser = closeComputer(slug)
+
+  action afterClose
+    match closedBrowser
+      case some(r)
+        if not r.ok
+          wantClose = false
+      case none
+
+  task clearWantClose when wantClose and computer.tabs.length == 0
+    after(1, dropWantClose)
+
+  action dropWantClose
+    wantClose = false
+
+  action showComputerLarge
+    computerEnlarged = true
+
+  action focusComputerFrame
+    focus("computer-frame")
+
+  task aimComputerFrame when holding and not computerEnlarged
+    after(1, focusComputerFrame)
+
+  action focusLarge
+    focus("computer-large")
+
+  task aimComputerLarge when holding and computerEnlarged
+    after(1, focusLarge)
+
+  action largePageKey(k: string, event: KeyboardEvent)
+    if holding and not event.isComposing
+      let chord = pageChord(k, event.metaKey, event.ctrlKey)
+      if chord != ""
+        preventDefault()
+        doDrive(chord, 0, 0, 0, 0, 0, "", 0, 0)
+      else
+        let kind = pageKeyKind(k, event.ctrlKey, event.metaKey)
+        if kind == "key"
+          preventDefault()
+          doDrive(kind, 0, 0, 0, 0, 0, k, pageKeyCode(k), pageModifiers(event.shiftKey, event.altKey, event.ctrlKey))
+        else if kind == "text"
+          preventDefault()
+          doDrive(kind, 0, 0, 0, 0, 0, k, 0, 0)
+
+  action largePoint(e: PointerEvent)
+    if holding and e.button == 0
+      let area = frame("computer-large")
+      if not area.unavailable and not area.provisional and area.width > 0 and area.height > 0
+        doDrive("click", e.offsetX, e.offsetY, area.width, area.height, 0, "", 0, 0)
+
+  action largeWheel(e: WheelEvent)
+    if holding
+      preventDefault()
+      let area = frame("computer-large")
+      if not area.unavailable and not area.provisional and area.width > 0 and area.height > 0
+        doDrive("wheel", e.offsetX, e.offsetY, area.width, area.height, e.deltaY, "", 0, 0)
+
+  action largePaste(e: ClipboardEvent)
+    if holding and e.text != ""
+      preventDefault()
+      doDrive("text", 0, 0, 0, 0, 0, e.text, 0, 0)
+
+  action hideComputerLarge
+    computerEnlarged = false

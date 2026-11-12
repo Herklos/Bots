@@ -1,0 +1,129 @@
+use shapeOf, colorOf, faceColor, eventVerb from "../ui/fns.contract"
+use Bot, Row, Pin, RoomMember from "../ui/shapes.contract"
+use ChoiceButton, TextControl, Bubble, Field from "../ui/controls.contract"
+use ChatMessage from "./message.contract"
+use Face, Avatar from "../face.contract"
+use WorkingDots from "../bot/first.contract"
+// The scrolling transcript. The Bot chat and a group both render their rows here.
+// ChatMessage is one message. This list owns every other row kind.
+component ChatLog
+  props
+    rows: Row[]
+    inRoom: bool
+    logId: string
+    logTestId: string
+    bots: Bot[]
+    slug: string
+    pins: Pin[]
+    workers: RoomMember[]
+    hover: bool
+    reactFor: string
+    messageMenu: string
+    copiedMenu: string
+    answerText: string
+    answerError: string
+    answering: bool
+    react: action
+    openPicker: action
+    reply: action
+    pin: action
+    openMenu: action
+    closeMenu: action
+    noteCopied: action
+    answer: action
+    editAnswer: action
+    retry: action
+    scrolled: action
+  view
+    column testId="chat-log" flex=1 min-height=0 width="100%"
+      list id=logId testId=logTestId width="100%" box-sizing="border-box" flex=1 min-height=0 appearance="none" virtualized=true scroll-start="end" scrollFollowEnd=true scroll=scrolled padding=(inRoom ? "space.sm max(0px, calc((100% - 46rem) / 2)) space.xl" : "space.lg max(0px, calc((100% - 46rem) / 2)) space.xl")
+        for m, i in rows key=m.id
+          column
+            if inRoom
+              if m.kind == "working"
+                column gap="space.sm" padding="1px 0" testId="room-working"
+                  for w in workers key=w.slug
+                    row gap="space.sm" align-items="center" testId=`room-working-${w.slug}`
+                      Face(shape=shapeOf(bots, w.slug), color=faceColor(colorOf(bots, w.slug)), state="working", size=24, still=false)
+                      row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working") testId=`room-working-dots-${w.slug}`
+                        WorkingDots()
+              else if m.kind == "message"
+                row justify-content=(m.mine ? "flex-end" : "flex-start") gap="space.sm" align-items="flex-end" padding="1px 0" testId=`room-msg-${m.id}`
+                  if not m.mine
+                    Face(shape=shapeOf(bots, m.botSlug), color=faceColor(colorOf(bots, m.botSlug)), state="idle", size=28, still=true)
+                  column gap="2px" max-width="82%" align-items=(m.mine ? "flex-end" : "flex-start")
+                    if not m.mine
+                      text m.botName font="-exact-footnote" font-weight=600 color="ink.muted" testId=`room-from-${m.id}`
+                    ChatMessage(row=m, canHover=hover, picking=(reactFor == m.id), menuOpen=(messageMenu == m.id), pinned=false, nearEnd=(i + 4 >= rows.length), copied=(copiedMenu == m.id), speaker=colorOf(bots, m.botSlug), inRoom=true, textTestId=`room-text-${m.id}`, react=react, openPicker=openPicker, reply=reply, pin=pin, openMenu=openMenu, closeMenu=closeMenu, noteCopied=noteCopied)
+              else
+                row justify-content="flex-end" padding="1px 0" testId=`room-msg-${m.id}`
+                  text m.text class=Bubble opacity=0.6 testId=`room-text-${m.id}`
+                    background-color="brand.default"
+                    color="ink.dark"
+                    border-radius="radius.lg"
+                    border-bottom-right-radius="radius.sm"
+            else if m.kind == "day"
+              text m.text text-align="center" font="-exact-footnote" color="ink.faint" padding="space.lg space.lg space.xs" testId=`day-${m.id}`
+            else if m.kind == "event"
+              row justify-content="center" padding="space.sm space.lg"
+                row gap="space.xs" align-items="center" padding="2px space.sm 2px 2px" border-radius="radius.full" background-color="surface.bubble" testId=`event-${m.id}`
+                  Face(shape=(m.botSlug != "" ? m.botShape : shapeOf(bots, slug)), color=faceColor(m.botSlug != "" ? m.botColor : colorOf(bots, slug)), state="idle", size=18, still=true)
+                  text eventVerb(m.variant, m.text, t("event.sent"), t("event.routineCreated"), t("event.routineUpdated"), t("event.routineDeleted"), t("event.from"), t("event.ran"), t("event.started"), t("event.providerLimit"), t("event.providerError")) font="-exact-footnote" color="-exact-label" white-space="nowrap" flex-shrink=0 testId=`event-verb-${m.id}`
+                  if m.botName != "" or m.variant == "from" or m.variant == "sent"
+                    text (m.botName != "" ? m.botName : t("settings.unknown")) font="-exact-footnote" color="-exact-label" white-space="nowrap" testId=`event-bot-${m.id}`
+                  if m.title != ""
+                    text m.title font="-exact-footnote" color="-exact-label" testId=`event-title-${m.id}`
+                  if m.resetAt != ""
+                    text t("event.resetsAt", time=m.resetAt) font="-exact-footnote" color="-exact-label" testId=`event-reset-${m.id}`
+            else if m.kind == "message"
+              ChatMessage(row=m, canHover=hover, picking=(reactFor == m.id), menuOpen=(messageMenu == m.id), pinned=(pins.filter(p => p.id == m.id).length > 0), nearEnd=(i + 4 >= rows.length), copied=(copiedMenu == m.id), speaker=(m.botColor != "" ? m.botColor : colorOf(bots, slug)), inRoom=false, textTestId=`message-${m.id}`, react=react, openPicker=openPicker, reply=reply, pin=pin, openMenu=openMenu, closeMenu=closeMenu, noteCopied=noteCopied)
+            else if m.kind == "pending"
+              row justify-content="flex-end" padding="2px space.lg" testId=(m.variant == "failed" ? "not-sent" : "sending")
+                if m.variant == "failed"
+                  column align-items="flex-end" gap="space.xs" max-width="82%"
+                    text m.text class=Bubble background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" opacity=0.7
+                    row gap="space.sm" align-items="center"
+                      text t("chat.notSent") font="-exact-footnote" color="-exact-system-red"
+                      button class=TextControl appearance="none" press=retry testId="retry-send"
+                        text t("common.retry")
+                else
+                  text m.text class=Bubble opacity=0.6 background-color="brand.default" color="ink.dark" border-radius="radius.lg" border-bottom-right-radius="radius.sm" max-width="82%"
+            else if m.kind == "request"
+              row padding="space.sm space.lg"
+                column gap="space.sm" padding="space.md space.lg" border-radius="radius.lg" background-color="surface.bubble" flex=1 max-width="32rem" testId=`request-${m.id}`
+                  row gap="space.sm" align-items="center"
+                    Avatar(shape=shapeOf(bots, slug), color=faceColor(colorOf(bots, slug)), state="idle", size=24, still=true, presence="")
+                    text m.text font-weight=600 flex=1 min-width=0
+                  if m.title != ""
+                    text m.title color="ink.muted" font="-exact-footnote"
+                  if m.variant == "approval_request"
+                    row gap="space.sm" flex-wrap="wrap"
+                      for c in m.choices key=c.value
+                        button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, c.key, c.value) testId=`answer-${c.value}`
+                          background-color=(c.value == "accept" ? "brand.default" : "surface.card")
+                          color=(c.value == "accept" ? "ink.dark" : "-exact-label")
+                          text c.label
+                  else if m.variant == "user_input_request"
+                    column gap="space.sm"
+                      for c in m.choices key=c.value
+                        button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, c.key, c.value) background-color="surface.card" testId=`answer-${c.value}`
+                          text c.label
+                      if m.placeholder != ""
+                        row gap="space.sm" align-items="center"
+                          input appearance="none" class=Field value=answerText input=editAnswer placeholder=m.placeholder aria-label=t("chat.yourAnswer") flex=1 min-width=0 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" testId="answer-text"
+                          button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, m.key, answerText) disabled=(answerText.trim() == "") background-color="brand.default" color="ink.dark" testId="answer-send"
+                            text t("common.send")
+                  else
+                    row gap="space.sm" align-items="center"
+                      input appearance="none" class=Field type="password" value=answerText input=editAnswer placeholder=(m.placeholder != "" ? m.placeholder : t("chat.secret")) aria-label=t("chat.secret") flex=1 min-width=0 padding="0 space.md" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" testId="secret-text"
+                      button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, "", answerText) disabled=(answerText == "") background-color="brand.default" color="ink.dark" testId="secret-save"
+                        text t("common.save")
+                      button class=ChoiceButton appearance="none" press=answer(m.id, m.variant, "", "") background-color="surface.card" testId="secret-decline"
+                        text t("chat.decline")
+                  if answerError != "" and not answering
+                    text answerError color="-exact-system-red" font="-exact-footnote" testId="answer-error"
+            else
+              row padding="space.sm space.lg" gap="space.sm" align-items="center" testId="working"
+                Face(shape=shapeOf(bots, slug), color=faceColor(colorOf(bots, slug)), state="working", size=24, still=false)
+                row gap="6px" align-items="center" padding="space.md space.lg" background-color="surface.bubble" border-top-left-radius="radius.lg" border-top-right-radius="radius.lg" border-bottom-left-radius="radius.sm" border-bottom-right-radius="radius.lg" aria-label=t("status.working")
+                  WorkingDots()

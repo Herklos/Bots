@@ -1,7 +1,10 @@
 use Face from "../face.contract"
 use Avatar from "../face.contract"
 use Glyph from "../glyph.contract"
-use Screen, PageHeader, SectionLabel, Segment, Field, FormList, Bot, Login, Provider, ModelList, UsageReport, PanelRow, ChoiceRow, keptEffort, modelEfforts, faceColor from "../ui/shared.contract"
+use keptEffort, modelEfforts, faceColor from "../ui/fns.contract"
+use ChoiceRow from "../ui/panel.contract"
+use Bot, Login, Provider, ModelList, UsageReport from "../ui/shapes.contract"
+use Screen, PageHeader, SectionLabel, Segment, Field, FormList from "../ui/controls.contract"
 
 component LoginSheet
   props

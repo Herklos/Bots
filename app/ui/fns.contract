@@ -1,0 +1,52 @@
+use Bot, RoomMember, FaceBit, Effort, Provider, PageTab from "./shapes.contract"
+
+// The tab on screen: the one the person picked, else the server's choice, else the first.
+fn tabId(tabs: PageTab[], picked: string, selected: string): string = match first(tabs.filter(t => t.id == (picked != "" ? picked : selected))) { case some(t) => t.id, case none => match first(tabs) { case some(t) => t.id, case none => "" } }
+
+fn tabTitle(tabs: PageTab[], id: string): string = match first(tabs.filter(t => t.id == id)) { case some(t) => t.title, case none => "" }
+
+// Navigation and editing keys go as keys, including with Shift, Alt or Ctrl. One character goes as text. Escape and Meta do not.
+// Colours come from design/tokens.json: change them there.
+// design:begin colours
+fn pickerColours(): string[] = ["brand.brown", "brand.red", "brand.orange", "brand.amber", "brand.green", "brand.default", "brand.blue", "brand.violet", "brand.pink", "brand.gray"]
+fn avatarInk(c: string): string = c == "brand.black" || c == "brand.brown" || c == "brand.gray" ? "ink.light" : "ink.dark"
+// design:end colours
+fn shapeOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.shape, case none => "ball" }
+
+fn colorOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.color, case none => "brand.default" }
+
+// Keep the level only when the model being chosen lists it. Otherwise the gateway uses that model's default.
+fn keptEffort(levels: Effort[], current: string): string = levels.filter(e => e.id == current).length > 0 ? current : ""
+
+fn modelEfforts(providers: Provider[], instanceId: string, model: string): Effort[] = match first(providers.filter(p => p.instanceId == instanceId)) { case some(p) => match first(p.models.filter(m => m.slug == model)) { case some(m) => m.efforts, case none => [] }, case none => [] }
+
+// Face colours are plain names; Bot colours are brand.* tokens from the design package.
+fn faceColor(c: string): string = c == "brand.default" ? "teal" : c == "brand.blue" ? "blue" : c == "brand.violet" ? "violet" : c == "brand.pink" ? "pink" : c == "brand.orange" ? "orange" : c == "brand.green" ? "green" : c == "brand.black" ? "black" : c == "brand.white" ? "white" : c == "brand.brown" ? "brown" : c == "brand.red" ? "red" : c == "brand.amber" ? "amber" : c == "brand.yellow" ? "yellow" : c == "brand.cyan" ? "cyan" : c == "brand.purple" ? "purple" : c == "brand.magenta" ? "magenta" : c == "brand.gray" ? "gray" : "teal"
+
+// Hover chrome ids. A prefix keeps a new menu row from falling out of the focus check.
+fn chromeTarget(id: string): bool = id.startsWith("reply-") or id.startsWith("menu-") or id.startsWith("pick-")
+
+fn knownReact(current: string): bool = current == "👍" or current == "❤️" or current == "😂" or current == "😮" or current == "🎉" or current == "🙏"
+
+// The six menu emoji. A saved reaction outside that set stays on the strip so it can show the ring.
+fn reactStrip(current: string): string[] = current == "" or knownReact(current) ? ["👍", "❤️", "😂", "😮", "🎉", "🙏"] : ["👍", "❤️", "😂", "😮", "🎉", "🙏"].concat([current])
+
+// A tool line's verb. Known ids come from the string table (passed in: a top-level `fn` cannot call `t`). Anything else keeps the stored sentence.
+fn eventVerb(id: string, stored: string, sent: string, routineCreated: string, routineUpdated: string, routineDeleted: string, from: string, ran: string, started: string, providerLimit: string, providerError: string): string = id == "sent" ? sent : id == "routine-created" ? routineCreated : id == "routine-updated" ? routineUpdated : id == "routine-deleted" ? routineDeleted : id == "from" ? from : id == "ran" ? ran : id == "started" ? started : id == "provider-limit" ? providerLimit : id == "provider-error" ? providerError : stored
+
+// The open chat is clear. A hidden Bot keeps the mark until that chat is the open one.
+fn showUnread(unread: bool, open: bool, hidden: bool): bool = unread and not open and (hidden or not hidden)
+
+fn bitShape(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.shape, case none => "ball" }
+
+fn bitColor(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.color, case none => "brand.default" }
+
+fn bitState(faces: FaceBit[], n: number): string = match faces.at(n) { case some(f) => f.state, case none => "idle" }
+
+fn memberFaces(bots: Bot[], members: RoomMember[]): FaceBit[] = members.slice(0, 3).map(m => FaceBit(shape=shapeOf(bots, m.slug), color=colorOf(bots, m.slug), state=m.state))
+
+fn alignAt(align: string[], i: number): string = match align.at(i) { case some(a) => a == "center" or a == "right" ? a : "left", case none => "left" }
+// The transcript id for a command id. A row already in that form is kept.
+
+// The three working marks. Each one lags the last. Reduced motion is the host's job.
+// Declared after Bots: the first component is the root, and it owns `routes nav`.

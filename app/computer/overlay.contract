@@ -1,0 +1,25 @@
+use Bot, Computer from "../ui/shapes.contract"
+use nameOf from "../ui/root-types.contract"
+use IconControl from "../ui/controls.contract"
+use Glyph from "../glyph.contract"
+// ComputerOverlay: one route of the root view, moved out with its values and actions injected.
+component ComputerOverlay
+  inject
+    computerEnlarged: bool
+    computer: Computer
+    onComputer: bool
+    holding: bool
+    largePageKey: action
+    largePoint: action
+    largeWheel: action
+    largePaste: action
+    hideComputerLarge: action
+    locked: bool
+    bots: Bot[]
+    slug: string
+  view
+    column position="absolute" inset=0 z-index=40 align-items="center" justify-content="center" background-color="brand.black" testId="computer-overlay"
+      button class=IconControl appearance="none" press=hideComputerLarge aria-label=t("computer.close") title=t("computer.close") testId="computer-close" position="absolute" top=12 right=12 z-index=1 color="ink.light" width=44 height=44
+        Glyph(name="close", size=22)
+      column id="computer-large" tabindex=(holding ? 0 : -1) key=largePageKey pointerdown=largePoint wheel=largeWheel paste=largePaste touch-action="none" width="100%" height="100%" testId="computer-large"
+        image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=nameOf(bots, slug)) width="100%" height="100%" object-fit="contain"

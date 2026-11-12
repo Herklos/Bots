@@ -1,3 +1,9 @@
+use ToastLine from "./shell/toast.contract"
+use ComputerOverlay from "./computer/overlay.contract"
+use LockScreen from "./session/lock.contract"
+use ChatScreen from "./chat/screen.contract"
+use Inbox from "./inbox/screen.contract"
+use VaultScreen from "./vault/screen.contract"
 use EmptyState from "exact:content"
 use Face from "./face.contract"
 use Avatar from "./face.contract"
@@ -6,425 +12,19 @@ use Glyph from "./glyph.contract"
 use getUserMedia, stopTrack, MediaStream, MediaStreamTrack from "@exact/media-capture"
 use startMediaRecorder, stopMediaRecorder, isTypeSupported, MediaRecorderInfo, RecordedMedia, TypeSupport from "@exact/recording"
 use requestNotificationPermission, NotificationStatus from "@exact/notifications"
-use ChatLog, MentionMenu from "./chat/chat.contract"
 use InboxRow from "./inbox/inbox.contract"
 use Faces, GroupPanel from "./group/group.contract"
-use FirstBot, BotPanel from "./bot/bot.contract"
 use LoginSheet, ModelPicker, UsageView from "./settings/settings.contract"
-use Screen, PageTitle, HeroTitle, PageHeader, TextControl, IconControl, ToggleControl, SwatchControl, ConversationLink, SectionLabel, IconTile, Field, PrimaryButton, Bot, Row, Chat, RoomMember, RoomMessage, Room, MentionHit, FaceBit, Convo, Login, Provider, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer, pickerColours, shapeOf, colorOf, faceColor, showUnread, memberFaces, PanelRow, ChoiceRow from "./ui/shared.contract"
-
-style SidebarBar
-  display="flex"
-  align-items="center"
-  gap="space.xs"
-  padding="space.sm space.md space.xs space.lg"
-  min-height=56
-  box-sizing="border-box"
-  background-color="surface.sidebar"
-
-// A 36 point disc inside a 44 point control, like the circles in the sidebar bar.
-style Disc
-  display="flex"
-  align-items="center"
-  justify-content="center"
-  width=36
-  height=36
-  box-sizing="border-box"
-  border-radius="radius.full"
-  border="1px solid surface.line"
-  background-color="surface.card"
-
-// A pinned Bot: its Face over its name, on a raised tile when it is open.
-style TileLink
-  display="flex"
-  justify-content="center"
-  box-sizing="border-box"
-  padding="space.sm space.xs"
-  border-radius="radius.lg"
-  color="-exact-label"
-  text-decoration="none"
-  :hover
-    background-color="surface.raised"
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-style HeaderToggle
-  display="flex"
-  align-items="center"
-  min-height=44
-  padding="0 space.xs"
-  border="none"
-  border-radius="radius.md"
-  background-color="transparent"
-  :hover
-    background-color="surface.soft"
-  :active
-    opacity=0.7
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-
-style SendControl
-  display="flex"
-  align-items="center"
-  justify-content="center"
-  width=36
-  height=36
-  padding=0
-  border="none"
-  border-radius="radius.full"
-  background-color="brand.default"
-  color="ink.dark"
-  :active
-    opacity=0.7
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-  :disabled
-    background-color="surface.line"
-    color="ink.muted"
-
-style StopControl
-  display="flex"
-  align-items="center"
-  justify-content="center"
-  width=36
-  height=36
-  padding=0
-  border="none"
-  border-radius="radius.full"
-  background-color="surface.raised"
-  color="-exact-label"
-  :active
-    opacity=0.7
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-style SearchField
-  box-sizing="border-box"
-  min-height=36
-  padding="space.xs space.md"
-  border="1px solid surface.line"
-  border-radius="radius.full"
-  background-color="surface.card"
-  color="-exact-label"
-style GroupCard
-  background-color="surface.card"
-  border="1px solid surface.line"
-  border-radius="radius.md"
-  padding="space.xs space.md"
-  box-sizing="border-box"
-
-// Settings uses one track for domain tabs and for exclusive choices.
-style SettingsTrack
-  display="flex"
-  align-items="stretch"
-  width="100%"
-  box-sizing="border-box"
-  padding="2px"
-  border-radius="radius.full"
-  background-color="surface.soft"
-
-style SettingsTab
-  flex=1
-  min-width=0
-  min-height=36
-  padding="space.xs space.sm"
-  border="none"
-  border-radius="radius.full"
-  background-color="transparent"
-  color="ink.muted"
-  font="-exact-subheadline"
-  font-weight=500
-  :active
-    opacity=0.7
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-
-// A row inside a Settings card. The card draws the outer edge; a hairline is a node attribute.
-style SettingsRow
-  display="flex"
-  align-items="center"
-  gap="space.md"
-  width="100%"
-  box-sizing="border-box"
-  min-height=44
-  padding="0 space.md"
-  border="none"
-  background-color="transparent"
-  color="-exact-label"
-  text-align="left"
-  text-decoration="none"
-  :hover
-    background-color="surface.soft"
-  :active
-    opacity=0.7
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-
-style SettingsFoot
-  color="ink.muted"
-  font="-exact-footnote"
-  padding="space.xs space.md 0"
-style FieldLabel
-  color="-exact-label"
-  font="-exact-footnote"
-  font-weight=600
-style FieldBox
-  box-sizing="border-box"
-  min-height=40
-  padding="0 space.md"
-  border="1px solid surface.line"
-  border-radius="radius.sm"
-  background-color="surface.soft"
-  color="-exact-label"
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-style ActionMain
-  border="1px solid AccentColor"
-  color="AccentColor"
-  background-color="transparent"
-  :active
-    opacity=0.7
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-style ActionQuiet
-  border="1px solid surface.line"
-  color="-exact-label"
-  background-color="transparent"
-  :active
-    opacity=0.7
-  :focus-visible
-    box-shadow="0 0 0 2px AccentColor"
-style FileChip
-  padding="space.xs space.sm"
-  border-radius="radius.full"
-  font="-exact-footnote"
-  overflow-wrap="anywhere"
-
-style BotRow
-  padding="space.md space.xs"
-  gap="space.md"
-  align-items="center"
-  min-height=52
-shape Reply
-  ok: bool
-  error: string
-
-// A chat or group send. `messageId` is the command id. The transcript row is that id
-// with `turn-item:message:` in front. Other mutations stay on Reply.
-shape Sent
-  ok: bool
-  error: string
-  messageId: string
-
-// A drive turn may return clipboard text after copy or cut.
-shape DriveReply
-  ok: bool
-  error: string
-  text: string
-
-shape Session
-  authenticated: bool
-  passwordRequired: bool
-
-// Where hbots listens. `mode` is local, lan, or tailscale. `urls` is one address per line.
-shape Network
-  mode: string
-  locked: bool
-  restartRequired: bool
-  canRestart: bool
-  listening: string
-  urls: string
-  error: string
-  http: bool
-
-// Where Bots are stored. `backendLock` and `rootLock` are the environment
-// variable that locks that control, or empty. The screen does not read a key.
-shape Storage
-  backend: string
-  root: string
-  backendLock: string
-  rootLock: string
-  restartRequired: bool
-  canRestart: bool
-  error: string
-  keySet: bool
-  space: string
-  spaceLock: string
-
-// Anytype pairing. `challengeId` is the open pairing request, or empty. The key never
-// reaches the screen. `AnytypeCheck` says whether the saved key reaches the chosen space
-// and whether that space has more than one member.
-shape Pairing
-  ok: bool
-  error: string
-  challengeId: string
-shape AnytypeCheck
-  ok: bool
-  error: string
-  space: string
-  spaceFound: bool
-  shared: bool
-shape Suggestion
-  name: string
-  about: string
-  color: string
-  shape: string
-  first: string
-
-shape About
-  ok: bool
-  version: string
-  harness: string
-  connected: bool
-
-// The update card. A failed read is a blank (ok false), the same as About.
-shape SystemStatus
-  ok: bool
-  installed: bool
-  service: bool
-  version: string
-  latest: string
-  updateAvailable: bool
-  error: string
-
-shape UpdateStart
-  ok: bool
-  version: string
-  error: string
-
-shape Health
-  ok: bool
-  version: string
-shape Made
-  ok: bool
-  id: string
-  error: string
-
-shape Prefs
-  userName: string
-  theme: string
-  defaultInstance: string
-  defaultModel: string
-  defaultEffort: string
-  defaultRuntimeMode: string
-  noticeEnabled: bool
-  noticeSound: bool
-  noticePreview: string
-  noticeWhen: string
-  noticeEnabledMissing: bool
-  groupAnswerPolicy: string
-
-// The host page, as the poster reads it. `hidden` or an unfocused window is background.
-shape PageState
-  visibilityState: string
-  hasFocus: bool
-
-// Whether this host can post, and the permission it already has.
-shape NoticeState
-  available: bool
-  state: string
-
-// Result of uploading one chat attachment to the gateway.
-shape Attached
-  ok: bool
-  id: string
-  name: string
-  error: string
-
-// A clip stored once, ready to hear and then send on the voice route.
-shape VoiceHeld
-  ok: bool
-  id: string
-  name: string
-  url: string
-  seconds: number
-  error: string
-shape Revealed
-  ok: bool
-  id: string
-  password: string
-  error: string
-
-// Counts on this machine. `ok` is false until a read succeeds, so an empty
-// fallback is not "nothing counted yet".
-shape Usage
-  ok: bool
-  error: string
-  messages: number
-  attachments: number
-  vaultWrites: number
-  iconFetches: number
-fn pageKeyKind(k: string, ctrl: bool, meta: bool): string = meta ? "" : (k == "Enter" or k == "Tab" or k == "Backspace" or k == "Delete" or k == "ArrowLeft" or k == "ArrowUp" or k == "ArrowRight" or k == "ArrowDown" or k == "Home" or k == "End" or k == "PageUp" or k == "PageDown" ? "key" : (k.length == 1 and not ctrl ? "text" : ""))
-// Windows virtual key codes for the keys the page stream understands. Anything else is 0.
-fn pageKeyCode(k: string): number = k == "Enter" ? 13 : k == "Tab" ? 9 : k == "Backspace" ? 8 : k == "Delete" ? 46 : k == "ArrowLeft" ? 37 : k == "ArrowUp" ? 38 : k == "ArrowRight" ? 39 : k == "ArrowDown" ? 40 : k == "Home" ? 36 : k == "End" ? 35 : k == "PageUp" ? 33 : k == "PageDown" ? 34 : 0
-// CDP bits: Alt 1, Ctrl 2, Shift 8. Meta is the copy, cut and select-all path.
-fn pageModifiers(shift: bool, alt: bool, ctrl: bool): number = (shift ? 8 : 0) + (alt ? 1 : 0) + (ctrl ? 2 : 0)
-// ⌘/Ctrl chords that the held page understands. Paste uses the paste event instead.
-fn pageChord(k: string, meta: bool, ctrl: bool): string = meta or ctrl ? (k.toLowerCase() == "c" ? "copy" : k.toLowerCase() == "x" ? "cut" : k.toLowerCase() == "a" ? "selectAll" : "") : ""
-
-// One kept conversation: its text, the files waiting with it, and a held clip.
-shape DraftPack
-  stamp: string
-  texts: string[]
-  files: string[]
-  voices: string[]
-
-// The host locale, so the data module can pick the same string table as t().
-shape HostTime
-  locale: string
-
-// Whether the primary pointer can hover. A phone is "none"; a mouse is "hover".
-shape PointerFacts
-  hover: string
-
-fn nameOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.name, case none => "" }
-fn labelOf(bots: Bot[], slug: string): string = match first(bots.filter(b => b.slug == slug)) { case some(b) => b.ready ? (b.label != "" ? b.label : "Ready to chat") : "Getting set up…", case none => "" }
-fn initialsOf(name: string): string = name.trim().split(" ").filter(w => w != "").slice(0, 2).map(w => w.slice(0, 1).toUpperCase()).join("")
-fn botCountLabel(n: number, one: string, many: string): string = n == 1 ? one : many
-fn settingsDomainLabel(domain: string, user: string, notifications: string, models: string, access: string, updates: string): string = domain == "user" ? user : domain == "notifications" ? notifications : domain == "models" ? models : domain == "access" ? access : updates
-fn noticeOn(missing: bool, enabled: bool, state: string): bool = missing ? state == "granted" : enabled
-fn mutedBots(bots: Bot[]): Bot[] = bots.filter(b => not b.notifications and not b.subagent)
-fn mutedGroups(convos: Convo[]): Convo[] = convos.filter(c => c.kind == "group" and not c.notifications)
-fn firstMutedBot(bots: Bot[]): string = match first(mutedBots(bots)) { case some(b) => b.slug, case none => "" }
-fn firstMutedGroup(convos: Convo[]): string = match first(mutedGroups(convos)) { case some(c) => c.id, case none => "" }
-fn noticeStatusLabel(available: bool, state: string, allowed: string, denied: string, unavailable: string, pending: string): string = not available ? unavailable : state == "granted" ? allowed : state == "denied" ? denied : pending
-fn networkModeLabel(mode: string, local: string, lan: string, tailscale: string): string = mode == "lan" ? lan : mode == "tailscale" ? tailscale : local
-fn nText(n: number, one: string, many: string): string = n == 1 ? `1 ${one}` : `${n} ${many}`
-fn usageLine(m: number, a: number, v: number, i: number): string = `${nText(m, "message", "messages")}, ${nText(a, "attachment", "attachments")}, ${nText(v, "vault write", "vault writes")}, and ${nText(i, "icon fetch", "icon fetches")} on this machine.`
-fn attachmentName(entry: string, fallback: string): string = match entry.split("\\t").at(-1) { case some(name) => name, case none => fallback }
-// A draft key is the Bot, or that Bot and a child thread. A room keeps none.
-fn convoKey(slug: string, child: string): string = slug == "" ? "" : (child == "" ? slug : `${slug}/${child}`)
-fn dropKey(rows: string[], key: string): string[] = key == "" ? rows : rows.filter(r => not r.startsWith(`${key}\u001f`))
-fn putText(rows: string[], key: string, value: string): string[] = key == "" ? rows : (value == "" ? dropKey(rows, key) : dropKey(rows, key).concat([`${key}\u001f${value}`]))
-fn putVoice(rows: string[], key: string, hold: string, id: string, preview: string, seconds: number): string[] = key == "" ? rows : ((hold == "" and id == "") ? dropKey(rows, key) : dropKey(rows, key).concat([`${key}\u001f${hold}\u001f${id}\u001f${preview}\u001f${seconds}`]))
-fn fieldAt(pack: string, n: number): string = match pack.split("\u001f").at(n) { case some(s) => s, case none => "" }
-fn voiceNumber(pack: string): number = match parseNumber(fieldAt(pack, 3)) { case some(n) => n, case none => 0 }
-fn entryId(entry: string): string = match entry.split("\\t").at(0) { case some(id) => id, case none => "" }
-fn fileIdOf(row: string): string = entryId(fieldAt(row, 1))
-fn hasFileId(rows: string[], id: string): bool = id != "" and rows.filter(r => fileIdOf(r) == id).length > 0
-fn hasVoiceId(rows: string[], id: string): bool = id != "" and rows.filter(r => fieldAt(r, 2) == id).length > 0
-fn themeLabel(theme: string, system: string, dark: string, light: string): string = theme == "system" ? system : theme == "dark" ? dark : light
-fn pickedFaces(bots: Bot[], slugs: string[]): FaceBit[] = slugs.slice(0, 3).map(slug => FaceBit(shape=shapeOf(bots, slug), color=colorOf(bots, slug), state="idle"))
-fn withWorking(messages: RoomMessage[], working: bool): RoomMessage[] = working ? messages.concat([RoomMessage(id="working", name="", text="", from="", parts=[])]) : messages
-// The person's text, on the same id the room will store, until that row arrives.
-fn withRoomPending(messages: RoomMessage[], text: string, id: string): RoomMessage[] = text == "" or id == "" or messages.filter(m => m.id == id).length > 0 ? messages : messages.concat([RoomMessage(id=id, name="", text=text, from="user", parts=[])])
-// Room lines use the same row shape as the Bot transcript. The group view reads kind, mine, and the bot fields.
-fn roomLine(msg: RoomMessage): Row = Row(id=msg.id, kind=(msg.id == "working" ? "working" : "message"), mine=(msg.from == "user"), text=msg.text, title="", time="", head=true, tail=true, variant="", files=[], botSlug=(msg.from == "user" ? "" : msg.from), botName=msg.name, botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=msg.parts)
-fn transcriptId(id: string): string = id == "" or id.startsWith("turn-item:") ? id : `turn-item:message:${id}`
-fn knownSent(rows: Row[], id: string): bool = id != "" and rows.filter(r => r.id == id or r.id == transcriptId(id)).length > 0
-fn botCount(rows: Row[]): number = rows.filter(m => m.kind == "message" and not m.mine).length
-// A local row for text that is still sending or failed. A send uses the transcript id so the
-// real row replaces it without a new key. A failure keeps the retry bubble.
-fn pendingRow(id: string, text: string, failed: bool): Row = Row(id=transcriptId(id), kind=(failed ? "pending" : "message"), mine=true, text=text, title="", time="", head=true, tail=true, variant=(failed ? "failed" : ""), files=[], botSlug="", botName="", botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=[])
-fn withoutWorking(rows: Row[]): Row[] = rows.filter(r => r.id != "working")
-fn workingOnly(): Row = Row(id="working", kind="working", mine=false, text="", title="", time="", head=true, tail=true, variant="", files=[], botSlug="", botName="", botColor="brand.default", botShape="ball", choices=[], placeholder="", key="", react="", quote="", tokens="", resetAt="", parts=[])
-// One working row, after the person's line. `hold` keeps it when a poll says the turn stopped.
-fn holdWorking(rows: Row[], hold: bool): Row[] = (hold or rows.filter(r => r.id == "working").length > 0) ? withoutWorking(rows).concat([workingOnly()]) : rows
-fn withPending(rows: Row[], id: string, text: string, failed: bool): Row[] = text == "" or id == "" or knownSent(rows, id) ? rows : rows.concat([pendingRow(id, text, failed)])
-// True when the last character can continue a word, so `joe@mail` is not a mention.
-fn wordChar(c: string): bool = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".includes(c)
-fn mentionReplace(text: string, q: string, slug: string): string = `${text.slice(0, text.length - q.length)}${slug} `
-fn botMentions(bots: Bot[]): MentionHit[] = bots.filter(b => not b.hideFromSidebar).map(b => MentionHit(slug=b.slug, name=b.name, color=b.color, shape=b.shape))
-fn roomMentions(bots: Bot[], members: RoomMember[], allName: string): MentionHit[] = [MentionHit(slug="everyone", name=allName, color="brand.default", shape=""), MentionHit(slug="all", name=allName, color="brand.default", shape="")].concat(members.map(m => MentionHit(slug=m.slug, name=m.name, color=colorOf(bots, m.slug), shape=shapeOf(bots, m.slug))))
-fn filterMentions(hits: MentionHit[], q: string): MentionHit[] = hits.filter(h => q == "" or h.slug.toLowerCase().startsWith(q) or h.name.toLowerCase().startsWith(q) or h.name.toLowerCase().replaceAll(" ", "").startsWith(q)).slice(0, 8)
+use pickerColours, shapeOf, colorOf, faceColor, showUnread, memberFaces from "./ui/fns.contract"
+use PanelRow, ChoiceRow from "./ui/panel.contract"
+use Bot, Chat, Room, Convo, Login, Provider, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer from "./ui/shapes.contract"
+use Reply, Sent, DriveReply, Session, Network, Storage, Pairing, AnytypeCheck, Suggestion, About, SystemStatus, UpdateStart, Health, Made, Prefs, PageState, NoticeState, Attached, VoiceHeld, Revealed, Usage, pageKeyKind, pageKeyCode, pageModifiers, pageChord, DraftPack, HostTime, PointerFacts, nameOf, initialsOf, botCountLabel, settingsDomainLabel, noticeOn, mutedBots, mutedGroups, firstMutedBot, firstMutedGroup, noticeStatusLabel, networkModeLabel, attachmentName, convoKey, dropKey, putText, putVoice, fieldAt, voiceNumber, entryId, hasFileId, hasVoiceId, themeLabel, pickedFaces, withWorking, withRoomPending, roomLine, transcriptId, knownSent, botCount, holdWorking, withPending, wordChar, mentionReplace, botMentions, roomMentions, filterMentions from "./ui/root-types.contract"
+use Screen, PageTitle, HeroTitle, PageHeader, TextControl, IconControl, ToggleControl, SwatchControl, ConversationLink, SectionLabel, IconTile, Field, PrimaryButton from "./ui/controls.contract"
+use SidebarBar, Disc, TileLink, HeaderToggle, SendControl, StopControl, SearchField, GroupCard, SettingsTrack, SettingsTab, SettingsRow, SettingsFoot, FieldLabel, FieldBox, ActionMain, ActionQuiet, BotRow from "./ui/sidebar.contract"
+use ChatLog from "./chat/log.contract"
+use MentionMenu from "./chat/mention.contract"
+use BotPanel from "./bot/panel.contract"
+use FirstBot from "./bot/first.contract"
 
 routes nav
   inbox "/"
@@ -438,122 +38,22 @@ routes nav
         vaultEdit "/vault/:id"
 
 component Bots
-  state password = ""
-  state draftTexts: string[] = []
-  state draftFiles: string[] = []
-  state draftVoices: string[] = []
-  state draftRev = 0
-  state savedRev = 0
-  state appliedStamp = ""
-  state lastText = ""
-  state failedText = ""
-  // The command id of the send on screen. The row key is `turn-item:message:` plus this.
-  state sentId = ""
   // Kept while this send's turn is open, so a poll that says working is false does not drop the row.
   state holdWork = false
   // Bot messages already in the transcript when the send started. A newer one ends the turn.
   state botMark = 0
   state roomSentId = ""
-  state answerText = ""
-  state newName = ""
-  state newColor = "brand.default"
-  state newShape = "ball"
-  state newFirst = ""
-  // The new-Bot walk: name, colour, shape, an optional template, a first message, then review.
-  state createStep = "name"
-  // Set once when the roster becomes empty, so a poll does not wipe a half-typed name.
-  state welcomed = false
-  state groupName = ""
-  state groupAbout = ""
-  state groupMembers: string[] = []
-  // The new-Group walk: name, the member face, the answer policy, a kickoff, then review.
-  state groupStep = "name"
-  state groupPolicy = "last"
   state roomText = ""
-  state mentionOn = false
-  state mentionQ = ""
-  state mentionIdx = 0
   state plusOpen = false
   state groupPanel = false
-  state groupPage = "root"
-  state nameDraft = ""
-  state nameEditing = false
-  // Settings opens on User. Picking another domain only changes which controls are shown.
-  state settingsDomain = "user"
-  // Set once POST /api/system/update accepts, until the new version answers or the wait gives up.
-  state updateTo = ""
-  state updateFrom = ""
-  state updatePolls = 0
-  state updateStuck = false
-  state newPassword = ""
-  state folderDraft = ""
-  state folderEditing = false
   state spaceDraft = ""
   state spaceEditing = false
-  state storageHint = ""
   state pairCode = ""
   state pairStep = ""
   state anytypeProbed = false
-  state botQuery = ""
-  state searching = false
-  state away = false
-  // Set before a send. A task scrolls once the new row exists, then clears it.
-  state stickToEnd = false
-  // Bumps on every send so followSend runs again when the jump target id stays the same.
-  state sendTick = 0
-  // The top route this scroll state belongs to. A change clears away and stickToEnd.
-  state scrollRoute = ""
-  // Group chat has no server row until room_send returns. This is that text, faded, in the log.
-  state roomPending = ""
-  // Slugs kept for a moment after they stop, so the working row does not unmount between turns.
-  state heldSlugs: string[] = []
-  state chatSearching = false
-  state hiddenOpen = false
-  state vaultQuery = ""
-  state messageQuery = ""
-  state marksOn = true
-  state voiceRecorder = ""
-  state voiceTrack = ""
-  state voiceKey = ""
-  state voiceError = ""
-  state reactFor = ""
-  state messageMenu = ""
-  state copiedMenu = ""
-  // One inbox row menu. The menu itself lives on the row, so it leaves with that row.
-  state rowMenu = ""
-  state replyTo = ""
-  state replyQuote = ""
-  state childThread = ""
-  // Wide windows show the Bot's panel beside the chat, like Threebot's desktop.
-  state wide = false
-  // The right panel (the Bot's settings) opens and closes from the chat header's
-  // Bot name. It opens by default when the window turns wide.
-  state panelOpen = false
-  state panelTab = "details"
-  state panelPage = "root"
-  state subSlug = ""
-  state subName = ""
-  state subShape = "ball"
-  state subColor = "brand.default"
-  state subPrompt = ""
-  state subInherit = false
-  state usagePeriod = "7d"
-  state usageView = "summary"
-  state toast = ""
-  // The page the person is driving. Cleared after Release, including when they leave.
-  state wantHold = false
-  state heldTab = ""
-  // Empty follows the server's selected tab. A pick refetches that page.
-  state computerTab = ""
-  state computerEnlarged = false
-  // Set while a silent Open browser request is in flight or waiting for a tab.
-  state wantOpen = false
-  // Set while a silent Close browser request is in flight or waiting for tabs to clear.
-  state wantClose = false
   resource hostTime = exactTime() as shape HostTime
   resource pointerFacts = exactViewport() as shape PointerFacts
   resource session = loadSession(hostTime.locale) as shape Session else empty()
-  resource keptDrafts = loadDrafts() as shape DraftPack else empty()
   resource bots = loadBots(slug != "" ? slug : roomId) as shape Bot[] else empty()
   resource page = exactPage() as shape PageState
   resource convos = loadConvos(botQuery.trim().toLowerCase(), slug, roomId) as shape Convo[] else empty()
@@ -561,138 +61,21 @@ component Bots
   resource room = loadRoom(roomId) as shape Room else empty()
   resource suggestions = loadSuggestions() as shape Suggestion[] else empty()
   resource providers = loadProviders() as shape Provider[] else empty()
-  resource about = loadAbout() as shape About else empty()
-  resource system = loadSystem(systemGate) as shape SystemStatus else empty()
-  resource prefs = loadPrefs() as shape Prefs else empty()
-  resource notice = loadNotice() as shape NoticeState else empty()
-  resource network = loadNetwork(networkGate) as shape Network else empty()
-  resource storage = loadStorage(networkGate) as shape Storage else empty()
-  resource vault = loadVault() as shape Login[] else empty()
-  resource usage = loadUsage(usageGate, hostTime.locale) as shape Usage else empty()
-  resource report = loadUsageReport(slug, usagePeriod, reportGate, hostTime.locale) as shape UsageReport else empty()
-  resource models = loadModels(slug, detailGate, hostTime.locale) as shape ModelList else empty()
-  resource childModels = loadModels(subSlug, subGate, hostTime.locale) as shape ModelList else empty()
-  resource routines = loadRoutines(slug, detailGate, hostTime.locale) as shape RoutineList else empty()
-  resource lineage = loadLineage(slug, detailGate, hostTime.locale) as shape Lineage else empty()
-  resource shelf = loadShelf(slug, libraryGate) as shape Shelf else empty()
-  resource computer = loadComputer(slug, computerGate, hostTime.locale, computerTab, computerEnlarged ? "large" : "") as shape Computer else empty()
-  resource clipType = isTypeSupported(type="audio/mp4") as shape TypeSupport else empty()
-  mutation signedIn as shape Reply refreshes session, bots
-  mutation signedOut as shape Reply refreshes session, bots
-  mutation created as shape Made refreshes bots then afterCreate
-  mutation groupMade as shape Made refreshes convos then afterGroupMade
-  mutation roomSent as shape Sent refreshes room, convos then afterRoomSend
-  mutation groupGone as shape Reply refreshes convos
-  mutation groupSaved as shape Reply refreshes room, convos
-  mutation subCreated as shape Reply refreshes bots then afterSubCreate
-  mutation subSaved as shape Reply refreshes bots then afterSubSave
-  mutation childRemoved as shape Reply refreshes bots then afterChildRemove
-  mutation seen as shape Reply refreshes bots
   mutation noted as shape Reply
-  mutation roomSeen as shape Reply refreshes convos, room
-  mutation noticeAsked as shape NotificationStatus refreshes notice then afterNotice
-  mutation noticeEnabled as shape Reply refreshes prefs
-  mutation noticeSaved as shape Reply refreshes prefs
-  mutation reacted as shape Reply refreshes chat
-  mutation messagePinned as shape Reply refreshes chat
-  mutation sent as shape Sent refreshes chat then afterSend
-  mutation draftSaved as shape Reply
-  mutation answered as shape Reply refreshes chat then afterAnswer
-  mutation stopped as shape Reply refreshes chat
-  mutation renamed as shape Reply refreshes bots
-  mutation recoloured as shape Reply refreshes bots
-  mutation reshaped as shape Reply refreshes bots
-  mutation pinned as shape Reply refreshes bots
-  mutation botMuted as shape Reply refreshes bots, convos
-  mutation hidSaved as shape Reply refreshes bots
-  mutation mainSaved as shape Reply refreshes bots
-  mutation botRemoved as shape Reply refreshes bots then afterBotRemove
-  mutation prefsSaved as shape Reply refreshes prefs
-  mutation passwordSet as shape Reply refreshes session, network then afterPassword
-  mutation updateStarted as shape UpdateStart then afterUpdateStart
-  mutation healthRead as shape Health then afterHealth
-  mutation networkSet as shape Reply refreshes network
-  mutation networkRestarted as shape Reply
-  mutation storageSaved as shape Reply refreshes storage
   mutation spaceSaved as shape Reply refreshes storage then afterSpaceSave
-  mutation storageTested as shape Reply then afterStorageTest
-  mutation storageCopied as shape Reply then afterStorageCopy
-  mutation storageRestarted as shape Reply
   mutation pairStarted as shape Pairing then afterPairStart
   mutation pairConfirmed as shape Reply then afterPairConfirm
   mutation anytypeChecked as shape AnytypeCheck
-  mutation loginSaved as shape Reply refreshes vault then afterLoginSave
-  mutation loginRemoved as shape Reply refreshes vault then afterLoginRemove
-  mutation revealed as shape Revealed
-  mutation attached as shape Attached then afterAttach
-  mutation micOpened as shape MediaStream then armMic
-  mutation recStarted as shape MediaRecorderInfo then recBegun
-  mutation clipSaved as shape RecordedMedia then stageClip
-  mutation trackEnded as shape MediaStreamTrack
-  mutation voiced as shape VoiceHeld then showClip
-  mutation voiceSent as shape Reply refreshes chat then afterVoice
-  mutation voiceDropped as shape Reply
-  mutation modelSaved as shape Reply refreshes models then afterModel
-  mutation defaultSaved as shape Reply refreshes prefs, models
-  mutation controlled as shape Reply refreshes computer then afterControl
-  mutation driven as shape DriveReply refreshes computer then afterDrive
-  mutation openedBrowser as shape Reply refreshes computer then afterOpen
-  mutation closedBrowser as shape Reply refreshes computer then afterClose
   derive slug = match stack(nav).filter(e => e.name == "chat").at(-1) { case some(e) => e.params.slug, case none => "" }
-  derive firstRun = bots.length == 0 and not pending(bots) and not failed(bots)
-  derive signInError = match signedIn { case some(r) => r.error, case none => "" }
-  derive createError = match created { case some(r) => r.error, case none => "" }
-  derive sendError = match sent { case some(r) => r.error, case none => "" }
-  derive lastId = match chat.rows.at(-1) { case some(m) => m.id, case none => "" }
   derive lastRoomId = match room.messages.at(-1) { case some(m) => m.id, case none => "" }
-  derive locked = session.passwordRequired and not session.authenticated
   derive query = botQuery.trim().toLowerCase()
-  derive groupSaveError = match groupSaved { case some(r) => r.error, case none => "" }
-  derive groupError = match groupMade { case some(r) => r.error, case none => "" }
-  derive canMakeGroup = groupName.trim() != "" and groupMembers.length >= 2 and not pending(groupMade)
-  derive roomError = match roomSent { case some(r) => r.error, case none => "" }
   derive roomId = match stack(nav).filter(e => e.name == "group").at(-1) { case some(e) => e.params.id, case none => "" }
   // The sidebar follows the latest conversation on the route, a chat or a group, never both.
   derive convoName = match stack(nav).filter(e => e.name == "chat" or e.name == "group").at(-1) { case some(e) => e.name, case none => "" }
-  derive workingMembers = room.members.filter(m => m.working)
-  derive workerKey = workingMembers.map(m => m.slug).join(",")
-  derive paintedWorkers = workingMembers.length > 0 ? workingMembers : room.members.filter(m => heldSlugs.filter(s => s == m.slug).length > 0)
   derive roomRows = withRoomPending(withWorking(room.messages, paintedWorkers.length > 0), roomPending, roomSentId).map(m => roomLine(m))
-  derive mentionPool = roomId != "" ? roomMentions(bots, room.members, t("group.everyone")) : botMentions(bots)
-  derive mentionHits = mentionOn ? filterMentions(mentionPool, mentionQ) : []
-  derive qtext = messageQuery.trim().toLowerCase()
-  derive filteredRows = chat.rows.filter(m => m.kind != "message" or qtext == "" or m.text.toLowerCase().includes(qtext))
-  derive pendingText = pending(sent) and lastText != "" ? lastText : (failedText != "" and not pending(sent) ? failedText : "")
-  derive pendingFailed = failedText != "" and not pending(sent)
   derive laterBot = botCount(chat.rows) > botMark
-  derive shownRows = holdWorking(withPending(filteredRows, sentId, pendingText, pendingFailed), holdWork)
-  derive searchNote = qtext != "" and chat.partial ? t("chat.searchPartial") : ""
-  derive visibleBots = bots.filter(b => not b.hidden and not b.hideFromSidebar and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
-  derive tiles = visibleBots.filter(b => query == "" and (b.main or b.pinned))
-  derive openUnread = bots.filter(b => b.slug == slug and b.unread).length > 0
-  derive hiddenBots = bots.filter(b => b.hidden and not b.hideFromSidebar and (query == "" or b.name.toLowerCase().includes(query) or b.label.toLowerCase().includes(query)))
-  derive pickableBots = bots.filter(b => not b.hideFromSidebar)
-  derive vquery = vaultQuery.trim().toLowerCase()
-  derive shownVault = vault.filter(v => vquery == "" or v.title.toLowerCase().includes(vquery) or v.username.toLowerCase().includes(vquery) or v.website.toLowerCase().includes(vquery))
-  derive renameError = match renamed { case some(r) => r.error, case none => "" }
-  derive colourError = match recoloured { case some(r) => r.error, case none => "" }
-  derive hideError = match hidSaved { case some(r) => r.error, case none => "" }
-  derive mainError = match mainSaved { case some(r) => r.error, case none => "" }
-  derive reshapeError = match reshaped { case some(r) => r.error, case none => "" }
-  derive pinError = match pinned { case some(r) => r.error, case none => "" }
-  derive botError = renameError != "" ? renameError : colourError != "" ? colourError : reshapeError != "" ? reshapeError : pinError != "" ? pinError : hideError != "" ? hideError : mainError
-  derive botRemoveError = match botRemoved { case some(r) => r.error, case none => "" }
-  derive prefsError = match prefsSaved { case some(r) => r.error, case none => "" }
-  derive passwordError = match passwordSet { case some(r) => r.error, case none => "" }
-  derive networkError = match networkSet { case some(r) => r.error, case none => "" }
-  derive networkRestartError = match networkRestarted { case some(r) => r.error, case none => "" }
   derive spaceName = spaceEditing ? spaceDraft : storage.space
   derive spaceSaveError = match spaceSaved { case some(r) => r.error, case none => "" }
-  derive storagePath = folderEditing ? folderDraft : (storage.root != "" ? storage.root : "~/.hbots/bots")
-  derive storageSaveError = match storageSaved { case some(r) => r.error, case none => "" }
-  derive storageTestError = match storageTested { case some(r) => r.error, case none => "" }
-  derive storageCopyError = match storageCopied { case some(r) => r.error, case none => "" }
-  derive storageRestartError = match storageRestarted { case some(r) => r.error, case none => "" }
   derive pairChallenge = match pairStarted { case some(r) => r.challengeId, case none => "" }
   derive pairError = match pairStarted { case some(r) => r.error, case none => "" }
   derive pairConfirmError = match pairConfirmed { case some(r) => r.error, case none => "" }
@@ -702,238 +85,18 @@ component Bots
   derive anytypeShared = match anytypeChecked { case some(r) => r.shared, case none => false }
   derive anytypeOn = pairStep == "checked" and anytypeError == "" and anytypeFound and not pending(anytypeChecked)
   derive shownBackend = (storage.backend == "anytype" and anytypeOn) ? "anytype" : "filesystem"
-  derive networkGate = (top(nav).name == "settings" and settingsDomain == "access") ? "1" : "0"
-  derive loginError = match loginSaved { case some(r) => r.error, case none => "" }
-  derive loginRemoveError = match loginRemoved { case some(r) => r.error, case none => "" }
-  derive revealedFor = match revealed { case some(r) => r.id, case none => "" }
-  derive revealedText = match revealed { case some(r) => (r.ok ? r.password : ""), case none => "" }
-  derive attachError = match attached { case some(r) => r.error, case none => "" }
-  derive dkey = convoKey(slug, childThread)
-  derive draft = match first(draftTexts.filter(d => d.startsWith(`${dkey}\u001f`))) { case some(d) => d.slice(dkey.length + 1).slice(0, 8000), case none => "" }
   derive pendingAttaches = draftFiles.filter(f => f.startsWith(`${dkey}\u001f`)).map(f => f.slice(dkey.length + 1))
-  derive voicePack = match first(draftVoices.filter(v => v.startsWith(`${dkey}\u001f`))) { case some(v) => v.slice(dkey.length + 1), case none => "" }
-  derive voiceHold = fieldAt(voicePack, 0)
-  derive voiceId = fieldAt(voicePack, 1)
-  derive voicePreview = fieldAt(voicePack, 2)
-  derive voiceSeconds = voiceNumber(voicePack)
-  derive answerError = match answered { case some(r) => r.error, case none => "" }
   derive canSend = draft.trim() != "" or pendingAttaches.length > 0
   derive onBot = top(nav).name == "chat"
   derive onGroup = top(nav).name == "group"
-  // The open chat's latest server row. Bot and group share this for reply following.
-  derive lastRowId = onGroup ? lastRoomId : lastId
-  // The row a send or a jump-to-end should land on: the optimistic line, otherwise lastRowId.
-  derive activePending = onGroup ? roomPending : pendingText
-  derive activeLastId = activePending != "" ? (onGroup ? roomSentId : transcriptId(sentId)) : lastRowId
-  // Skip a stale last id while the send is still in flight and the new row is not in the list yet.
-  derive activeReady = activePending != "" or ((onGroup ? not pending(roomSent) : not pending(sent)) and lastRowId != "")
-  derive followKey = `${activeLastId}:${sendTick}`
-  derive routeId = `${top(nav).name}:${slug}:${roomId}`
   derive workingHere = onGroup ? (paintedWorkers.length > 0 ? "working" : "") : (onBot and chat.working ? "working" : "")
   derive onLibrary = top(nav).name == "chat" and panelOpen and panelTab == "library"
-  derive onComputer = top(nav).name == "chat" and panelOpen and panelTab == "computer"
-  derive detailGate = (onBot and slug != "") ? "1" : "0"
-  derive subGate = (onBot and panelOpen and panelPage == "subagent" and subSlug != "") ? "1" : "0"
-  derive subError = match subCreated { case some(r) => r.error, case none => "" }
-  derive subSaveError = match subSaved { case some(r) => r.error, case none => "" }
-  derive childRemoveError = match childRemoved { case some(r) => r.error, case none => "" }
-  derive reportGate = ((onBot and slug != "") or top(nav).name == "settings") ? "1" : "0"
-  derive pickedModel = providers.filter(p => p.instanceId == prefs.defaultInstance).length > 0
-  derive libraryGate = (onLibrary and slug != "") ? "1" : "0"
-  derive computerGate = (onComputer and slug != "") ? "1" : "0"
-  derive usageGate = top(nav).name == "settings" ? "1" : "0"
-  derive systemGate = (top(nav).name == "settings" and settingsDomain == "updates") ? "1" : "0"
-  derive updateError = match updateStarted { case some(r) => r.ok ? "" : r.error, case none => "" }
-  derive canUpdate = system.ok and system.installed and system.service and system.updateAvailable and system.error == "" and updateTo == "" and not updateStuck
-  derive updateNeedsService = system.ok and system.installed and not system.service and system.updateAvailable and system.error == "" and updateTo == "" and not updateStuck
-  derive modelError = match modelSaved { case some(r) => r.error, case none => "" }
-  derive controlError = match controlled { case some(r) => r.error, case none => "" }
-  derive openError = match openedBrowser { case some(r) => r.error, case none => "" }
-  derive openingBrowser = wantOpen and computer.tabs.length == 0
-  derive closeError = match closedBrowser { case some(r) => r.error, case none => "" }
-  derive closingBrowser = wantClose and computer.tabs.length > 0
-  derive driveError = match driven { case some(r) => r.error, case none => "" }
-  derive holding = wantHold and controlError == "" and not pending(controlled)
 
   // The inbox list refreshes on the inbox, and a chat refreshes on that chat.
   // A wide window keeps the list beside the open conversation, so the list still refreshes.
   // A hidden page waits about ten seconds. Sending, answering, or stopping skips the poll.
   task probeAnytype when networkGate == "1" and storage.keySet and not anytypeProbed and not pending(anytypeChecked)
     after(1, doAnytypeCheck)
-
-  task poll when page.visibilityState == "visible" and not pending(sent) and not pending(answered) and not pending(stopped)
-    every(1500, pull)
-
-  task pollHidden when page.visibilityState != "visible" and not pending(sent) and not pending(answered) and not pending(stopped)
-    every(10000, pull)
-
-  // A later Bot line ends the turn at once. Working that stays false after the send settles drops the row.
-  task releaseWorkSoon when holdWork and not pending(sent) and laterBot
-    after(1, dropWork)
-
-  task releaseWorkLater when holdWork and not pending(sent) and not laterBot and not chat.working
-    after(800, dropWork)
-
-  task adoptSent when lastText != "" and not pending(sent) and knownSent(chat.rows, sentId)
-    after(1, forgetSentText)
-
-  task adoptRoom when roomPending != "" and not pending(roomSent) and room.messages.filter(m => m.id == roomSentId).length > 0
-    after(1, forgetRoomPending)
-
-  // Notices follow the roster, the open chat, and whether this window is in front.
-  // A poll does not post them again, and does not read settings or permission again.
-  derive noticeStamp = pending(convos) or pending(prefs) or pending(notice) or failed(convos) ? "" : convos.map(c => c.kind + "\t" + c.id + "\t" + c.line + "\t" + c.at + "\t" + (c.unread ? "1" : "0") + "\t" + (c.notifications ? "1" : "0")).join("\n") + "\n" + bots.map(b => b.slug + "\t" + b.line + "\t" + (b.unread ? "1" : "0") + "\t" + (b.notifications ? "1" : "0") + "\t" + (b.hideFromSidebar ? "1" : "0") + "\t" + (b.subagent ? "1" : "0") + "\t" + (b.hidden ? "1" : "0")).join("\n") + "\n" + page.visibilityState + "\t" + (page.hasFocus ? "1" : "0") + "\t" + (notice.available ? "1" : "0") + "\t" + notice.state + "\t" + (prefs.noticeEnabled ? "1" : "0") + "\t" + (prefs.noticeEnabledMissing ? "1" : "0") + "\t" + (prefs.noticeSound ? "1" : "0") + "\t" + prefs.noticePreview + "\t" + prefs.noticeWhen + "\t" + slug + "\t" + roomId
-
-  task noteRoster when noticeStamp != "" key=noticeStamp
-    after(1, postNotices)
-
-  task fadeToast when toast != ""
-    after(3000, clearToast)
-
-  // Copy confirms on the row, then the menu closes. The toast is the same notice.
-  task finishCopied when copiedMenu != ""
-    after(700, finishCopy)
-
-  task fit mount
-    every(200, fitView)
-
-  // Health while an update is replacing this process. About ten minutes, then stop.
-  task watchUpdate when updateTo != "" and not updateStuck
-    every(2000, askHealth)
-
-  // The saved theme is applied once it has loaded; picking one applies it at once.
-  task scheme when prefs.theme != ""
-    after(1, applyScheme)
-
-  task letGo when holding and not onComputer
-    after(1, releaseHeld)
-
-  // A take stops itself at two minutes. Stopping earlier cancels this wait.
-  task capClip when voiceRecorder != ""
-    after(120000, holdVoice)
-
-  // The store answers after the first paint. Apply it once, unless this screen already typed.
-  task restoreDrafts when keptDrafts.stamp != appliedStamp
-    after(1, applyDrafts)
-
-  // One save for a burst of edits. The key is draftRev: while the gate stays true the
-  // wait does not restart, and each edit has to re-arm it. About 400ms after the last one.
-  task keepDrafts when draftRev != savedRev key=draftRev
-    after(400, writeDrafts)
-
-  // Leaving the page writes a draft the wait has not saved. Typing does not change this gate.
-  task flushDraftOnHide when page.visibilityState != "visible"
-    after(1, writeDrafts)
-
-  // Once per empty roster, not once per poll. A Bot coming back clears the flag.
-  task welcomeEmpty when not welcomed and bots.length == 0 and not pending(bots) and not failed(bots)
-    after(1, beginWelcome)
-
-  task endWelcome when welcomed and bots.length > 0
-    after(1, forgetWelcome)
-
-  // Opening another screen forgets the previous list's scroll. The first paint records the route.
-  task resetScroll when routeId != scrollRoute
-    after(1, forgetScroll)
-
-  // Scroll once the row this send is waiting on exists. sendTick re-arms the task when that id
-  // does not change, which happens for the shared pending row on a second send.
-  task followSend when stickToEnd and messageQuery == "" and activeReady and (onBot or onGroup) key=followKey
-    after(1, jumpToSend)
-
-  // A reply or any new last row. Stay put when the person has scrolled up, and leave sends to followSend.
-  task followReplies when lastRowId != "" and not away and not stickToEnd and messageQuery == "" and (onBot or onGroup) key=lastRowId
-    after(1, jumpToReply)
-
-  // A working row grows the list. Follow it only when the person is already at the end.
-  task followWorking when workingHere != "" and not away and not stickToEnd and activePending == "" and (onBot or onGroup) key=workingHere
-    after(1, jumpToWorking)
-
-  // A task can only schedule an action, and scrollIntoView needs a literal list id.
-  action forgetScroll
-    scrollRoute = routeId
-    away = false
-    stickToEnd = false
-  action jumpToSend
-    if onGroup
-      scrollIntoView("room-log", activeLastId, block="end")
-    else
-      scrollIntoView("transcript", activeLastId, block="end")
-    stickToEnd = false
-  action jumpToReply
-    if onGroup
-      scrollIntoView("room-log", lastRowId, block="end")
-    else
-      scrollIntoView("transcript", lastRowId, block="end")
-  action jumpToWorking
-    if onGroup
-      scrollIntoView("room-log", workingHere, block="end")
-    else
-      scrollIntoView("transcript", workingHere, block="end")
-
-  // Remember who is working, then drop that row shortly after the last one stops.
-  task catchWorkers when workerKey != "" key=workerKey
-    after(1, keepWorkers)
-
-  task releaseWorkers when roomId != "" and workerKey == "" and heldSlugs.length > 0
-    after(800, dropWorkers)
-
-  task leaveWorkers when roomId == "" and heldSlugs.length > 0
-    after(1, dropWorkers)
-
-  action keepWorkers()
-    heldSlugs = workingMembers.map(m => m.slug)
-
-  action dropWorkers()
-    if workingMembers.length == 0
-      heldSlugs = []
-
-  action fitView
-    let box = frame("app-shell")
-    // A missing measurement is not a resize. Keep the last stable layout.
-    if not box.unavailable and box.width > 0
-      let w = box.width >= 1200
-      if w != wide
-        wide = w
-        panelOpen = w
-  action togglePanel
-    computerEnlarged = false
-    let next = not panelOpen
-    panelOpen = next
-    if not next
-      writeDrafts()
-    if next and panelTab == "details"
-      refresh models
-      refresh routines
-      refresh lineage
-      refresh report
-  action retryDetails
-    refresh models
-    refresh routines
-    refresh lineage
-    refresh report
-  action retryUsage
-    refresh usage
-  action pickPanelTab(tab: string)
-    computerEnlarged = false
-    panelTab = tab
-  action openPage(page: string)
-    panelPage = page
-  action pickPeriod(p: string)
-    usagePeriod = p
-  action pickView(v: string)
-    usageView = v
-  action clearToast
-    toast = ""
-  action openHidden(bslug: string)
-    writeDrafts()
-    panelTab = "details"
-    panelPage = "root"
-    panelOpen = true
-    nav = wide and (top(nav).name == "chat" or top(nav).name == "group") ? replace(nav, path("chat", bslug)) : go(nav, path("chat", bslug))
-
-  action postNotices
-    send noted = noteUnread(page.visibilityState, page.hasFocus, notice.available, notice.state, prefs.noticeEnabled, prefs.noticeEnabledMissing, prefs.noticeSound, prefs.noticePreview, prefs.noticeWhen, slug, roomId)
 
   action pull
     refresh bots
@@ -961,726 +124,15 @@ component Bots
       refresh routines
       refresh lineage
       refresh report
-  action editPassword(v: string)
-    password = v
-  action login
-    if password != "" and not pending(signedIn)
-      send signedIn = signIn(password)
-      password = ""
-  action logout
-    send signedOut = signOut()
-  // A wide window shows the list beside the open conversation. Switching chats
-  // or groups replaces that route, so the conversation swaps instead of stacking.
-  action open(url: string)
-    writeDrafts()
-    computerEnlarged = false
-    wantOpen = false
-    wantClose = false
-    childThread = ""
-    panelPage = "root"
-    computerTab = ""
-    rowMenu = ""
-    let conversation = url.startsWith("/bot/") or url.startsWith("/group/")
-    let onConversation = top(nav).name == "chat" or top(nav).name == "group"
-    nav = wide and conversation and onConversation ? replace(nav, url) : go(nav, url)
-  action back
-    writeDrafts()
-    computerEnlarged = false
-    if childThread != ""
-      childThread = ""
-    else
-      nav = back(nav)
-  action closeChild
-    writeDrafts()
-    childThread = ""
-  action noteDraft
-    draftRev = draftRev + 1
-  action applyDrafts
-    let stamp = keptDrafts.stamp
-    if stamp != appliedStamp
-      appliedStamp = stamp
-      if draftRev == 0
-        draftTexts = keptDrafts.texts
-        draftFiles = keptDrafts.files
-        draftVoices = keptDrafts.voices
-  action writeDrafts
-    if draftRev != savedRev
-      let rev = draftRev
-      savedRev = rev
-      send draftSaved = saveDrafts(draftTexts, draftFiles, draftVoices)
-  action editChatQuery(v: string)
-    messageQuery = v
-  action toggleShownMark
-    let next = not marksOn
-    marksOn = next
-  action toggleChatSearch
-    let next = not chatSearching
-    chatSearching = next
-    messageQuery = ""
-    if next
-      focus("chat-search")
-  // The contract runner has no microphone: the fixture hold is the file name, at once.
-  // Anywhere else, the first press records and the next press stops.
-  action holdVoice
-    voiceError = ""
-    if slug == "fixture" or slug == ""
-      draftVoices = putVoice(draftVoices, dkey, "voice.m4a", "", "", 0)
-      noteDraft()
-    else if voiceRecorder != "" and voiceKey == dkey
-      send clipSaved = stopMediaRecorder(recorder=voiceRecorder)
-    else if voiceRecorder == "" and not pending(micOpened)
-      voiceKey = dkey
-      send micOpened = getUserMedia(audio=true)
-  action armMic
-    match micOpened
-      case some(s)
-        let stream = s.id
-        let track = match s.tracks.at(0) { case some(t) => t.id, case none => "" }
-        voiceTrack = track
-        let path = clipType.supported ? "app:/tmp/voice.m4a" : "app:/tmp/voice.webm"
-        let mime = clipType.supported ? "audio/mp4" : "audio/webm"
-        send recStarted = startMediaRecorder(stream=stream, mimeType=mime, path=path)
-      case none
-        voiceError = t("voice.micOff")
-  action recBegun
-    match recStarted
-      case some(r)
-        voiceRecorder = r.id
-        draftVoices = putVoice(draftVoices, voiceKey, t("voice.recording"), "", "", 0)
-        noteDraft()
-      case none
-        voiceRecorder = ""
-        voiceError = t("voice.micOff")
-  action stageClip
-    match clipSaved
-      case some(media)
-        let track = voiceTrack
-        let secs = media.duration / 1000
-        voiceRecorder = ""
-        voiceTrack = ""
-        if track != ""
-          send trackEnded = stopTrack(track=track)
-        if media.size > 8388608
-          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
-          noteDraft()
-          voiceError = t("voice.tooLong")
-        else if secs <= 0 or media.size == 0
-          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
-          noteDraft()
-          voiceError = t("voice.empty")
-        else
-          send voiced = stageVoice(slug, media.path, media.mimeType, secs)
-      case none
-        voiceRecorder = ""
-        voiceError = t("voice.unreadable")
-  action showClip
-    match voiced
-      case some(r)
-        if r.ok and r.id != ""
-          draftVoices = putVoice(draftVoices, dkey, r.name, r.id, r.url, r.seconds)
-          noteDraft()
-          voiceError = ""
-        else
-          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
-          noteDraft()
-          voiceError = r.error != "" ? r.error : t("voice.unreadable")
-      case none
-  action sendHeldVoice
-    if voiceId != "" and not pending(voiceSent)
-      toEnd()
-      send voiceSent = sendVoice(slug, voiceSeconds, voiceId, childThread)
-  action afterVoice
-    match voiceSent
-      case some(r)
-        if r.ok
-          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
-          noteDraft()
-          voiceError = ""
-        else
-          voiceError = r.error
-      case none
-  action discardVoice
-    if voiceId != ""
-      let id = voiceId
-      let nextVoices = putVoice(draftVoices, dkey, "", "", "", 0)
-      draftVoices = nextVoices
-      noteDraft()
-      voiceError = ""
-      if not hasFileId(draftFiles, id) and not hasVoiceId(nextVoices, id) and slug != "fixture" and slug != ""
-        send voiceDropped = dropVoice(slug, id)
-  action openChild(threadId: string)
-    writeDrafts()
-    childThread = threadId
-  action openNew
-    writeDrafts()
-    plusOpen = false
-    newName = ""
-    newColor = "brand.default"
-    newShape = "ball"
-    newFirst = ""
-    createStep = "name"
-    nav = push(nav, "/new")
-  action beginWelcome
-    newName = ""
-    newColor = "brand.default"
-    newShape = "ball"
-    newFirst = ""
-    createStep = "name"
-    plusOpen = false
-    welcomed = true
-  action forgetWelcome
-    welcomed = false
-  action editBotQuery(v: string)
-    botQuery = v
-  action openSearch
-    searching = true
-    focus("bot-search")
-  action closeSearch
-    searching = false
-    botQuery = ""
-  action toggleHidden
-    hiddenOpen = not hiddenOpen
-  action editVaultQuery(v: string)
-    vaultQuery = v
-  action editName(v: string)
-    newName = v
-  action pick(c: string)
-    newColor = c
-  action pickShape(s: string)
-    newShape = s
-  action editFirst(v: string)
-    newFirst = v
-  action useStart(name: string, color: string, shape: string, first: string)
-    newName = name
-    newColor = color
-    newShape = shape
-    newFirst = first
-    createStep = "message"
-  action createBack
-    if createStep == "colour"
-      createStep = "name"
-    else if createStep == "shape"
-      createStep = "colour"
-    else if createStep == "template"
-      createStep = "shape"
-    else if createStep == "message"
-      createStep = "template"
-    else if createStep == "review"
-      createStep = "message"
   action goCreateStep(s: string)
     createStep = s
-  action createNext
-    if createStep == "name"
-      if newName.trim() != ""
-        createStep = "colour"
-    else if createStep == "colour"
-      createStep = "shape"
-    else if createStep == "shape"
-      createStep = "template"
-    else if createStep == "template"
-      createStep = "message"
-    else if createStep == "message"
-      createStep = "review"
-  action create
-    if newName.trim() != "" and not pending(created)
-      send created = createBot(newName.trim(), newColor, newShape, newFirst)
-  action afterCreate
-    match created
-      case some(r)
-        if r.ok and r.id != ""
-          nav = push(top(nav).name == "create" ? back(nav) : nav, path("chat", r.id))
-        else if r.ok and top(nav).name == "create"
-          nav = back(nav)
-      case none
-  action openNewGroup
-    writeDrafts()
-    plusOpen = false
-    groupName = ""
-    groupAbout = ""
-    groupMembers = []
-    groupStep = "name"
-    groupPolicy = "last"
-    nav = push(nav, "/new-group")
-  action editGroupName(v: string)
-    groupName = v
-  action editGroupAbout(v: string)
-    groupAbout = v
-  action pickGroupPolicy(p: string)
-    groupPolicy = p
   action goGroupStep(s: string)
     groupStep = s
-  action toggleGroupMember(m: string)
-    groupMembers = groupMembers.includes(m) ? groupMembers.filter(x => x != m) : groupMembers.concat([m])
-  action groupStepBack
-    if groupStep == "face"
-      groupStep = "name"
-    else if groupStep == "policy"
-      groupStep = "face"
-    else if groupStep == "kickoff"
-      groupStep = "policy"
-    else if groupStep == "review"
-      groupStep = "kickoff"
-  action groupStepNext
-    if groupStep == "name"
-      if groupName.trim() != ""
-        groupStep = "face"
-    else if groupStep == "face"
-      if groupMembers.length >= 2
-        groupStep = "policy"
-    else if groupStep == "policy"
-      groupStep = "kickoff"
-    else if groupStep == "kickoff"
-      groupStep = "review"
-  action makeGroup
-    if canMakeGroup
-      send groupMade = createGroup(groupName.trim(), groupAbout.trim(), "brand.default", "ball", groupMembers.join("\n"), groupPolicy)
-  action afterGroupMade
-    match groupMade
-      case some(r)
-        if r.ok and r.id != "" and top(nav).name == "newGroup"
-          nav = push(back(nav), path("group", r.id))
-      case none
   action togglePlus
     plusOpen = not plusOpen
-  action toggleGroupPanel
-    groupPanel = not groupPanel
-    groupPage = "root"
-  action openGroupEdit
-    groupPage = "edit"
-  action groupBack
-    groupPage = "root"
-  action openGroupAdd
-    groupPage = "add"
-  action closeGroupAdd
-    groupPage = "edit"
-  action patchGroup(field: string, value: string)
-    if roomId != ""
-      send groupSaved = updateGroup(roomId, field, value)
-  action removeGroupMember(m: string)
-    if roomId != "" and room.members.length > 2
-      let next = room.members.map(x => x.slug).filter(x => x != m)
-      send groupSaved = updateGroup(roomId, "members", next.join("\n"))
-  action addGroupMember(m: string)
-    if roomId != ""
-      let current = room.members.map(x => x.slug)
-      if not current.includes(m)
-        send groupSaved = updateGroup(roomId, "members", current.concat([m]).join("\n"))
-        groupPage = "edit"
-  action dropGroup
-    if roomId != ""
-      send groupGone = deleteGroup(roomId)
-      groupPanel = false
-      groupPage = "root"
-      nav = back(nav)
-  action clearMention
-    mentionOn = false
-    mentionQ = ""
-    mentionIdx = 0
-  action syncMention(text: string)
-    let parts = text.split("@")
-    if parts.length < 2
-      clearMention()
-    else
-      match parts.at(parts.length - 1)
-        case some(q)
-          let head = parts.slice(0, parts.length - 1).join("@")
-          if q.includes(" ") or q.includes("\n") or q.includes("\t") or (head != "" and wordChar(head.slice(-1)))
-            clearMention()
-          else
-            mentionOn = true
-            mentionQ = q.toLowerCase()
-            mentionIdx = 0
-        case none
-          clearMention()
-  action editRoomText(v: string)
-    roomText = v
-    syncMention(v)
-  action mention(m: string)
-    roomText = `${roomText}${(roomText == "" or roomText.endsWith(" ")) ? "" : " "}@${m} `
-    clearMention()
-    focus("room-composer")
-  action completeMention(slug: string)
-    if mentionOn and slug != ""
-      if roomId != ""
-        roomText = mentionReplace(roomText, mentionQ, slug)
-        clearMention()
-        focus("room-composer")
-      else
-        let next = mentionReplace(draft, mentionQ, slug).slice(0, 8000)
-        draftTexts = putText(draftTexts, dkey, next)
-        noteDraft()
-        clearMention()
-        focus("composer")
-  action postRoom
-    if roomText.trim() != "" and not pending(roomSent) and roomId != ""
-      let text = roomText.trim()
-      away = false
-      stickToEnd = true
-      let id = `m-${sendTick + 1}`
-      sendTick = sendTick + 1
-      roomSentId = id
-      roomPending = text
-      send roomSent = sendRoom(roomId, text, id)
-      roomText = ""
-      clearMention()
-    focus("room-composer")
-  action afterRoomSend
-    if roomError != "" or room.messages.filter(m => m.id == roomSentId).length > 0
-      roomPending = ""
-  action forgetRoomPending
-    if room.messages.filter(m => m.id == roomSentId).length > 0
-      roomPending = ""
-  action roomKey(k: string, event: KeyboardEvent)
-    if mentionOn and mentionHits.length > 0 and (k == "ArrowDown" or k == "ArrowUp" or k == "Enter" or k == "Tab" or k == "Escape")
-      preventDefault()
-      if k == "Escape"
-        clearMention()
-      else if k == "ArrowDown"
-        mentionIdx = mentionIdx + 1 >= mentionHits.length ? 0 : mentionIdx + 1
-      else if k == "ArrowUp"
-        mentionIdx = mentionIdx <= 0 ? mentionHits.length - 1 : mentionIdx - 1
-      else if not event.repeat
-        match mentionHits.at(mentionIdx)
-          case some(h)
-            completeMention(h.slug)
-          case none
-    else if k == "Enter" and not event.shiftKey and not event.isComposing
-      preventDefault()
-      if not event.repeat
-        postRoom()
-  action edit(v: string)
-    let next = v.slice(0, 8000)
-    draftTexts = putText(draftTexts, dkey, next)
-    noteDraft()
-    syncMention(next)
-  action pickFiles
-    showPicker("chat-attach")
-  action filesPicked(files: Picked[])
-    if slug != "" and not pending(attached) and files.length > 0
-      match files.at(0)
-        case some(f)
-          send attached = uploadAttachment(slug, f.path, f.name, f.type, hostTime.locale)
-        case none
-  action afterAttach
-    match attached
-      case some(r)
-        if r.ok and r.id != "" and dkey != "" and pendingAttaches.length < 8
-          draftFiles = draftFiles.concat([`${dkey}\u001f${r.id}\\t${r.name}`])
-          noteDraft()
-      case none
-  action dropPending(entry: string)
-    let id = entryId(entry)
-    let next = draftFiles.filter(f => f != `${dkey}\u001f${entry}`)
-    draftFiles = next
-    noteDraft()
-    if id != "" and not hasFileId(next, id) and not hasVoiceId(draftVoices, id) and slug != "fixture" and slug != ""
-      send voiceDropped = dropVoice(slug, id)
-  action post
-    if canSend and not pending(sent)
-      messageQuery = ""
-      away = false
-      stickToEnd = true
-      let id = `m-${sendTick + 1}`
-      sendTick = sendTick + 1
-      sentId = id
-      botMark = botCount(chat.rows)
-      holdWork = true
-      // pendingAttaches entries are `id\\tname`; the data module keeps the ids.
-      lastText = draft.trim()
-      failedText = ""
-      // Pass the local. A state read in this same action still sees the value from before the write.
-      send sent = sendMessage(slug, draft.trim(), pendingAttaches.join("\n"), childThread, replyTo, replyQuote, id)
-      clearMention()
-      edit("")
-      writeDrafts()
-    focus("composer")
-  action composerKey(k: string, event: KeyboardEvent)
-    if mentionOn and mentionHits.length > 0 and (k == "ArrowDown" or k == "ArrowUp" or k == "Enter" or k == "Tab" or k == "Escape")
-      preventDefault()
-      if k == "Escape"
-        clearMention()
-      else if k == "ArrowDown"
-        mentionIdx = mentionIdx + 1 >= mentionHits.length ? 0 : mentionIdx + 1
-      else if k == "ArrowUp"
-        mentionIdx = mentionIdx <= 0 ? mentionHits.length - 1 : mentionIdx - 1
-      else if not event.repeat
-        match mentionHits.at(mentionIdx)
-          case some(h)
-            completeMention(h.slug)
-          case none
-    else if k == "Enter" and not event.shiftKey and not event.isComposing
-      preventDefault()
-      if not event.repeat
-        post()
-  action afterSend
-    if sendError == ""
-      draftFiles = dropKey(draftFiles, dkey)
-      noteDraft()
-      writeDrafts()
-      if knownSent(chat.rows, sentId)
-        lastText = ""
-      replyTo = ""
-      replyQuote = ""
-      // A search filter hides the new row, so the jump waits until this is empty.
-      messageQuery = ""
-    else
-      failedText = lastText
-      holdWork = false
-  action forgetSentText
-    if knownSent(chat.rows, sentId)
-      lastText = ""
-  action dropWork
-    if not pending(sent) and (laterBot or not chat.working)
-      holdWork = false
-  action retry
-    if failedText != "" and not pending(sent)
-      messageQuery = ""
-      away = false
-      stickToEnd = true
-      let id = `m-${sendTick + 1}`
-      sendTick = sendTick + 1
-      sentId = id
-      botMark = botCount(chat.rows)
-      holdWork = true
-      let again = failedText
-      lastText = again
-      failedText = ""
-      send sent = sendMessage(slug, again, "", childThread, replyTo, replyQuote, id)
-  action startReply(id: string, text: string)
-    if top(nav).name == "chat"
-      replyTo = id
-      replyQuote = text.slice(0, 500)
-  action cancelReply
-    replyTo = ""
-    replyQuote = ""
-  action doPinMessage(id: string, text: string)
-    if top(nav).name == "chat" and chat.threadId != "" and not pending(messagePinned)
-      send messagePinned = pinMessage(slug, chat.threadId, id, text)
-  action doReact(item: string, emoji: string)
-    reactFor = ""
-    if top(nav).name == "chat"
-      send reacted = reactTo(slug, item, emoji)
-  action openReact(item: string)
-    reactFor = (reactFor == item ? "" : item)
-  action openMessageMenu(id: string)
-    messageMenu = id
-    focus(`menu-reply-${id}`)
-  action closeMessageMenu()
-    let id = messageMenu
-    messageMenu = ""
-    if id != ""
-      focus(`bubble-${id}`)
-  action noteCopied(id: string)
-    copiedMenu = id
-    toast = t("chat.copied")
-  action finishCopy()
-    let id = copiedMenu
-    copiedMenu = ""
-    messageMenu = ""
-    if id != ""
-      focus(`bubble-${id}`)
-  action openRowMenu(key: string)
-    rowMenu = key
-  action closeRowMenu()
-    rowMenu = ""
-  // Edit from the row menu opens the same page as the panel's edit control.
-  action editBotFromRow(bslug: string)
-    open(path("chat", bslug))
-    panelTab = "details"
-    panelPage = "edit"
-    panelOpen = true
-  action editGroupFromRow(id: string)
-    open(path("group", id))
-    groupPanel = true
-    groupPage = "edit"
-  action filesDropped(e: DragEvent)
-    if slug != "" and not pending(attached) and e.files.length > 0
-      match e.files.at(0)
-        case some(f)
-          send attached = uploadAttachment(slug, f, "", "", hostTime.locale)
-        case none
-  action editAnswer(v: string)
-    answerText = v
-  action answer(rid: string, kind: string, key: string, value: string)
-    if not pending(answered)
-      send answered = respondRequest(slug, rid, kind, key, value, childThread)
-  action afterAnswer
-    answerText = ""
-  action stop
-    send stopped = stopRun(slug, childThread)
-  action toEnd
-    away = false
-    if activeLastId != ""
-      if onGroup
-        scrollIntoView("room-log", activeLastId, block="end")
-      else
-        scrollIntoView("transcript", activeLastId, block="end")
-  action moved(x: number, y: number, e: ScrollEvent)
-    away = e.scrollHeight - e.scrollTop - e.clientHeight > 80
-  action pasted(e: ClipboardEvent)
-    if slug != "" and not pending(attached) and pendingAttaches.length < 8 and e.files.length > 0
-      preventDefault()
-      match e.files.at(0)
-        case some(f)
-          send attached = uploadAttachment(slug, f, "", "", hostTime.locale)
-        case none
-  // Bot details: a Bot's name, colour, visibility and main status, and its deletion.
-  action doRename(bslug: string, name: string)
-    if name.trim() != ""
-      send renamed = renameBot(bslug, name.trim())
-  action doRecolour(bslug: string, color: string)
-    send recoloured = recolourBot(bslug, color)
-  action doHide(bslug: string, on: bool)
-    if on and bslug != "fixture" and bslug != "bea" and bslug != "tabs"
-      send noticeAsked = requestNotificationPermission()
-    send hidSaved = hideBot(bslug, on)
-  action afterNotice
-    match noticeAsked
-      case some(status)
-        if status.state == "granted"
-          send noticeEnabled = enableNotifications()
-      case none
-  action doMute(bslug: string, on: bool)
-    send botMuted = setBotNotifications(bslug, on)
-  action saveNotifications(enabled: bool, sound: bool, preview: string, noticeWhen: string)
-    send noticeSaved = setNotifications(enabled ? "on" : "off", sound, preview, noticeWhen)
-  action saveNoticePart(sound: bool, preview: string, noticeWhen: string)
-    if prefs.noticeEnabledMissing
-      send noticeSaved = setNotifications("", sound, preview, noticeWhen)
-    else if prefs.noticeEnabled
-      send noticeSaved = setNotifications("on", sound, preview, noticeWhen)
-    else
-      send noticeSaved = setNotifications("off", sound, preview, noticeWhen)
-  action doMuteGroup(id: string, on: bool)
-    if id != ""
-      send groupSaved = updateGroup(id, "notifications", on ? "true" : "false")
-  action doAllowNotices
-    send noticeAsked = requestNotificationPermission()
-  action doMain(bslug: string)
-    send mainSaved = makeMainBot(bslug)
-  action doDropBot(bslug: string)
-    send botRemoved = deleteBot(bslug)
-  action afterBotRemove
-    if botRemoveError == ""
-      nav = go(nav, "/")
-  action openNewSub
-    subSlug = ""
-    subName = ""
-    subShape = shapeOf(bots, slug)
-    subColor = colorOf(bots, slug)
-    subPrompt = ""
-    subInherit = false
-    panelPage = "subagent"
-  action editSub(bslug: string, name: string, shape: string, color: string, prompt: string, inherit: bool)
-    subSlug = bslug
-    subName = name
-    subShape = shape
-    subColor = color
-    subPrompt = prompt
-    subInherit = inherit
-    panelPage = "subagent"
-  action editSubName(v: string)
-    subName = v
-  action editSubPrompt(v: string)
-    subPrompt = v
-  action pickSubColor(c: string)
-    subColor = c
-  action pickSubShape(s: string)
-    subShape = s
-  action toggleSubInherit
-    subInherit = not subInherit
-  action doCreateSub
-    if not pending(subCreated)
-      send subCreated = createSubagent(slug, subName.trim(), subShape, subColor, subPrompt, subInherit)
-  action afterSubCreate
-    if subError == ""
-      panelPage = "root"
-      subSlug = ""
-  action doSaveSub
-    if subSlug != "" and not pending(subSaved)
-      send subSaved = saveSubagent(subSlug, subName.trim(), subShape, subColor, subPrompt, subInherit)
-  action afterSubSave
-    if subSaveError == ""
-      panelPage = "root"
-  action doDropChild(bslug: string)
-    send childRemoved = deleteBot(bslug)
-  action afterChildRemove
-    if childRemoveError == ""
-      panelPage = "root"
-      subSlug = ""
 
-  // Settings: name, theme, usage, the default model, Vault, the remote password, storage, and about.
-  action openSettings
-    writeDrafts()
-    settingsDomain = "user"
-    computerEnlarged = false
-    childThread = ""
-    panelPage = "root"
-    computerTab = ""
-    nav = go(nav, "/settings")
-  action pickSettingsDomain(domain: string)
-    settingsDomain = domain
-  action doStartUpdate
-    if canUpdate and not pending(updateStarted)
-      send updateStarted = startUpdate()
-  action afterUpdateStart
-    match updateStarted
-      case some(r)
-        if r.ok and r.version != ""
-          updateTo = r.version
-          updateFrom = system.version
-          updatePolls = 0
-          updateStuck = false
-      case none
-        updatePolls = updatePolls
-  action askHealth
-    if updateTo != "" and not updateStuck and not pending(healthRead)
-      updatePolls = updatePolls + 1
-      send healthRead = readHealth()
-  action afterHealth
-    let target = updateTo
-    let polls = updatePolls
-    let arrived = match healthRead { case some(h) => h.ok and h.version == target and target != "", case none => false }
-    if arrived
-      updateTo = ""
-      reload()
-    else if target != "" and polls >= 300
-      updateStuck = true
-  action doEditName(v: string)
-    nameDraft = v
-    nameEditing = true
-  action doSaveName(v: string)
-    nameEditing = false
-    if v.trim() != "" and v.trim() != prefs.userName
-      send prefsSaved = setUserName(v.trim())
   action applyScheme
     setScheme(prefs.theme)
-  action doPickTheme(t: string)
-    setScheme(t)
-    send prefsSaved = setTheme(t)
-  action editNewPassword(v: string)
-    newPassword = v
-  action doSavePassword
-    if newPassword != "" and not pending(passwordSet)
-      send passwordSet = setPassword(newPassword)
-  action afterPassword
-    if passwordError == ""
-      newPassword = ""
-  action doSetNetwork(mode: string)
-    if not network.locked and mode != network.mode and not pending(networkSet)
-      send networkSet = setNetwork(mode)
-  action doRestartNetwork
-    if network.canRestart and network.restartRequired and not pending(networkRestarted)
-      send networkRestarted = restartGateway()
-  action doEditFolder(v: string)
-    folderDraft = v
-    folderEditing = true
-  action doSaveStorage
-    let path = storagePath
-    if (storage.rootLock == "" or storage.backendLock == "") and path != "" and not pending(storageSaved)
-      storageHint = ""
-      folderEditing = false
-      send storageSaved = saveStorage(path, "", storage.rootLock == "" ? "1" : "0")
   action doEditSpace(v: string)
     spaceDraft = v
     spaceEditing = true
@@ -1701,33 +153,6 @@ component Bots
     if storage.backendLock == "" and not pending(storageSaved) and backend != shownBackend and (backend == "filesystem" or (backend == "anytype" and anytypeOn))
       storageHint = ""
       send storageSaved = saveStorage(storagePath, backend, "0")
-  action doTestStorage
-    let path = storagePath
-    if path != "" and not pending(storageTested)
-      storageHint = ""
-      send storageTested = testStorage(path)
-  action afterStorageTest
-    match storageTested
-      case some(r)
-        if r.ok
-          storageHint = "test"
-      case none
-        storageHint = storageHint
-  action doCopyStorage
-    let path = storagePath
-    if path != "" and not pending(storageCopied)
-      storageHint = ""
-      send storageCopied = copyStorage(path)
-  action afterStorageCopy
-    match storageCopied
-      case some(r)
-        if r.ok
-          storageHint = "copy"
-      case none
-        storageHint = storageHint
-  action doRestartStorage
-    if storage.canRestart and storage.restartRequired and not pending(storageRestarted)
-      send storageRestarted = restartStorage()
   // Anytype: start pairing, type the 4 digit code the app shows, then check the space.
   action doPairStart
     if not pending(pairStarted)
@@ -1762,382 +187,256 @@ component Bots
       anytypeProbed = true
       send anytypeChecked = checkAnytype()
 
-  // Vault: a login is edited in a sheet. The password is kept unless a new one is typed.
-  action doCommitLogin(id: string, title: string, website: string, username: string, password: string, hints: string)
-    if (title.trim() != "" or website.trim() != "") and not pending(loginSaved)
-      send loginSaved = saveLogin(id, title.trim(), website.trim(), username.trim(), password, hints.trim())
-  action afterLoginSave
-    if loginError == ""
-      nav = back(nav)
-  action doDropLogin(id: string)
-    send loginRemoved = deleteLogin(id)
-  action afterLoginRemove
-    if loginRemoveError == ""
-      nav = back(nav)
-  action doReveal(id: string)
-    if not pending(revealed)
-      send revealed = revealPassword(id)
-  action doHideReveal
-    revealed = none
-  action doCloseLogin
-    revealed = none
-    nav = back(nav)
-
-  // Projects: a board of items by kind, edited in a sheet.
-  action doPickModel(bslug: string, instanceId: string, model: string, effort: string, mode: string)
-    if not pending(modelSaved)
-      send modelSaved = setModel(bslug, instanceId, model, effort, mode)
-  action afterModel
-    if modelError == ""
-      toast = t("toast.modelSaved")
-  action doDefaultMode(mode: string)
-    if not pending(prefsSaved)
-      send prefsSaved = setDefaultMode(mode)
-  action doGroupAnswer(policy: string)
-    if not pending(prefsSaved)
-      send prefsSaved = setGroupAnswerPolicy(policy)
-  action doMakeDefault(instanceId: string, model: string, effort: string)
-    if not pending(defaultSaved)
-      send defaultSaved = setDefaultModel(instanceId, model, effort)
-  action doReshape(bslug: string, shape: string)
-    send reshaped = reshapeBot(bslug, shape)
-  action doPin(bslug: string, on: bool)
-    send pinned = pinBot(bslug, on)
-  action doTake(tab: string)
-    wantHold = true
-    heldTab = tab
-    computerEnlarged = true
-    send controlled = computerControl(slug, tab, "take")
-  action doRelease
-    wantHold = false
-    computerEnlarged = false
-    if heldTab != ""
-      send controlled = computerControl(slug, heldTab, "release")
-  // Choosing another page drops the one being driven. It does not take the new one.
-  action pickComputerTab(id: string)
-    if id != "" and id != computerTab
-      if heldTab != "" and heldTab != id
-        wantHold = false
-        computerEnlarged = false
-        send controlled = computerControl(slug, heldTab, "release")
-      computerTab = id
-  action releaseHeld
-    wantHold = false
-    computerEnlarged = false
-    if heldTab != ""
-      send controlled = computerControl(slug, heldTab, "release")
-  action afterControl
-    if not wantHold
-      heldTab = ""
-  action afterDrive
-    match driven
-      case some(r)
-        if r.ok and r.text != ""
-          copyText(r.text)
-      case none
-    if holding and computerEnlarged
-      focus("computer-large")
-    else if holding
-      focus("computer-frame")
-  // Clicks, the wheel and keys reach the page only while this take is held.
-  action doDrive(kind: string, x: number, y: number, boxW: number, boxH: number, delta: number, text: string, keyCode: number, modifiers: number)
-    if holding and heldTab != "" and kind != ""
-      send driven = computerInput(slug, kind, x, y, boxW, boxH, delta, text, keyCode, modifiers)
-
-  action doOpenBrowser
-    if slug != "" and not pending(openedBrowser) and not wantOpen
-      wantOpen = true
-      wantClose = false
-      send openedBrowser = openComputer(slug)
-  action afterOpen
-    match openedBrowser
-      case some(r)
-        if not r.ok
-          wantOpen = false
-      case none
-  task clearWantOpen when wantOpen and computer.tabs.length > 0
-    after(1, dropWantOpen)
-  action dropWantOpen
-    wantOpen = false
-  action doCloseBrowser
-    if slug != "" and not pending(closedBrowser) and not wantClose and computer.tabs.length > 0
-      if holding
-        doRelease()
-      wantClose = true
-      wantOpen = false
-      computerEnlarged = false
-      send closedBrowser = closeComputer(slug)
-  action afterClose
-    match closedBrowser
-      case some(r)
-        if not r.ok
-          wantClose = false
-      case none
-  task clearWantClose when wantClose and computer.tabs.length == 0
-    after(1, dropWantClose)
-  action dropWantClose
-    wantClose = false
-  action showComputerLarge
-    computerEnlarged = true
-  action focusComputerFrame
-    focus("computer-frame")
-  task aimComputerFrame when holding and not computerEnlarged
-    after(1, focusComputerFrame)
-  action focusLarge
-    focus("computer-large")
-  task aimComputerLarge when holding and computerEnlarged
-    after(1, focusLarge)
-  action largePageKey(k: string, event: KeyboardEvent)
-    if holding and not event.isComposing
-      let chord = pageChord(k, event.metaKey, event.ctrlKey)
-      if chord != ""
-        preventDefault()
-        doDrive(chord, 0, 0, 0, 0, 0, "", 0, 0)
-      else
-        let kind = pageKeyKind(k, event.ctrlKey, event.metaKey)
-        if kind == "key"
-          preventDefault()
-          doDrive(kind, 0, 0, 0, 0, 0, k, pageKeyCode(k), pageModifiers(event.shiftKey, event.altKey, event.ctrlKey))
-        else if kind == "text"
-          preventDefault()
-          doDrive(kind, 0, 0, 0, 0, 0, k, 0, 0)
-  action largePoint(e: PointerEvent)
-    if holding and e.button == 0
-      let area = frame("computer-large")
-      if not area.unavailable and not area.provisional and area.width > 0 and area.height > 0
-        doDrive("click", e.offsetX, e.offsetY, area.width, area.height, 0, "", 0, 0)
-  action largeWheel(e: WheelEvent)
-    if holding
-      preventDefault()
-      let area = frame("computer-large")
-      if not area.unavailable and not area.provisional and area.width > 0 and area.height > 0
-        doDrive("wheel", e.offsetX, e.offsetY, area.width, area.height, e.deltaY, "", 0, 0)
-  action largePaste(e: ClipboardEvent)
-    if holding and e.text != ""
-      preventDefault()
-      doDrive("text", 0, 0, 0, 0, 0, e.text, 0, 0)
-  action hideComputerLarge
-    computerEnlarged = false
-
+  members "./computer/model.contract"
+  members "./vault/model.contract"
+  members "./settings/model.contract"
+  members "./bot/model.contract"
+  members "./mentions/model.contract"
+  members "./chat/model.contract"
+  members "./voice/model.contract"
+  members "./drafts/model.contract"
+  members "./scroll/model.contract"
+  members "./inbox/model.contract"
+  members "./session/model.contract"
+  members "./group/model.contract"
+  members "./shell/model.contract"
+  members "./usage/model.contract"
+  derive vaultFailed = failed(vault)
+  derive vaultPending = pending(vault)
+  derive botsFailed = failed(bots)
+  derive chatFailed = failed(chat)
+  derive chatPending = pending(chat)
+  derive answeredPending = pending(answered)
+  derive attachedPending = pending(attached)
+  derive voiceSentPending = pending(voiceSent)
+  derive sentPending = pending(sent)
+  derive modelsFailed = failed(models)
+  derive routinesFailed = failed(routines)
+  derive lineageFailed = failed(lineage)
+  derive reportFailed = failed(report)
+  derive shelfFailed = failed(shelf)
+  derive computerFailed = failed(computer)
+  derive subCreatedPending = pending(subCreated)
+  derive subSavedPending = pending(subSaved)
+  derive childModelsFailed = failed(childModels)
+  derive signedInPending = pending(signedIn)
+  provide
+    open
+    vaultQuery
+    vault
+    vquery
+    shownVault
+    editVaultQuery
+    login
+    query
+    vaultFailed
+    vaultPending
+    prefs
+    openSettings
+    botQuery
+    searching
+    hiddenOpen
+    rowMenu
+    firstRun
+    visibleBots
+    tiles
+    hiddenBots
+    openHidden
+    editBotQuery
+    openSearch
+    closeSearch
+    toggleHidden
+    openRowMenu
+    closeRowMenu
+    editBotFromRow
+    editGroupFromRow
+    retry
+    openNewGroup
+    doMuteGroup
+    newColor
+    newShape
+    wide
+    openNew
+    doHide
+    doMute
+    doMain
+    doPin
+    plusOpen
+    bots
+    convos
+    chat
+    slug
+    roomId
+    convoName
+    pull
+    togglePlus
+    botsFailed
+    system
+    models
+    modelError
+    doPickModel
+    shownRows
+    searchNote
+    away
+    toEnd
+    moved
+    answerText
+    chatSearching
+    messageQuery
+    reactFor
+    messageMenu
+    copiedMenu
+    replyTo
+    replyQuote
+    childThread
+    sent
+    answered
+    attached
+    pendingText
+    attachError
+    answerError
+    editChatQuery
+    toggleChatSearch
+    edit
+    pickFiles
+    filesPicked
+    dropPending
+    post
+    composerKey
+    startReply
+    cancelReply
+    doPinMessage
+    doReact
+    openReact
+    openMessageMenu
+    closeMessageMenu
+    noteCopied
+    filesDropped
+    editAnswer
+    answer
+    stop
+    pasted
+    paintedWorkers
+    openPage
+    pickPeriod
+    pickView
+    back
+    closeChild
+    openChild
+    draft
+    mentionIdx
+    mentionHits
+    mention
+    completeMention
+    usagePeriod
+    usageView
+    report
+    childModels
+    routines
+    lineage
+    shelf
+    voiceRecorder
+    voiceError
+    voiceSent
+    voiceHold
+    voiceId
+    voicePreview
+    holdVoice
+    sendHeldVoice
+    discardVoice
+    panelOpen
+    panelTab
+    panelPage
+    subSlug
+    subName
+    subShape
+    subColor
+    subPrompt
+    subInherit
+    subCreated
+    subSaved
+    botError
+    subError
+    subSaveError
+    childRemoveError
+    togglePanel
+    retryDetails
+    pickPanelTab
+    pick
+    doRename
+    doRecolour
+    doDropBot
+    openNewSub
+    editSub
+    editSubName
+    editSubPrompt
+    pickSubColor
+    pickSubShape
+    toggleSubInherit
+    doCreateSub
+    doSaveSub
+    doDropChild
+    doReshape
+    heldTab
+    computerTab
+    computer
+    controlError
+    openError
+    openingBrowser
+    closeError
+    closingBrowser
+    driveError
+    holding
+    doTake
+    doRelease
+    pickComputerTab
+    doDrive
+    doOpenBrowser
+    doCloseBrowser
+    showComputerLarge
+    pointerFacts
+    page
+    pendingAttaches
+    canSend
+    chatFailed
+    chatPending
+    answeredPending
+    attachedPending
+    voiceSentPending
+    sentPending
+    modelsFailed
+    routinesFailed
+    lineageFailed
+    reportFailed
+    shelfFailed
+    computerFailed
+    subCreatedPending
+    subSavedPending
+    childModelsFailed
+    editPassword
+    password
+    signedIn
+    signInError
+    locked
+    signedInPending
+    computerEnlarged
+    onComputer
+    largePageKey
+    largePoint
+    largeWheel
+    largePaste
+    hideComputerLarge
+    toast
   view
     main id="app-shell" class=Screen navigationKey=`${top(nav).id}` navigationBack="back" navigate=open beforeunload=writeDrafts interactive-widget="resizes-content" position="relative" width="100%" height="100%" testId="app"
       if locked
-        column flex=1 justify-content="center" align-items="center" padding="space.xl" testId="sign-in"
-          column width="100%" max-width="22rem" gap="space.lg" box-sizing="border-box" padding="space.xl" border="1px solid surface.line" border-radius="radius.lg" background-color="surface.card"
-            column align-items="center" gap="space.sm"
-              Face(shape="ball", color="teal", state=(pending(signedIn) ? "working" : "idle"), size=96, still=false)
-              text "hbots" role="heading" aria-level=1 class=HeroTitle
-              text t("inbox.tagline") color="-exact-secondary-label"
-            text t("auth.passwordHint") color="-exact-secondary-label"
-            input appearance="none" class=Field type="password" value=password input=editPassword submit=login placeholder=t("common.password") aria-label=t("common.password") testId="password" width="100%"
-            if signInError != "" and not pending(signedIn)
-              text signInError color="-exact-system-red" testId="sign-in-error"
-            button press=login disabled=(password == "" or pending(signedIn)) buttonStyle="filled" testId="sign-in-button"
-              text (pending(signedIn) ? t("auth.signingIn") : t("auth.signIn"))
+            LockScreen()
       else
         for e in stack(nav) key=e.id
           if e.name == "inbox"
-            column class=Screen background-color="surface.sidebar" navigationSplit="288" navigationKey=`${e.id}` navigationScroll="bots-list" position="absolute" inset=0
-              header class=SidebarBar
-                if not wide
-                  button class=IconControl appearance="none" press=openSettings aria-label=t("settings.title") title=(prefs.userName != "" ? prefs.userName : t("settings.you")) testId="open-settings"
-                    column class=Disc
-                      if initialsOf(prefs.userName) != ""
-                        text initialsOf(prefs.userName) font="-exact-footnote" font-weight=600 testId="you-name"
-                      else
-                        Glyph(name="person", size=16)
-                if firstRun
-                  if wide
-                    text "hbots" class=PageTitle
-                  column flex=1
-                else if searching
-                  input type="search" class=SearchField value=botQuery input=editBotQuery placeholder=t("inbox.search") aria-label=t("inbox.search") testId="bot-search" flex=1 min-width=0
-                  button class=TextControl appearance="none" press=closeSearch testId="search-cancel"
-                    text t("common.cancel")
-                else
-                  column flex=1
-                  button class=IconControl appearance="none" press=openSearch aria-label=t("inbox.search") title=t("inbox.search") testId="search-open"
-                    column class=Disc
-                      Glyph(name="search", size=18)
-                  button class=IconControl appearance="none" press=togglePlus aria-label=t("inbox.newMenu") title=t("inbox.newMenu") aria-expanded=plusOpen testId="new-bot"
-                    column class=Disc
-                      Glyph(name="add", size=18)
-              if plusOpen and not firstRun
-                button appearance="none" press=togglePlus aria-label=t("inbox.closeMenu") position="absolute" inset=0 z-index=9 background-color="transparent" border="none" testId="new-menu-backdrop"
-                column position="absolute" top=52 right=8 z-index=10 width=208 box-sizing="border-box" padding="space.xs" gap="2px" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-menu"
-                  button class=ConversationLink appearance="none" press=openNew testId="new-bot-option" padding="space.sm space.md"
-                    row gap="space.md" align-items="center"
-                      Face(shape="ball", color="teal", state="idle", size=28, still=true)
-                      text t("inbox.newBot") font-weight=500
-                  button class=ConversationLink appearance="none" press=openNewGroup disabled=(bots.length < 2) testId="new-group-option" padding="space.sm space.md"
-                    row gap="space.md" align-items="center"
-                      Face(shape="hex", color="blue", state="idle", size=28, still=true)
-                      column gap="2px"
-                        text t("group.new") font-weight=500
-                        if bots.length < 2
-                          text t("group.needsTwo") font="-exact-footnote" color="ink.faint"
-              column navigationSplit="placeholder" flex=1 min-height=0 background-color=(wide and firstRun ? "surface.canvas" : "transparent") align-items=(wide and firstRun ? "stretch" : "center") justify-content=(wide and firstRun ? "flex-start" : "center") gap="space.lg" padding=(wide and firstRun ? "0" : "space.xl")
-                if wide and firstRun
-                  FirstBot(color=newColor, shape=newShape, start=openNew)
-                else if not firstRun
-                  Face(shape="ball", color="teal", state="idle", size=72, still=false)
-                  text t("inbox.tagline") class=HeroTitle text-align="center"
-                  text t("inbox.placeholderBody") color="ink.muted" text-align="center" max-width="24rem"
-                  button class=PrimaryButton press=openNew buttonStyle="filled"
-                    text t("inbox.newBot")
-              if failed(bots) and bots.length == 0
-                EmptyState(symbol="symbol:alert", title=t("error.gatewayTitle"), message=t("error.gatewayHint"))
-                  button press=pull testId="retry"
-                    text t("common.tryAgain")
-              else if firstRun and not wide
-                FirstBot(color=newColor, shape=newShape, start=openNew)
-              else if query != "" and visibleBots.length == 0 and hiddenBots.length == 0
-                column flex=1 min-height=0 align-items="center" justify-content="center" padding="space.xl" testId="no-bot-match"
-                  EmptyState(symbol="symbol:search", title=t("inbox.noMatch", query=botQuery.trim()), message=t("inbox.searchHint"))
-              else
-                if tiles.length > 0
-                  row gap="space.xs" padding="space.sm" testId="bot-tiles"
-                    for b in tiles key=b.slug
-                      link class=TileLink href=path("chat", b.slug) testId=`bot-${b.slug}` aria-label=b.name width=84 flex-shrink=0 background-color=(convoName == "chat" and slug == b.slug ? "surface.raised" : "transparent")
-                        column align-items="center" gap="space.xs" width="100%" min-width=0 max-width="100%"
-                          Avatar(shape=b.shape, color=faceColor(b.color), state=(b.ready ? (b.working ? "working" : "idle") : "asleep"), size=64, still=(not b.working), presence=(b.unread ? "unread" : b.working ? "online" : ""))
-                          text b.name font="-exact-footnote" font-weight=600 max-width="100%" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" text-align="center"
-                scroll id="bots-list" flex=1 min-height=0
-                  column padding="0 space.sm" gap="2px"
-                    for c in convos key=c.key
-                      InboxRow(row=c, bots=bots, current=(c.kind == "group" ? (convoName == "group" and roomId == c.id) : (convoName == "chat" and slug == c.id)), menuOpen=(rowMenu == c.key), openMenu=openRowMenu, closeMenu=closeRowMenu, pin=doPin, hide=doHide, mute=doMute, muteGroup=doMuteGroup, makeMain=doMain, editBot=editBotFromRow, editGroup=editGroupFromRow)
-                    if hiddenBots.length > 0
-                      button class=ConversationLink appearance="none" press=toggleHidden aria-expanded=hiddenOpen testId="hidden-toggle"
-                        row gap="space.sm" align-items="center" flex=1 min-width=0
-                          text t("inbox.hidden", n=hiddenBots.length) font="-exact-footnote" color="ink.muted" flex=1
-                          column color="ink.muted" rotate=(hiddenOpen ? "90deg" : "0deg")
-                            Glyph(name="chevron", size=14)
-                      if hiddenOpen
-                        for b in hiddenBots key=b.slug
-                          button class=ConversationLink appearance="none" press=openHidden(b.slug) testId=`hidden-${b.slug}`
-                            row gap="space.md" align-items="center" flex=1 min-width=0
-                              Avatar(shape=b.shape, color=faceColor(b.color), state="asleep", size=32, still=true, presence="")
-                              text b.name flex=1 color="ink.muted"
-                              if showUnread(b.unread, convoName == "chat" and slug == b.slug, b.hidden)
-                                column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${b.slug}`
-              if wide
-                column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
-                  button class=ConversationLink appearance="none" press=openSettings aria-label=t("settings.title") title=t("settings.title") testId="open-settings" padding="space.sm space.md"
-                    row align-items="center" gap="space.md"
-                      column width=32 height=32 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
-                        if initialsOf(prefs.userName) != ""
-                          text initialsOf(prefs.userName) font="-exact-footnote" font-weight=600
-                        else
-                          Glyph(name="person", size=16)
-                      column flex=1 min-width=0 gap="2px"
-                        text (prefs.userName != "" ? prefs.userName : t("settings.you")) font-weight=500 overflow-wrap="break-word" testId="you-name"
+            Inbox(route=e.id)
           else if e.name == "chat"
-            column class=Screen navigationKey=`${e.id}` navigationScroll="transcript" drop=filesDropped position="absolute" inset=0 padding-right=((wide and panelOpen) ? "20rem" : "0px")
-              if messageMenu != ""
-                button appearance="none" position="absolute" inset=0 z-index=20 background-color="transparent" border="none" press=closeMessageMenu aria-label=t("common.cancel") testId="message-menu-scrim"
-              header appearance="none" class=PageHeader position="relative" testId="chat-header"
-                button id="back" class=IconControl appearance="none" press=back aria-label=t("common.back") title=t("common.back") display=(wide ? "none" : "flex")
-                  column rotate="180deg"
-                    Glyph(name="chevron", size=20)
-                button class=HeaderToggle appearance="none" press=togglePanel aria-label=(panelOpen ? t("chat.hideDetails") : t("chat.showDetails")) aria-expanded=panelOpen aria-controls="bot-panel" title=t("chat.botSettings") testId="panel-toggle" position="absolute" left="50%" translate="-50% 0" gap="space.sm" padding="0 space.md" max-width="75%"
-                  if nameOf(bots, e.params.slug) != ""
-                    column testId="chat-avatar"
-                      Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state=(chat.working ? "working" : "idle"), size=28, still=true)
-                  text nameOf(bots, e.params.slug) role="heading" aria-level=1 class=PageTitle overflow-wrap="anywhere" testId="chat-title" min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
-                column flex=1
-                button class=IconControl appearance="none" press=toggleChatSearch aria-label=t("chat.search") title=t("chat.search") testId="chat-search-open" width=36 height=36
-                  Glyph(name=(chatSearching ? "close" : "search"), size=18)
-              if childThread != ""
-                row align-items="center" gap="space.sm" padding="space.xs space.md" min-height=44 box-sizing="border-box" background-color="surface.raised" border-bottom="1px solid surface.line" testId="child-strip"
-                  button class=TextControl appearance="none" press=closeChild display="flex" align-items="center" aria-label=(nameOf(bots, e.params.slug) != "" ? t("chat.backToNamed", name=nameOf(bots, e.params.slug)) : t("chat.backToChat")) testId="close-child" min-height=44 padding="0 space.sm" color="AccentColor" flex=1 min-width=0
-                    column color="AccentColor" rotate="180deg" flex-shrink=0
-                      Glyph(name="chevron", size=16)
-                    text (nameOf(bots, e.params.slug) != "" ? t("chat.backToNamed", name=nameOf(bots, e.params.slug)) : t("chat.backToChat")) font="-exact-subheadline" font-weight=600 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
-                  text (chat.readOnly ? t("status.done") : chat.working ? t("status.working") : t("status.done")) color="ink.muted" font="-exact-footnote" flex-shrink=0 testId="child-strip-status"
-              if failed(chat)
-                EmptyState(symbol="symbol:alert", title=t("error.chatTitle"), message=t("error.chatHint"))
-                  button press=pull testId="retry-chat"
-                    text t("common.tryAgain")
-              else if pending(chat) and chat.rows.length == 0
-                column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" aria-busy=true
-                  Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="working", size=44, still=false)
-                  text t("chat.loading") color="ink.muted"
-              else if chat.rows.length == 0 and not chat.working and pendingText == ""
-                column flex=1 align-items="center" justify-content="center" gap="space.md" padding="space.xl" testId="empty-chat"
-                  Face(shape=shapeOf(bots, e.params.slug), color=faceColor(colorOf(bots, e.params.slug)), state="idle", size=72, still=false)
-                  text nameOf(bots, e.params.slug) class=HeroTitle
-                  text t("chat.emptyBody") color="ink.muted" text-align="center"
-                  column gap="space.sm" width="100%" max-width="24rem" margin-top="space.lg"
-                    button press=edit(t("chat.starter.planSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-plan"
-                      text t("chat.starter.plan")
-                    button press=edit(t("chat.starter.ideaSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-idea"
-                      text t("chat.starter.idea")
-                    button press=edit(t("chat.starter.helpSend")) class=TextControl appearance="none" background-color="surface.card" border="1px solid surface.line" border-radius="radius.full" testId="starter-help"
-                      text t("chat.starter.help")
-              else
-                column flex=1 min-height=0 justify-content="flex-end" position="relative" z-index=(messageMenu != "" ? 21 : 0) pointer-events=(messageMenu != "" ? "none" : "auto")
-                  if chatSearching
-                    input type="search" class=SearchField value=messageQuery input=editChatQuery placeholder=t("chat.search") aria-label=t("chat.search") testId="chat-search" width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="0 space.lg space.xs"
-                  if chatSearching and searchNote != ""
-                    text searchNote color="ink.muted" font="-exact-footnote" testId="search-note" width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
-                  if away
-                    button class=IconControl appearance="none" press=toEnd aria-label=t("chat.jump") title=t("chat.jumpShort") testId="to-end" position="absolute" left="50%" translate="-50% 0" bottom=8 z-index=1 width=32 height=32 border-radius="radius.full" background-color="surface.raised" border="1px solid surface.line"
-                      Glyph(name="arrow-down", size=16)
-                  for p in chat.pins key=p.id
-                    text p.text color="ink.muted" font="-exact-footnote" testId=`pin-${p.id}` width="100%" max-width="46rem" align-self="center" box-sizing="border-box" padding="0 space.lg"
-                  ChatLog(rows=shownRows, inRoom=false, logId="transcript", logTestId=(childThread != "" ? "child-transcript" : "transcript"), bots=bots, slug=e.params.slug, pins=chat.pins, workers=paintedWorkers, hover=(pointerFacts.hover == "hover"), reactFor=reactFor, messageMenu=messageMenu, copiedMenu=copiedMenu, answerText=answerText, answerError=answerError, answering=pending(answered), react=doReact, openPicker=openReact, reply=startReply, pin=doPinMessage, openMenu=openMessageMenu, closeMenu=closeMessageMenu, noteCopied=noteCopied, answer=answer, editAnswer=editAnswer, retry=retry, scrolled=moved)
-              if attachError != "" and not pending(attached)
-                text attachError color="-exact-system-red" padding="0 space.lg" testId="attach-error"
-              if pendingAttaches.length > 0
-                row gap="space.sm" flex-wrap="wrap" padding="0 space.lg space.xs" align-self="center" width="100%" max-width="44rem" box-sizing="border-box" testId="pending-files"
-                  for entry in pendingAttaches key=entry
-                    row gap="space.xs" align-items="center" padding="4px 6px 4px space.sm" border="1px solid surface.line" border-radius="radius.full" background-color="surface.card" max-width="100%" box-sizing="border-box"
-                      column color="ink.muted"
-                        Glyph(name="attach", size=14)
-                      text attachmentName(entry, t("chat.attachment")) font="-exact-footnote" color="-exact-label" overflow-wrap="anywhere" flex=1 min-width=0
-                      button class=IconControl appearance="none" press=dropPending(entry) aria-label=t("chat.removeNamed", name=attachmentName(entry, t("chat.attachment"))) title=t("chat.removeAttachment") testId="pending-file" width=28 height=28
-                        Glyph(name="close", size=14)
-              if chat.readOnly
-                text t("chat.readOnly") color="ink.muted" padding="space.md space.lg space.xl" testId="child-readonly"
-              else
-                column width="calc(100% - 32px)" max-width="44rem" align-self="center" box-sizing="border-box" margin="space.sm space.lg space.xl" gap="space.xs" position="relative"
-                  if replyTo != ""
-                    row gap="space.sm" align-items="center" padding="space.xs space.sm" border-radius="radius.md" background-color="surface.raised" border="1px solid surface.line" testId="reply-bar"
-                      text replyQuote font="-exact-footnote" color="ink.muted" flex=1 min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap" testId="reply-quote"
-                      button class=TextControl appearance="none" press=cancelReply aria-label=t("chat.cancelReply") testId="reply-cancel" min-height=44 padding="0 space.sm"
-                        text t("common.cancel")
-                  if voicePreview != ""
-                    audio voicePreview controls=true testId="voice-preview"
-                  if voiceError != ""
-                    text voiceError color="-exact-system-red" font="-exact-footnote" testId="voice-error"
-                  MentionMenu(hits=mentionHits, picked=mentionIdx, choose=completeMention)
-                  row align-items="flex-end" width="100%" box-sizing="border-box" padding="space.xs" gap="space.xs" border-radius="radius.lg" border="1px solid surface.line" background-color="surface.card"
-                    button class=IconControl press=pickFiles disabled=(slug == "" or pending(attached) or pendingAttaches.length >= 8) appearance="none" aria-label=t("chat.attach") title=t("chat.attach") testId="attach" width=36 height=36 border-radius="radius.full" background-color="surface.raised"
-                      Glyph(name="add", size=18)
-                    if voiceHold != ""
-                      text voiceHold font="-exact-footnote" color="ink.muted" testId="voice-hold"
-                    if voiceId != ""
-                      button class=IconControl appearance="none" press=discardVoice aria-label=t("chat.discardClip") title=t("chat.discardClip") testId="voice-discard" width=36 height=36
-                        Glyph(name="close", size=16)
-                    input type="file" id="chat-attach" display="none" change=filesPicked testId="chat-attach"
-                    textarea id="composer" value=draft input=edit key=composerKey paste=pasted maxlength=8000 outline="none" border-radius="radius.md" rows=1 field-sizing="content" max-height=140 placeholder=(nameOf(bots, e.params.slug) != "" ? t("chat.messageTo", name=nameOf(bots, e.params.slug)) : t("chat.write")) aria-label=t("chat.message") aria-expanded=(mentionHits.length > 0) aria-controls="mention-menu" testId="composer" flex=1 min-width=0 padding="space.sm space.xs" border="none" background-color="transparent" color="-exact-label"
-                    if voiceRecorder != ""
-                      button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label=t("chat.stopRecording") title=t("chat.stopRecording") testId="voice-record" background-color="-exact-system-red" color="ink.dark"
-                        Glyph(name="stop", size=16)
-                    else if voiceId != ""
-                      button class=SendControl appearance="none" press=sendHeldVoice disabled=pending(voiceSent) margin="2px 0" aria-label=t("chat.sendVoice") title=t("chat.sendVoice") testId="voice-send"
-                        Glyph(name="send", size=18)
-                    else if chat.working and not canSend
-                      button class=StopControl appearance="none" press=stop margin="2px 0" aria-label=t("common.stop") testId="stop"
-                        Glyph(name="stop", size=16)
-                    else if not canSend
-                      button class=SendControl appearance="none" press=holdVoice margin="2px 0" aria-label=t("chat.record") title=t("chat.record") testId="voice-record" background-color="-exact-label" color="surface.canvas"
-                        Glyph(name="mic", size=18)
-                    else
-                      button class=SendControl appearance="none" press=post disabled=(not canSend or pending(sent)) margin="2px 0" retainFocus=true aria-label=t("common.send") testId="send"
-                        Glyph(name="send", size=18)
-              for b in bots.filter(x => x.slug == e.params.slug) key=b.slug
-                BotPanel(working=chat.working, shown=panelOpen, tab=panelTab, page=panelPage, pickTab=pickPanelTab, openPage=openPage, closePanel=togglePanel, openChild=openChild, wide=wide, bot=b, bots=bots, error=botError, rename=doRename, recolour=doRecolour, reshape=doReshape, pin=doPin, hide=doHide, mute=doMute, makeMain=doMain, drop=doDropBot, models=models, modelsDown=failed(models), pickModel=doPickModel, modelError=modelError, routines=routines, routinesDown=failed(routines), lineage=lineage, lineageDown=failed(lineage), report=report, reportDown=failed(report), period=usagePeriod, usageView=usageView, pickPeriod=pickPeriod, pickView=pickView, retryDetails=retryDetails, shelf=shelf, shelfDown=failed(shelf), computer=computer, computerDown=failed(computer), showComputerLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=holding, drive=doDrive, take=doTake, release=doRelease, picked=computerTab, pick=pickComputerTab, openBrowser=doOpenBrowser, opening=openingBrowser, openError=openError, closeBrowser=doCloseBrowser, closing=closingBrowser, closeError=closeError, subSlug=subSlug, subName=subName, subShape=subShape, subColor=subColor, subPrompt=subPrompt, subInherit=subInherit, openNewSub=openNewSub, editSub=editSub, editSubName=editSubName, editSubPrompt=editSubPrompt, pickSubColor=pickSubColor, pickSubShape=pickSubShape, toggleSubInherit=toggleSubInherit, createSub=doCreateSub, saveSub=doSaveSub, dropChild=doDropChild, creating=pending(subCreated), saving=pending(subSaved), subError=(subSlug == "" ? subError : (subSaveError != "" ? subSaveError : childRemoveError)), childModels=childModels, childModelsDown=failed(childModels))
+            ChatScreen(route=e.id)
           else if e.name == "group"
             column class=Screen navigationKey=`${e.id}` navigationScroll="room-log" position="absolute" inset=0 padding-right=((wide and groupPanel) ? "20rem" : "0px")
               if messageMenu != ""
@@ -2496,35 +795,7 @@ component Bots
                           button class=SettingsRow appearance="none" press=logout justify-content="flex-start" color="-exact-system-red" testId="sign-out"
                             text t("settings.signOut") font-weight=500
           else if e.name == "vault"
-            column class=Screen navigationKey=`${e.id}` navigationScroll="vault-list" position="absolute" inset=0
-              header class=PageHeader flex-wrap="wrap"
-                text t("vault.title") role="heading" aria-level=1 class=PageTitle flex=1
-                button class=IconControl appearance="none" press=open("/vault/new") aria-label=t("vault.new") title=t("vault.new") testId="new-login"
-                  Glyph(name="add", size=20)
-                input type="search" class=SearchField value=vaultQuery input=editVaultQuery placeholder=t("vault.search") aria-label=t("vault.search") testId="vault-search" width="100%"
-              if failed(vault)
-                EmptyState(symbol="symbol:alert", title=t("error.vaultTitle"), message=t("error.hbotsCode"))
-              else if vault.length == 0 and not pending(vault)
-                EmptyState(symbol="symbol:lock", title=t("vault.emptyTitle"), message=t("vault.emptyBody"))
-                  button press=open("/vault/new") testId="empty-login"
-                    text t("vault.add")
-              else if vquery != "" and shownVault.length == 0
-                column flex=1 min-height=0 align-items="center" justify-content="center" padding="space.xl" testId="no-vault-match"
-                  EmptyState(symbol="symbol:search", title=t("vault.noMatch", query=vaultQuery.trim()), message=t("vault.searchHint"))
-              else
-                list id="vault-list" appearance="none" width="100%" box-sizing="border-box" flex=1 min-height=0 gap="space.sm" padding="space.md max(space.lg, calc((100% - 40rem) / 2))"
-                  for v in shownVault key=v.id
-                    link href=path("vaultEdit", v.id) testId=`login-${v.id}`
-                      row class=BotRow background-color="surface.card" border="1px solid surface.line" border-radius="radius.md" padding="space.md"
-                        column class=IconTile color="AccentColor" overflow="hidden"
-                          if v.icon != ""
-                            image v.icon aria-label="" width=24 height=24 border-radius="radius.sm"
-                          else
-                            Glyph(name="lock", size=18)
-                        column flex=1 min-width=0 gap="space.xs"
-                          text v.title font-weight=600
-                          text (v.username != "" ? v.username : v.website) color="ink.muted" font="-exact-footnote"
-                        Glyph(name="chevron", size=20)
+            VaultScreen(route=e.id)
           else if e.name == "vaultAdd"
             LoginSheet(route=e.id, item=Login(id="", title="", website="", username="", hasPassword=false, hints="", icon=""), revealedFor=revealedFor, revealedText=revealedText, error=loginError, save=doCommitLogin, reveal=doReveal, hide=doHideReveal, drop=doDropLogin, cancel=doCloseLogin)
           else if e.name == "vaultEdit"
@@ -2697,11 +968,6 @@ component Bots
                     button class=PrimaryButton buttonStyle="filled" press=createNext disabled=(createStep == "name" and newName.trim() == "") width="100%" testId="create-next"
                       text t("create.next")
       if computerEnlarged and not locked and onComputer and computer.image != ""
-        column position="absolute" inset=0 z-index=40 align-items="center" justify-content="center" background-color="brand.black" testId="computer-overlay"
-          button class=IconControl appearance="none" press=hideComputerLarge aria-label=t("computer.close") title=t("computer.close") testId="computer-close" position="absolute" top=12 right=12 z-index=1 color="ink.light" width=44 height=44
-            Glyph(name="close", size=22)
-          column id="computer-large" tabindex=(holding ? 0 : -1) key=largePageKey pointerdown=largePoint wheel=largeWheel paste=largePaste touch-action="none" width="100%" height="100%" testId="computer-large"
-            image `data:image/jpeg;base64,${computer.image}` aria-label=t("computer.pageFor", name=nameOf(bots, slug)) width="100%" height="100%" object-fit="contain"
+        ComputerOverlay()
       if toast != ""
-        row position="absolute" bottom=88 left="50%" translate="-50% 0" padding="space.md space.lg" border-radius="radius.full" background-color="-exact-label" color="surface.canvas" max-width="90%" box-sizing="border-box" testId="toast" role="status" aria-live="polite"
-          text toast font="-exact-subheadline" font-weight=500
+        ToastLine()

@@ -1,0 +1,138 @@
+use getUserMedia, stopTrack, MediaStream, MediaStreamTrack from "@exact/media-capture"
+use startMediaRecorder, stopMediaRecorder, isTypeSupported, MediaRecorderInfo, RecordedMedia, TypeSupport from "@exact/recording"
+use Reply, VoiceHeld, putVoice, fieldAt, voiceNumber, hasFileId, hasVoiceId from "../ui/root-types.contract"
+members Bots
+  state voiceRecorder = ""
+
+  state voiceTrack = ""
+
+  state voiceKey = ""
+
+  state voiceError = ""
+
+  resource clipType = isTypeSupported(type="audio/mp4") as shape TypeSupport else empty()
+
+  mutation micOpened as shape MediaStream then armMic
+
+  mutation recStarted as shape MediaRecorderInfo then recBegun
+
+  mutation clipSaved as shape RecordedMedia then stageClip
+
+  mutation trackEnded as shape MediaStreamTrack
+
+  mutation voiced as shape VoiceHeld then showClip
+
+  mutation voiceSent as shape Reply refreshes chat then afterVoice
+
+  mutation voiceDropped as shape Reply
+
+  derive voicePack = match first(draftVoices.filter(v => v.startsWith(`${dkey}\u001f`))) { case some(v) => v.slice(dkey.length + 1), case none => "" }
+
+  derive voiceHold = fieldAt(voicePack, 0)
+
+  derive voiceId = fieldAt(voicePack, 1)
+
+  derive voicePreview = fieldAt(voicePack, 2)
+
+  derive voiceSeconds = voiceNumber(voicePack)
+
+  // A take stops itself at two minutes. Stopping earlier cancels this wait.
+  task capClip when voiceRecorder != ""
+    after(120000, holdVoice)
+
+  // The contract runner has no microphone: the fixture hold is the file name, at once.
+  // Anywhere else, the first press records and the next press stops.
+  action holdVoice
+    voiceError = ""
+    if slug == "fixture" or slug == ""
+      draftVoices = putVoice(draftVoices, dkey, "voice.m4a", "", "", 0)
+      noteDraft()
+    else if voiceRecorder != "" and voiceKey == dkey
+      send clipSaved = stopMediaRecorder(recorder=voiceRecorder)
+    else if voiceRecorder == "" and not pending(micOpened)
+      voiceKey = dkey
+      send micOpened = getUserMedia(audio=true)
+
+  action armMic
+    match micOpened
+      case some(s)
+        let stream = s.id
+        let track = match s.tracks.at(0) { case some(t) => t.id, case none => "" }
+        voiceTrack = track
+        let path = clipType.supported ? "app:/tmp/voice.m4a" : "app:/tmp/voice.webm"
+        let mime = clipType.supported ? "audio/mp4" : "audio/webm"
+        send recStarted = startMediaRecorder(stream=stream, mimeType=mime, path=path)
+      case none
+        voiceError = t("voice.micOff")
+
+  action recBegun
+    match recStarted
+      case some(r)
+        voiceRecorder = r.id
+        draftVoices = putVoice(draftVoices, voiceKey, t("voice.recording"), "", "", 0)
+        noteDraft()
+      case none
+        voiceRecorder = ""
+        voiceError = t("voice.micOff")
+
+  action stageClip
+    match clipSaved
+      case some(media)
+        let track = voiceTrack
+        let secs = media.duration / 1000
+        voiceRecorder = ""
+        voiceTrack = ""
+        if track != ""
+          send trackEnded = stopTrack(track=track)
+        if media.size > 8388608
+          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+          noteDraft()
+          voiceError = t("voice.tooLong")
+        else if secs <= 0 or media.size == 0
+          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+          noteDraft()
+          voiceError = t("voice.empty")
+        else
+          send voiced = stageVoice(slug, media.path, media.mimeType, secs)
+      case none
+        voiceRecorder = ""
+        voiceError = t("voice.unreadable")
+
+  action showClip
+    match voiced
+      case some(r)
+        if r.ok and r.id != ""
+          draftVoices = putVoice(draftVoices, dkey, r.name, r.id, r.url, r.seconds)
+          noteDraft()
+          voiceError = ""
+        else
+          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+          noteDraft()
+          voiceError = r.error != "" ? r.error : t("voice.unreadable")
+      case none
+
+  action sendHeldVoice
+    if voiceId != "" and not pending(voiceSent)
+      toEnd()
+      send voiceSent = sendVoice(slug, voiceSeconds, voiceId, childThread)
+
+  action afterVoice
+    match voiceSent
+      case some(r)
+        if r.ok
+          draftVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+          noteDraft()
+          voiceError = ""
+        else
+          voiceError = r.error
+      case none
+
+  action discardVoice
+    if voiceId != ""
+      let id = voiceId
+      let nextVoices = putVoice(draftVoices, dkey, "", "", "", 0)
+      draftVoices = nextVoices
+      noteDraft()
+      voiceError = ""
+      if not hasFileId(draftFiles, id) and not hasVoiceId(nextVoices, id) and slug != "fixture" and slug != ""
+        send voiceDropped = dropVoice(slug, id)

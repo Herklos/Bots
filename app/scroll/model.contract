@@ -1,0 +1,94 @@
+use transcriptId from "../ui/root-types.contract"
+members Bots
+  state away = false
+
+  // Set before a send. A task scrolls once the new row exists, then clears it.
+  state stickToEnd = false
+
+  // Bumps on every send so followSend runs again when the jump target id stays the same.
+  state sendTick = 0
+
+  // The top route this scroll state belongs to. A change clears away and stickToEnd.
+  state scrollRoute = ""
+
+  derive lastId = match chat.rows.at(-1) { case some(m) => m.id, case none => "" }
+
+  // The open chat's latest server row. Bot and group share this for reply following.
+  derive lastRowId = onGroup ? lastRoomId : lastId
+
+  // The row a send or a jump-to-end should land on: the optimistic line, otherwise lastRowId.
+  derive activePending = onGroup ? roomPending : pendingText
+
+  derive activeLastId = activePending != "" ? (onGroup ? roomSentId : transcriptId(sentId)) : lastRowId
+
+  // Skip a stale last id while the send is still in flight and the new row is not in the list yet.
+  derive activeReady = activePending != "" or ((onGroup ? not pending(roomSent) : not pending(sent)) and lastRowId != "")
+
+  derive followKey = `${activeLastId}:${sendTick}`
+
+  derive routeId = `${top(nav).name}:${slug}:${roomId}`
+
+  task fit mount
+    every(200, fitView)
+
+  // Opening another screen forgets the previous list's scroll. The first paint records the route.
+  task resetScroll when routeId != scrollRoute
+    after(1, forgetScroll)
+
+  // Scroll once the row this send is waiting on exists. sendTick re-arms the task when that id
+  // does not change, which happens for the shared pending row on a second send.
+  task followSend when stickToEnd and messageQuery == "" and activeReady and (onBot or onGroup) key=followKey
+    after(1, jumpToSend)
+
+  // A reply or any new last row. Stay put when the person has scrolled up, and leave sends to followSend.
+  task followReplies when lastRowId != "" and not away and not stickToEnd and messageQuery == "" and (onBot or onGroup) key=lastRowId
+    after(1, jumpToReply)
+
+  // A working row grows the list. Follow it only when the person is already at the end.
+  task followWorking when workingHere != "" and not away and not stickToEnd and activePending == "" and (onBot or onGroup) key=workingHere
+    after(1, jumpToWorking)
+
+  // A task can only schedule an action, and scrollIntoView needs a literal list id.
+  action forgetScroll
+    scrollRoute = routeId
+    away = false
+    stickToEnd = false
+
+  action jumpToSend
+    if onGroup
+      scrollIntoView("room-log", activeLastId, block="end")
+    else
+      scrollIntoView("transcript", activeLastId, block="end")
+    stickToEnd = false
+
+  action jumpToReply
+    if onGroup
+      scrollIntoView("room-log", lastRowId, block="end")
+    else
+      scrollIntoView("transcript", lastRowId, block="end")
+
+  action jumpToWorking
+    if onGroup
+      scrollIntoView("room-log", workingHere, block="end")
+    else
+      scrollIntoView("transcript", workingHere, block="end")
+
+  action fitView
+    let box = frame("app-shell")
+    // A missing measurement is not a resize. Keep the last stable layout.
+    if not box.unavailable and box.width > 0
+      let w = box.width >= 1200
+      if w != wide
+        wide = w
+        panelOpen = w
+
+  action toEnd
+    away = false
+    if activeLastId != ""
+      if onGroup
+        scrollIntoView("room-log", activeLastId, block="end")
+      else
+        scrollIntoView("transcript", activeLastId, block="end")
+
+  action moved(x: number, y: number, e: ScrollEvent)
+    away = e.scrollHeight - e.scrollTop - e.clientHeight > 80

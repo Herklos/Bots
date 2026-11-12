@@ -1,0 +1,28 @@
+use ModelList, RoutineList, Lineage, UsageReport, Shelf from "../ui/shapes.contract"
+use Usage from "../ui/root-types.contract"
+members Bots
+  state usagePeriod = "7d"
+
+  state usageView = "summary"
+
+  resource usage = loadUsage(usageGate, hostTime.locale) as shape Usage else empty()
+
+  resource report = loadUsageReport(slug, usagePeriod, reportGate, hostTime.locale) as shape UsageReport else empty()
+
+  resource childModels = loadModels(subSlug, subGate, hostTime.locale) as shape ModelList else empty()
+
+  resource routines = loadRoutines(slug, detailGate, hostTime.locale) as shape RoutineList else empty()
+
+  resource lineage = loadLineage(slug, detailGate, hostTime.locale) as shape Lineage else empty()
+
+  resource shelf = loadShelf(slug, libraryGate) as shape Shelf else empty()
+
+  derive detailGate = (onBot and slug != "") ? "1" : "0"
+
+  derive subGate = (onBot and panelOpen and panelPage == "subagent" and subSlug != "") ? "1" : "0"
+
+  derive reportGate = ((onBot and slug != "") or top(nav).name == "settings") ? "1" : "0"
+
+  derive libraryGate = (onLibrary and slug != "") ? "1" : "0"
+
+  derive usageGate = top(nav).name == "settings" ? "1" : "0"

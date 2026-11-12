@@ -1,0 +1,27 @@
+use Reply, SystemStatus from "../ui/root-types.contract"
+use HeroTitle, Field from "../ui/controls.contract"
+use Face from "../face.contract"
+// LockScreen: one route of the root view, moved out with its values and actions injected.
+component LockScreen
+  inject
+    system: SystemStatus
+    editPassword: action
+    password: string
+    signedIn: option<Reply>
+    signInError: string
+    locked: bool
+    login: action
+    signedInPending: bool
+  view
+    column flex=1 justify-content="center" align-items="center" padding="space.xl" testId="sign-in"
+      column width="100%" max-width="22rem" gap="space.lg" box-sizing="border-box" padding="space.xl" border="1px solid surface.line" border-radius="radius.lg" background-color="surface.card"
+        column align-items="center" gap="space.sm"
+          Face(shape="ball", color="teal", state=(signedInPending ? "working" : "idle"), size=96, still=false)
+          text "hbots" role="heading" aria-level=1 class=HeroTitle
+          text t("inbox.tagline") color="-exact-secondary-label"
+        text t("auth.passwordHint") color="-exact-secondary-label"
+        input appearance="none" class=Field type="password" value=password input=editPassword submit=login placeholder=t("common.password") aria-label=t("common.password") testId="password" width="100%"
+        if signInError != "" and not signedInPending
+          text signInError color="-exact-system-red" testId="sign-in-error"
+        button press=login disabled=(password == "" or signedInPending) buttonStyle="filled" testId="sign-in-button"
+          text (signedInPending ? t("auth.signingIn") : t("auth.signIn"))

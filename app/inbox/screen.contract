@@ -1,0 +1,152 @@
+use EmptyState from "exact:content"
+use faceColor, showUnread from "../ui/fns.contract"
+use Bot, Chat, Convo from "../ui/shapes.contract"
+use Prefs, initialsOf from "../ui/root-types.contract"
+use Screen, PageTitle, HeroTitle, TextControl, IconControl, ConversationLink, PrimaryButton from "../ui/controls.contract"
+use SidebarBar, Disc, TileLink, SearchField from "../ui/sidebar.contract"
+use InboxRow from "./inbox.contract"
+use Face, Avatar from "../face.contract"
+use Glyph from "../glyph.contract"
+use FirstBot from "../bot/first.contract"
+// Inbox: one route of the root view, moved out with its values and actions injected.
+component Inbox
+  props
+    route: number
+  inject
+    prefs: Prefs
+    openSettings: action
+    botQuery: string
+    searching: bool
+    hiddenOpen: bool
+    rowMenu: string
+    firstRun: bool
+    visibleBots: Bot[]
+    tiles: Bot[]
+    hiddenBots: Bot[]
+    openHidden: action
+    editBotQuery: action
+    openSearch: action
+    closeSearch: action
+    toggleHidden: action
+    openRowMenu: action
+    closeRowMenu: action
+    editBotFromRow: action
+    editGroupFromRow: action
+    retry: action
+    openNewGroup: action
+    doMuteGroup: action
+    open: action
+    newColor: string
+    newShape: string
+    wide: bool
+    openNew: action
+    doHide: action
+    doMute: action
+    doMain: action
+    doPin: action
+    plusOpen: bool
+    bots: Bot[]
+    convos: Convo[]
+    chat: Chat
+    slug: string
+    query: string
+    roomId: string
+    convoName: string
+    pull: action
+    togglePlus: action
+    botsFailed: bool
+  view
+    column class=Screen background-color="surface.sidebar" navigationSplit="288" navigationKey=`${route}` navigationScroll="bots-list" position="absolute" inset=0
+      header class=SidebarBar
+        if not wide
+          button class=IconControl appearance="none" press=openSettings aria-label=t("settings.title") title=(prefs.userName != "" ? prefs.userName : t("settings.you")) testId="open-settings"
+            column class=Disc
+              if initialsOf(prefs.userName) != ""
+                text initialsOf(prefs.userName) font="-exact-footnote" font-weight=600 testId="you-name"
+              else
+                Glyph(name="person", size=16)
+        if firstRun
+          if wide
+            text "hbots" class=PageTitle
+          column flex=1
+        else if searching
+          input type="search" class=SearchField value=botQuery input=editBotQuery placeholder=t("inbox.search") aria-label=t("inbox.search") testId="bot-search" flex=1 min-width=0
+          button class=TextControl appearance="none" press=closeSearch testId="search-cancel"
+            text t("common.cancel")
+        else
+          column flex=1
+          button class=IconControl appearance="none" press=openSearch aria-label=t("inbox.search") title=t("inbox.search") testId="search-open"
+            column class=Disc
+              Glyph(name="search", size=18)
+          button class=IconControl appearance="none" press=togglePlus aria-label=t("inbox.newMenu") title=t("inbox.newMenu") aria-expanded=plusOpen testId="new-bot"
+            column class=Disc
+              Glyph(name="add", size=18)
+      if plusOpen and not firstRun
+        button appearance="none" press=togglePlus aria-label=t("inbox.closeMenu") position="absolute" inset=0 z-index=9 background-color="transparent" border="none" testId="new-menu-backdrop"
+        column position="absolute" top=52 right=8 z-index=10 width=208 box-sizing="border-box" padding="space.xs" gap="2px" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="new-menu"
+          button class=ConversationLink appearance="none" press=openNew testId="new-bot-option" padding="space.sm space.md"
+            row gap="space.md" align-items="center"
+              Face(shape="ball", color="teal", state="idle", size=28, still=true)
+              text t("inbox.newBot") font-weight=500
+          button class=ConversationLink appearance="none" press=openNewGroup disabled=(bots.length < 2) testId="new-group-option" padding="space.sm space.md"
+            row gap="space.md" align-items="center"
+              Face(shape="hex", color="blue", state="idle", size=28, still=true)
+              column gap="2px"
+                text t("group.new") font-weight=500
+                if bots.length < 2
+                  text t("group.needsTwo") font="-exact-footnote" color="ink.faint"
+      column navigationSplit="placeholder" flex=1 min-height=0 background-color=(wide and firstRun ? "surface.canvas" : "transparent") align-items=(wide and firstRun ? "stretch" : "center") justify-content=(wide and firstRun ? "flex-start" : "center") gap="space.lg" padding=(wide and firstRun ? "0" : "space.xl")
+        if wide and firstRun
+          FirstBot(color=newColor, shape=newShape, start=openNew)
+        else if not firstRun
+          Face(shape="ball", color="teal", state="idle", size=72, still=false)
+          text t("inbox.tagline") class=HeroTitle text-align="center"
+          text t("inbox.placeholderBody") color="ink.muted" text-align="center" max-width="24rem"
+          button class=PrimaryButton press=openNew buttonStyle="filled"
+            text t("inbox.newBot")
+      if botsFailed and bots.length == 0
+        EmptyState(symbol="symbol:alert", title=t("error.gatewayTitle"), message=t("error.gatewayHint"))
+          button press=pull testId="retry"
+            text t("common.tryAgain")
+      else if firstRun and not wide
+        FirstBot(color=newColor, shape=newShape, start=openNew)
+      else if query != "" and visibleBots.length == 0 and hiddenBots.length == 0
+        column flex=1 min-height=0 align-items="center" justify-content="center" padding="space.xl" testId="no-bot-match"
+          EmptyState(symbol="symbol:search", title=t("inbox.noMatch", query=botQuery.trim()), message=t("inbox.searchHint"))
+      else
+        if tiles.length > 0
+          row gap="space.xs" padding="space.sm" testId="bot-tiles"
+            for b in tiles key=b.slug
+              link class=TileLink href=path("chat", b.slug) testId=`bot-${b.slug}` aria-label=b.name width=84 flex-shrink=0 background-color=(convoName == "chat" and slug == b.slug ? "surface.raised" : "transparent")
+                column align-items="center" gap="space.xs" width="100%" min-width=0 max-width="100%"
+                  Avatar(shape=b.shape, color=faceColor(b.color), state=(b.ready ? (b.working ? "working" : "idle") : "asleep"), size=64, still=(not b.working), presence=(b.unread ? "unread" : b.working ? "online" : ""))
+                  text b.name font="-exact-footnote" font-weight=600 max-width="100%" overflow="hidden" text-overflow="ellipsis" white-space="nowrap" text-align="center"
+        scroll id="bots-list" flex=1 min-height=0
+          column padding="0 space.sm" gap="2px"
+            for c in convos key=c.key
+              InboxRow(row=c, bots=bots, current=(c.kind == "group" ? (convoName == "group" and roomId == c.id) : (convoName == "chat" and slug == c.id)), menuOpen=(rowMenu == c.key), openMenu=openRowMenu, closeMenu=closeRowMenu, pin=doPin, hide=doHide, mute=doMute, muteGroup=doMuteGroup, makeMain=doMain, editBot=editBotFromRow, editGroup=editGroupFromRow)
+            if hiddenBots.length > 0
+              button class=ConversationLink appearance="none" press=toggleHidden aria-expanded=hiddenOpen testId="hidden-toggle"
+                row gap="space.sm" align-items="center" flex=1 min-width=0
+                  text t("inbox.hidden", n=hiddenBots.length) font="-exact-footnote" color="ink.muted" flex=1
+                  column color="ink.muted" rotate=(hiddenOpen ? "90deg" : "0deg")
+                    Glyph(name="chevron", size=14)
+              if hiddenOpen
+                for b in hiddenBots key=b.slug
+                  button class=ConversationLink appearance="none" press=openHidden(b.slug) testId=`hidden-${b.slug}`
+                    row gap="space.md" align-items="center" flex=1 min-width=0
+                      Avatar(shape=b.shape, color=faceColor(b.color), state="asleep", size=32, still=true, presence="")
+                      text b.name flex=1 color="ink.muted"
+                      if showUnread(b.unread, convoName == "chat" and slug == b.slug, b.hidden)
+                        column width=8 height=8 flex-shrink=0 border-radius="radius.full" background-color="AccentColor" aria-label=t("inbox.unread") testId=`unread-${b.slug}`
+      if wide
+        column padding="space.xs space.sm" border-top="1px solid surface.line" gap="2px"
+          button class=ConversationLink appearance="none" press=openSettings aria-label=t("settings.title") title=t("settings.title") testId="open-settings" padding="space.sm space.md"
+            row align-items="center" gap="space.md"
+              column width=32 height=32 border-radius="radius.full" background-color="surface.raised" align-items="center" justify-content="center"
+                if initialsOf(prefs.userName) != ""
+                  text initialsOf(prefs.userName) font="-exact-footnote" font-weight=600
+                else
+                  Glyph(name="person", size=16)
+              column flex=1 min-width=0 gap="2px"
+                text (prefs.userName != "" ? prefs.userName : t("settings.you")) font-weight=500 overflow-wrap="break-word" testId="you-name"

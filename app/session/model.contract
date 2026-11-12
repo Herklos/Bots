@@ -1,0 +1,19 @@
+use Reply from "../ui/root-types.contract"
+members Bots
+  state password = ""
+
+  mutation signedIn as shape Reply refreshes session, bots
+
+  mutation signedOut as shape Reply refreshes session, bots
+
+  derive signInError = match signedIn { case some(r) => r.error, case none => "" }
+
+  derive locked = session.passwordRequired and not session.authenticated
+
+  action login
+    if password != "" and not pending(signedIn)
+      send signedIn = signIn(password)
+      password = ""
+
+  action logout
+    send signedOut = signOut()

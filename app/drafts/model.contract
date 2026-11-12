@@ -1,0 +1,52 @@
+use Reply, DraftPack, convoKey from "../ui/root-types.contract"
+members Bots
+  state draftTexts: string[] = []
+
+  state draftFiles: string[] = []
+
+  state draftVoices: string[] = []
+
+  state draftRev = 0
+
+  state savedRev = 0
+
+  state appliedStamp = ""
+
+  resource keptDrafts = loadDrafts() as shape DraftPack else empty()
+
+  mutation draftSaved as shape Reply
+
+  derive dkey = convoKey(slug, childThread)
+
+  derive draft = match first(draftTexts.filter(d => d.startsWith(`${dkey}\u001f`))) { case some(d) => d.slice(dkey.length + 1).slice(0, 8000), case none => "" }
+
+  // The store answers after the first paint. Apply it once, unless this screen already typed.
+  task restoreDrafts when keptDrafts.stamp != appliedStamp
+    after(1, applyDrafts)
+
+  // One save for a burst of edits. The key is draftRev: while the gate stays true the
+  // wait does not restart, and each edit has to re-arm it. About 400ms after the last one.
+  task keepDrafts when draftRev != savedRev key=draftRev
+    after(400, writeDrafts)
+
+  // Leaving the page writes a draft the wait has not saved. Typing does not change this gate.
+  task flushDraftOnHide when page.visibilityState != "visible"
+    after(1, writeDrafts)
+
+  action noteDraft
+    draftRev = draftRev + 1
+
+  action applyDrafts
+    let stamp = keptDrafts.stamp
+    if stamp != appliedStamp
+      appliedStamp = stamp
+      if draftRev == 0
+        draftTexts = keptDrafts.texts
+        draftFiles = keptDrafts.files
+        draftVoices = keptDrafts.voices
+
+  action writeDrafts
+    if draftRev != savedRev
+      let rev = draftRev
+      savedRev = rev
+      send draftSaved = saveDrafts(draftTexts, draftFiles, draftVoices)

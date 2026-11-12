@@ -1,0 +1,92 @@
+use knownSent from "../ui/root-types.contract"
+members Bots
+  state toast = ""
+
+  task poll when page.visibilityState == "visible" and not pending(sent) and not pending(answered) and not pending(stopped)
+    every(1500, pull)
+
+  task pollHidden when page.visibilityState != "visible" and not pending(sent) and not pending(answered) and not pending(stopped)
+    every(10000, pull)
+
+  task adoptSent when lastText != "" and not pending(sent) and knownSent(chat.rows, sentId)
+    after(1, forgetSentText)
+
+  task adoptRoom when roomPending != "" and not pending(roomSent) and room.messages.filter(m => m.id == roomSentId).length > 0
+    after(1, forgetRoomPending)
+
+  task noteRoster when noticeStamp != "" key=noticeStamp
+    after(1, postNotices)
+
+  task fadeToast when toast != ""
+    after(3000, clearToast)
+
+  // Copy confirms on the row, then the menu closes. The toast is the same notice.
+  task finishCopied when copiedMenu != ""
+    after(700, finishCopy)
+
+  // Health while an update is replacing this process. About ten minutes, then stop.
+  task watchUpdate when updateTo != "" and not updateStuck
+    every(2000, askHealth)
+
+  // The saved theme is applied once it has loaded; picking one applies it at once.
+  task scheme when prefs.theme != ""
+    after(1, applyScheme)
+
+  task letGo when holding and not onComputer
+    after(1, releaseHeld)
+
+  // Once per empty roster, not once per poll. A Bot coming back clears the flag.
+  task welcomeEmpty when not welcomed and bots.length == 0 and not pending(bots) and not failed(bots)
+    after(1, beginWelcome)
+
+  task endWelcome when welcomed and bots.length > 0
+    after(1, forgetWelcome)
+
+  action retryUsage
+    refresh usage
+
+  action openPage(page: string)
+    panelPage = page
+
+  action pickPeriod(p: string)
+    usagePeriod = p
+
+  action pickView(v: string)
+    usageView = v
+
+  action clearToast
+    toast = ""
+
+  action postNotices
+    send noted = noteUnread(page.visibilityState, page.hasFocus, notice.available, notice.state, prefs.noticeEnabled, prefs.noticeEnabledMissing, prefs.noticeSound, prefs.noticePreview, prefs.noticeWhen, slug, roomId)
+
+  // A wide window shows the list beside the open conversation. Switching chats
+  // or groups replaces that route, so the conversation swaps instead of stacking.
+  action open(url: string)
+    writeDrafts()
+    computerEnlarged = false
+    wantOpen = false
+    wantClose = false
+    childThread = ""
+    panelPage = "root"
+    computerTab = ""
+    rowMenu = ""
+    let conversation = url.startsWith("/bot/") or url.startsWith("/group/")
+    let onConversation = top(nav).name == "chat" or top(nav).name == "group"
+    nav = wide and conversation and onConversation ? replace(nav, url) : go(nav, url)
+
+  action back
+    writeDrafts()
+    computerEnlarged = false
+    if childThread != ""
+      childThread = ""
+    else
+      nav = back(nav)
+
+  action closeChild
+    writeDrafts()
+    childThread = ""
+
+  action openChild(threadId: string)
+    writeDrafts()
+    childThread = threadId

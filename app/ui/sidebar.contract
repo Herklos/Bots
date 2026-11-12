@@ -1,0 +1,199 @@
+
+style SidebarBar
+  display="flex"
+  align-items="center"
+  gap="space.xs"
+  padding="space.sm space.md space.xs space.lg"
+  min-height=56
+  box-sizing="border-box"
+  background-color="surface.sidebar"
+
+// A 36 point disc inside a 44 point control, like the circles in the sidebar bar.
+style Disc
+  display="flex"
+  align-items="center"
+  justify-content="center"
+  width=36
+  height=36
+  box-sizing="border-box"
+  border-radius="radius.full"
+  border="1px solid surface.line"
+  background-color="surface.card"
+
+// A pinned Bot: its Face over its name, on a raised tile when it is open.
+style TileLink
+  display="flex"
+  justify-content="center"
+  box-sizing="border-box"
+  padding="space.sm space.xs"
+  border-radius="radius.lg"
+  color="-exact-label"
+  text-decoration="none"
+  :hover
+    background-color="surface.raised"
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+style HeaderToggle
+  display="flex"
+  align-items="center"
+  min-height=44
+  padding="0 space.xs"
+  border="none"
+  border-radius="radius.md"
+  background-color="transparent"
+  :hover
+    background-color="surface.soft"
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+style SendControl
+  display="flex"
+  align-items="center"
+  justify-content="center"
+  width=36
+  height=36
+  padding=0
+  border="none"
+  border-radius="radius.full"
+  background-color="brand.default"
+  color="ink.dark"
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+  :disabled
+    background-color="surface.line"
+    color="ink.muted"
+
+style StopControl
+  display="flex"
+  align-items="center"
+  justify-content="center"
+  width=36
+  height=36
+  padding=0
+  border="none"
+  border-radius="radius.full"
+  background-color="surface.raised"
+  color="-exact-label"
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+style SearchField
+  box-sizing="border-box"
+  min-height=36
+  padding="space.xs space.md"
+  border="1px solid surface.line"
+  border-radius="radius.full"
+  background-color="surface.card"
+  color="-exact-label"
+
+style GroupCard
+  background-color="surface.card"
+  border="1px solid surface.line"
+  border-radius="radius.md"
+  padding="space.xs space.md"
+  box-sizing="border-box"
+
+// Settings uses one track for domain tabs and for exclusive choices.
+style SettingsTrack
+  display="flex"
+  align-items="stretch"
+  width="100%"
+  box-sizing="border-box"
+  padding="2px"
+  border-radius="radius.full"
+  background-color="surface.soft"
+
+style SettingsTab
+  flex=1
+  min-width=0
+  min-height=36
+  padding="space.xs space.sm"
+  border="none"
+  border-radius="radius.full"
+  background-color="transparent"
+  color="ink.muted"
+  font="-exact-subheadline"
+  font-weight=500
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+// A row inside a Settings card. The card draws the outer edge; a hairline is a node attribute.
+style SettingsRow
+  display="flex"
+  align-items="center"
+  gap="space.md"
+  width="100%"
+  box-sizing="border-box"
+  min-height=44
+  padding="0 space.md"
+  border="none"
+  background-color="transparent"
+  color="-exact-label"
+  text-align="left"
+  text-decoration="none"
+  :hover
+    background-color="surface.soft"
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+style SettingsFoot
+  color="ink.muted"
+  font="-exact-footnote"
+  padding="space.xs space.md 0"
+
+style FieldLabel
+  color="-exact-label"
+  font="-exact-footnote"
+  font-weight=600
+
+style FieldBox
+  box-sizing="border-box"
+  min-height=40
+  padding="0 space.md"
+  border="1px solid surface.line"
+  border-radius="radius.sm"
+  background-color="surface.soft"
+  color="-exact-label"
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+style ActionMain
+  border="1px solid AccentColor"
+  color="AccentColor"
+  background-color="transparent"
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+style ActionQuiet
+  border="1px solid surface.line"
+  color="-exact-label"
+  background-color="transparent"
+  :active
+    opacity=0.7
+  :focus-visible
+    box-shadow="0 0 0 2px AccentColor"
+
+style FileChip
+  padding="space.xs space.sm"
+  border-radius="radius.full"
+  font="-exact-footnote"
+  overflow-wrap="anywhere"
+
+style BotRow
+  padding="space.md space.xs"
+  gap="space.md"
+  align-items="center"
+  min-height=52

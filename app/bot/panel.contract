@@ -1,34 +1,12 @@
-use Face from "../face.contract"
-use Avatar from "../face.contract"
-use shapeNames from "../face.contract"
-use Glyph from "../glyph.contract"
-use PageTitle, HeroTitle, QuietButton, TextControl, IconControl, ToggleControl, SwatchControl, ConversationLink, SectionLabel, Chip, IconTile, Segment, Field, PrimaryButton, Bot, Provider, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer, pickerColours, faceColor, PanelRow, dot from "../ui/shared.contract"
+use pickerColours, faceColor from "../ui/fns.contract"
+use PanelRow from "../ui/panel.contract"
+use Bot, ModelList, RoutineList, Lineage, UsageReport, Shelf, Computer from "../ui/shapes.contract"
+use PageTitle, QuietButton, TextControl, IconControl, ToggleControl, SwatchControl, ConversationLink, SectionLabel, Chip, IconTile, Segment, Field, PrimaryButton from "../ui/controls.contract"
 use ModelPage, UsageView from "../settings/settings.contract"
+use shapeNames, Avatar from "../face.contract"
+use Glyph from "../glyph.contract"
+use EditBotPage from "./edit.contract"
 use BotShelf, ScreenCard from "../computer/computer.contract"
-
-component WorkingDots
-  view
-    row gap="6px" align-items="center"
-      for n in [0, 1, 2] key=n
-        column width=7 height=7 border-radius="radius.full" background-color="ink.muted" animation=`dot 1.2s ease-in-out infinite ${n * 0.16}s`
-
-// A group's face is its members, at most three, overlapped. It has no colour or shape of its own.
-
-// The empty roster. Creating still uses the new-Bot walk. The phone inbox and the wide placeholder share this.
-component FirstBot
-  props
-    color: string
-    shape: string
-    start: action
-  view
-    scroll flex=1 min-height=0 width="100%" background-color="surface.canvas" testId="first-bot"
-      column width="100%" max-width="24rem" box-sizing="border-box" margin="0 auto" align-items="center" gap="space.md" padding="space.xl"
-        Avatar(shape=shape, color=faceColor(color), state="idle", size=96, still=false, presence="")
-        text t("inbox.emptyTitle") role="heading" aria-level=2 class=HeroTitle text-align="center"
-        text t("inbox.emptyBody") color="ink.muted" text-align="center" max-width="22rem"
-        button buttonStyle="filled" press=start testId="first-create"
-          text t("inbox.emptyAction")
-
 // One inbox row, a Bot or a group. A normal click still opens the chat or the group.
 // A secondary click or a long press (both a contextmenu) opens one menu on this row.
 // A Bot can be pinned, hidden, edited, or made main, with the actions the panel already uses.
@@ -305,96 +283,3 @@ component BotPanel
         column id="bot-tab-computer" role="tabpanel" aria-label=t("panel.computer") display=(tab == "computer" ? "flex" : "none") flex=1 min-height=0
           scroll id="panel-computer-scroll" flex=1 min-height=0
             ScreenCard(name=bot.name, computer=computer, down=computerDown, showLarge=showComputerLarge, heldTab=heldTab, controlError=controlError, driveError=driveError, live=live, drive=drive, take=take, release=release, picked=picked, pick=pick, openBrowser=openBrowser, opening=opening, openError=openError, closeBrowser=closeBrowser, closing=closing, closeError=closeError)
-
-// Pick the provider, the model and how hard it thinks. Each choice applies to the Bot's next message.
-// Provider, model and effort as one picker. The Bot's panel and Settings both use it.
-component EditBotPage
-  props
-    bot: Bot
-    error: string
-    rename: action
-    recolour: action
-    reshape: action
-    pin: action
-    hide: action
-    mute: action
-    makeMain: action
-    drop: action
-  state name = bot.name
-  action editName(v: string)
-    name = v
-  view
-    column gap="space.lg" padding="space.sm space.lg space.xl" testId="edit-page"
-      column gap="space.sm"
-        text t("common.name") class=SectionLabel
-        input appearance="none" class=Field value=name input=editName change=rename(bot.slug) aria-label=t("common.name") padding="0 space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="bot-name"
-      column gap="space.sm"
-        text t("edit.colour") class=SectionLabel
-        row gap="space.xs" flex-wrap="wrap"
-          for c in pickerColours() key=c
-            button class=SwatchControl press=recolour(bot.slug, c) appearance="none" aria-label=t("edit.colourNamed", name=faceColor(c)) aria-pressed=(bot.color == c) testId=`colour-${c}` width=40 height=40 padding=0
-              column width=30 height=30 box-sizing="border-box" border-radius="radius.full" background-color=c border=(bot.color == c ? "3px solid AccentColor" : "3px solid transparent")
-      column gap="space.sm"
-        text t("edit.shape") class=SectionLabel
-        row gap="space.xs" flex-wrap="wrap"
-          for s in shapeNames() key=s
-            button class=SwatchControl press=reshape(bot.slug, s) appearance="none" aria-label=t("edit.shapeNamed", name=s) aria-pressed=(bot.shape == s) testId=`shape-${s}` width=48 height=48 padding=0 border-radius="radius.md" background-color=(bot.shape == s ? "surface.raised" : "transparent")
-              Avatar(shape=s, color=faceColor(bot.color), state="idle", size=34, still=true, presence="")
-      column gap="2px"
-        row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
-          column class=IconTile color="AccentColor"
-            Glyph(name="pin", size=18)
-          column flex=1 gap="2px"
-            text t("edit.pin") font-weight=600
-            text t("edit.pinNote") color="ink.muted" font="-exact-footnote"
-          button class=ToggleControl appearance="none" role="switch" aria-checked=bot.pinned disabled=bot.main press=pin(bot.slug, not bot.pinned) aria-label=t("edit.pin") testId="pin-bot"
-            row width=44 height=26 border-radius="radius.full" background-color=(bot.pinned or bot.main ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.pinned or bot.main ? "flex-end" : "flex-start")
-              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
-        row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
-          column class=IconTile color="AccentColor"
-            Glyph(name="star", size=18)
-          column flex=1 gap="2px"
-            text t("edit.main") font-weight=600
-            text (bot.main ? t("edit.isDefault") : t("edit.makeDefault")) color="ink.muted" font="-exact-footnote"
-          if bot.main
-            column color="AccentColor" aria-label=t("edit.main") testId="is-main"
-              Glyph(name="check", size=20)
-          else
-            button class=IconControl appearance="none" press=makeMain(bot.slug) aria-label=t("edit.makeMain") title=t("edit.makeMain") testId="make-main"
-              Glyph(name="star", size=20)
-        row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
-          column class=IconTile color="ink.muted"
-            Glyph(name="eye-off", size=18)
-          column flex=1 gap="2px"
-            text t("edit.hide") font-weight=600
-            text t("edit.hideNote") color="ink.muted" font="-exact-footnote"
-          button class=ToggleControl appearance="none" role="switch" aria-checked=bot.hidden disabled=bot.main press=hide(bot.slug, not bot.hidden) aria-label=t("edit.hidden") testId="hide-bot"
-            row width=44 height=26 border-radius="radius.full" background-color=(bot.hidden ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.hidden ? "flex-end" : "flex-start")
-              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
-        row align-items="center" gap="space.md" min-height=56 padding="0 space.md"
-          column class=IconTile color="AccentColor"
-            Glyph(name="bell", size=18)
-          column flex=1 gap="2px"
-            text t("edit.notify") font-weight=600 testId="mute-label"
-            text t("edit.muteNote") color="ink.muted" font="-exact-footnote"
-          button class=ToggleControl appearance="none" role="switch" aria-checked=bot.notifications press=mute(bot.slug, not bot.notifications) aria-label=t("edit.notify") testId="mute-bot"
-            row width=44 height=26 border-radius="radius.full" background-color=(bot.notifications ? "AccentColor" : "surface.line") align-items="center" justify-content=(bot.notifications ? "flex-end" : "flex-start")
-              column width="1.25rem" height="1.25rem" margin="0 3px" border-radius="radius.full" background-color="ink.light"
-      if bot.main
-        text t("edit.mainStays") color="ink.muted" font="-exact-footnote" padding="0 space.md"
-      if error != ""
-        text error color="-exact-system-red" testId="bot-error" padding="0 space.md"
-      row align-items="center" gap="space.md" min-height=56 padding="0 space.md" border-top="1px solid surface.line"
-        column class=IconTile color="-exact-system-red"
-          Glyph(name="trash", size=18)
-        column flex=1 gap="2px"
-          text t("edit.delete") font-weight=600 color=(bot.main ? "ink.muted" : "-exact-system-red")
-          text t("edit.deleteMove") color="ink.muted" font="-exact-footnote"
-        button class=IconControl appearance="none" commandfor=`drop-bot-${bot.slug}` command="show-modal" disabled=bot.main aria-label=t("edit.delete") title=t("edit.delete") color="-exact-system-red" testId="delete-bot"
-          Glyph(name="trash", size=20)
-      dialog id=`drop-bot-${bot.slug}` role="alertdialog" aria-label=t("edit.deleteNamed", name=bot.name)
-        text t("edit.deleteBody")
-        button press=drop(bot.slug) destructive=true commandfor=`drop-bot-${bot.slug}` command="close" testId="drop-bot-ok"
-          text t("common.delete")
-        button commandfor=`drop-bot-${bot.slug}` command="close" testId="drop-bot-cancel"
-          text t("common.cancel")

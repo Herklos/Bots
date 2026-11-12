@@ -1,0 +1,53 @@
+use putText, wordChar, mentionReplace, filterMentions from "../ui/root-types.contract"
+members Bots
+  state mentionOn = false
+
+  state mentionQ = ""
+
+  state mentionIdx = 0
+
+  derive mentionHits = mentionOn ? filterMentions(mentionPool, mentionQ) : []
+
+  action clearMention
+    mentionOn = false
+    mentionQ = ""
+    mentionIdx = 0
+
+  action syncMention(text: string)
+    let parts = text.split("@")
+    if parts.length < 2
+      clearMention()
+    else
+      match parts.at(parts.length - 1)
+        case some(q)
+          let head = parts.slice(0, parts.length - 1).join("@")
+          if q.includes(" ") or q.includes("\n") or q.includes("\t") or (head != "" and wordChar(head.slice(-1)))
+            clearMention()
+          else
+            mentionOn = true
+            mentionQ = q.toLowerCase()
+            mentionIdx = 0
+        case none
+          clearMention()
+
+  action editRoomText(v: string)
+    roomText = v
+    syncMention(v)
+
+  action mention(m: string)
+    roomText = `${roomText}${(roomText == "" or roomText.endsWith(" ")) ? "" : " "}@${m} `
+    clearMention()
+    focus("room-composer")
+
+  action completeMention(slug: string)
+    if mentionOn and slug != ""
+      if roomId != ""
+        roomText = mentionReplace(roomText, mentionQ, slug)
+        clearMention()
+        focus("room-composer")
+      else
+        let next = mentionReplace(draft, mentionQ, slug).slice(0, 8000)
+        draftTexts = putText(draftTexts, dkey, next)
+        noteDraft()
+        clearMention()
+        focus("composer")
