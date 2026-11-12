@@ -3,5 +3,5 @@
 // and the gateway, which serves it, swaps in the address the page was loaded from. One build then works
 // on localhost, Tailscale or a tunnel. Native apps have no page: build them with HBOTS_URL set to the
 // gateway, e.g. `HBOTS_URL=https://hbots.example.ts.net bun exact.mjs mac`.
-const HBOTS_URL = import.meta.env.HBOTS_URL ?? 'http://hbots-origin.invalid';
-export const API: string = HBOTS_URL.replace(/\/$/, '');
+export let API = 'http://hbots-origin.invalid';
+export function setGatewayUrl(url: string): void { API = url.replace(/\/$/, ''); }

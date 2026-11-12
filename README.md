@@ -33,13 +33,15 @@ For a terminal-only setup, run `hbots up --no-service`, then `hbots serve` using
 
 ## Features
 
-- **Personal Bots:** create and customize Bots, choose models and approval modes, and give each Bot its own instructions and workspace. Claude Haiku is the default model.
+- **Personal Bots:** use the guided setup to choose a name, appearance, optional template and first message. Each Bot has its own instructions and workspace; choose its model and approval mode. Claude Haiku is the default model.
 - **Conversations:** chat with individual Bots or groups, mention Bots, attach files and voice clips, reply, react, and pin messages. In a group, an `@mention`, `@all`, or a single name chooses who answers; otherwise the last speaker does, unless the group or Settings says everyone or a chief should. Stop a run or answer an approval request from the app.
+- **Notifications:** receive unread conversation notices and mute individual Bots or groups without losing unread indicators.
 - **Bot details:** see routines, usage, child threads, and a library of files, pages and links. Manage per-Bot MCP connectors and watch or interact with a Bot's browser through T3 Code.
-- **Routines:** schedule work through the harness and review or run a Bot's routines.
+- **Memory and routines:** Bot instructions include a bounded snapshot of memory and shared notes, refreshed when those files change. Schedule work through the harness and review or run a Bot's routines.
 - **Vault:** keep logins encrypted, import or export CSV, and let Bot tools use saved credentials without exposing the password to the Bot.
 - **Remote access:** set a password, then choose this device, the local network, or Tailscale in Settings.
-- **Installation and updates:** install checksummed releases, run a background service, update, and roll back.
+- **Storage:** configure the Bot folder in Settings. Pair with Anytype and check a space; the running gateway still uses the file system while the Anytype storage adapter is under development.
+- **Installation and updates:** install checksummed releases, run a background service, update and restart from Settings, or roll back from the CLI.
 
 See [the project plan](docs/PLAN.md) for ongoing work and limitations.
 
@@ -62,9 +64,9 @@ See [the project plan](docs/PLAN.md) for ongoing work and limitations.
                                                          └──────────────────┘
 ```
 
-The **gateway** serves the client and API, manages sessions and the Vault, and connects to the harness. The **harness** runs Bot threads and holds provider logins. T3 Code is the harness currently wired into hbots.
+The **gateway** serves the client and API, manages sessions and the Vault, and connects to a harness. The **harness** runs Bot threads and holds provider logins. The gateway has a harness interface; T3 Code is the production implementation wired today.
 
-The **workspace** is a separate storage concern. The `Workspace` interface backs Bot library records, files and MCP connectors; the running gateway currently uses its local-disk adapter. Other parts of the gateway still access local files directly, and the in-memory adapter is for tests. Additional storage and harness backends are planned, not selectable production options today. See [architecture](docs/architecture.md) and the [backend plan](docs/backends.md) for details.
+The **workspace** is a separate storage concern. The `Workspace` interface backs Bot library records, files and MCP connectors; the running gateway currently uses its local-disk adapter. Other parts of the gateway still access local files directly, and the in-memory adapter is for tests. Anytype pairing and space checks are available in Settings, but Bot storage still uses the file system. Other production storage and harness backends need further work. See [architecture](docs/architecture.md) and the [backend plan](docs/backends.md) for details.
 
 A Bot's thread is created on that local T3. Choosing a linked computer from Settings or from a Bot's config, and listing that computer's models, is specified in [the execution environment design](docs/bot-execution-environment.md). It is not a setting in the app today.
 

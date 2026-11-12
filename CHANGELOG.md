@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.2
+
+This release corrects a group setting label and continues organizing the client and T3 integration for future work.
+
+### Bug fixes
+
+- Show the correct default answer policy label when configuring a group.
+
+### Improvements
+
+- Split group and Settings screens into focused client modules and move T3-specific approval, routine and provisioning calls into the T3 adapter without changing their intended behavior.
+- Document plans for Anytype, memory, webhook triggers, reply images and client architecture. These plans do not indicate that the features have shipped.
+
 ## 0.3.1
 
 This release improves group setup, Bot instruction updates and browser control, and adds an Anytype connection flow.
