@@ -28,6 +28,7 @@ component Bots
   members "./vault/model.contract"
   members "./settings/model.contract"
   members "./bot/model.contract"
+  members "./bot/memory-model.contract"
   members "./mentions/model.contract"
   members "./chat/model.contract"
   members "./voice/model.contract"
@@ -114,6 +115,13 @@ component Bots
     togglePanel
     retryDetails
     pickPanelTab
+    beginMemoryEdit
+    editMemoryDraft
+    cancelMemory
+    saveMemory
+    reloadMemory
+    overwriteMemory
+    memoryBag
     pick
     doRename
     doSavePrompt

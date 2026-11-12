@@ -1,0 +1,88 @@
+use Field, PrimaryButton, TextControl from "../ui/controls.contract"
+
+// One Bot's memory/MEMORY.md, as GET /api/memory returns it.
+shape MemoryFile
+  ok: bool
+  path: string
+  text: string
+  revision: string
+  truncated: bool
+
+// PUT /api/memory. A stale revision is `conflict`, with the file as it is now.
+shape MemorySave
+  ok: bool
+  error: string
+  conflict: bool
+  text: string
+  revision: string
+
+// What the Memory tab reads. The tab injects this bag so the chat screen stays as it is.
+shape MemoryBag
+  file: MemoryFile
+  failed: bool
+  pending: bool
+  editing: bool
+  draft: string
+  conflict: bool
+  serverText: string
+  serverRevision: string
+  error: string
+  saving: bool
+
+component MemoryTab
+  props
+    name: string
+  inject
+    memoryBag: MemoryBag
+    pull: action
+    beginMemoryEdit: action
+    editMemoryDraft: action
+    cancelMemory: action
+    saveMemory: action
+    reloadMemory: action
+    overwriteMemory: action
+  view
+    scroll flex=1 min-height=0
+      column gap="space.md" padding="0 space.lg space.xl" testId="memory-tab"
+        if memoryBag.file.path != ""
+          text memoryBag.file.path color="ink.muted" font="-exact-footnote" testId="memory-path"
+        if memoryBag.failed
+          text t("error.memory") color="-exact-system-red" testId="memory-error"
+          button class=PrimaryButton buttonStyle="bordered" press=pull testId="memory-retry"
+            text t("common.tryAgain")
+        else if memoryBag.pending and memoryBag.file.revision == ""
+          text t("memory.loading") color="ink.muted" testId="memory-loading"
+        else if memoryBag.editing
+          if memoryBag.conflict
+            column gap="space.sm" padding="space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.raised" testId="memory-conflict"
+              text t("memory.conflict", name=name) testId="memory-conflict-text"
+              if memoryBag.serverText != ""
+                text memoryBag.serverText color="ink.muted" font="-exact-footnote" white-space="pre-wrap" testId="memory-server"
+              row gap="space.sm" flex-wrap="wrap"
+                button class=PrimaryButton buttonStyle="filled" press=reloadMemory testId="memory-reload"
+                  text t("memory.reload")
+                button class=PrimaryButton buttonStyle="bordered" commandfor="memory-overwrite" command="show-modal" testId="memory-overwrite"
+                  text t("memory.overwrite")
+          textarea appearance="none" class=Field value=memoryBag.draft input=editMemoryDraft aria-label=t("panel.memory") rows=12 maxlength=200000 padding="space.md" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" white-space="pre-wrap" testId="memory-draft"
+          if memoryBag.error != ""
+            text memoryBag.error color="-exact-system-red" testId="memory-save-error"
+          row gap="space.sm" flex-wrap="wrap"
+            button class=PrimaryButton buttonStyle="bordered" press=cancelMemory testId="memory-cancel"
+              text t("memory.cancel")
+            if not memoryBag.conflict
+              button class=PrimaryButton buttonStyle="filled" press=saveMemory disabled=memoryBag.saving testId="memory-save"
+                text (memoryBag.saving ? t("memory.saving") : t("memory.save"))
+          dialog id="memory-overwrite" role="alertdialog" aria-label=t("memory.overwrite")
+            text t("memory.overwriteBody")
+            button press=overwriteMemory destructive=true commandfor="memory-overwrite" command="close" testId="memory-overwrite-ok"
+              text t("memory.overwrite")
+            button commandfor="memory-overwrite" command="close" testId="memory-overwrite-cancel"
+              text t("common.cancel")
+        else if memoryBag.file.text.trim() == ""
+          text t("memory.empty") color="ink.muted" testId="memory-empty"
+          button class=PrimaryButton buttonStyle="filled" press=beginMemoryEdit testId="memory-edit"
+            text t("memory.edit")
+        else
+          text memoryBag.file.text markup="markdown" white-space="normal" testId="memory-body"
+          button class=PrimaryButton buttonStyle="filled" press=beginMemoryEdit testId="memory-edit"
+            text t("memory.edit")

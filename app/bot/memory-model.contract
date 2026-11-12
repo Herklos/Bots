@@ -1,0 +1,66 @@
+use MemoryFile, MemorySave, MemoryBag from "./memory.contract"
+
+members Bots
+  state memoryEditing = false
+  state memoryDraft = ""
+  state memoryBase = ""
+  state memoryFor = ""
+  state memoryConflict = false
+  state memoryServerText = ""
+  state memoryServerRevision = ""
+  // True after a save settles, so a cancelled edit does not keep the last error.
+  state memoryNoted = false
+  derive onMemory = top(nav).name == "chat" and panelOpen and panelTab == "memory"
+  derive memoryGate = (onMemory and slug != "") ? "1" : "0"
+  resource memory = loadMemory(slug, memoryGate) as shape MemoryFile else empty()
+  mutation memorySaved as shape MemorySave refreshes memory then afterMemorySave
+  derive memoryFailed = failed(memory)
+  derive memoryPending = pending(memory)
+  derive memorySaving = pending(memorySaved)
+  derive memoryLive = memoryEditing and memoryFor == slug
+  derive memoryClash = memoryConflict and memoryFor == slug
+  derive memoryError = match memorySaved { case some(r) => (memoryNoted and memoryLive and not r.ok and not r.conflict) ? r.error : "", case none => "" }
+  derive memoryBag = MemoryBag(file=memory, failed=memoryFailed, pending=memoryPending, editing=memoryLive, draft=memoryDraft, conflict=memoryClash, serverText=memoryServerText, serverRevision=memoryServerRevision, error=memoryError, saving=memorySaving)
+  action beginMemoryEdit
+    memoryFor = slug
+    memoryDraft = memory.text
+    memoryBase = memory.revision
+    memoryEditing = true
+    memoryConflict = false
+    memoryServerText = ""
+    memoryServerRevision = ""
+    memoryNoted = false
+  action editMemoryDraft(v: string)
+    memoryDraft = v
+  action cancelMemory
+    memoryEditing = false
+    memoryConflict = false
+  action saveMemory
+    if memoryLive and not memoryClash and not pending(memorySaved)
+      send memorySaved = saveBotMemory(slug, memoryDraft, memoryBase)
+  action reloadMemory
+    memoryEditing = false
+    memoryConflict = false
+    refresh memory
+  action overwriteMemory
+    if memoryClash and memoryServerRevision != "" and not pending(memorySaved)
+      send memorySaved = saveBotMemory(slug, memoryDraft, memoryServerRevision)
+  action afterMemorySave
+    memoryNoted = true
+    match memorySaved
+      case some(r)
+        if memoryFor != slug
+          memoryEditing = memoryEditing
+        else if r.conflict
+          memoryConflict = true
+          memoryServerText = r.text
+          memoryServerRevision = r.revision
+        else if r.ok
+          memoryEditing = false
+          memoryConflict = false
+          memoryDraft = r.text
+          memoryBase = r.revision
+        else
+          memoryConflict = false
+      case none
+        memoryEditing = memoryEditing

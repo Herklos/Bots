@@ -1,0 +1,109 @@
+locale "en-US"
+
+test "the memory tab shows the file and can cancel an edit"
+  size 340x740
+  at "/bot/quiet"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-memory"
+  clock data
+  expect text "panel-tab-memory" == "Memory"
+  expect text "memory-path" == "memory/MEMORY.md"
+  expect text "memory-body" == "Likes tea"
+  tap "memory-edit"
+  expect tree has "memory-draft"
+  type "memory-draft" "Nope"
+  tap "memory-cancel"
+  expect tree missing "memory-draft"
+  expect text "memory-body" == "Likes tea"
+test "saving memory shows the saved note"
+  size 340x740
+  at "/bot/quiet"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-memory"
+  clock data
+  tap "memory-edit"
+  type "memory-draft" "Likes coffee"
+  tap "memory-save"
+  clock data
+  expect tree missing "memory-draft"
+  expect text "memory-body" == "Likes coffee"
+test "a stale revision offers reload and overwrite"
+  size 340x740
+  at "/bot/bea"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-memory"
+  clock data
+  tap "memory-edit"
+  type "memory-draft" "Mine"
+  tap "memory-save"
+  clock data
+  expect text "memory-conflict-text" == "Bea changed this file while you were editing."
+  expect text "memory-server" == "Bot wrote this"
+  tap "memory-overwrite"
+  expect tree has "memory-overwrite-ok"
+  tap "memory-overwrite-cancel"
+  expect tree has "memory-conflict"
+  tap "memory-reload"
+  clock data
+  expect tree missing "memory-conflict"
+  expect tree missing "memory-draft"
+  expect text "memory-body" == "Bot wrote this"
+test "overwrite keeps the text you were editing"
+  size 340x740
+  at "/bot/bea"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-memory"
+  clock data
+  tap "memory-edit"
+  type "memory-draft" "Mine"
+  tap "memory-save"
+  clock data
+  tap "memory-overwrite"
+  tap "memory-overwrite-ok"
+  clock data
+  expect tree missing "memory-conflict"
+  expect text "memory-body" == "Mine"
+test "an empty memory file says so"
+  size 340x740
+  at "/bot/frame"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-memory"
+  clock data
+  expect text "memory-empty" == "Nothing here yet."
+  expect text "memory-path" == "memory/MEMORY.md"
+  expect tree missing "memory-body"
+test "the memory tab says when it cannot open"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  expect tree missing "memory-error"
+  tap "panel-tab-memory"
+  clock data
+  expect tree has "memory-error"
+  expect text "memory-error" == "Can’t open this memory. Check that hbots is running, then try again."
+test "the memory tab says when it cannot open, in French"
+  locale "fr"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-memory"
+  clock data
+  expect text "panel-tab-memory" == "Mémoire"
+  expect text "memory-error" == "Impossible d’ouvrir cette mémoire. Vérifiez qu’hbots tourne, puis réessayez."
+test "arrow keys move from details to memory"
+  size 340x740
+  at "/bot/fixture"
+  clock data
+  tap "panel-toggle"
+  tap "panel-tab-details"
+  expect tree missing "memory-error"
+  type "panel-tab-details" key "ArrowRight"
+  clock data
+  expect tree has "memory-error"
