@@ -11,6 +11,9 @@ members Bots
 
   state groupPolicy = "last"
 
+  // A member slug. Empty unless the policy is chief, and cleared when the members change.
+  state groupChief = ""
+
   state groupPage = "root"
 
   // Group chat has no server row until room_send returns. This is that text, faded, in the log.
@@ -77,6 +80,7 @@ members Bots
     groupMembers = []
     groupStep = "name"
     groupPolicy = "last"
+    groupChief = ""
     nav = push(nav, "/new-group")
 
   action editGroupName(v: string)
@@ -87,9 +91,21 @@ members Bots
 
   action pickGroupPolicy(p: string)
     groupPolicy = p
+    if p == "chief"
+      if not groupMembers.includes(groupChief)
+        groupChief = match first(groupMembers) { case some(s) => s, case none => "" }
+    else
+      groupChief = ""
+
+  action pickGroupChief(m: string)
+    if groupMembers.includes(m)
+      groupChief = m
 
   action toggleGroupMember(m: string)
     groupMembers = groupMembers.includes(m) ? groupMembers.filter(x => x != m) : groupMembers.concat([m])
+    groupChief = ""
+    if groupPolicy == "chief"
+      groupChief = match first(groupMembers) { case some(s) => s, case none => "" }
 
   action groupStepBack
     if groupStep == "face"
@@ -115,7 +131,7 @@ members Bots
 
   action makeGroup
     if canMakeGroup
-      send groupMade = createGroup(groupName.trim(), groupAbout.trim(), "brand.default", "ball", groupMembers.join("\n"), groupPolicy)
+      send groupMade = createGroup(groupName.trim(), groupAbout.trim(), "brand.default", "ball", groupMembers.join("\n"), groupPolicy, groupPolicy == "chief" ? groupChief : "")
 
   action afterGroupMade
     match groupMade

@@ -2,7 +2,7 @@ import type { Answer, Result, Sources, Storage } from './app.contract.d.ts';
 import { when, isGroupLeak, lineOf, stackFaces, initials } from './host/time.ts';
 import { REACH_GATEWAY, noteLocale, say, localize, call, read, fresh, botsBody, roomsBody, noticeHost, setNoticeHost, hostNotice, reply, sentFrom, systemChecked, setSystemChecked, madeFromBot } from './host/gateway.ts';
 import { NOT_IN_VIEW, roomMessage } from './host/markdown.ts';
-import { blankChat, PinRow, fixtureMade, setFixtureMade, fixtureMemberEdits, fixtureMemberRow, fixtureCrowdBots, fixtureSent, fixtureRoomSent, fixtureBotNotify, fixtureRoomNotify, fixtureRoomPolicy, fixtureGroupAnswer, setFixtureGroupAnswer, roomAnswer, wantsNotice, FIXTURE_SUGGESTIONS, fixtureModelList, rememberFixtureModel, savedEffort, fixturePins, quietChatView, fixtureChat, explain } from './host/fixture.ts';
+import { blankChat, PinRow, fixtureMade, setFixtureMade, fixtureMemberEdits, fixtureMemberRow, fixtureCrowdBots, fixtureSent, fixtureRoomSent, fixtureBotNotify, fixtureRoomNotify, fixtureRoomPolicy, fixtureRoomChief, fixtureGroupAnswer, setFixtureGroupAnswer, roomAnswer, roomChief, wantsNotice, FIXTURE_SUGGESTIONS, fixtureModelList, rememberFixtureModel, savedEffort, fixturePins, quietChatView, fixtureChat, explain } from './host/fixture.ts';
 
 // A group on the machine default follows the Settings choice; fixtures use last speaker.
 const effectivePolicy = (policy: string): string => (policy === 'everyone' || policy === 'chief' ? policy : 'last');
@@ -356,6 +356,10 @@ const sources: Sources = {
       fixtureRoomPolicy.set(id, policy);
       return { ok: true, error: '' };
     }
+    if (fixtureRoom && field === 'chief') {
+      fixtureRoomChief.set(id, value.trim());
+      return { ok: true, error: '' };
+    }
     const body = field === 'members'
       ? { members: value === '' ? [] : value.split('\n') }
       : field === 'notifications'
@@ -363,9 +367,10 @@ const sources: Sources = {
         : { [field]: value };
     return reply(await call(store, `/api/rooms/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(body) }));
   },
-  createGroup: async ([title, description, color, shape, members, answerPolicy], store): Promise<Result<'createGroup'>> => {
+  createGroup: async ([title, description, color, shape, members, answerPolicy, chief], store): Promise<Result<'createGroup'>> => {
     const slugs = members === '' ? [] : members.split('\n').filter((s) => s !== '');
     const policy = answerPolicy.trim();
+    const chiefSlug = chief.trim();
     // The contract runner's Bots. A real room still goes to the gateway.
     // The answer policy has to arrive with the name: create already stores one per group.
     if (slugs.length >= 2 && slugs.every((s) => s === 'fixture' || s === 'bea')) {
@@ -375,12 +380,15 @@ const sources: Sources = {
       if (policy !== 'last' && policy !== 'everyone' && policy !== 'chief' && policy !== 'default') {
         return { ok: false, id: '', error: 'Create was missing the answer policy.' };
       }
-      setFixtureMade({ title, description, color, shape, slugs, answerPolicy: policy });
+      if (policy === 'chief' && !slugs.includes(chiefSlug)) {
+        return { ok: false, id: '', error: 'Create was missing the chief.' };
+      }
+      setFixtureMade({ title, description, color, shape, slugs, answerPolicy: policy, chief: policy === 'chief' ? chiefSlug : '' });
       return { ok: true, id: 'fixture', error: '' };
     }
     const r = await call(store, '/api/rooms', {
       method: 'POST',
-      body: JSON.stringify({ title, description, color, shape, members: slugs, answerPolicy: policy }),
+      body: JSON.stringify({ title, description, color, shape, members: slugs, answerPolicy: policy, chief: chiefSlug }),
     });
     return r.ok ? { ok: true, id: String(r.body.id ?? ''), error: '' } : { ok: false, id: '', error: r.error };
   },
@@ -814,7 +822,8 @@ const sources: Sources = {
           messages: fixtureRoomSent.map((m) => roomMessage({ id: m.id, name: 'You', text: m.text, from: 'user' })),
           notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
           answerPolicy: roomAnswer('fixture', fixtureMade?.answerPolicy),
-          answerPolicyEffective: effectivePolicy(roomAnswer('fixture', fixtureMade?.answerPolicy)), chief: '',
+          answerPolicyEffective: effectivePolicy(roomAnswer('fixture', fixtureMade?.answerPolicy)),
+          chief: roomChief('fixture', fixtureMade?.chief ?? ''),
         };
       }
       return {
@@ -830,7 +839,8 @@ const sources: Sources = {
         ],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture')),
         answerPolicy: roomAnswer('fixture', fixtureMade?.answerPolicy),
-          answerPolicyEffective: effectivePolicy(roomAnswer('fixture', fixtureMade?.answerPolicy)), chief: '',
+        answerPolicyEffective: effectivePolicy(roomAnswer('fixture', fixtureMade?.answerPolicy)),
+        chief: roomChief('fixture', fixtureMade?.chief ?? ''),
       };
     }
     if (id === 'fixture-crowd') {
@@ -841,7 +851,8 @@ const sources: Sources = {
         messages: [],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture-crowd')),
         answerPolicy: roomAnswer('fixture-crowd'),
-          answerPolicyEffective: effectivePolicy(roomAnswer('fixture-crowd')), chief: '',
+        answerPolicyEffective: effectivePolicy(roomAnswer('fixture-crowd')),
+        chief: roomChief('fixture-crowd'),
       };
     }
     if (id === 'fixture-busy') {
@@ -858,7 +869,8 @@ const sources: Sources = {
         ],
         notifications: wantsNotice(fixtureRoomNotify.get('fixture-busy')),
         answerPolicy: roomAnswer('fixture-busy'),
-          answerPolicyEffective: effectivePolicy(roomAnswer('fixture-busy')), chief: '',
+        answerPolicyEffective: effectivePolicy(roomAnswer('fixture-busy')),
+        chief: roomChief('fixture-busy'),
       };
     }
     const kept = roomKept.get(id);
@@ -882,7 +894,7 @@ const sources: Sources = {
       notifications: wantsNotice(body.notifications),
       answerPolicy: body.answerPolicy === 'last' || body.answerPolicy === 'everyone' || body.answerPolicy === 'chief' ? body.answerPolicy : 'default',
       answerPolicyEffective: body.answerPolicyEffective === 'everyone' || body.answerPolicyEffective === 'chief' ? body.answerPolicyEffective : 'last',
-      chief: String(body.chief ?? ''),
+      chief: typeof body.chief === 'string' ? body.chief : '',
     };
     roomKept.set(id, { etag: res.etag, view });
     return view;

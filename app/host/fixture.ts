@@ -17,8 +17,8 @@ export type ChatRow = any;
 // The contract runner has no gateway: a small conversation, a writable child and a missing pin.
 // Pins are mutable so a Pin tap can toggle a row without a live gateway.
 // A room the contract runner just created. Null keeps the built-in Design room.
-export let fixtureMade: { title: string; description: string; color: string; shape: string; slugs: string[]; answerPolicy: string } | null = null;
-export function setFixtureMade(value: { title: string; description: string; color: string; shape: string; slugs: string[]; answerPolicy: string } | null) {
+export let fixtureMade: { title: string; description: string; color: string; shape: string; slugs: string[]; answerPolicy: string; chief: string } | null = null;
+export function setFixtureMade(value: { title: string; description: string; color: string; shape: string; slugs: string[]; answerPolicy: string; chief: string } | null) {
   fixtureMade = value;
 }
 // Membership edits the contract runner saves without a gateway. Absent means the room's built-in roster.
@@ -47,6 +47,11 @@ export const fixtureRoomSent: { id: string; text: string }[] = [];
 export const fixtureBotNotify = new Map<string, boolean>();
 export const fixtureRoomNotify = new Map<string, boolean>();
 export const fixtureRoomPolicy = new Map<string, string>();
+export const fixtureRoomChief = new Map<string, string>();
+export function roomChief(id: string, made = ''): string {
+  const saved = fixtureRoomChief.get(id);
+  return saved !== undefined ? saved : made;
+}
 export let fixtureGroupAnswer = '';
 export function setFixtureGroupAnswer(value: string) {
   fixtureGroupAnswer = value;

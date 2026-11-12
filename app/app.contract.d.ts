@@ -11,7 +11,7 @@
 //   confirmPairing: (args: [string, string]) => Reply
 //   copyStorage: (args: [string]) => Reply
 //   createBot: (args: [string, string, string, string]) => Made
-//   createGroup: (args: [string, string, string, string, string, string]) => Made
+//   createGroup: (args: [string, string, string, string, string, string, string]) => Made
 //   createSubagent: (args: [string, string, string, string, string, boolean]) => Reply
 //   deleteBot: (args: [string]) => Reply
 //   deleteGroup: (args: [string]) => Reply
@@ -607,7 +607,7 @@ export interface SourceMap {
   "confirmPairing": { args: [T0, T0]; result: T53 };
   "copyStorage": { args: [T0]; result: T53 };
   "createBot": { args: [T0, T0, T0, T0]; result: T66 };
-  "createGroup": { args: [T0, T0, T0, T0, T0, T0]; result: T66 };
+  "createGroup": { args: [T0, T0, T0, T0, T0, T0, T0]; result: T66 };
   "createSubagent": { args: [T0, T0, T0, T0, T0, T1]; result: T53 };
   "deleteBot": { args: [T0]; result: T53 };
   "deleteGroup": { args: [T0]; result: T53 };

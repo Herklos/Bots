@@ -46,6 +46,7 @@ component GroupPanel
   state about = room.description
   state memberQuery = ""
   derive memberSlugs = room.members.map(m => m.slug)
+  derive chiefSlug = match first(room.members.filter(m => m.slug == room.chief)) { case some(m) => m.slug, case none => match first(room.members) { case some(m) => m.slug, case none => "" } }
   derive candidates = bots.filter(b => not b.hideFromSidebar and not memberSlugs.includes(b.slug))
   derive memberQ = memberQuery.trim().toLowerCase()
   derive shownCandidates = (candidates.length > 6 and memberQ != "") ? candidates.filter(b => b.name.toLowerCase().includes(memberQ) or b.slug.toLowerCase().includes(memberQ)) : candidates
@@ -106,12 +107,16 @@ component GroupPanel
                   button class=ChoiceRow appearance="none" press=patch("answerPolicy", policy) role="radio" aria-checked=(room.answerPolicy == policy) testId=`group-policy-${policy}` background-color=(room.answerPolicy == policy ? "surface.raised" : "transparent")
                     text (policy == "default" ? t("group.policyDefaultNamed", policy=(room.answerPolicyEffective == "everyone" ? t("group.policyEveryone") : room.answerPolicyEffective == "chief" ? t("group.policyChief") : t("group.policyLast"))) : policy == "last" ? t("group.policyLast") : policy == "everyone" ? t("group.policyEveryone") : t("group.policyChief"))
             if room.answerPolicyEffective == "chief"
-              column gap="space.sm"
+              column gap="space.xs" width="100%" min-width=0
                 text t("group.chief") class=SectionLabel
-                column role="radiogroup" aria-label=t("group.chief") gap="space.xs"
+                column role="radiogroup" aria-label=t("group.chief") gap="space.xs" width="100%" min-width=0
                   for m in room.members key=m.slug
-                    button class=ChoiceRow appearance="none" press=patch("chief", m.slug) role="radio" aria-checked=(room.chief == m.slug) testId=`group-chief-${m.slug}` background-color=(room.chief == m.slug ? "surface.raised" : "transparent")
-                      text m.name
+                    button class=ChoiceRow appearance="none" press=patch("chief", m.slug) role="radio" aria-checked=(chiefSlug == m.slug) aria-label=m.name testId=`group-chief-${m.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border="1px solid surface.line" border-radius="radius.md" background-color=(chiefSlug == m.slug ? "surface.raised" : "surface.card")
+                      Avatar(shape=shapeOf(bots, m.slug), color=faceColor(colorOf(bots, m.slug)), state=m.state, size=32, still=(m.state != "working"), presence="")
+                      text m.name font-weight=500 flex=1 min-width=0 text-align="left" overflow-wrap="anywhere"
+                      column width=22 height=22 flex-shrink=0 align-items="center" justify-content="center" border-radius="radius.full" background-color=(chiefSlug == m.slug ? "AccentColor" : "transparent") border=(chiefSlug == m.slug ? "none" : "2px solid surface.line")
+                        if chiefSlug == m.slug
+                          column width=8 height=8 border-radius="radius.full" background-color="ink.dark"
             column gap="space.sm"
               row align-items="center" gap="space.sm"
                 text t("common.bots") class=SectionLabel flex=1

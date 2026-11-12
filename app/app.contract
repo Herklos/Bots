@@ -850,6 +850,18 @@ component Bots
                         column flex=1 gap="2px" min-width=0 align-items="flex-start"
                           text t("group.policyChief") font-weight=600
                           text t("group.policyChiefAbout") color="ink.muted" font="-exact-footnote"
+                      if groupPolicy == "chief"
+                        column gap="space.xs" width="100%" min-width=0
+                          text t("group.chief") class=SectionLabel
+                          column role="radiogroup" aria-label=t("group.chief") gap="space.xs" width="100%" min-width=0
+                            for slug in groupMembers key=slug
+                              for b in pickableBots.filter(x => x.slug == slug) key=b.slug
+                                button class=ChoiceRow appearance="none" press=pickGroupChief(b.slug) role="radio" aria-checked=(groupChief == b.slug) aria-label=b.name testId=`group-chief-${b.slug}` width="100%" box-sizing="border-box" min-height=52 padding="space.sm space.md" border="1px solid surface.line" border-radius="radius.md" background-color=(groupChief == b.slug ? "surface.raised" : "surface.card")
+                                  Avatar(shape=b.shape, color=faceColor(b.color), state="idle", size=32, still=true, presence="")
+                                  text b.name font-weight=500 flex=1 min-width=0 text-align="left" overflow-wrap="anywhere"
+                                  column width=22 height=22 flex-shrink=0 align-items="center" justify-content="center" border-radius="radius.full" background-color=(groupChief == b.slug ? "AccentColor" : "transparent") border=(groupChief == b.slug ? "none" : "2px solid surface.line")
+                                    if groupChief == b.slug
+                                      column width=8 height=8 border-radius="radius.full" background-color="ink.dark"
                   else if groupStep == "kickoff"
                     column gap="space.sm"
                       text t("group.askKickoff") font="-exact-title3" font-weight=600 letter-spacing="-0.3px" role="heading" aria-level=2 testId="step-group-kickoff"
@@ -866,7 +878,10 @@ component Bots
                         button class=SettingsRow appearance="none" press=goGroupStep("policy") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-policy"
                           column flex=1 min-width=0 gap="2px" align-items="flex-start"
                             text t("group.stepPolicy") color="ink.muted" font="-exact-footnote"
-                            text (groupPolicy == "everyone" ? t("group.policyEveryone") : groupPolicy == "chief" ? t("group.policyChief") : t("group.policyLast")) font-weight=600 testId="review-policy"
+                            row gap="space.sm" align-items="baseline" flex-wrap="wrap" min-width=0
+                              text (groupPolicy == "everyone" ? t("group.policyEveryone") : groupPolicy == "chief" ? t("group.policyChief") : t("group.policyLast")) font-weight=600 testId="review-policy" overflow-wrap="anywhere"
+                              if groupPolicy == "chief"
+                                text nameOf(bots, groupChief) testId="review-chief" overflow-wrap="anywhere"
                           Glyph(name="chevron", size=18)
                         button class=SettingsRow appearance="none" press=goGroupStep("kickoff") min-height=56 padding="space.sm space.md" border-top="1px solid surface.line" testId="review-edit-kickoff"
                           column flex=1 min-width=0 gap="2px" align-items="flex-start"

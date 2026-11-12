@@ -1076,7 +1076,7 @@ test "a group's edit page saves who answers"
   tap "group-toggle"
   tap "group-edit"
   expect checked "group-policy-default"
-  expect text "group-policy-default" == "This machine"
+  expect text "group-policy-default" == "Default (Last speaker)"
   expect text "group-policy-last" == "Last speaker"
   tap "group-policy-chief"
   clock data
