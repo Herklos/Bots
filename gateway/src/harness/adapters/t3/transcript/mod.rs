@@ -1,6 +1,11 @@
 mod preview;
 mod project;
+mod renders;
 mod usage;
+
+#[cfg(test)]
+#[path = "renders_tests.rs"]
+mod renders_tests;
 
 #[cfg(test)]
 pub(crate) use usage::turn_token_line;

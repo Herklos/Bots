@@ -304,7 +304,20 @@ pub(crate) fn project_turns(items: &[Value], peers: &Peers, projection: &Value) 
         .rev()
         .find(|r| r["status"].as_str().is_some_and(|s| LIVE.contains(&s)))
         .and_then(|r| r["id"].as_str().map(String::from));
-    json!({ "messages": messages, "events": events, "requests": requests, "working": working || active.is_some(), "activeRunId": active })
+    // Pages are a sibling of messages. Omitting an empty list keeps a transcript
+    // with no page byte-identical to one projected before pages existed.
+    let mut projected = json!({
+        "messages": messages,
+        "events": events,
+        "requests": requests,
+        "working": working || active.is_some(),
+        "activeRunId": active
+    });
+    let pages = super::renders::list(items);
+    if !pages.is_empty() {
+        projected["renders"] = json!(pages);
+    }
+    projected
 }
 
 pub(crate) fn projection_partial(projection: &Value) -> bool {
