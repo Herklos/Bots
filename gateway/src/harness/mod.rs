@@ -6,6 +6,7 @@
 
 mod error;
 mod forks;
+mod search;
 mod snapshot;
 
 pub(crate) mod adapters;
@@ -15,6 +16,7 @@ pub(crate) use forks::{ForkPoint, ForkRequest, Forks, MergeRequest, SideChatRef}
 
 pub(crate) use adapters::t3;
 pub(crate) use error::HarnessError;
+pub(crate) use search::{ThreadHit, ThreadSearch};
 pub(crate) use snapshot::{
     message_id, without_urls, BrowserTab, ComputerCatalog, ComputerLink, Frame, ProvisionedSend,
     ShellSnapshot, ShellThread, ThreadSnapshot, UserMessage,
@@ -208,6 +210,8 @@ pub trait Relay: Send + Sync {
 pub trait Harness: std::fmt::Debug + Send + Sync {
     async fn connected(&self) -> bool;
     fn transcript(&self) -> Result<&dyn Transcript, HarnessError>;
+    /// Conversation search. [`HarnessError::Unsupported`] sends no request.
+    fn thread_search(&self) -> Result<&dyn search::ThreadSearch, HarnessError>;
     fn turns(&self) -> Result<&dyn Turns, HarnessError>;
     fn forks(&self) -> Result<&dyn Forks, HarnessError>;
     fn previews(&self) -> Result<&dyn Previews, HarnessError>;

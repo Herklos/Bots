@@ -100,7 +100,7 @@ fn one_message(message: &Value, routines: &HashSet<String>) -> Option<PageMessag
     })
 }
 
-fn routine_ids(projection: &Value) -> HashSet<String> {
+pub(crate) fn routine_ids(projection: &Value) -> HashSet<String> {
     turn_items(projection)
         .iter()
         .filter_map(|raw| {

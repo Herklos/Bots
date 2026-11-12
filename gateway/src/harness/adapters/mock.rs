@@ -2,13 +2,15 @@
 use crate::harness::{
     Approval, Approvals, Browser, BrowserTab, ComputerCatalog, ForkRequest, Forks, Frame, Harness,
     HarnessError, LaunchThread, MergeRequest, Previews, ProjectInfo, ProvisionedSend, Provisioning,
-    Relay, Repos, Routines, ShellSnapshot, SideChatRef, ThreadSnapshot, Transcript, Turns,
-    UserMessage,
+    Relay, Repos, Routines, ShellSnapshot, SideChatRef, ThreadSearch, ThreadSnapshot, Transcript,
+    Turns, UserMessage,
 };
 use async_trait::async_trait;
 
 mod forks;
+mod search;
 use axum::response::IntoResponse;
+pub(crate) use search::SearchScript;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -51,6 +53,9 @@ pub(crate) struct MockHarness {
     scheduled: Mutex<std::collections::BTreeMap<String, Value>>,
     messages: Mutex<Vec<UserMessage>>,
     approvals: Mutex<Vec<Approval>>,
+    search_script: Mutex<search::SearchScript>,
+    search_calls: Mutex<Vec<(String, u32)>>,
+    thread_reads: Mutex<HashMap<String, usize>>,
 }
 
 #[derive(Debug)]
@@ -66,6 +71,9 @@ impl MockHarness {
             scheduled: Mutex::default(),
             messages: Mutex::default(),
             approvals: Mutex::default(),
+            search_script: Mutex::new(search::SearchScript::Absent),
+            search_calls: Mutex::default(),
+            thread_reads: Mutex::default(),
             tabs: Vec::new(),
             busy: Vec::new(),
             typed: Mutex::new(HashMap::new()),
@@ -167,6 +175,7 @@ fn missing(what: &'static str) -> HarnessError {
 #[async_trait]
 impl Transcript for MockHarness {
     async fn read(&self, thread_id: &str) -> Result<ThreadSnapshot, HarnessError> {
+        self.note_read(thread_id);
         let body = self
             .book()
             .projections
@@ -437,6 +446,10 @@ impl Harness for MockHarness {
     }
 
     fn transcript(&self) -> Result<&dyn Transcript, HarnessError> {
+        Ok(self)
+    }
+
+    fn thread_search(&self) -> Result<&dyn ThreadSearch, HarnessError> {
         Ok(self)
     }
 
