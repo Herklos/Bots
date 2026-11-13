@@ -476,6 +476,8 @@
   "settings.anytype.prepare": "Prepare space",
   "settings.anytype.private": "This space is private.",
   "settings.anytype.ready": "Ready",
+  "settings.anytype.restartHint": "Restart hbots to start syncing this space.",
+  "settings.anytype.importHint": "Review and confirm the first import below.",
   "settings.anytype.missing": "The space {name} is not in the spaces this key can reach.",
   "settings.about": "About",
   "settings.appearance": "Appearance",
