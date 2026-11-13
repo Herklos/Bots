@@ -341,6 +341,7 @@ pub(crate) fn task_row(task: &Value) -> Value {
         "lastRunAt": task["lastRunAt"].as_str().unwrap_or(""),
         "lastStatus": task["lastRunStatus"].as_str().unwrap_or("never"),
         "lastError": task["lastRunError"].as_str().unwrap_or(""),
+        "runtimeMode": task["runtimeMode"].as_str().unwrap_or(""),
         "blocked": task["blockedByPolicy"].is_string(),
         "kind": webhook::kind_of(task),
     });

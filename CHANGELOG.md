@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.2
+
+This release hardens Anytype sync and rounds out the webhook surface.
+
+### New features
+
+- Follow Anytype file changes on the search stream.
+- Show a webhook routine's URL and its last deliveries.
+
+### Improvements
+
+- Harden Anytype sync: tombstones, duplicates, and the local log.
+- Fix the webhook reset task and the management tool count.
+
 ## 0.4.1
 
 This release wires Anytype sync into the gateway and adds webhook routines, alongside activity-level tool display and settings polish.

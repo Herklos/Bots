@@ -149,7 +149,7 @@ fn keep_header(name: &header::HeaderName) -> bool {
         && !name.starts_with("cf-")
 }
 
-fn http_client() -> &'static reqwest::Client {
+pub(crate) fn http_client() -> &'static reqwest::Client {
     static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
     CLIENT.get_or_init(|| {
         reqwest::Client::builder()

@@ -317,6 +317,13 @@
       "classification": "generated"
     },
     {
+      "path": "/api/bots/{slug}/routines/{id}/test",
+      "method": "POST",
+      "tool": "hbots_bot_routine_test",
+      "permission": "write",
+      "classification": "generated"
+    },
+    {
       "path": "/api/bots/{slug}/routines/{id}/deliveries",
       "method": "GET",
       "tool": "hbots_bot_deliveries",

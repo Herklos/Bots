@@ -90,18 +90,119 @@ pub(crate) async fn bot_routine_save(
     require_json(&h)?;
     let bot = require_bot(&s, &slug).await?;
     let body = parse(&body)?;
+    let is_hook = body["kind"].as_str() == Some("webhook");
     let cap =
         crate::bots::runtime_mode::RuntimeMode::cap(s.settings().await["maxRuntimeMode"].as_str());
-    let task = crate::chat::routines::new_routine(
-        &bot,
-        body["title"].as_str().unwrap_or(""),
-        body["kind"].as_str().unwrap_or("hour"),
-        unix_now(),
-        cap,
-    )
-    .map_err(ApiError::bad_request)?;
-    Ok(Json(
-        crate::chat::routines::change(routines(&s)?, &s.routine_history, "upsert", task).await?,
+    let mut task = if is_hook {
+        crate::chat::routines::webhook::new_webhook_routine(&bot, &body, unix_now())
+            .map_err(ApiError::bad_request)?
+    } else {
+        crate::chat::routines::new_routine(
+            &bot,
+            body["title"].as_str().unwrap_or(""),
+            body["kind"].as_str().unwrap_or("hour"),
+            unix_now(),
+            cap,
+        )
+        .map_err(ApiError::bad_request)?
+    };
+    crate::chat::routines::clamp_task_mode(&mut task, cap);
+    let saved =
+        crate::chat::routines::change(routines(&s)?, &s.routine_history, "upsert", task).await?;
+    let task = saved.get("task").cloned().unwrap_or_else(|| saved.clone());
+    let mut out = json!({ "ok": true, "task": crate::chat::routines::task_row(&task) });
+    // The address is returned only here, on create, and on the hook routes.
+    if is_hook {
+        let settings = s.settings().await;
+        out["hook"] =
+            crate::chat::routines::inspect::hook_view(&task, &settings, &s.remote);
+    }
+    Ok(Json(out))
+}
+
+/// Local self-delivery for the URL card's Test button. The sample body goes to
+/// T3's hook endpoint with this machine's own URL, so it behaves like an outside
+/// sender. The secret is signed into a header and then dropped: it is not stored.
+pub(crate) async fn bot_routine_test(
+    State(s): S,
+    Path((slug, id)): Path<(String, String)>,
+    h: HeaderMap,
+    body: Bytes,
+) -> ApiResult<Json<Value>> {
+    require_json(&h)?;
+    let task = owned_task(&s, &slug, &id).await?;
+    require_webhook(&task)?;
+    let input = parse(&body)?;
+    let payload = match input.get("body") {
+        Some(Value::String(text)) => text,
+        None => return Err(ApiError::bad_request("Give the test a sample body.")),
+        Some(_) => return Err(ApiError::bad_request("A test body is text.")),
+    };
+    if payload.len() > super::hooks_api::BODY_LIMIT {
+        return Err(ApiError::bad_request("A test body is at most 1 MiB."));
+    }
+    let signature = match secret_of(&input) {
+        None => None,
+        // A secret typed here is used once for this request and then dropped.
+        Some(secret) => Some(sign(&task, payload.as_bytes(), secret.as_bytes())?),
+    };
+    let Some(path) = task["webhook"]["path"].as_str().filter(|p| !p.is_empty()) else {
+        return Err(ApiError::bad_request("This routine has no address yet."));
+    };
+    let base = s.cfg.t3_url.trim_end_matches('/');
+    let url = format!("{base}{path}");
+    let mut request = super::hooks_api::http_client()
+        .post(&url)
+        .header(header::CONTENT_TYPE, "application/json");
+    if let Some((name, value)) = &signature {
+        request = request.header(name.as_str(), value.as_str());
+    }
+    // The reqwest error can quote the token URL, so it is discarded.
+    let outcome = request
+        .body(payload.as_bytes().to_vec())
+        .send()
+        .await
+        .map_err(|_| ApiError::new(502, "T3 did not take the delivery."))?;
+    let ok = outcome.status().is_success();
+    let made = outcome
+        .headers()
+        .get("x-t3-hook-outcome")
+        .and_then(|value| value.to_str().ok())
+        .unwrap_or(if ok { "accepted" } else { "" })
+        .to_string();
+    let _ = outcome.bytes().await;
+    Ok(Json(json!({ "ok": ok, "outcome": made })))
+}
+
+fn secret_of(input: &Value) -> Option<String> {
+    match input.get("secret") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(secret)) if secret.is_empty() => None,
+        Some(Value::String(secret)) => Some(secret.clone()),
+        Some(_) => None,
+    }
+}
+
+/// Plain HMAC-SHA256 over the raw body, encoded the way the task's signature says.
+fn sign(task: &Value, payload: &[u8], secret: &[u8]) -> ApiResult<(String, String)> {
+    use hmac::Mac;
+    use base64::Engine;
+    let sig = &task["schedule"]["signature"];
+    let Some(header) = sig["header"].as_str().filter(|h| !h.is_empty()) else {
+        return Err(ApiError::bad_request("This webhook has no signature check."));
+    };
+    let mut mac = <hmac::Hmac<sha2::Sha256>>::new_from_slice(secret)
+        .map_err(|_| ApiError::bad_request("A signing secret is text."))?;
+    mac.update(payload);
+    let digest = mac.finalize().into_bytes();
+    let raw = match sig["encoding"].as_str().unwrap_or("hex") {
+        "base64" => base64::engine::general_purpose::STANDARD.encode(digest),
+        _ => hex::encode(digest),
+    };
+    let prefix = sig["prefix"].as_str().unwrap_or("");
+    Ok((
+        header.to_ascii_lowercase(),
+        format!("{prefix}{raw}"),
     ))
 }
 

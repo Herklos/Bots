@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "hbots gateway application API",
-    "version": "0.4.1",
+    "version": "0.4.2",
     "description": "Generated from the application operation registry. Infrastructure endpoints are excluded. MCP uses the same operations through /mcp with dedicated bearer credentials."
   },
   "paths": {
@@ -2907,7 +2907,8 @@
                       "hour",
                       "day",
                       "once",
-                      "interval"
+                      "interval",
+                      "webhook"
                     ]
                   }
                 },
@@ -3265,6 +3266,94 @@
             "applicationSession": []
           }
         ]
+      }
+    },
+    "/api/bots/{slug}/routines/{id}/test": {
+      "post": {
+        "operationId": "hbots_bot_routine_test",
+        "summary": "POST /api/bots/{slug}/routines/{id}/test",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "x-hbots-permission": "write",
+        "responses": {
+          "200": {
+            "description": "Original gateway operation result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                  "x-hbots-dynamic": true
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Gateway error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "applicationSession": []
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "body": {
+                    "type": "string"
+                  },
+                  "secret": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "body"
+                ],
+                "additionalProperties": true
+              }
+            }
+          }
+        }
       }
     },
     "/api/bots/{slug}/routines/{id}/deliveries": {

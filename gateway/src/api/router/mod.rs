@@ -115,6 +115,7 @@ pub(crate) fn application_routes() -> (
     route!("/api/bots/{slug}/routines/run", post(bot_routine_run));
     route!("/api/bots/{slug}/routines/{id}/hook", get(bot_hook));
     route!("/api/bots/{slug}/routines/{id}/rotate", post(bot_rotate));
+    route!("/api/bots/{slug}/routines/{id}/test", post(bot_routine_test));
     route!(
         "/api/bots/{slug}/routines/{id}/deliveries",
         get(bot_deliveries)

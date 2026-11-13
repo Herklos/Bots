@@ -171,9 +171,19 @@ impl Operation {
             "hbots_bot_routine_save" => object(
                 &[
                     ("title", string()),
-                    ("kind", enumeration(&["hour", "day", "once", "interval"])),
+                    (
+                        "kind",
+                        enumeration(&["hour", "day", "once", "interval", "webhook"]),
+                    ),
                 ],
                 &[],
+            ),
+            "hbots_bot_routine_test" => object(
+                &[
+                    ("body", string()),
+                    ("secret", json!({"type": ["string", "null"]})),
+                ],
+                &["body"],
             ),
             "hbots_bot_routine_enabled" | "hbots_routines_enabled" => {
                 object(&[("id", string()), ("enabled", boolean())], &["id"])

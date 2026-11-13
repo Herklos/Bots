@@ -4737,7 +4737,8 @@
                   "hour",
                   "day",
                   "once",
-                  "interval"
+                  "interval",
+                  "webhook"
                 ]
               }
             },
@@ -5348,6 +5349,142 @@
           "path"
         ],
         "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer",
+                "minimum": 200,
+                "maximum": 299
+              },
+              "body": {
+                "description": "Original gateway response with domain and provider extension fields. Preserved without transport-specific projection.",
+                "x-hbots-dynamic": true
+              }
+            },
+            "required": [
+              "status",
+              "body"
+            ],
+            "additionalProperties": true
+          },
+          {
+            "type": "object",
+            "properties": {
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "details": {
+                    "description": "Original structured gateway error details when available.",
+                    "x-hbots-dynamic": true
+                  }
+                },
+                "required": [
+                  "code",
+                  "message"
+                ],
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "error"
+            ],
+            "additionalProperties": true
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false,
+        "destructiveHint": true,
+        "openWorldHint": true
+      }
+    },
+    {
+      "name": "hbots_bot_routine_test",
+      "description": "POST /api/bots/{slug}/routines/{id}/test. Required permission: write. Supply API parameters in path/query and the JSON request in body.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "object",
+            "properties": {
+              "slug": {
+                "type": "string",
+                "minLength": 1
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "slug",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "query": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "body": {
+            "type": "object",
+            "properties": {
+              "body": {
+                "type": "string"
+              },
+              "secret": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "body"
+            ],
+            "additionalProperties": true
+          },
+          "bodyBase64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "description": "Raw bytes instead of JSON body. JSON content is validated against the body schema after decoding."
+          },
+          "contentType": {
+            "type": "string",
+            "default": "application/json"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false,
+        "not": {
+          "required": [
+            "body",
+            "bodyBase64"
+          ]
+        }
       },
       "outputSchema": {
         "type": "object",

@@ -58,6 +58,8 @@ mod rooms_api;
 mod router;
 mod routines_api;
 #[cfg(test)]
+mod routines_create_tests;
+#[cfg(test)]
 mod routines_inspect_tests;
 #[cfg(test)]
 mod runtime_mode_tests;
