@@ -46,7 +46,7 @@ function detailOf(row: any) {
   };
 }
 
-export const webhookSources: Pick<Sources, 'readHook' | 'rotateHook' | 'loadDeliveries' | 'loadDelivery'> = {
+export const webhookSources: Pick<Sources, 'readHook' | 'rotateHook' | 'loadDeliveries' | 'loadDelivery' | 'saveRoutine' | 'saveWebhookRoutine' | 'testWebhookRoutine'> = {
   readHook: async ([slug, id, locale], store): Promise<Result<'readHook'>> => {
     noteLocale(locale);
     if (slug === 'fixture') {
