@@ -1,4 +1,4 @@
-//! The hb_device heartbeat against the mock: register twice is one object, and the
+//! The m_device heartbeat against the mock: register twice is one object, and the
 //! peers list names the other devices without this one.
 
 use super::support::World;
@@ -7,7 +7,7 @@ use crate::storage::adapters::anytype::client::AnytypeClient;
 #[tokio::test]
 async fn registering_twice_publishes_one_device_and_lists_peers() {
     let world = World::start("device-heartbeat").await;
-    world.mock.seed_named("hb_device", "hb_device");
+    world.mock.seed_named("m_device", "m_device");
     let client = AnytypeClient::new(&world.rig.url, world.rig.device.clone(), "space").unwrap();
 
     super::super::device::register(&client, "device-heartbeat", "mac.example", "0.4.0")
@@ -19,31 +19,31 @@ async fn registering_twice_publishes_one_device_and_lists_peers() {
 
     let rows = client
         .search(&serde_json::json!({
-            "type": "hb_device",
-            "fields": ["id", "hb_slug", "hb_hostname", "hb_last_seen"],
+            "type": "m_device",
+            "fields": ["id", "m_slug", "m_hostname", "m_last_seen"],
         }))
         .await
         .unwrap();
     let own: Vec<&serde_json::Value> = rows
         .iter()
-        .filter(|row| row["properties"]["hb_slug"].as_str() == Some("device-heartbeat"))
+        .filter(|row| row["properties"]["m_slug"].as_str() == Some("device-heartbeat"))
         .collect();
     assert_eq!(own.len(), 1, "register twice must not duplicate: {rows:?}");
-    assert_eq!(own[0]["properties"]["hb_hostname"], "mac.example");
-    assert!(own[0]["properties"]["hb_last_seen"].as_i64().unwrap_or(0) > 0);
+    assert_eq!(own[0]["properties"]["m_hostname"], "mac.example");
+    assert!(own[0]["properties"]["m_last_seen"].as_i64().unwrap_or(0) > 0);
 
     // Another gateway on another machine: a peer, never this device.
     client
         .create_object(
             &serde_json::json!({
-                "type": "hb_device",
+                "type": "m_device",
                 "name": "other-device",
                 "properties": {
-                    "hb_slug": "other-device",
-                    "hb_hostname": "second.example",
-                    "hb_gateway_version": "0.4.0",
-                    "hb_status": "online",
-                    "hb_last_seen": 1_000,
+                    "m_slug": "other-device",
+                    "m_hostname": "second.example",
+                    "m_gateway_version": "0.4.0",
+                    "m_status": "online",
+                    "m_last_seen": 1_000,
                 },
             }),
             "device-heartbeat-peer",

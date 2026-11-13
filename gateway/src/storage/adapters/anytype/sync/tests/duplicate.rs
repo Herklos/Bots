@@ -1,7 +1,7 @@
 use super::support::{files_with_path, remote_body, seed, World};
 
 #[tokio::test]
-async fn duplicate_hb_path_keeps_the_earliest_object() {
+async fn duplicate_m_path_keeps_the_earliest_object() {
     let mut world = World::start("dev-dup").await;
     world.live().await;
     let path = "ada/memory/dup.md";

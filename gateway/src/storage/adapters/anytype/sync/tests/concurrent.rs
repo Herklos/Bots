@@ -2,7 +2,7 @@
 //! findable after both sides go quiet, and the folders agree or a conflict is open.
 
 use super::super::sha256_hex;
-use super::support::{api, hb_files, read_rel, remote_body, write_rel, Rig};
+use super::support::{api, m_files, read_rel, remote_body, write_rel, Rig};
 use crate::storage::adapters::anytype::tests::mock::Mock;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -67,8 +67,8 @@ async fn two_engines_keep_every_acknowledged_write() {
     }
     let conflicts = api(&mock.url)
         .search(&serde_json::json!({
-            "type": "hb_conflict",
-            "fields": ["hb_path", "hb_conflict_state", "hb_copy_a", "hb_copy_b"],
+            "type": "m_conflict",
+            "fields": ["m_path", "m_conflict_state", "m_copy_a", "m_copy_b"],
         }))
         .await
         .unwrap();
@@ -81,10 +81,10 @@ async fn two_engines_keep_every_acknowledged_write() {
                 "{path} diverged without a conflict"
             );
         }
-        let copies = hb_files(&mock.url)
+        let copies = m_files(&mock.url)
             .await
             .into_iter()
-            .filter(|row| row["properties"]["hb_path"].as_str() == Some(path.as_str()))
+            .filter(|row| row["properties"]["m_path"].as_str() == Some(path.as_str()))
             .count();
         assert!(copies <= 1, "{path} has {copies} objects");
     }
@@ -119,18 +119,18 @@ async fn harvest(mock: &Mock, rigs: &[Rig; 2]) -> BTreeSet<String> {
         collect(rig.root.path(), &mut bag);
         collect(rig.sync_dir.path(), &mut bag);
     }
-    for row in hb_files(&mock.url).await {
+    for row in m_files(&mock.url).await {
         bag.insert(sha256_hex(&remote_body(&mock.url, &row).await));
     }
     let conflicts = api(&mock.url)
         .search(&serde_json::json!({
-            "type": "hb_conflict",
-            "fields": ["hb_path", "hb_conflict_state", "hb_copy_a", "hb_copy_b"],
+            "type": "m_conflict",
+            "fields": ["m_path", "m_conflict_state", "m_copy_a", "m_copy_b"],
         }))
         .await
         .unwrap();
     for row in conflicts {
-        for key in ["hb_copy_a", "hb_copy_b"] {
+        for key in ["m_copy_a", "m_copy_b"] {
             let Some(id) = row["properties"][key]
                 .as_array()
                 .and_then(|ids| ids.first())
@@ -164,7 +164,7 @@ fn open_conflict(rigs: &[Rig; 2], conflicts: &[Value], path: &str) -> bool {
     rigs.iter()
         .any(|rig| rig.engine.conflict_for(path).is_some())
         || conflicts.iter().any(|row| {
-            row["properties"]["hb_path"].as_str() == Some(path)
-                && row["properties"]["hb_conflict_state"].as_str() == Some("open")
+            row["properties"]["m_path"].as_str() == Some(path)
+                && row["properties"]["m_conflict_state"].as_str() == Some("open")
         })
 }

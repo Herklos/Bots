@@ -1,5 +1,5 @@
-//! Object bodies for `hb_file`. Text at most 256 KiB stays in `hb_content`.
-//! Anything larger, or any byte that is not UTF-8, goes up as a file and `hb_blob` holds its id.
+//! Object bodies for `m_file`. Text at most 256 KiB stays in `m_content`.
+//! Anything larger, or any byte that is not UTF-8, goes up as a file and `m_blob` holds its id.
 
 use super::outbox::Op;
 use super::sha256_hex;
@@ -97,25 +97,25 @@ pub(super) fn file_properties(
         Some(_) | None => json!([]),
     };
     json!({
-        "hb_path": rel,
-        "hb_dir": dir_of(rel),
-        "hb_content": content,
-        "hb_sha": sha,
-        "hb_size": if deleted { 0 } else { size },
-        "hb_mime": mime_of(rel, text),
-        "hb_mtime": mtime_ns / 1_000_000_000,
-        "hb_deleted": deleted,
-        "hb_owner_bot": owner(rel),
-        "hb_device": device,
-        "hb_rev": rev,
-        "hb_blob": blob_value,
+        "m_path": rel,
+        "m_dir": dir_of(rel),
+        "m_content": content,
+        "m_sha": sha,
+        "m_size": if deleted { 0 } else { size },
+        "m_mime": mime_of(rel, text),
+        "m_mtime": mtime_ns / 1_000_000_000,
+        "m_deleted": deleted,
+        "m_owner_bot": owner(rel),
+        "m_device": device,
+        "m_rev": rev,
+        "m_blob": blob_value,
     })
 }
 
 pub(super) fn create_body(properties: Value) -> Value {
     json!({
-        "type": "hb_file",
-        "name": properties["hb_path"].as_str().unwrap_or(""),
+        "type": "m_file",
+        "name": properties["m_path"].as_str().unwrap_or(""),
         "properties": properties,
     })
 }

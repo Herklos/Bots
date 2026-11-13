@@ -1,5 +1,5 @@
 //! An open conflict keeps the local file, writes the remote bytes beside it, and
-//! records both copies on an `hb_conflict` object. The path stays frozen until resolved.
+//! records both copies on an `m_conflict` object. The path stays frozen until resolved.
 
 use super::super::client::{AnytypeClient, AnytypeError};
 use super::error::SyncError;
@@ -210,19 +210,19 @@ pub(super) async fn publish(
     let copy_a = upload_copy(client, device_id, rel, "a", local_sha, local).await?;
     let copy_b = upload_copy(client, device_id, rel, "b", remote_sha, remote).await?;
     let properties = json!({
-        "hb_path": rel,
-        "hb_owner_bot": payload::owner(rel),
-        "hb_conflict_state": "open",
-        "hb_device_a": device_id,
-        "hb_device_b": "",
-        "hb_sha_a": local_sha,
-        "hb_sha_b": remote_sha,
-        "hb_copy_a": [copy_a],
-        "hb_copy_b": [copy_b],
-        "hb_detected_at": unix_ms(),
+        "m_path": rel,
+        "m_owner_bot": payload::owner(rel),
+        "m_conflict_state": "open",
+        "m_device_a": device_id,
+        "m_device_b": "",
+        "m_sha_a": local_sha,
+        "m_sha_b": remote_sha,
+        "m_copy_a": [copy_a],
+        "m_copy_b": [copy_b],
+        "m_detected_at": unix_ms(),
     });
     let body = json!({
-        "type": "hb_conflict",
+        "type": "m_conflict",
         "name": rel,
         "properties": properties,
     });
@@ -241,7 +241,7 @@ pub(super) async fn mark(
     let body = json!({
         "ops": [{
             "op": "set_properties",
-            "set": {"hb_conflict_state": state.as_str()},
+            "set": {"m_conflict_state": state.as_str()},
         }],
     });
     let key = outbox::idem_key(
@@ -285,18 +285,18 @@ pub(super) fn state_of(text: &str) -> ConflictState {
 async fn find_open(client: &AnytypeClient, rel: &str) -> Result<Option<String>, AnytypeError> {
     let rows = client
         .search(&json!({
-            "type": "hb_conflict",
-            "fields": ["hb_path", "hb_conflict_state"],
+            "type": "m_conflict",
+            "fields": ["m_path", "m_conflict_state"],
         }))
         .await?;
     for row in rows {
         let path = row
             .get("properties")
-            .and_then(|props| props.get("hb_path"))
+            .and_then(|props| props.get("m_path"))
             .and_then(Value::as_str);
         let state = row
             .get("properties")
-            .and_then(|props| props.get("hb_conflict_state"))
+            .and_then(|props| props.get("m_conflict_state"))
             .and_then(Value::as_str)
             .unwrap_or("open");
         if path == Some(rel) && state == "open" {

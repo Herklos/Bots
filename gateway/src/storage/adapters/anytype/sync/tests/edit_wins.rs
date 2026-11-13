@@ -14,14 +14,14 @@ async fn local_edit_wins_over_a_remote_tombstone() {
         .to_string();
     assert!(world.mock.peer_write(
         &id,
-        json!({"hb_deleted": true, "hb_content": "", "hb_sha": ""}),
+        json!({"m_deleted": true, "m_content": "", "m_sha": ""}),
         false,
     ));
     world.write(path, b"kept\n");
     world.rig.until_quiet().await;
     let rows = files_with_path(&world.mock.url, path).await;
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0]["properties"]["hb_deleted"], false);
+    assert_eq!(rows[0]["properties"]["m_deleted"], false);
     assert_eq!(remote_body(&world.mock.url, &rows[0]).await, b"kept\n");
 }
 

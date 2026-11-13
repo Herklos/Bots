@@ -33,14 +33,14 @@ async fn a_patch_replay_does_not_apply_twice() {
     let api = AnytypeClient::new(&mock.url, "k", "space-1").unwrap();
     let created = api
         .create_object(
-            &json!({"type": "page", "name": "Note", "properties": {"hb_rev": 1}}),
+            &json!({"type": "page", "name": "Note", "properties": {"m_rev": 1}}),
             "create-1",
         )
         .await
         .unwrap();
     let id = created["id"].as_str().unwrap();
     let etag = created["etag"].as_str().unwrap();
-    let body = json!({"ops": [{"op": "set_properties", "set": {"hb_rev": 2}}]});
+    let body = json!({"ops": [{"op": "set_properties", "set": {"m_rev": 2}}]});
     let first = api
         .patch_object(id, &body, Some(etag), "patch-key")
         .await
@@ -52,7 +52,7 @@ async fn a_patch_replay_does_not_apply_twice() {
     assert_eq!(first["etag"], second["etag"]);
     let fetched = api.get_object(id).await.unwrap();
     assert_eq!(fetched["etag"], first["etag"]);
-    assert_eq!(fetched["properties"]["hb_rev"], 2);
+    assert_eq!(fetched["properties"]["m_rev"], 2);
 }
 
 #[tokio::test]

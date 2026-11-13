@@ -17,7 +17,7 @@ async fn a_fresh_tombstone_stays_searchable() {
     world.rig.until_quiet().await;
     let rows = files_with_path(&world.mock.url, path).await;
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0]["properties"]["hb_deleted"], true);
+    assert_eq!(rows[0]["properties"]["m_deleted"], true);
 }
 
 #[tokio::test]

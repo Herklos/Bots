@@ -9,9 +9,9 @@ async fn a_peer_write_is_last_writer_wins_per_property() {
     let created = api
         .create_object(
             &json!({
-                "type": "hb_file",
+                "type": "m_file",
                 "name": "ada/memory/MEMORY.md",
-                "properties": {"hb_content": "old", "hb_sha": "aaa"},
+                "properties": {"m_content": "old", "m_sha": "aaa"},
             }),
             "create-1",
         )
@@ -19,11 +19,11 @@ async fn a_peer_write_is_last_writer_wins_per_property() {
         .unwrap();
     let id = created["id"].as_str().unwrap();
 
-    assert!(mock.peer_write(id, json!({"hb_content": "one"}), false));
-    assert!(mock.peer_write(id, json!({"hb_sha": "bbb"}), false));
+    assert!(mock.peer_write(id, json!({"m_content": "one"}), false));
+    assert!(mock.peer_write(id, json!({"m_sha": "bbb"}), false));
     let doc = api.get_object(id).await.unwrap();
-    assert_eq!(doc["properties"]["hb_content"], "one");
-    assert_eq!(doc["properties"]["hb_sha"], "bbb");
+    assert_eq!(doc["properties"]["m_content"], "one");
+    assert_eq!(doc["properties"]["m_sha"], "bbb");
     assert!(doc.get("last_modified_date").is_some());
 }
 
@@ -34,17 +34,17 @@ async fn a_torn_peer_write_keeps_the_old_sha() {
     let created = api
         .create_object(
             &json!({
-                "type": "hb_file",
+                "type": "m_file",
                 "name": "ada/memory/MEMORY.md",
-                "properties": {"hb_content": "old", "hb_sha": "aaa"},
+                "properties": {"m_content": "old", "m_sha": "aaa"},
             }),
             "create-1",
         )
         .await
         .unwrap();
     let id = created["id"].as_str().unwrap();
-    assert!(mock.peer_write(id, json!({"hb_content": "torn", "hb_sha": "ccc"}), true));
+    assert!(mock.peer_write(id, json!({"m_content": "torn", "m_sha": "ccc"}), true));
     let doc = api.get_object(id).await.unwrap();
-    assert_eq!(doc["properties"]["hb_content"], "torn");
-    assert_eq!(doc["properties"]["hb_sha"], "aaa");
+    assert_eq!(doc["properties"]["m_content"], "torn");
+    assert_eq!(doc["properties"]["m_sha"], "aaa");
 }

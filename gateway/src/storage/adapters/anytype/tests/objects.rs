@@ -12,13 +12,13 @@ async fn archive_leaves_search_and_restore_brings_it_back() {
     let api = client(&mock);
     let created = api
         .create_object(
-            &json!({"type": "hb_file", "name": "ada/memory/MEMORY.md", "markdown": "# H\n\nbody"}),
+            &json!({"type": "m_file", "name": "ada/memory/MEMORY.md", "markdown": "# H\n\nbody"}),
             "create-1",
         )
         .await
         .unwrap();
     let id = created["id"].as_str().unwrap();
-    assert_eq!(created["type"], "hb_file");
+    assert_eq!(created["type"], "m_file");
     assert!(created["etag"].is_string());
     let before = api.get_object(id).await.unwrap();
     assert_eq!(before["blocks"][0]["text"], "# H\n\nbody");
@@ -37,7 +37,7 @@ async fn archive_leaves_search_and_restore_brings_it_back() {
     let refused = api
         .patch_object(
             id,
-            &json!({"ops": [{"op": "set_properties", "set": {"hb_rev": 2}}]}),
+            &json!({"ops": [{"op": "set_properties", "set": {"m_rev": 2}}]}),
             Some(fetched["etag"].as_str().unwrap()),
             "patch-archived",
         )
@@ -62,9 +62,9 @@ async fn patch_ops_round_trip_and_a_missing_find_is_gone() {
     let created = api
         .create_object(
             &json!({
-                "type": "hb_file",
+                "type": "m_file",
                 "name": "note",
-                "properties": {"hb_content": "old", "hb_sha": "aaa"},
+                "properties": {"m_content": "old", "m_sha": "aaa"},
                 "markdown": "hello",
             }),
             "create-1",
@@ -78,7 +78,7 @@ async fn patch_ops_round_trip_and_a_missing_find_is_gone() {
         .patch_object(
             id,
             &json!({"ops": [
-                {"op": "set_properties", "set": {"hb_content": "new"}, "unset": ["hb_sha"]},
+                {"op": "set_properties", "set": {"m_content": "new"}, "unset": ["m_sha"]},
                 {"op": "insert_blocks", "blocks": [{"type": "paragraph", "text": "tail"}]},
                 {"op": "replace_text", "find": "hello", "replace": "world"},
             ]}),
@@ -91,8 +91,8 @@ async fn patch_ops_round_trip_and_a_missing_find_is_gone() {
     assert!(patched["created_blocks"]["0"].is_string());
 
     let fetched = api.get_object(id).await.unwrap();
-    assert_eq!(fetched["properties"]["hb_content"], "new");
-    assert!(fetched["properties"].get("hb_sha").is_none());
+    assert_eq!(fetched["properties"]["m_content"], "new");
+    assert!(fetched["properties"].get("m_sha").is_none());
     assert!(fetched["markdown"].is_null());
     assert!(fetched["blocks"]
         .as_array()
@@ -126,7 +126,7 @@ async fn a_stale_if_match_returns_the_current_etag_from_the_message() {
     match api
         .patch_object(
             id,
-            &json!({"ops": [{"op": "set_properties", "set": {"hb_rev": 1}}]}),
+            &json!({"ops": [{"op": "set_properties", "set": {"m_rev": 1}}]}),
             Some("00000000"),
             "stale",
         )

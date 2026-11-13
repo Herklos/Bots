@@ -22,9 +22,9 @@ fn declared_keys_have_no_digits() {
     for table in TABLES {
         assert!(table.key.chars().all(|c| !c.is_ascii_digit()));
     }
-    assert!(table::option_allowed("hb_conflict_state", "open"));
-    assert!(!table::option_allowed("hb_conflict_state", "later"));
-    assert!(!table::option_allowed("hb_sha", "open"));
+    assert!(table::option_allowed("m_conflict_state", "open"));
+    assert!(!table::option_allowed("m_conflict_state", "later"));
+    assert!(!table::option_allowed("m_sha", "open"));
 }
 
 #[tokio::test]
@@ -58,21 +58,21 @@ async fn bootstrap_twice_is_a_no_op() {
     assert!(schema_ready(&api).await.unwrap());
 
     let rows = api
-        .search(&json!({ "type": "hb_meta", "query": "hb_meta" }))
+        .search(&json!({ "type": "m_meta", "query": "m_meta" }))
         .await
         .unwrap();
     let id = rows[0]["id"].as_str().unwrap();
     let fetched = api.get_object(id).await.unwrap();
     api.patch_object(
         id,
-        &json!({ "ops": [{ "op": "set_properties", "set": { "hb_note": "extra" } }] }),
+        &json!({ "ops": [{ "op": "set_properties", "set": { "m_note": "extra" } }] }),
         Some(fetched["etag"].as_str().unwrap()),
         "note-1",
     )
     .await
     .unwrap();
     let rows = api
-        .search(&json!({ "type": "hb_meta", "query": "hb_meta" }))
+        .search(&json!({ "type": "m_meta", "query": "m_meta" }))
         .await
         .unwrap();
     let fetched = api.get_object(rows[0]["id"].as_str().unwrap()).await.unwrap();
@@ -84,7 +84,7 @@ async fn bootstrap_twice_is_a_no_op() {
     let state = api.list_properties().await.unwrap();
     let conflict = state
         .iter()
-        .find(|row| row["key"] == "hb_conflict_state")
+        .find(|row| row["key"] == "m_conflict_state")
         .unwrap();
     assert_eq!(conflict["format"], "select");
     assert!(conflict.get("options").is_none());
@@ -103,7 +103,7 @@ async fn a_missing_property_is_the_only_create() {
         .unwrap();
     }
     for column in COLUMNS {
-        if column.key == "hb_mime" {
+        if column.key == "m_mime" {
             continue;
         }
         api.create_property(
@@ -115,7 +115,7 @@ async fn a_missing_property_is_the_only_create() {
     }
     let report = bootstrap(&api, false).await.unwrap();
     assert!(report.types.is_empty());
-    assert_eq!(report.properties, vec!["hb_mime".to_string()]);
+    assert_eq!(report.properties, vec!["m_mime".to_string()]);
     let again = bootstrap(&api, false).await.unwrap();
     assert!(again.properties.is_empty());
 }
@@ -154,40 +154,40 @@ async fn a_type_without_its_property_definitions_is_repaired() {
     let after = bootstrap(&api, true).await.unwrap();
     assert!(after.schema_ready);
     assert!(after.properties.is_empty());
-    let file_type = api.get_type("hb_file").await.unwrap();
+    let file_type = api.get_type("m_file").await.unwrap();
     let names: Vec<&str> = file_type["blocks"][0]["properties"]
         .as_array()
         .unwrap()
         .iter()
         .filter_map(|property| property["property"].as_str())
         .collect();
-    assert!(names.contains(&"hb_path"));
-    assert!(names.contains(&"hb_sha"));
+    assert!(names.contains(&"m_path"));
+    assert!(names.contains(&"m_sha"));
 }
 
 #[tokio::test]
-async fn a_drifted_key_is_kept_in_hb_keys_json() {
+async fn a_drifted_key_is_kept_in_m_keys_json() {
     let mock = Mock::start().await;
-    mock.rewrite_key("hb_sha", "hb_sha_kept");
+    mock.rewrite_key("m_sha", "m_sha_kept");
     let api = client(&mock);
     let report = bootstrap(&api, false).await.unwrap();
     assert_eq!(
-        report.keys.get("hb_sha").map(String::as_str),
-        Some("hb_sha_kept")
+        report.keys.get("m_sha").map(String::as_str),
+        Some("m_sha_kept")
     );
     let properties = api.list_properties().await.unwrap();
-    assert!(properties.iter().any(|row| row["key"] == "hb_sha_kept"));
-    assert!(!properties.iter().any(|row| row["key"] == "hb_sha"));
+    assert!(properties.iter().any(|row| row["key"] == "m_sha_kept"));
+    assert!(!properties.iter().any(|row| row["key"] == "m_sha"));
     let rows = api
-        .search(&json!({ "type": "hb_meta", "query": "hb_meta" }))
+        .search(&json!({ "type": "m_meta", "query": "m_meta" }))
         .await
         .unwrap();
     let fetched = api.get_object(rows[0]["id"].as_str().unwrap()).await.unwrap();
     let stored: BTreeMap<String, String> =
-        serde_json::from_str(fetched["properties"]["hb_keys_json"].as_str().unwrap()).unwrap();
+        serde_json::from_str(fetched["properties"]["m_keys_json"].as_str().unwrap()).unwrap();
     assert_eq!(
-        stored.get("hb_sha").map(String::as_str),
-        Some("hb_sha_kept")
+        stored.get("m_sha").map(String::as_str),
+        Some("m_sha_kept")
     );
     let before = properties.len();
     let second = bootstrap(&api, false).await.unwrap();
@@ -202,7 +202,7 @@ async fn a_fresh_space_never_searches_by_unknown_keys() {
     let mock = Mock::start().await;
     let api = client(&mock);
     let unknown_type = api
-        .search(&json!({ "type": "hb_meta", "query": "hb_meta" }))
+        .search(&json!({ "type": "m_meta", "query": "m_meta" }))
         .await
         .unwrap_err();
     assert!(matches!(
@@ -210,7 +210,7 @@ async fn a_fresh_space_never_searches_by_unknown_keys() {
         AnytypeError::Bad { status: 400, .. }
     ));
     let unknown_field = api
-        .search(&json!({ "query": "hb_meta", "fields": ["hb_schema_version"] }))
+        .search(&json!({ "query": "m_meta", "fields": ["m_schema_version"] }))
         .await
         .unwrap_err();
     assert!(matches!(
@@ -226,7 +226,7 @@ async fn the_type_body_uses_api_key_and_the_live_field_set() {
     let mock = Mock::start().await;
     let api = client(&mock);
     let bad = api
-        .create_type(&json!({ "name": "x", "key": "hb_x" }), "t-1")
+        .create_type(&json!({ "name": "x", "key": "m_x" }), "t-1")
         .await
         .unwrap_err();
     assert!(matches!(bad, AnytypeError::Bad { status: 400, .. }));
@@ -251,12 +251,12 @@ fn setup_failure_keeps_the_reason_and_drops_the_space_id() {
     let id = "bafyreig54easpaerpi3ztgragrlxh2utaisv5cdboakfqhlmndt3tzk2va.39bilhfrc4c6s";
     let bad = AnytypeError::Bad {
         status: 400,
-        message: format!("type \"hb_meta\" not found in space {id}"),
+        message: format!("type \"m_meta\" not found in space {id}"),
     };
     let (status, text) = setup_failure(&bad);
     assert_eq!(status, 502);
     assert!(text.starts_with("Anytype could not prepare the space."));
-    assert!(text.contains("hb_meta"));
+    assert!(text.contains("m_meta"));
     assert!(!text.contains("bafy"));
     assert_eq!(
         setup_failure(&AnytypeError::Unreachable).1,

@@ -173,7 +173,7 @@ impl MockState {
     }
 
     /// Another machine's write. Each property keeps the last value.
-    /// `tear` keeps the previous `hb_sha` while the other properties change.
+    /// `tear` keeps the previous `m_sha` while the other properties change.
     pub(super) fn peer_write(&mut self, id: &str, update: &Value, tear: bool) -> bool {
         let Some(incoming) = update.as_object() else {
             return false;
@@ -190,7 +190,7 @@ impl MockState {
             if !object.properties.is_object() {
                 object.properties = json!({});
             }
-            let old_sha = object.properties.get("hb_sha").cloned();
+            let old_sha = object.properties.get("m_sha").cloned();
             if let Some(props) = object.properties.as_object_mut() {
                 for (key, value) in incoming {
                     props.insert(key.clone(), value.clone());
@@ -198,10 +198,10 @@ impl MockState {
                 if tear {
                     match old_sha {
                         Some(sha) => {
-                            props.insert("hb_sha".to_string(), sha);
+                            props.insert("m_sha".to_string(), sha);
                         }
                         None => {
-                            props.remove("hb_sha");
+                            props.remove("m_sha");
                         }
                     }
                 }

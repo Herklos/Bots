@@ -1,6 +1,6 @@
-//! Create missing types and properties, then the one `hb_meta` object.
+//! Create missing types and properties, then the one `m_meta` object.
 //! Nothing is renamed or deleted. Keys come back from the create response and
-//! any key that differs from the one we asked for is stored in `hb_keys_json`.
+//! any key that differs from the one we asked for is stored in `m_keys_json`.
 
 use super::table::{self, Column, Table, COLUMNS, TABLES};
 use crate::storage::adapters::anytype::client::{AnytypeClient, AnytypeError};
@@ -117,7 +117,7 @@ pub(crate) async fn schema_ready(client: &AnytypeClient) -> Result<bool, Anytype
 pub(crate) fn read_meta(object: &Value, keys: &BTreeMap<String, String>) -> Meta {
     Meta {
         version: version(object, keys),
-        min_gateway: text_prop(object, keys, "hb_min_gateway"),
+        min_gateway: text_prop(object, keys, "m_min_gateway"),
         keys: read_keys(object),
     }
 }
@@ -257,23 +257,23 @@ async fn meta_object(
     types: &[Value],
     keys: &BTreeMap<String, String>,
 ) -> Result<Option<Value>, AnytypeError> {
-    // A brand-new space does not know the `hb_meta` type yet, and Anytype
+    // A brand-new space does not know the `m_meta` type yet, and Anytype
     // refuses searches that filter by an unknown type key. Filter by name
     // locally instead when the type is not in the space's type list.
     let type_key = find_row(
         types,
-        "hb_meta",
-        keys.get(&table::type_map_key("hb_meta"))
+        "m_meta",
+        keys.get(&table::type_map_key("m_meta"))
             .map(String::as_str),
     );
-    // No `fields` projection: the hb_* property keys do not exist yet in a
+    // No `fields` projection: the m_* property keys do not exist yet in a
     // fresh space and Anytype answers 400 for an unknown key.
-    let mut body = json!({ "query": "hb_meta" });
+    let mut body = json!({ "query": "m_meta" });
     if let Some(key) = type_key {
         body["type"] = json!(key);
     }
     let mut rows = client.search(&body).await?;
-    rows.retain(|row| row["name"].as_str() == Some("hb_meta") && row["archived"] != true);
+    rows.retain(|row| row["name"].as_str() == Some("m_meta") && row["archived"] != true);
     rows.sort_by(|left, right| {
         left["created_date"]
             .as_str()
@@ -284,8 +284,8 @@ async fn meta_object(
         return Ok(None);
     };
     // Live Anytype search omits `properties` unless `fields` is set. A fresh
-    // space cannot name hb_* fields yet, so we never project them here. Load
-    // the object so schema_ready can read hb_schema_version and friends.
+    // space cannot name m_* fields yet, so we never project them here. Load
+    // the object so schema_ready can read m_schema_version and friends.
     let id = row["id"].as_str().unwrap_or("");
     if id.is_empty() {
         return Ok(None);
@@ -300,14 +300,14 @@ async fn write_meta(
     existing: Option<&Value>,
 ) -> Result<bool, AnytypeError> {
     let properties = json!({
-        actual(keys, "hb_schema_version"): SCHEMA_VERSION,
-        actual(keys, "hb_min_gateway"): env!("CARGO_PKG_VERSION"),
-        actual(keys, "hb_keys_json"): serde_json::to_string(drifts).unwrap_or_else(|_| "{}".into()),
+        actual(keys, "m_schema_version"): SCHEMA_VERSION,
+        actual(keys, "m_min_gateway"): env!("CARGO_PKG_VERSION"),
+        actual(keys, "m_keys_json"): serde_json::to_string(drifts).unwrap_or_else(|_| "{}".into()),
     });
     let Some(object) = existing else {
         let body = json!({
             "type": meta_type(keys),
-            "name": "hb_meta",
+            "name": "m_meta",
             "properties": properties,
         });
         client.create_object(&body, &idem(&body)).await?;
@@ -331,9 +331,9 @@ async fn write_meta(
 }
 
 fn meta_type(keys: &BTreeMap<String, String>) -> &str {
-    keys.get(&table::type_map_key("hb_meta"))
+    keys.get(&table::type_map_key("m_meta"))
         .map(String::as_str)
-        .unwrap_or("hb_meta")
+        .unwrap_or("m_meta")
 }
 
 fn idem(body: &Value) -> String {
@@ -342,7 +342,7 @@ fn idem(body: &Value) -> String {
 }
 
 fn version(object: &Value, keys: &BTreeMap<String, String>) -> Option<i64> {
-    match prop(object, keys, "hb_schema_version") {
+    match prop(object, keys, "m_schema_version") {
         Some(Value::Number(number)) => number.as_i64(),
         Some(Value::String(text)) => text.parse().ok(),
         _ => None,
@@ -365,7 +365,7 @@ fn read_keys(object: &Value) -> BTreeMap<String, String> {
     let Some(properties) = object["properties"].as_object() else {
         return BTreeMap::new();
     };
-    if let Some(map) = properties.get("hb_keys_json").and_then(parse_map) {
+    if let Some(map) = properties.get("m_keys_json").and_then(parse_map) {
         return map;
     }
     properties.values().find_map(parse_map).unwrap_or_default()
@@ -374,12 +374,12 @@ fn read_keys(object: &Value) -> BTreeMap<String, String> {
 fn parse_map(value: &Value) -> Option<BTreeMap<String, String>> {
     let text = value.as_str()?;
     let parsed: Map<String, Value> = serde_json::from_str(text).ok()?;
-    if !parsed.contains_key("hb_sha")
-        && !parsed.contains_key("hb_schema_version")
-        && !parsed.contains_key(&table::type_map_key("hb_meta"))
+    if !parsed.contains_key("m_sha")
+        && !parsed.contains_key("m_schema_version")
+        && !parsed.contains_key(&table::type_map_key("m_meta"))
         && !parsed
             .keys()
-            .any(|key| key.starts_with("hb_") || key.starts_with("type:"))
+            .any(|key| key.starts_with("m_") || key.starts_with("type:"))
     {
         return None;
     }

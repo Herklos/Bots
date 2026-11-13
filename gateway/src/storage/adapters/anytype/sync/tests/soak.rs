@@ -94,13 +94,13 @@ async fn ten_bots_and_two_thousand_files_survive_a_day_of_edits() {
 }
 
 async fn remote_tree(url: &str) -> BTreeMap<String, Vec<u8>> {
-    let rows = super::support::hb_files(url).await;
+    let rows = super::support::m_files(url).await;
     let mut tree = BTreeMap::new();
     for row in rows {
-        if row["properties"]["hb_deleted"] == Value::Bool(true) {
+        if row["properties"]["m_deleted"] == Value::Bool(true) {
             continue;
         }
-        let Some(path) = row["properties"]["hb_path"].as_str() else {
+        let Some(path) = row["properties"]["m_path"].as_str() else {
             continue;
         };
         let body = remote_body(url, &row).await;

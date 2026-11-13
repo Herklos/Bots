@@ -8,7 +8,7 @@ Probe leftovers in `Test-AnyBot`, because the API cannot purge them: one chat (`
 
 1. **Anytype first, for sync across several instances on several machines.** Anytype is the authority. Each machine keeps a local working copy because the harness needs a real folder and Anytype may be briefly unreachable.
 2. **A dedicated private Anytype space.**
-3. **Own `hb_` types, as many as needed,** adapted from the person's `anytype-agents` org schema.
+3. **Own `m_` types, as many as needed,** adapted from the person's `anytype-agents` org schema.
 4. **The pre-release API (v2) is accepted.** The risk is contained in one module.
 5. **Prompts and memory are editable inside Anytype.** The markdown codec is core work.
 6. **Storage is configured in Settings.** The default is the file system with a configurable folder. Anytype is added when implemented, with a host (default localhost) and an API key or a pairing code.
@@ -25,21 +25,21 @@ Every claim was re-checked against the code, the spec and the probes.
 | A1 | "No change feed, poll" was wrong. This build serves `POST /v2/spaces/{id}/search/stream` (SSE: `object_added`, `object_updated`, `object_removed`) | High | One search stream per gateway, polling as fallback |
 | A2 | The rate limit applies to writes. The spec lists `429` only on mutating routes and on streams (too many held), not on reads | High | Budget counts writes only. Adaptive limiter driven by real 429s |
 | A3 | Delete: `permanent=true` works only for objects the same key created; archiving works for any object the key can write; archived objects vanish from search and refuse edits (409 `object_archived`); objects with a discussion cannot be purged; types and properties are never purged | High | Tombstone property is the delete signal, Bin is garbage collection, no destructive schema operations |
-| A4 | Key normalization: requesting `hbprobe2` created `hbprobe_2`, so `hb_sha256` would not keep its key | High | No digits in keys, explicit keys, read back created keys into `hb_meta` |
+| A4 | Key normalization: requesting `hbprobe2` created `hbprobe_2`, so `m_sha256` would not keep its key | High | No digits in keys, explicit keys, read back created keys into `m_meta` |
 | A5 | `Library` already writes `.mcp.json`, `.codex/config.toml`, `.claude/settings.json` through `Workspace`. A deny list in callers would not stop them syncing | High | Path policy enforced inside the synced layer |
 | A6 | `Bots::load` rescans the disk and reads every `bot.json` on each call. `bots.list()` has 25 call sites across 7 modules (some in tests) | High | In-memory read-through cache in every typed store |
 | A7 | A room keeps per device runtime state (`threads`, `anchors`, `hops`, `lastSeenAt`) and dispatches through the local T3 | High | Runtime state stays local. A group lives on one machine (home machine rule) |
-| A8 | Two machines can create the same slug offline | Medium | Identity is `hb_bot_id` (uuid). Deterministic collision rule |
+| A8 | Two machines can create the same slug offline | Medium | Identity is `m_bot_id` (uuid). Deterministic collision rule |
 | A9 | Joining a second Anytype to the space is not an API operation. Desktop with the same account joins on its own. A headless bot account joins by an invite link created in the app | Medium | Manual step, deferred to phase 9 |
-| A10 | Gateways auto-update independently, so versions differ across machines | Medium | `hb_schema_version`, `hb_min_gateway`, read-only degraded mode |
-| A11 | A per device task id map on a shared `hb_schedule` makes every machine write one object | Medium | T3 task ids stay local |
-| A12 | A human edit in the app changes `last_modified_date`, not our `hb_updated` | High | Change detection uses `last_modified_date` and content. Our properties are advisory |
-| A13 | Per property last-writer-wins can pair `hb_content` from one machine with `hb_sha` from another | High | Content is authoritative, sha recomputed |
+| A10 | Gateways auto-update independently, so versions differ across machines | Medium | `m_schema_version`, `m_min_gateway`, read-only degraded mode |
+| A11 | A per device task id map on a shared `m_schedule` makes every machine write one object | Medium | T3 task ids stay local |
+| A12 | A human edit in the app changes `last_modified_date`, not our `m_updated` | High | Change detection uses `last_modified_date` and content. Our properties are advisory |
+| A13 | Per property last-writer-wins can pair `m_content` from one machine with `m_sha` from another | High | Content is authoritative, sha recomputed |
 | A14 | Echo loops, and rewriting a file while a harness turn edits it | High | Manifest sha check. Remote changes to a Bot's folder apply only while it is idle |
 | A15 | Limits were guesses. Spec: 1 MiB per string, 1 MiB structured body, 10 MiB document, 128 properties, 2,048 blocks, 512 ops per patch, 256 blocks per op | Medium | 256 KiB inline cap, split larger content |
 | A16 | Codec facts: block `text` already carries inline markdown; numbered lists carry no start number; `---` front matter becomes divider plus paragraph; HTML comment becomes a literal paragraph; multi-line quote is one block | Medium | Codec rules and tests |
 | A17 | `Test-AnyBot` has a second member (`anybot-live`, editor). Sharing a space exposes everything and lets that member write objects machines pull | Medium | Setup refuses a shared space by default |
-| A18 | Views and query views are addressed by minted ids. A type created with an explicit property list drops bundled properties such as `backlinks` | Low | View ids in `hb_meta`, bundled properties listed per type |
+| A18 | Views and query views are addressed by minted ids. A type created with an explicit property list drops bundled properties such as `backlinks` | Low | View ids in `m_meta`, bundled properties listed per type |
 | A19 | The CLI README says "on v2, a key can only delete objects created under its name" | Medium | Same key name on every machine. Confirmed in phase 9 |
 | A20 | A scoped key comes from the Desktop pairing flow (`POST /v2/auth/challenges`, approval in the app, 4 digit code) or `anytype auth apikey create --space ... --read-write`. Scoped keys work on v2 only | Info | Settings offers a Connect button that runs the pairing flow; pasting a key is the advanced path |
 | A21 | The storage choice cannot live in the synced settings (chicken and egg), and the folder path is today `HBOTS_ROOT` read in `Config::from_env` before anything else, with `.botapp` inside it | High | Local `~/.hbots/storage.json` plus env override, same locking pattern as network access |
@@ -64,9 +64,9 @@ Everything is files under `~/.hbots` (`HBOTS_HOME`). The Bots live in `HBOTS_ROO
 
 | Data | Where today | Written by | Harness reads | Goes to Anytype |
 |---|---|---|---|---|
-| Bot state and config | `<bot>/.bot/bot.json` | gateway | no | shared fields (`hb_bot`) |
+| Bot state and config | `<bot>/.bot/bot.json` | gateway | no | shared fields (`m_bot`) |
 | T3 binding (`projectId`, `mainThreadId`), `lastSeenAt`, computer override, routine to T3 task ids | `bot.json`, T3 | gateway | no | **no**, per machine (`.bot/local.json`) |
-| Prompt and rendered instructions | `AGENTS.md`, `CLAUDE.md` symlink | gateway | yes | prompt yes (`hb_prompt`), rendered file no |
+| Prompt and rendered instructions | `AGENTS.md`, `CLAUDE.md` symlink | gateway | yes | prompt yes (`m_prompt`), rendered file no |
 | Tool wiring | `.mcp.json`, `.codex/config.toml`, `.claude/settings.json` | gateway | yes | **no**, holds the Bot bearer token |
 | Memory | `memory/MEMORY.md`, `memory/log.md`, notes, `.botapp/shared-memory.md` | harness, gateway tools | yes | yes |
 | Skills, library files | `skills/`, `library/` | person, harness | yes | yes |
@@ -76,23 +76,23 @@ Everything is files under `~/.hbots` (`HBOTS_HOME`). The Bots live in `HBOTS_ROO
 | Groups | `.botapp/groups.json`: shared fields, `messages`, runtime state | gateway | no | shared fields and messages yes, runtime state no |
 | Settings | `.botapp/settings.json`, `main-bot.json`, `apps.json` | gateway | no | shared prefs yes (`userName`, `autoReview`, `rules`, `sections`, `defaultModel`, `avatarDrawingModel`, `defaultRuntimeMode`, `groupAnswerPolicy`, `beta`), UI prefs no (`theme`, `palette`, `accent`, `timezone`) |
 | Reactions and pins, usage, routine history | `.botapp/thread-meta.json`, `usage.json`, `routine-history.json` | gateway | no | local |
-| Routines | T3 `scheduledTasks` | T3 | no | definitions yes (`hb_schedule`), executor stays T3 |
+| Routines | T3 `scheduledTasks` | T3 | no | definitions yes (`m_schedule`), executor stays T3 |
 | Secrets | `vault.enc`, `.vault-key`, `access.json`, `session-secret`, `.bot-mcp-token`, `t3-token`, `.env` | gateway | no | **never** |
 | Storage backend config (new) | `~/.hbots/storage.json`, `~/.hbots/anytype-key` | gateway | no | **never** |
 | Transcripts, run state | T3's database | T3 | n/a | out of scope |
 
 ## Data model at a glance
 
-Property level detail is in [anytype-schema.md](anytype-schema.md). All keys start with `hb_`.
+Property level detail is in [anytype-schema.md](anytype-schema.md). All keys start with `m_`.
 
 | Group | Types | Tier | Phase |
 |---|---|---|---|
-| Core | `hb_meta`, `hb_device`, `hb_settings`, `hb_bot` (profile layout), `hb_file`, `hb_conflict` | A and B | P2 to P4 |
-| Records | `hb_project`, `hb_note`, `hb_task` (todo layout), `hb_plan`, `hb_link` (bookmark layout), `hb_repo`, `hb_machine`, `hb_service`, `hb_attachment` | B | P4 |
-| Conversation | `hb_group`, `hb_msg_segment` | B | P4 |
-| Routines and models | `hb_schedule`, `hb_model_profile`, `hb_connector` | B | P4 |
-| Documents | `hb_prompt`, `hb_memory`, `hb_skill`, `hb_log` | C | P5 |
-| Catalog | `hb_team`, `hb_subagent`, `hb_harness`, `hb_computer`, `hb_tool_profile`, `hb_vault_grant`, `hb_suggestion`, `hb_approval`, `hb_usage_day` | B | P7 |
+| Core | `m_meta`, `m_device`, `m_settings`, `m_bot` (profile layout), `m_file`, `m_conflict` | A and B | P2 to P4 |
+| Records | `m_project`, `m_note`, `m_task` (todo layout), `m_plan`, `m_link` (bookmark layout), `m_repo`, `m_machine`, `m_service`, `m_attachment` | B | P4 |
+| Conversation | `m_group`, `m_msg_segment` | B | P4 |
+| Routines and models | `m_schedule`, `m_model_profile`, `m_connector` | B | P4 |
+| Documents | `m_prompt`, `m_memory`, `m_skill`, `m_log` | C | P5 |
+| Catalog | `m_team`, `m_subagent`, `m_harness`, `m_computer`, `m_tool_profile`, `m_vault_grant`, `m_suggestion`, `m_approval`, `m_usage_day` | B | P7 |
 
 Each type ships with a default template, a default view, an icon and a generated query. Statuses and kinds that Michel owns are select properties, everything that follows an outside system is text.
 
@@ -237,7 +237,7 @@ Principles:
 New module `gateway/src/anytype/`:
 
 - `client.rs`: `reqwest` wrapper. Write limiter (default 0.8 per second, burst 40, adapted from real 429s), one `Idempotency-Key` per logical mutation (hash of device, path, sha, operation, so an outbox replay is safe), `If-Match`, pagination walker, SSE reader with reconnect, typed errors (`EtagMismatch`, `RateLimited`, `Unreachable`, `NotGranted`, `ApiChanged`, `ObjectArchived`, `Gone`).
-- `schema.rs`: idempotent bootstrap of types, properties, templates, queries and widgets from one declarative table (the schema doc follows the code). Reads actual keys back into `hb_meta`. Additive migrations only.
+- `schema.rs`: idempotent bootstrap of types, properties, templates, queries and widgets from one declarative table (the schema doc follows the code). Reads actual keys back into `m_meta`. Additive migrations only.
 - `pairing.rs`: the pairing flow and `whoami` validation.
 - `workspace.rs`: `AnytypeWorkspace`, the remote half of tier A.
 - `sync.rs`: manifest, outbox, change detection, apply, conflicts, history ring, tombstones.
@@ -251,12 +251,12 @@ New module `gateway/src/anytype/`:
 Because `Library` writes `.mcp.json` and friends through `Workspace`, the allow and deny rules live in `PathPolicy`, applied by `SyncedWorkspace` on every call and again on every pulled path.
 
 - Allowed, per Bot: `memory/**`, `skills/**`, `library/**`, `.bot/attachments/**`. Shared: `.botapp/shared-memory.md`.
-- Always denied: `.mcp.json`, `.codex/**`, `.claude/**`, `AGENTS.md`, `CLAUDE.md`, `.bot/local.json`, `.bot/connectors.json` (until secrets are split, `hb_connector` replaces it), `.botapp/access.json`, `.botapp/session-secret`, `.vault-key`, `vault.enc`, tokens, `.env`, `storage.json`, `anytype-key`.
-- Pulled `hb_path` values pass `safe_rel`, the allow list and a symlink refusal, and may never target a derived file.
+- Always denied: `.mcp.json`, `.codex/**`, `.claude/**`, `AGENTS.md`, `CLAUDE.md`, `.bot/local.json`, `.bot/connectors.json` (until secrets are split, `m_connector` replaces it), `.botapp/access.json`, `.botapp/session-secret`, `.vault-key`, `vault.enc`, tokens, `.env`, `storage.json`, `anytype-key`.
+- Pulled `m_path` values pass `safe_rel`, the allow list and a symlink refusal, and may never target a derived file.
 
-### Tier A: exact files (`hb_file`)
+### Tier A: exact files (`m_file`)
 
-One object per synced path, byte for byte. Exact text in `hb_content` up to 256 KiB, larger or binary content as an Anytype file in `hb_blob`. `hb_sha`, `hb_size`, `hb_mime`, `hb_mtime` are ours because Anytype drops extensions and times. `hb_deleted` is the tombstone, because an archived object disappears from search and cannot be edited. A tombstone older than 30 days is archived to the Bin by whichever device sees it first. Directories are implicit: `list(rel)` queries `hb_dir` and folds deeper paths into entries.
+One object per synced path, byte for byte. Exact text in `m_content` up to 256 KiB, larger or binary content as an Anytype file in `m_blob`. `m_sha`, `m_size`, `m_mime`, `m_mtime` are ours because Anytype drops extensions and times. `m_deleted` is the tombstone, because an archived object disappears from search and cannot be edited. A tombstone older than 30 days is archived to the Bin by whichever device sees it first. Directories are implicit: `list(rel)` queries `m_dir` and folds deeper paths into entries.
 
 ### Tier B: typed objects
 
@@ -271,13 +271,13 @@ Edited in Anytype (decision 5), so the canonical content is the object body.
 - **Codec rules:** inline markup passes through (a block's `text` already holds `**`, `*`, `~~`, backticks, links, `<mention>`); `anytype://object?objectId=` links stay; headings 1 to 4; bullets and numbered lists by `indent`, numbering restarted by position; `checkbox` as `- [ ]` and `- [x]`; one `quote` block as a `>` group; `code` with its language; `divider` as `---`; `table` as a pipe table; unknown blocks (callout, toggle, embed, file, dataview) render as a comment line and are kept byte for byte in a sidecar so a round trip does not delete them. Front matter is rejected on write.
 - **Normalization is idempotent** (parse, render, parse, render equals one pass). A property based test enforces it. The first write of a file the codec would change is shown as an informational conflict, not rewritten silently.
 - **Disk rendering.** The harness reads plain files. `.bot/sync-manifest.json` (local, never synced) maps path to object id, last rendered sha and Anytype `last_modified_date`.
-- **Both sides edit.** Base is the last rendered text. A line based three-way merge runs on the rendered markdown. Clean: written to both sides. Otherwise keep both and open an `hb_conflict`.
-- **Structured memory.** `hb_memory` carries category, valid range, provenance and tombstone as properties, matching `docs/memory-maintenance.md`. `@valid(...)` stays in the rendered file.
-- **Large documents.** More than 2,048 blocks or 1 MiB of text is split into part objects linked by `hb_parent`.
+- **Both sides edit.** Base is the last rendered text. A line based three-way merge runs on the rendered markdown. Clean: written to both sides. Otherwise keep both and open an `m_conflict`.
+- **Structured memory.** `m_memory` carries category, valid range, provenance and tombstone as properties, matching `docs/memory-maintenance.md`. `@valid(...)` stays in the rendered file.
+- **Large documents.** More than 2,048 blocks or 1 MiB of text is split into part objects linked by `m_parent`.
 
 ### Change detection
 
-One search stream per gateway on the Michel types, requesting only cheap fields (`hb_path`, `hb_sha`, `hb_deleted`, `hb_device`, `hb_rev`, `last_modified_date`, `hb_slug`), never content. On `object_added` or `object_updated`, fetch the object only if content could have changed: `hb_sha` differs from the manifest, or `last_modified_date` is newer than recorded (a human edit in the app). Our own echo is recognized by `hb_device` equal to this device and `hb_sha` equal to what we pushed.
+One search stream per gateway on the Michel types, requesting only cheap fields (`m_path`, `m_sha`, `m_deleted`, `m_device`, `m_rev`, `last_modified_date`, `m_slug`), never content. On `object_added` or `object_updated`, fetch the object only if content could have changed: `m_sha` differs from the manifest, or `last_modified_date` is newer than recorded (a human edit in the app). Our own echo is recognized by `m_device` equal to this device and `m_sha` equal to what we pushed.
 
 On reconnect the stream restarts with a fresh snapshot. Diff it against the manifest. An object in the manifest but absent from the snapshot has left the set, possibly archived, so confirm with one read before acting.
 
@@ -287,11 +287,11 @@ Fallback if the stream is refused (stream cap) or missing: a query every 10 seco
 
 Anytype merges property by property, last writer wins, and `If-Match` covers only the local view.
 
-1. **Content is authoritative, metadata is advisory.** The decision uses `sha256(hb_content)` computed locally. `hb_sha`, `hb_rev`, `hb_device` are hints, so a torn write is detected by recomputing.
+1. **Content is authoritative, metadata is advisory.** The decision uses `sha256(m_content)` computed locally. `m_sha`, `m_rev`, `m_device` are hints, so a torn write is detected by recomputing.
 2. **Three-way per path.** The manifest keeps `base_sha`. Local changed only: push. Remote changed only: apply. Both: conflict.
 3. **Home machine.** Folder files have one writer, the Bot's home machine, plus human edits in the app, handled by the three-way merge.
 4. **Append only for fan-in.** Messages, logs and activity are per device segments or one object per entry.
-5. **Typed objects merge by property.** Two machines editing different properties of a `hb_bot` both survive. Same property: last writer wins, the loser's value stays in the local history ring.
+5. **Typed objects merge by property.** Two machines editing different properties of a `m_bot` both survive. Same property: last writer wins, the loser's value stays in the local history ring.
 6. **History ring.** Every version this device writes or overwrites is kept (last 20 per path or 14 days) under `.botapp/sync-history/`. It is the safety net for the one race that cannot be removed: a remote overwrite of content this device pushed moments earlier. Detection raises an informational notice.
 7. **Idle apply.** A remote change to a Bot's folder is written only while that Bot has no active turn. Writes are atomic (`store::write_atomic`).
 8. **Echo guard.** A disk event whose sha equals `base_sha` is ignored.
@@ -307,13 +307,13 @@ Anytype merges property by property, last writer wins, and `If-Match` covers onl
 | 410 `object_deleted` | Treat as purged. Recreate only if the local file still exists and is newer |
 | Key revoked or space left | State `not_granted`. Reads from the working copy, writes queue, banner in Settings |
 | `api_changed` | Read-only degraded mode and a banner |
-| Process killed mid-push | Durable idempotent outbox. Before creating an object, search `hb_path` to avoid duplicates after a crash |
-| Duplicate `hb_file` for one path | Keep the earliest `created_date`, merge three-way with the later one, archive the duplicate |
+| Process killed mid-push | Durable idempotent outbox. Before creating an object, search `m_path` to avoid duplicates after a crash |
+| Duplicate `m_file` for one path | Keep the earliest `created_date`, merge three-way with the later one, archive the duplicate |
 | Folder missing or Anytype unreachable at start | Fall back to the file system working copy and say why in Settings |
 
 ### Schema versioning across machines
 
-`hb_meta` holds `hb_schema_version` and `hb_min_gateway`. A gateway older than `hb_min_gateway` runs read-only with a banner. A newer gateway runs the additive migration once (guarded by a `hb_migrating_by` property) and bumps the version. Readers tolerate unknown properties and options. Writers never send an option the property does not hold.
+`m_meta` holds `m_schema_version` and `m_min_gateway`. A gateway older than `m_min_gateway` runs read-only with a banner. A newer gateway runs the additive migration once (guarded by a `m_migrating_by` property) and bumps the version. Readers tolerate unknown properties and options. Writers never send an option the property does not hold.
 
 ## Multiple machines
 
@@ -321,11 +321,11 @@ Anytype merges property by property, last writer wins, and `If-Match` covers onl
 
 **Topology.** Each machine runs its own Anytype and a gateway that talks only to it. Anytype's sync moves the data. A machine without Anytype cannot use this backend. Joining a second instance is deferred to phase 9.
 
-**Devices.** A stable device id (`~/.hbots/device-id`) and one `hb_device` object per gateway: hostname, version, reachable URLs, stream status, last seen. Writes record the device in `hb_device`, not the Anytype participant, because machines may share one account.
+**Devices.** A stable device id (`~/.hbots/device-id`) and one `m_device` object per gateway: hostname, version, reachable URLs, stream status, last seen. Writes record the device in `m_device`, not the Anytype participant, because machines may share one account.
 
-**Peer lag.** Every 60 seconds a device updates its own `hb_last_seen`. Others read it through the stream and show `now - last_seen` as lag, or "offline". Anytype has no sync status API, so this is the only measurement.
+**Peer lag.** Every 60 seconds a device updates its own `m_last_seen`. Others read it through the stream and show `now - last_seen` as lag, or "offline". Anytype has no sync status API, so this is the only measurement.
 
-**Bot identity.** `hb_bot_id` (uuid) is the identity and the slug is a folder label. If a pull finds two Bots with one slug, the earlier `created_date` keeps it and the later one is renamed `<slug>-2` on every machine, with a notice. Creating a Bot checks the remote slug first when online.
+**Bot identity.** `m_bot_id` (uuid) is the identity and the slug is a folder label. If a pull finds two Bots with one slug, the earlier `created_date` keeps it and the later one is renamed `<slug>-2` on every machine, with a notice. Creating a Bot checks the remote slug first when online.
 
 **Where concurrent writes are possible:**
 
@@ -334,21 +334,21 @@ Anytype merges property by property, last writer wins, and `If-Match` covers onl
 | Group messages, logs, activity | many machines | append only, per device segments or one object per entry |
 | Library records, settings, group metadata | any machine, rarely together | per property merge, content authority, history ring |
 | A Bot's folder | its home machine, plus human edits in Anytype | home machine plus three-way merge |
-| Bot definition (`hb_bot`) | any machine | per property merge |
+| Bot definition (`m_bot`) | any machine | per property merge |
 
-**Home machine per Bot (the rule behind "one active machine").** This is about which computer runs a Bot, not about Anytype accounts. A Bot's live session is local to a computer: its T3 thread, its routines and the harness editing its memory files. If two computers ran the same Bot at once, both would fire its routines (duplicate runs) and both harnesses would edit the same files (conflicts), and each T3 thread would hold half the conversation. So each Bot has a **home machine** (default: where it was created), recorded in `hb_active_device`. Every machine syncs and shows every Bot, and any machine can edit a Bot's definition and records, but only the home machine runs it. To move a Bot, the person presses **Run this Bot on this machine**:
+**Home machine per Bot (the rule behind "one active machine").** This is about which computer runs a Bot, not about Anytype accounts. A Bot's live session is local to a computer: its T3 thread, its routines and the harness editing its memory files. If two computers ran the same Bot at once, both would fire its routines (duplicate runs) and both harnesses would edit the same files (conflicts), and each T3 thread would hold half the conversation. So each Bot has a **home machine** (default: where it was created), recorded in `m_active_device`. Every machine syncs and shows every Bot, and any machine can edit a Bot's definition and records, but only the home machine runs it. To move a Bot, the person presses **Run this Bot on this machine**:
 
 1. The old machine stops starting new turns, lets the current one finish, pushes its last changes, and marks the Bot `released`.
-2. The new machine pulls the folder, binds its own T3 project and thread, recreates the routines from `hb_schedule`, and marks itself the home.
+2. The new machine pulls the folder, binds its own T3 project and thread, recreates the routines from `m_schedule`, and marks itself the home.
 3. If the old machine is dead, the person can force it. If it comes back, it sees it is no longer home, stops the Bot locally, and turns anything it had not pushed into conflict copies.
 
 Consequences: the new machine starts a fresh T3 main thread (T3 transcripts do not move), so handover seeds it with the Bot's memory and recent log. A single machine setup never sees any of this.
 
 **Groups.** A group's messages are dispatched through the local T3 to each member's thread, so a group lives on one machine: every member's home must be that machine. The UI refuses to add a Bot whose home is elsewhere and warns when moving a member out of a group. Groups across machines (relaying messages through Anytype) are a later option.
 
-**Clients.** A web or native client connects to one gateway. It lists every Bot and where each runs. Chatting with a Bot homed on another machine needs that machine's gateway, and `hb_device.hb_urls` carries its address so the client can offer "open on laptop".
+**Clients.** A web or native client connects to one gateway. It lists every Bot and where each runs. Chatting with a Bot homed on another machine needs that machine's gateway, and `m_device.m_urls` carries its address so the client can offer "open on laptop".
 
-**Routines.** T3 executes them. Definitions are `hb_schedule` objects. A machine creates T3 tasks only for Bots it is home for and keeps the task ids locally, so there are no double runs.
+**Routines.** T3 executes them. Definitions are `m_schedule` objects. A machine creates T3 tasks only for Bots it is home for and keeps the task ids locally, so there are no double runs.
 
 **Clocks.** No correctness depends on wall clocks across machines. Content shas decide changes. Timestamps order append-only streams, with message ids as tie-break.
 
@@ -447,17 +447,17 @@ Each phase is roughly one focused PR and ends with the criteria shown. Day count
 
 **P1. Interface hardening and storage settings (file system), 6 to 7 days.** Extend `Workspace` (items 1 to 5 and 7), add `PathPolicy`, `JsonDoc`, `LocalState` and the typed store traits (local implementations only), route the remaining raw filesystem paths. Add `storage_settings.rs`, `storage.json`, env precedence and locking, `GET` and `PUT /api/storage`, `POST /api/storage/test`, `POST /api/storage/copy`, `POST /api/storage/restart`, the Settings Storage section with the folder field, validation, copy action and restart banner, and the Anytype option shown as "Not available yet". Exit: the 340 tests, `tests/e2e.sh` and `tests/compat` pass unchanged; changing the folder in Settings and restarting works on a copy of a real home; env variables lock the fields.
 
-**P2. Anytype client, schema, connection settings, about 8 days.** `client.rs`, `pairing.rs`, `schema.rs` (types, layouts, icons, templates, queries, views from the declarative table), `hb_meta`, `hbots anytype setup | status | doctor`, the mock server, and the Anytype fields in Settings: host (default `http://127.0.0.1:31009`), Connect with Anytype (pairing), advanced API key, space picker, Test connection. The backend still cannot be selected for use. Exit: bootstrap is idempotent and read-back keys are stored; 429, 409, 410, archived and drift each have a test; the key is write only and 0600; a person can pair, test and open the space in Anytype to see the empty structure.
+**P2. Anytype client, schema, connection settings, about 8 days.** `client.rs`, `pairing.rs`, `schema.rs` (types, layouts, icons, templates, queries, views from the declarative table), `m_meta`, `hbots anytype setup | status | doctor`, the mock server, and the Anytype fields in Settings: host (default `http://127.0.0.1:31009`), Connect with Anytype (pairing), advanced API key, space picker, Test connection. The backend still cannot be selected for use. Exit: bootstrap is idempotent and read-back keys are stored; 429, 409, 410, archived and drift each have a test; the key is write only and 0600; a person can pair, test and open the space in Anytype to see the empty structure.
 
-**P3. Tier A, devices, conflicts, 10 to 12 days.** `AnytypeWorkspace`, `SyncedWorkspace`, manifest, outbox, change detection (stream and poll), tombstones, history ring, `hb_device`, canary, `hb_conflict`. The Anytype backend becomes selectable. Order: library and connectors, then `memory/`, `skills/`, attachments. Exit: conformance passes against the mock and a live scratch space; killing Anytype or the gateway at any step loses nothing; the concurrent writer mock never loses an unsynced local edit; `hbots anytype pull` rebuilds a Bot on an empty home.
+**P3. Tier A, devices, conflicts, 10 to 12 days.** `AnytypeWorkspace`, `SyncedWorkspace`, manifest, outbox, change detection (stream and poll), tombstones, history ring, `m_device`, canary, `m_conflict`. The Anytype backend becomes selectable. Order: library and connectors, then `memory/`, `skills/`, attachments. Exit: conformance passes against the mock and a live scratch space; killing Anytype or the gateway at any step loses nothing; the concurrent writer mock never loses an unsynced local edit; `hbots anytype pull` rebuilds a Bot on an empty home.
 
-**P4. Typed stores, 9 to 11 days.** `hb_bot`, `hb_settings`, `hb_model_profile`, `hb_connector`, `hb_schedule` reconciliation, `hb_group` with message segments and the home machine rule, `hb_attachment`, the eight record types, the local overlay, home machine and handover, slug collision rule, Bin based "undo delete". Retire the `library.json` blob and the `groups.json` messages array in Anytype mode (with migration). Exit: a record edited in Anytype shows in Michel within seconds on a stream; `bots.list()` stays within a small constant of today's cost with a warm cache; handover is covered by tests with two simulated machines.
+**P4. Typed stores, 9 to 11 days.** `m_bot`, `m_settings`, `m_model_profile`, `m_connector`, `m_schedule` reconciliation, `m_group` with message segments and the home machine rule, `m_attachment`, the eight record types, the local overlay, home machine and handover, slug collision rule, Bin based "undo delete". Retire the `library.json` blob and the `groups.json` messages array in Anytype mode (with migration). Exit: a record edited in Anytype shows in Michel within seconds on a stream; `bots.list()` stays within a small constant of today's cost with a warm cache; handover is covered by tests with two simulated machines.
 
-**P5. Page-backed documents, 9 to 11 days.** `codec.rs`, `hb_prompt`, `hb_memory`, `hb_skill`, `hb_log`, links and dates, three-way merge on rendered markdown, unknown block sidecar. Exit: codec suites green on real files; edit a memory note in Anytype and see the file change under an idle Bot; edit the file and see the page change; a simultaneous edit yields a conflict object and both copies, never a loss.
+**P5. Page-backed documents, 9 to 11 days.** `codec.rs`, `m_prompt`, `m_memory`, `m_skill`, `m_log`, links and dates, three-way merge on rendered markdown, unknown block sidecar. Exit: codec suites green on real files; edit a memory note in Anytype and see the file change under an idle Bot; edit the file and see the page change; a simultaneous edit yields a conflict object and both copies, never a loss.
 
 **P6. Operations, 5 days.** `import`, `pull`, `verify`, `export`, `conflicts`, `devices`, `handover`; the Settings Sync block (state, outbox, devices, conflicts, handover); `GET /api/config` storage block; docs and a `PLAN.md` blurb. Exit: the migration section works end to end on a copy of a real home.
 
-**P7. Remaining catalog types, 5 days.** `hb_team`, `hb_subagent`, `hb_harness`, `hb_computer`, `hb_tool_profile`, `hb_vault_grant`, `hb_suggestion`, `hb_approval`, `hb_usage_day`, wired only where the gateway has a feature behind them.
+**P7. Remaining catalog types, 5 days.** `m_team`, `m_subagent`, `m_harness`, `m_computer`, `m_tool_profile`, `m_vault_grant`, `m_suggestion`, `m_approval`, `m_usage_day`, wired only where the gateway has a feature behind them.
 
 **P8. Native Anytype experience, 4 days.** Collections, widgets, the Bot overview page with embedded views (S7 permitting), graph view of memory links, polished templates. Exit: opening the space on a phone shows Bots, boards and conflicts without any Michel UI.
 
@@ -476,7 +476,7 @@ Rough total: 13 to 15 weeks for P0 to P8, plus P9. P3 to P5 are the bulk. P0 or 
 
 - `docs/memory-maintenance.md`: needs revisions, journals and `Workspace` only. P1 satisfies it, P3 makes memory Anytype capable, P5 adds categories, valid ranges and provenance.
 - `docs/backends.md` phase 6 is P1 here. Its harness abstraction is independent. Its "145 tests" figure is stale.
-- `docs/bot-execution-environment.md`: "which machine's gateway is home for this Bot" and "which linked T3 computer runs it" are different axes. `hb_device` and `hb_computer` are separate on purpose. Reconcile before P4 so "where it runs" has one meaning in the UI. That design also adds Settings controls, so the Storage section and the computer setting must share one Settings layout.
+- `docs/bot-execution-environment.md`: "which machine's gateway is home for this Bot" and "which linked T3 computer runs it" are different axes. `m_device` and `m_computer` are separate on purpose. Reconcile before P4 so "where it runs" has one meaning in the UI. That design also adds Settings controls, so the Storage section and the computer setting must share one Settings layout.
 - `docs/multi-user.md`: revisit before sharing the space with other people.
 
 ## Risks
@@ -495,7 +495,7 @@ Rough total: 13 to 15 weeks for P0 to P8, plus P9. P3 to P5 are the bulk. P0 or 
 
 ## Open questions
 
-1. **Model availability per machine.** `hb_model_profile` may name a provider instance that a given machine lacks. Warn and fall back to the machine's default, or refuse to run the Bot there?
-2. **Execution designs.** Reconcile `hb_computer` and `hb_device` with `bot-execution-environment.md`.
+1. **Model availability per machine.** `m_model_profile` may name a provider instance that a given machine lacks. Warn and fall back to the machine's default, or refuse to run the Bot there?
+2. **Execution designs.** Reconcile `m_computer` and `m_device` with `bot-execution-environment.md`.
 3. **Vault across machines.** Out of scope. If wanted it needs its own design (ciphertext only, key distribution).
 4. **Home machine and groups for v1.** Confirm the plain rule above: each Bot runs on one machine at a time, and a group's members all live on that machine. If you want Bots from several machines in one group, that is the relay design, a larger step.

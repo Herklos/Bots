@@ -11,14 +11,14 @@ async fn a_tombstone_comes_back_when_the_file_returns() {
     world.rig.engine.run_once().await.unwrap();
     assert!(tombstone_flag(world.rig.sync_dir.path(), path));
     assert_eq!(
-        files_with_path(&world.mock.url, path).await[0]["properties"]["hb_deleted"],
+        files_with_path(&world.mock.url, path).await[0]["properties"]["m_deleted"],
         true
     );
     world.write(path, b"again\n");
     world.rig.engine.run_once().await.unwrap();
     let rows = files_with_path(&world.mock.url, path).await;
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0]["properties"]["hb_deleted"], false);
+    assert_eq!(rows[0]["properties"]["m_deleted"], false);
     assert_eq!(remote_body(&world.mock.url, &rows[0]).await, b"again\n");
     assert!(!tombstone_flag(world.rig.sync_dir.path(), path));
 }

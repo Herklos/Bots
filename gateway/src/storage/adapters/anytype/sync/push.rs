@@ -318,7 +318,7 @@ async fn finish(
         entry.local_mtime_ns = job.mtime_ns;
     }
     let rev = rev_of(ctx, &job.rel);
-    entry.extra.insert("hb_rev".to_string(), Value::from(rev));
+    entry.extra.insert("m_rev".to_string(), Value::from(rev));
     let outcome = commit(ctx, &job.rel, entry, bytes, true).await?;
     if matches!(outcome, Outcome::Applied) && !tombstone {
         ctx.echo.remember(&job.rel, sha);
@@ -378,7 +378,7 @@ fn rev_of(ctx: &Ctx<'_>, rel: &str) -> i64 {
     ctx.manifest
         .entries
         .get(rel)
-        .and_then(|entry| entry.extra.get("hb_rev"))
+        .and_then(|entry| entry.extra.get("m_rev"))
         .and_then(Value::as_i64)
         .unwrap_or(0)
         .saturating_add(1)
@@ -417,7 +417,7 @@ trait TapSha {
 impl TapSha for Value {
     fn tap_sha(mut self, sha: &str) -> Value {
         if let Some(object) = self.as_object_mut() {
-            object.insert("hb_sha".to_string(), Value::from(sha));
+            object.insert("m_sha".to_string(), Value::from(sha));
         }
         self
     }

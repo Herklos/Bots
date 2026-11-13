@@ -1,6 +1,6 @@
 use super::super::hook::{Control, Hook, Step};
 use super::super::status::Phase;
-use super::support::{files_with_path, hb_files, seed, write_rel, World};
+use super::support::{files_with_path, m_files, seed, write_rel, World};
 use std::sync::{Arc, Mutex};
 
 struct Order {
@@ -38,7 +38,7 @@ async fn first_sync_dry_run_then_import_overlapping_paths() {
         "seed-both",
     )
     .await;
-    let before = hb_files(&world.mock.url).await.len();
+    let before = m_files(&world.mock.url).await.len();
     let preview = world.rig.engine.dry_run().await.unwrap();
     assert_eq!(preview.push, 3);
     assert_eq!(preview.pull, 1);
@@ -46,7 +46,7 @@ async fn first_sync_dry_run_then_import_overlapping_paths() {
     assert!(preview.estimate > std::time::Duration::ZERO);
     world.rig.engine.run_once().await.unwrap();
     assert_eq!(world.rig.engine.phase(), Phase::NeedsImport);
-    assert_eq!(hb_files(&world.mock.url).await.len(), before);
+    assert_eq!(m_files(&world.mock.url).await.len(), before);
     assert!(world.read("ada/memory/remote.md").is_none());
     assert_eq!(world.read("ada/memory/both.md").unwrap(), b"from-disk\n");
 
@@ -67,7 +67,7 @@ async fn first_sync_dry_run_then_import_overlapping_paths() {
             .len(),
         1
     );
-    assert_eq!(hb_files(&world.mock.url).await.len(), before + 3);
+    assert_eq!(m_files(&world.mock.url).await.len(), before + 3);
     let seen = paths.lock().expect("order").clone();
     let shared = seen
         .iter()

@@ -38,13 +38,13 @@ async fn filters_sorts_and_a_limit_in_the_body_is_refused() {
     let api = AnytypeClient::new(&mock.url, "k", "space-1").unwrap();
     let small = api
         .create_object(
-            &json!({"type": "hb_file", "name": "small", "properties": {"hb_size": 1}}),
+            &json!({"type": "m_file", "name": "small", "properties": {"m_size": 1}}),
             "small",
         )
         .await
         .unwrap();
     api.create_object(
-        &json!({"type": "hb_file", "name": "large", "properties": {"hb_size": 5}}),
+        &json!({"type": "m_file", "name": "large", "properties": {"m_size": 5}}),
         "large",
     )
     .await
@@ -52,8 +52,8 @@ async fn filters_sorts_and_a_limit_in_the_body_is_refused() {
 
     let greater = api
         .search(&json!({
-            "type": "hb_file",
-            "filters": [{"property": "hb_size", "condition": "greater", "value": 2}],
+            "type": "m_file",
+            "filters": [{"property": "m_size", "condition": "greater", "value": 2}],
         }))
         .await
         .unwrap();
@@ -62,7 +62,7 @@ async fn filters_sorts_and_a_limit_in_the_body_is_refused() {
 
     let sorted = api
         .search(&json!({
-            "sorts": [{"property": "hb_size", "direction": "desc"}],
+            "sorts": [{"property": "m_size", "direction": "desc"}],
         }))
         .await
         .unwrap();
@@ -70,7 +70,7 @@ async fn filters_sorts_and_a_limit_in_the_body_is_refused() {
 
     api.patch_object(
         small["id"].as_str().unwrap(),
-        &json!({"ops": [{"op": "set_properties", "set": {"hb_rev": 1}}]}),
+        &json!({"ops": [{"op": "set_properties", "set": {"m_rev": 1}}]}),
         None,
         "touch",
     )

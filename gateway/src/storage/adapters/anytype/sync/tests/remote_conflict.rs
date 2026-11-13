@@ -22,20 +22,20 @@ async fn a_conflict_resolved_in_anytype_clears_the_local_entry() {
     peer_text(&world.mock, &id, b"alpha\nLOCAL\nomega\n");
     let conflicts = api(&world.mock.url)
         .search(&json!({
-            "type": "hb_conflict",
-            "fields": ["hb_path", "hb_conflict_state"],
+            "type": "m_conflict",
+            "fields": ["m_path", "m_conflict_state"],
         }))
         .await
         .unwrap();
     let conflict_id = conflicts
         .iter()
-        .find(|row| row["properties"]["hb_path"].as_str() == Some(path))
+        .find(|row| row["properties"]["m_path"].as_str() == Some(path))
         .and_then(|row| row["id"].as_str())
         .unwrap()
         .to_string();
     assert!(world.mock.peer_write(
         &conflict_id,
-        json!({"hb_conflict_state": "resolved"}),
+        json!({"m_conflict_state": "resolved"}),
         false,
     ));
     world.rig.until_quiet().await;
@@ -63,15 +63,15 @@ async fn a_conflict_dismissed_in_anytype_clears_the_local_entry() {
     peer_text(&world.mock, &id, b"local\n");
     let conflicts = api(&world.mock.url)
         .search(&json!({
-            "type": "hb_conflict",
-            "fields": ["hb_path", "hb_conflict_state"],
+            "type": "m_conflict",
+            "fields": ["m_path", "m_conflict_state"],
         }))
         .await
         .unwrap();
     let conflict_id = conflicts[0]["id"].as_str().unwrap();
     assert!(world.mock.peer_write(
         conflict_id,
-        json!({"hb_conflict_state": "dismissed"}),
+        json!({"m_conflict_state": "dismissed"}),
         false,
     ));
     world.rig.until_quiet().await;

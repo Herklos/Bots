@@ -13,7 +13,7 @@ impl Hook for Bump {
     fn on_step(&mut self, step: Step, _path: &str) -> Control {
         if step == Step::BeforeRemoteCall && !self.armed {
             self.armed = true;
-            assert!(self.mock.peer_write(&self.id, json!({"hb_rev": 9}), false));
+            assert!(self.mock.peer_write(&self.id, json!({"m_rev": 9}), false));
         }
         Control::Continue
     }

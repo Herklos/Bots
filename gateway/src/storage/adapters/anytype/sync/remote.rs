@@ -1,5 +1,5 @@
 //! Remote listing. Cheap fields only. Content is fetched when those fields say it changed.
-//! Two objects with one `hb_path` keep the earliest `created_date`. The others are duplicates.
+//! Two objects with one `m_path` keep the earliest `created_date`. The others are duplicates.
 
 use super::super::client::{AnytypeClient, AnytypeError};
 use super::manifest::Entry;
@@ -57,17 +57,17 @@ impl Listing {
 pub(super) async fn list(client: &AnytypeClient) -> Result<Listing, AnytypeError> {
     let files = client
         .search(&json!({
-            "type": "hb_file",
+            "type": "m_file",
             "fields": [
-                "hb_path", "hb_sha", "hb_deleted", "hb_device", "hb_rev", "hb_size",
+                "m_path", "m_sha", "m_deleted", "m_device", "m_rev", "m_size",
                 "created_date", "last_modified_date",
             ],
         }))
         .await?;
     let conflicts = client
         .search(&json!({
-            "type": "hb_conflict",
-            "fields": ["hb_path", "hb_conflict_state"],
+            "type": "m_conflict",
+            "fields": ["m_path", "m_conflict_state"],
         }))
         .await?;
     Ok(parse(&files, &conflicts))
@@ -128,7 +128,7 @@ fn parse(files: &[Value], conflicts: &[Value]) -> Listing {
     }
     let mut conflict_map: BTreeMap<String, RemoteConflict> = BTreeMap::new();
     for row in conflicts {
-        let Some(path) = text_at(row, "hb_path") else {
+        let Some(path) = text_at(row, "m_path") else {
             skipped += 1;
             continue;
         };
@@ -140,7 +140,7 @@ fn parse(files: &[Value], conflicts: &[Value]) -> Listing {
             skipped += 1;
             continue;
         };
-        let state = text_at(row, "hb_conflict_state").unwrap_or_else(|| "open".to_string());
+        let state = text_at(row, "m_conflict_state").unwrap_or_else(|| "open".to_string());
         let next = RemoteConflict {
             object_id: object_id.to_string(),
             state,
@@ -161,7 +161,7 @@ fn parse(files: &[Value], conflicts: &[Value]) -> Listing {
 }
 
 fn parse_file(row: &Value) -> Option<(String, RemoteFile)> {
-    let path = text_at(row, "hb_path")?;
+    let path = text_at(row, "m_path")?;
     if !matches!(classify(&path), Class::Allow { .. }) {
         return None;
     }
@@ -172,11 +172,11 @@ fn parse_file(row: &Value) -> Option<(String, RemoteFile)> {
         path,
         RemoteFile {
             object_id,
-            advisory_sha: text_at(row, "hb_sha").unwrap_or_default(),
-            deleted: bool_at(row, "hb_deleted"),
+            advisory_sha: text_at(row, "m_sha").unwrap_or_default(),
+            deleted: bool_at(row, "m_deleted"),
             modified,
             created,
-            device: text_at(row, "hb_device"),
+            device: text_at(row, "m_device"),
         },
     ))
 }
@@ -184,7 +184,7 @@ fn parse_file(row: &Value) -> Option<(String, RemoteFile)> {
 async fn parse_object(client: &AnytypeClient, value: &Value) -> Result<Loaded, AnytypeError> {
     let props = value.get("properties");
     let deleted = props
-        .and_then(|props| props.get("hb_deleted"))
+        .and_then(|props| props.get("m_deleted"))
         .and_then(Value::as_bool)
         .unwrap_or(false);
     let modified = text_at(value, "last_modified_date");
@@ -197,7 +197,7 @@ async fn parse_object(client: &AnytypeClient, value: &Value) -> Result<Loaded, A
     let bytes = if let Some(file_id) = blob {
         client.download_file(&file_id).await?
     } else if let Some(text) = props
-        .and_then(|props| props.get("hb_content"))
+        .and_then(|props| props.get("m_content"))
         .and_then(Value::as_str)
     {
         text.as_bytes().to_vec()
@@ -215,7 +215,7 @@ async fn parse_object(client: &AnytypeClient, value: &Value) -> Result<Loaded, A
 }
 
 fn first_blob(props: &Value) -> Option<String> {
-    let id = props.get("hb_blob")?.as_array()?.first()?.as_str()?;
+    let id = props.get("m_blob")?.as_array()?.first()?.as_str()?;
     if id.is_empty() {
         None
     } else {

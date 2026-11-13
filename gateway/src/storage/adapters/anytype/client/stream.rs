@@ -1,4 +1,4 @@
-//! Search stream for `hb_file`. One SSE response: a snapshot, then live changes.
+//! Search stream for `m_file`. One SSE response: a snapshot, then live changes.
 //!
 //! The body is a search with no `query` and only the cheap fields. Content stays off
 //! this connection. A reconnect is a new request and a fresh snapshot. The caller
@@ -13,15 +13,15 @@ use std::collections::VecDeque;
 use std::pin::Pin;
 use std::time::Duration;
 
-/// Fields a stream may carry. `hb_content` and `hb_blob` are never requested.
+/// Fields a stream may carry. `m_content` and `m_blob` are never requested.
 const CHEAP_FIELDS: &[&str] = &[
-    "hb_path",
-    "hb_sha",
-    "hb_deleted",
-    "hb_device",
-    "hb_rev",
+    "m_path",
+    "m_sha",
+    "m_deleted",
+    "m_device",
+    "m_rev",
     "last_modified_date",
-    "hb_size",
+    "m_size",
 ];
 
 #[derive(Debug, Clone, PartialEq)]
@@ -54,7 +54,7 @@ impl FileStream {
 }
 
 impl AnytypeClient {
-    /// `POST /v2/spaces/{id}/search/stream?heartbeat=<seconds>` for `hb_file`.
+    /// `POST /v2/spaces/{id}/search/stream?heartbeat=<seconds>` for `m_file`.
     pub(crate) async fn open_file_stream(
         &self,
         heartbeat: Duration,
@@ -65,7 +65,7 @@ impl AnytypeClient {
             self.space_id
         );
         let body = json!({
-            "type": "hb_file",
+            "type": "m_file",
             "fields": CHEAP_FIELDS,
         });
         let response = self

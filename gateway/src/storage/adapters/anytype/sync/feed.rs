@@ -1,4 +1,4 @@
-//! Live `hb_file` search stream. Events are hints: the engine lists and fetches the
+//! Live `m_file` search stream. Events are hints: the engine lists and fetches the
 //! path. A dropped or refused stream (cap, 429) does not stop the loop; the caller
 //! polls. A reconnect is a new snapshot, diffed against the manifest. An id in the
 //! manifest but missing from that snapshot is only a hint — the cycle reads the
@@ -184,7 +184,7 @@ pub(super) fn ingest(engine: &mut Engine, note: Note, stream_up: &mut bool) -> b
             if is_echo(engine, &row) {
                 return false;
             }
-            if let Some(path) = field(&row, "hb_path") {
+            if let Some(path) = field(&row, "m_path") {
                 engine.nudge(&path);
             }
             true
@@ -211,7 +211,7 @@ fn diff_snapshot(
             continue;
         };
         seen.insert(id.to_string());
-        let Some(path) = field(row, "hb_path") else {
+        let Some(path) = field(row, "m_path") else {
             continue;
         };
         if echo_of(device, echo, &path, row) {
@@ -239,11 +239,11 @@ fn path_changed(manifest: &Manifest, path: &str, row: &Value) -> bool {
     let Some(entry) = manifest.entries.get(path) else {
         return true;
     };
-    let deleted = flag(row, "hb_deleted");
+    let deleted = flag(row, "m_deleted");
     if deleted != entry.tombstone {
         return true;
     }
-    let sha = field(row, "hb_sha").unwrap_or_default();
+    let sha = field(row, "m_sha").unwrap_or_default();
     if sha.is_empty() || entry.base_sha.as_deref() != Some(sha.as_str()) {
         return true;
     }
@@ -252,17 +252,17 @@ fn path_changed(manifest: &Manifest, path: &str, row: &Value) -> bool {
 }
 
 fn is_echo(engine: &Engine, row: &Value) -> bool {
-    let Some(path) = field(row, "hb_path") else {
+    let Some(path) = field(row, "m_path") else {
         return false;
     };
     echo_of(&engine.device_id, &engine.echo, &path, row)
 }
 
 fn echo_of(device: &str, echo: &super::echo::EchoBook, path: &str, row: &Value) -> bool {
-    let Some(sha) = field(row, "hb_sha") else {
+    let Some(sha) = field(row, "m_sha") else {
         return false;
     };
-    field(row, "hb_device").as_deref() == Some(device) && echo.matches(path, &sha)
+    field(row, "m_device").as_deref() == Some(device) && echo.matches(path, &sha)
 }
 
 fn path_of(manifest: &Manifest, id: &str) -> Option<String> {

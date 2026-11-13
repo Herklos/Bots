@@ -134,14 +134,14 @@ pub(super) fn api(url: &str) -> AnytypeClient {
     AnytypeClient::new(url, "k", "space").unwrap()
 }
 
-pub(super) async fn hb_files(url: &str) -> Vec<Value> {
+pub(super) async fn m_files(url: &str) -> Vec<Value> {
     // Live search omits properties unless `fields` names them.
     api(url)
         .search(&json!({
-            "type": "hb_file",
+            "type": "m_file",
             "fields": [
-                "hb_path", "hb_sha", "hb_deleted", "hb_device", "hb_rev", "hb_size",
-                "hb_content", "hb_blob", "created_date", "last_modified_date",
+                "m_path", "m_sha", "m_deleted", "m_device", "m_rev", "m_size",
+                "m_content", "m_blob", "created_date", "last_modified_date",
             ],
         }))
         .await
@@ -149,16 +149,16 @@ pub(super) async fn hb_files(url: &str) -> Vec<Value> {
 }
 
 pub(super) async fn files_with_path(url: &str, rel: &str) -> Vec<Value> {
-    hb_files(url)
+    m_files(url)
         .await
         .into_iter()
-        .filter(|row| row["properties"]["hb_path"].as_str() == Some(rel))
+        .filter(|row| row["properties"]["m_path"].as_str() == Some(rel))
         .collect()
 }
 
 pub(super) async fn remote_body(url: &str, object: &Value) -> Vec<u8> {
     let props = &object["properties"];
-    if let Some(id) = props["hb_blob"]
+    if let Some(id) = props["m_blob"]
         .as_array()
         .and_then(|ids| ids.first())
         .and_then(Value::as_str)
@@ -166,7 +166,7 @@ pub(super) async fn remote_body(url: &str, object: &Value) -> Vec<u8> {
     {
         return api(url).download_file(id).await.unwrap();
     }
-    props["hb_content"]
+    props["m_content"]
         .as_str()
         .unwrap_or("")
         .as_bytes()
@@ -188,10 +188,10 @@ pub(super) fn peer_text(mock: &Mock, id: &str, bytes: &[u8]) {
     assert!(mock.peer_write(
         id,
         json!({
-            "hb_content": text,
-            "hb_sha": sha256_hex(bytes),
-            "hb_deleted": false,
-            "hb_size": bytes.len(),
+            "m_content": text,
+            "m_sha": sha256_hex(bytes),
+            "m_deleted": false,
+            "m_size": bytes.len(),
         }),
         false,
     ));

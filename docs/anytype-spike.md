@@ -11,16 +11,16 @@
 | 7 | Latency | p50/p95 ms: get 2.7/7.3, patch 6.2/7.3, search of 100 rows 9.3/19.7, 256 KiB upload 1.4/2.4 |
 | 8 | Change detection | A body edit in the app sets `last_modified_date` and `last_modified_by`; the field is absent until first modification; `last_modified_date` filters only work with day precision, timestamp or epoch filters match nothing, so poll by sort plus client-side compare |
 | 9 | Search stream | Works on this build; SSE with per-match `object_added`, `snapshot_complete`, then `object_added`, `object_updated`, `object_removed`, `: keepalive` heartbeat; the app quitting closes the stream cleanly (EOF), no error event |
-| 10 | Key normalization | Explicit keys without digits come back unchanged (`hb_explicit_key`, type `hb_spike_file`); `hb_probe2` comes back stored as `hb_probe_2` |
+| 10 | Key normalization | Explicit keys without digits come back unchanged (`m_explicit_key`, type `m_spike_file`); `m_probe2` comes back stored as `m_probe_2` |
 | 11 | Archive and tombstone | Archived object leaves search, GET stays 200, PATCH is 409 `object_archived`; `restore` works; `?permanent=true` deletes for good; a tombstone object stays searchable and editable |
 
-All runs live against Anytype Desktop on `127.0.0.1:31009`, API version `2025-11-08`, in the scratch space billed `Bots` (the renamed `Test-AnyBot`, confirmed by the person before any write). One throwaway type (`hb_spike_file`) and its `spike_*` properties stay in that space forever, as the design predicts. No secrets written.
+All runs live against Anytype Desktop on `127.0.0.1:31009`, API version `2025-11-08`, in the scratch space billed `Bots` (the renamed `Test-AnyBot`, confirmed by the person before any write). One throwaway type (`m_spike_file`) and its `spike_*` properties stay in that space forever, as the design predicts. No secrets written.
 
 ## S2. Request shapes (from `GET /v2/docs/openapi.json`, verified live)
 
-- Create type: `POST /v2/spaces/{id}/types` with `{"name": "...", "api_key": "hb_spike_file", "layout": "basic", "property_definitions": [{"name": "...", "format": "text|number|checkbox|files..."}]}`. `api_key` is the explicit key. Response 201: `{"id", "key", "etag", "created": {"properties": [{"key", "name", "format"}...]}}`.
-- Create property: `POST /v2/spaces/{id}/properties` with `{"name": "...", "format": "text", "key": "hb_explicit_key"}`. Response 201: `{"id", "key"}`. Unknown names inside `property_definitions` mint lowercase snake keys (`Spike Path` becomes `spike_path`).
-- Create object: `POST /v2/spaces/{id}/objects`, shortcut body `{"type": "hb_spike_file", "name": "ada/memory/MEMORY.md", "properties": {"spike_path": "...", "spike_size": 12}, "markdown": "# H\n\nbody"}`. The second arm of the spec is a full AnyBlock document (`blocks` array). Response 201: `{"id", "type", "etag"}` both as `etag` member and `ETag` header.
+- Create type: `POST /v2/spaces/{id}/types` with `{"name": "...", "api_key": "m_spike_file", "layout": "basic", "property_definitions": [{"name": "...", "format": "text|number|checkbox|files..."}]}`. `api_key` is the explicit key. Response 201: `{"id", "key", "etag", "created": {"properties": [{"key", "name", "format"}...]}}`.
+- Create property: `POST /v2/spaces/{id}/properties` with `{"name": "...", "format": "text", "key": "m_explicit_key"}`. Response 201: `{"id", "key"}`. Unknown names inside `property_definitions` mint lowercase snake keys (`Spike Path` becomes `spike_path`).
+- Create object: `POST /v2/spaces/{id}/objects`, shortcut body `{"type": "m_spike_file", "name": "ada/memory/MEMORY.md", "properties": {"spike_path": "...", "spike_size": 12}, "markdown": "# H\n\nbody"}`. The second arm of the spec is a full AnyBlock document (`blocks` array). Response 201: `{"id", "type", "etag"}` both as `etag` member and `ETag` header.
 - Read object: `GET /v2/spaces/{id}/objects/{oid}` returns the whole AnyBlock document: `properties` dict plus `blocks` list. `ETag` header present.
 - Patch object: `PATCH /v2/spaces/{id}/objects/{oid}` with `{"ops": [{...}]}` only, 1 to 512 ops. No other body members exist. Verified ops: `{"op": "set_properties", "set": {"k": v}, "add": {...}, "remove": {...}, "unset": ["k"]}`, `{"op": "insert_blocks", "blocks": [{"type": "paragraph", "text": "..."}]}` (returns `created_blocks` map to real ids), `{"op": "replace_text", "find": "...", "replace": "..."}` (finds markdown source, 404 when absent). Request header `If-Match: <etag>`. Query: `dry_run`, `ids`, `create_missing_options`.
 - Search: `POST /v2/spaces/{id}/search?limit=25&offset=0`; pagination lives in the query string, a `limit` body member is a 400 with hint `resend with ?limit=25`. Body: `filters` (structured nodes: `{"property", "condition", "value"}` or `{"operator": "and|or", "filters": []}`) or a compact `filter` string, at most one of the two; also `type`, `fields`, `sorts` (`{"property", "direction"}`, 10 max), `query`. Response: `{"data": [{"id", "name", "type", "properties": {...}}], "total", "offset", "limit", "has_more"}`.
@@ -41,7 +41,7 @@ Measured fact: 256 KiB is safe and fast, the design's 1 MiB string limit is smal
 
 - Upload: `POST /v2/spaces/{id}/files`, `multipart/form-data`, one part named `file`, filename and Content-Type taken from the part. A JSON arm with `url` exists for import by URL. Response 201: `{"id", "name", "mime_type", "size"}`.
 - Stored name: `notes.bin` became `notes`, `memory.md` became `memory` (the extension is dropped, Anytype keeps mime separately). `Content-Type` sent as `text/markdown` came back `mime_type: "text/plain; charset=utf-8"`; `application/octet-stream` survived as is; uniform ASCII uploaded as a `.bin` also sniffed to `text/plain; charset=utf-8`. So the mime mainly comes from Anytype's sniffer.
-- `hb_blob` reference: a `files` format property holds a plain array of file id strings in the object document and in search rows: `"spike_blob": ["bafyrei..."]`.
+- `m_blob` reference: a `files` format property holds a plain array of file id strings in the object document and in search rows: `"spike_blob": ["bafyrei..."]`.
 - Download: `GET /v2/spaces/{id}/files/{fid}/content`, body byte exact, `Content-Length`, `ETag` (sha256-shaped), `Accept-Ranges: bytes`, `Last-Modified` absent. `HEAD` works. `Range: bytes=256-511` returns 206 with the exact slice.
 - Size limit: 100 MiB accepted in 0.7 s, 1 GiB accepted in 6.5 s, no limit reached. The 10 MiB JSON body cap does not apply to multipart.
 
@@ -86,9 +86,9 @@ Everything is single-digit to tens of milliseconds. The 10 s remote poll at 100 
 
 ## S10. Key normalization
 
-- Type: created with `api_key: "hb_spike_file"`, read back `key: "hb_spike_file"` unchanged.
-- Property: created with `key: "hb_explicit_key"`, read back unchanged.
-- Property created with `key: "hb_probe2"`: stored and returned as `hb_probe_2`, exactly the design's `hbprobe2` -> `hbprobe_2` rule. Digits split the snake key, so Michel keys already avoid digits, which stays mandatory.
+- Type: created with `api_key: "m_spike_file"`, read back `key: "m_spike_file"` unchanged.
+- Property: created with `key: "m_explicit_key"`, read back unchanged.
+- Property created with `key: "m_probe2"`: stored and returned as `m_probe_2`, exactly the design's `hbprobe2` -> `hbprobe_2` rule. Digits split the snake key, so Michel keys already avoid digits, which stays mandatory.
 - Unkeyed properties mint lowercase snake keys from display names (`Spike Path` -> `spike_path`).
 
 ## S11. Archive and tombstone (audit A3 confirmed once)

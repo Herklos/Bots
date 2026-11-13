@@ -9,9 +9,9 @@ async fn an_empty_earliest_object_takes_the_duplicate_then_the_extra_is_archived
     client
         .create_object(
             &json!({
-                "type": "hb_file",
+                "type": "m_file",
                 "name": path,
-                "properties": {"hb_path": path, "hb_deleted": false, "hb_sha": ""},
+                "properties": {"m_path": path, "m_deleted": false, "m_sha": ""},
             }),
             "shell",
         )

@@ -1,5 +1,5 @@
-//! This machine's `hb_device` object and the list of the others. One object per gateway
-//! on one machine, `hb_slug` is the engine's device id. The heartbeat re-creates the
+//! This machine's `m_device` object and the list of the others. One object per gateway
+//! on one machine, `m_slug` is the engine's device id. The heartbeat re-creates the
 //! object if it is gone and never returns an error to the caller: the loop logs it.
 
 use super::super::client::{AnytypeClient, AnytypeError};
@@ -24,14 +24,14 @@ pub(super) async fn register(
     version: &str,
 ) -> Result<(), AnytypeError> {
     let props = json!({
-        "hb_slug": device_id,
-        "hb_hostname": hostname,
-        "hb_gateway_version": version,
-        "hb_status": "online",
-        "hb_last_seen": unix_ms(),
+        "m_slug": device_id,
+        "m_hostname": hostname,
+        "m_gateway_version": version,
+        "m_status": "online",
+        "m_last_seen": unix_ms(),
     });
     if let Some(id) = own_id(client, device_id).await? {
-        let logical = outbox::idem_key(device_id, "hb_device", Op::Update, &props.to_string());
+        let logical = outbox::idem_key(device_id, "m_device", Op::Update, &props.to_string());
         client
             .patch_object(
                 &id,
@@ -41,9 +41,9 @@ pub(super) async fn register(
             )
             .await?;
     } else {
-        let logical = outbox::idem_key(device_id, "hb_device", Op::Create, &props.to_string());
+        let logical = outbox::idem_key(device_id, "m_device", Op::Create, &props.to_string());
         let body = json!({
-            "type": "hb_device",
+            "type": "m_device",
             "name": device_id,
             "properties": props,
         });
@@ -60,22 +60,22 @@ pub(super) async fn peers(
 ) -> Result<Vec<Peer>, AnytypeError> {
     let rows = client
         .search(&json!({
-            "type": "hb_device",
-            "fields": ["hb_slug", "hb_hostname", "hb_gateway_version", "hb_status", "hb_last_seen"],
+            "type": "m_device",
+            "fields": ["m_slug", "m_hostname", "m_gateway_version", "m_status", "m_last_seen"],
         }))
         .await?;
     let mut peers = Vec::new();
     for row in rows {
-        let slug = text_at(&row, "hb_slug").unwrap_or_default();
+        let slug = text_at(&row, "m_slug").unwrap_or_default();
         if slug.is_empty() || slug == device_id {
             continue;
         }
         peers.push(Peer {
             slug,
-            hostname: text_at(&row, "hb_hostname").unwrap_or_default(),
-            version: text_at(&row, "hb_gateway_version").unwrap_or_default(),
-            status: text_at(&row, "hb_status").unwrap_or_default(),
-            last_seen: number_at(&row, "hb_last_seen").unwrap_or(0),
+            hostname: text_at(&row, "m_hostname").unwrap_or_default(),
+            version: text_at(&row, "m_gateway_version").unwrap_or_default(),
+            status: text_at(&row, "m_status").unwrap_or_default(),
+            last_seen: number_at(&row, "m_last_seen").unwrap_or(0),
         });
     }
     peers.sort_by(|left, right| left.slug.cmp(&right.slug));
@@ -85,13 +85,13 @@ pub(super) async fn peers(
 async fn own_id(client: &AnytypeClient, device_id: &str) -> Result<Option<String>, AnytypeError> {
     let rows = client
         .search(&json!({
-            "type": "hb_device",
-            "fields": ["name", "hb_slug"],
+            "type": "m_device",
+            "fields": ["name", "m_slug"],
         }))
         .await?;
     Ok(rows
         .iter()
-        .filter(|row| text_at(row, "hb_slug").as_deref() == Some(device_id))
+        .filter(|row| text_at(row, "m_slug").as_deref() == Some(device_id))
         .filter_map(|row| row.get("id").and_then(Value::as_str))
         .map(str::to_string)
         .min())
@@ -114,7 +114,7 @@ fn number_at(row: &Value, field: &str) -> Option<i64> {
         .and_then(number_ms)
 }
 
-/// `hb_last_seen` is a millisecond number. A whole number arrives as an int; the
+/// `m_last_seen` is a millisecond number. A whole number arrives as an int; the
 /// app sends a float once in a while, and rounding loses no part that matters.
 #[allow(
     clippy::cast_possible_truncation,

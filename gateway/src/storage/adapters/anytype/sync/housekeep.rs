@@ -1,9 +1,9 @@
-//! Tombstone garbage collection, duplicate `hb_file` cleanup, and manifest compaction.
+//! Tombstone garbage collection, duplicate `m_file` cleanup, and manifest compaction.
 //! History revisions that aged out are pruned in the same pass.
 //!
 //! A tombstone older than 30 days is archived by whichever device sees it first.
 //! `409 object_archived` means another device already did that, and is success.
-//! Two objects with one `hb_path` keep the earliest. An empty earliest object takes
+//! Two objects with one `m_path` keep the earliest. An empty earliest object takes
 //! the other object's bytes, then the extra object is archived.
 
 use super::super::client::AnytypeError;

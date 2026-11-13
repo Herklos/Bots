@@ -29,17 +29,17 @@ async fn the_stream_sends_a_snapshot_then_live_changes_without_content() {
     let created = api
         .create_object(
             &json!({
-                "type": "hb_file",
+                "type": "m_file",
                 "name": "ada/memory/note.md",
                 "properties": {
-                    "hb_path": "ada/memory/note.md",
-                    "hb_sha": "sha-1",
-                    "hb_deleted": false,
-                    "hb_device": "other",
-                    "hb_rev": 1,
-                    "hb_size": 3,
-                    "hb_content": "secret-content",
-                    "hb_blob": ["blob-1"],
+                    "m_path": "ada/memory/note.md",
+                    "m_sha": "sha-1",
+                    "m_deleted": false,
+                    "m_device": "other",
+                    "m_rev": 1,
+                    "m_size": 3,
+                    "m_content": "secret-content",
+                    "m_blob": ["blob-1"],
                 }
             }),
             "create-1",
@@ -54,11 +54,11 @@ async fn the_stream_sends_a_snapshot_then_live_changes_without_content() {
         panic!("expected object_added, got {added:?}");
     };
     assert_eq!(row["id"], id);
-    assert_eq!(row["properties"]["hb_path"], "ada/memory/note.md");
-    assert_eq!(row["properties"]["hb_sha"], "sha-1");
-    assert!(row["properties"].get("hb_content").is_none());
-    assert!(row["properties"].get("hb_blob").is_none());
-    assert!(row.get("hb_content").is_none());
+    assert_eq!(row["properties"]["m_path"], "ada/memory/note.md");
+    assert_eq!(row["properties"]["m_sha"], "sha-1");
+    assert!(row["properties"].get("m_content").is_none());
+    assert!(row["properties"].get("m_blob").is_none());
+    assert!(row.get("m_content").is_none());
     assert!(matches!(
         take(&mut stream).await,
         StreamEvent::SnapshotComplete
@@ -75,13 +75,13 @@ async fn the_stream_sends_a_snapshot_then_live_changes_without_content() {
     assert_eq!(
         fields,
         [
-            "hb_path",
-            "hb_sha",
-            "hb_deleted",
-            "hb_device",
-            "hb_rev",
+            "m_path",
+            "m_sha",
+            "m_deleted",
+            "m_device",
+            "m_rev",
             "last_modified_date",
-            "hb_size",
+            "m_size",
         ]
     );
 
@@ -94,15 +94,15 @@ async fn the_stream_sends_a_snapshot_then_live_changes_without_content() {
 
     assert!(mock.peer_write(
         &id,
-        json!({"hb_sha": "sha-2", "hb_content": "still-secret"}),
+        json!({"m_sha": "sha-2", "m_content": "still-secret"}),
         false,
     ));
     let updated = take(&mut stream).await;
     let StreamEvent::Updated(row) = updated else {
         panic!("expected object_updated, got {updated:?}");
     };
-    assert_eq!(row["properties"]["hb_sha"], "sha-2");
-    assert!(row["properties"].get("hb_content").is_none());
+    assert_eq!(row["properties"]["m_sha"], "sha-2");
+    assert!(row["properties"].get("m_content").is_none());
 
     api.archive_object(&id, "archive-1").await.unwrap();
     assert_eq!(

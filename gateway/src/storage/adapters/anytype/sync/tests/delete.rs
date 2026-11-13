@@ -13,7 +13,7 @@ async fn local_delete_tombstones_the_object() {
     world.rig.engine.run_once().await.unwrap();
     let rows = files_with_path(&world.mock.url, path).await;
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0]["properties"]["hb_deleted"], true);
+    assert_eq!(rows[0]["properties"]["m_deleted"], true);
     assert!(tombstone_flag(world.rig.sync_dir.path(), path));
     assert!(world.read(path).is_none());
 }
@@ -31,7 +31,7 @@ async fn remote_delete_removes_the_local_file_and_keeps_history() {
         .to_string();
     assert!(world.mock.peer_write(
         &id,
-        json!({"hb_deleted": true, "hb_content": "", "hb_sha": ""}),
+        json!({"m_deleted": true, "m_content": "", "m_sha": ""}),
         false,
     ));
     world.rig.until_quiet().await;

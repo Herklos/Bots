@@ -156,7 +156,7 @@ impl MockState {
         stamp(self.tick)
     }
 
-    /// Digits split a snake key (`hb_probe2` comes back `hb_probe_2`).
+    /// Digits split a snake key (`m_probe2` comes back `m_probe_2`).
     /// An explicit rewrite, used by the drift test, wins over that rule.
     pub(super) fn finish_key(&self, key: &str) -> String {
         if let Some(rewritten) = self.rewrites.get(key) {

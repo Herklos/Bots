@@ -11,13 +11,13 @@ This file is the executable slice of [anytype-backend.md](anytype-backend.md) (t
 **In scope (v1, milestones M0 to M7).**
 
 1. A hardened Anytype HTTP client (limits, retries, etags, idempotency).
-2. Idempotent schema bootstrap of four types: `hb_meta`, `hb_file`, `hb_conflict`, `hb_device`.
+2. Idempotent schema bootstrap of four types: `m_meta`, `m_file`, `m_conflict`, `m_device`.
 3. A sync engine for **tier A**: byte-exact files under an allow list (`memory/**`, `skills/**`, `library/**`, `.bot/attachments/**`, `.bot/library.json`, `.botapp/shared-memory.md`). Push, pull, three-way merge, tombstones, conflicts, history, crash safety, offline queue.
 4. Change detection: disk scan plus Anytype poll (v1), search stream (M6).
 5. Wiring: the backend actually becomes "Anytype", a status API, a Settings Sync block, a `SyncedWorkspace` so `Library` writes notify the engine.
 6. Tests: a mock Anytype server with a concurrent peer, fault injection, a live smoke run.
 
-**Out of scope for this plan (later phases of the design).** Typed stores (`hb_bot`, `hb_group`, records, settings objects), page-backed documents with the markdown codec (P5), catalog types, widgets and collections, multi-machine home-machine rules, import/export CLI, multi-instance validation (P9). Where v1 must leave a seam for them, the plan says so.
+**Out of scope for this plan (later phases of the design).** Typed stores (`m_bot`, `m_group`, records, settings objects), page-backed documents with the markdown codec (P5), catalog types, widgets and collections, multi-machine home-machine rules, import/export CLI, multi-instance validation (P9). Where v1 must leave a seam for them, the plan says so.
 
 **Non-goals.** Syncing secrets, T3 transcripts, `bot.json` runtime fields, or derived files (see the path policy in 5.2). Using the Anytype MCP. Using Anytype chat features.
 
@@ -87,8 +87,8 @@ gateway/src/storage/
       files.rs        upload, download (M0 decides the shape)
       stream.rs       SSE search stream (M6)
     schema/           declarative table + bootstrap
-      table.rs        the type and property declarations (hb_meta, hb_file, hb_conflict, hb_device)
-      bootstrap.rs    idempotent create, read back keys, write hb_meta
+      table.rs        the type and property declarations (m_meta, m_file, m_conflict, m_device)
+      bootstrap.rs    idempotent create, read back keys, write m_meta
     tests/            mock server and client tests
       mock/           in-memory Anytype: types, properties, objects, search, 409/429/archived switches, peer writer
       client.rs, schema.rs
@@ -115,28 +115,28 @@ Decide `storage/sync/` vs a top-level `sync/`. Use `storage/sync/` (it is the st
 
 ## 4. Data model on the Anytype side
 
-Only the four types v1 needs. Keys contain **no digits** and are passed explicitly (design rule 1: Anytype normalizes keys, and `hbprobe2` became `hbprobe_2`). After creating, always read the key back and store the mapping in `hb_meta`.
+Only the four types v1 needs. Keys contain **no digits** and are passed explicitly (design rule 1: Anytype normalizes keys, and `hbprobe2` became `hbprobe_2`). After creating, always read the key back and store the mapping in `m_meta`.
 
-Properties (format in parentheses): `hb_path` (text), `hb_dir` (text), `hb_content` (text), `hb_sha` (text), `hb_size` (number), `hb_mime` (text), `hb_mtime` (number), `hb_deleted` (checkbox), `hb_owner_bot` (text), `hb_device` (text), `hb_rev` (number), `hb_blob` (files), `hb_schema_version` (number), `hb_min_gateway` (text), `hb_keys_json` (text), `hb_conflict_state` (select: `open`, `resolved`, `dismissed`), `hb_device_a`, `hb_device_b`, `hb_sha_a`, `hb_sha_b` (text), `hb_detected_at` (date), `hb_copy_a`, `hb_copy_b` (files), `hb_slug` (text), `hb_hostname`, `hb_gateway_version`, `hb_status` (text), `hb_last_seen` (number).
+Properties (format in parentheses): `m_path` (text), `m_dir` (text), `m_content` (text), `m_sha` (text), `m_size` (number), `m_mime` (text), `m_mtime` (number), `m_deleted` (checkbox), `m_owner_bot` (text), `m_device` (text), `m_rev` (number), `m_blob` (files), `m_schema_version` (number), `m_min_gateway` (text), `m_keys_json` (text), `m_conflict_state` (select: `open`, `resolved`, `dismissed`), `m_device_a`, `m_device_b`, `m_sha_a`, `m_sha_b` (text), `m_detected_at` (date), `m_copy_a`, `m_copy_b` (files), `m_slug` (text), `m_hostname`, `m_gateway_version`, `m_status` (text), `m_last_seen` (number).
 
 Types:
 
 | Type key | Layout | Purpose | Properties |
 |---|---|---|---|
-| `hb_meta` | basic | Singleton: schema version, key map | `hb_schema_version`, `hb_min_gateway`, `hb_keys_json` |
-| `hb_file` | basic | One synced path, byte exact | `hb_path`, `hb_dir`, `hb_content`, `hb_blob`, `hb_sha`, `hb_size`, `hb_mime`, `hb_mtime`, `hb_deleted`, `hb_owner_bot`, `hb_device`, `hb_rev` |
-| `hb_conflict` | basic | An unresolved disagreement | `hb_path`, `hb_owner_bot`, `hb_conflict_state`, `hb_device_a`, `hb_device_b`, `hb_sha_a`, `hb_sha_b`, `hb_copy_a`, `hb_copy_b`, `hb_detected_at` |
-| `hb_device` | basic | One gateway on one machine | `hb_slug`, `hb_hostname`, `hb_gateway_version`, `hb_status`, `hb_last_seen` |
+| `m_meta` | basic | Singleton: schema version, key map | `m_schema_version`, `m_min_gateway`, `m_keys_json` |
+| `m_file` | basic | One synced path, byte exact | `m_path`, `m_dir`, `m_content`, `m_blob`, `m_sha`, `m_size`, `m_mime`, `m_mtime`, `m_deleted`, `m_owner_bot`, `m_device`, `m_rev` |
+| `m_conflict` | basic | An unresolved disagreement | `m_path`, `m_owner_bot`, `m_conflict_state`, `m_device_a`, `m_device_b`, `m_sha_a`, `m_sha_b`, `m_copy_a`, `m_copy_b`, `m_detected_at` |
+| `m_device` | basic | One gateway on one machine | `m_slug`, `m_hostname`, `m_gateway_version`, `m_status`, `m_last_seen` |
 
-Rules for `hb_file` (all from the design audit):
+Rules for `m_file` (all from the design audit):
 
-- **Object name** = the rel path (for example `ada/memory/MEMORY.md`), so a person sees something readable in Anytype. **Identity is `hb_path`**, not the name.
-- `hb_path` is the rel path under `HBOTS_ROOT` using `/`. It must pass `safe_rel` and the allow list on every pull (a pulled path is untrusted input).
-- Text content that is valid UTF-8 and at most **256 KiB** goes in `hb_content`. Anything larger or binary goes in `hb_blob` as an Anytype file and `hb_content` stays empty. `hb_sha` is always the sha256 of the **raw bytes**, lowercase hex.
-- **`hb_sha` and `hb_content` are not trusted together** (a concurrent property merge can pair one machine's content with another's sha). On every read the engine recomputes the sha from the content it received and uses that. `hb_sha`, `hb_rev`, `hb_device`, `hb_mtime` are advisory.
-- **Delete = tombstone**: set `hb_deleted=true` and clear `hb_content`. Never archive on delete, because an archived object disappears from search and cannot be edited (409 `object_archived`). Garbage collection of tombstones older than 30 days (archive to Bin) is M7.
-- **Duplicates**: two `hb_file` objects with one `hb_path` can appear after a crash or a race. Keep the earliest `created_date`, merge into it, tombstone-archive the other (M5).
-- Exactly one `hb_meta` object. If several exist, use the earliest.
+- **Object name** = the rel path (for example `ada/memory/MEMORY.md`), so a person sees something readable in Anytype. **Identity is `m_path`**, not the name.
+- `m_path` is the rel path under `HBOTS_ROOT` using `/`. It must pass `safe_rel` and the allow list on every pull (a pulled path is untrusted input).
+- Text content that is valid UTF-8 and at most **256 KiB** goes in `m_content`. Anything larger or binary goes in `m_blob` as an Anytype file and `m_content` stays empty. `m_sha` is always the sha256 of the **raw bytes**, lowercase hex.
+- **`m_sha` and `m_content` are not trusted together** (a concurrent property merge can pair one machine's content with another's sha). On every read the engine recomputes the sha from the content it received and uses that. `m_sha`, `m_rev`, `m_device`, `m_mtime` are advisory.
+- **Delete = tombstone**: set `m_deleted=true` and clear `m_content`. Never archive on delete, because an archived object disappears from search and cannot be edited (409 `object_archived`). Garbage collection of tombstones older than 30 days (archive to Bin) is M7.
+- **Duplicates**: two `m_file` objects with one `m_path` can appear after a crash or a race. Keep the earliest `created_date`, merge into it, tombstone-archive the other (M5).
+- Exactly one `m_meta` object. If several exist, use the earliest.
 
 Anytype limits the engine must respect (measured values from the M0 spike, see `docs/anytype-spike.md` S3 and S6): text properties round-trip byte exact beyond 1 MiB (tested 4 MiB), so the real write cap is the 10 MiB request body (413 `request_too_large`), not a property limit; 128 properties; writes rate limited at burst 60 then exactly 1 per second sustained, 429 with no `Retry-After` header. Reads are not limited.
 
@@ -150,7 +150,7 @@ Directory `~/.hbots/sync/` (under `data_root`, outside the Bots root so copying 
 - `device-id`: a uuid created once.
 - `outbox.jsonl`: one JSON line per pending remote write `{ id, path, op, sha, idem_key, attempts, next_at }`. Written before the remote call, removed after the acknowledgement. Replays are safe because every mutation carries a stable `Idempotency-Key = sha256(device_id | path | op | sha)`.
 - `history/<sha-of-path>/<rev>.bin`: copies of every version this device overwrites or removes (last 20 per path or 14 days, whichever keeps more). This is the safety net for the one race that cannot be removed.
-- `conflicts.json`: local index of open conflicts for the UI (the `hb_conflict` object is the shared record).
+- `conflicts.json`: local index of open conflicts for the UI (the `m_conflict` object is the shared record).
 
 All files written with `storage::write_atomic`. Mode 0600 for the manifest and outbox.
 
@@ -163,7 +163,7 @@ Allow (per Bot): `memory/**`, `skills/**`, `library/**`, `.bot/attachments/**`, 
 Deny, always, checked on push **and** on every pulled path, with symlinks refused (`symlink_metadata`, never follow):
 `AGENTS.md`, `CLAUDE.md`, `.mcp.json`, `.codex/**`, `.claude/**`, `.bot/bot.json`, `.bot/local.json`, `.bot/connectors.json`, `.botapp/**` except `shared-memory.md`, `.git/**`, `*.conflict-*`, `*.tmp`, `*.lock`, anything outside the root, and the secret files by name (`vault.enc`, `.vault-key`, `access.json`, `session-secret`, `.bot-mcp-token`, `t3-token`, `.env`, `storage.json`, `anytype-key`).
 
-Why `bot.json` is denied in v1: it mixes shared fields with the T3 binding (`projectId`, `mainThreadId`), `workspaceRoot` and `lastSeenAt`, which differ per machine. Syncing it needs the typed `hb_bot` store (later phase) or a split into `bot.json` and `local.json`. A second machine therefore gets files, not Bots, until that phase. State this plainly in the Settings copy (see 8).
+Why `bot.json` is denied in v1: it mixes shared fields with the T3 binding (`projectId`, `mainThreadId`), `workspaceRoot` and `lastSeenAt`, which differ per machine. Syncing it needs the typed `m_bot` store (later phase) or a split into `bot.json` and `local.json`. A second machine therefore gets files, not Bots, until that phase. State this plainly in the Settings copy (see 8).
 
 `MergePolicy`: `Text3Way` for `*.md`, `*.txt`, `*.html`; `Whole` (no merge, conflict if both sides changed) for `*.json` and binaries. `.bot/library.json` is `Whole` because a JSON blob cannot be merged by lines safely.
 
@@ -172,12 +172,12 @@ Why `bot.json` is denied in v1: it mixes shared fields with the T3 binding (`pro
 `engine.run_once()`:
 
 1. **Scan local.** Walk the allow-listed paths under `bots_root` (reuse the walker idea in `filesystem/copy.rs`). For each file take `(size, mtime_ns)`. If equal to the manifest's cached values, reuse `base_sha` as the current sha. Otherwise hash it. Skip a file modified within the last 1 s (a writer may be mid-write) and pick it up next cycle. Result: `LocalState = { rel -> Present{sha,size,mtime} | Absent }`.
-2. **List remote.** Search `hb_file` objects in the space with the `fields` projection `hb_path, hb_sha, hb_deleted, hb_device, hb_rev, last_modified_date, hb_size` (no content). Paginate with the walker. Result: `RemoteState = { rel -> Present{object_id, etag?, sha, modified} | Tombstone{...} | Absent }`. If the same `hb_path` appears twice, pick the earliest `created_date` as the object and schedule duplicate cleanup. Measured in M0 (spike S9): `last_modified_date` is absent on objects never modified after create, and filtering on it only matches with day precision, so compare it client-side, never filter on it at second precision.
+2. **List remote.** Search `m_file` objects in the space with the `fields` projection `m_path, m_sha, m_deleted, m_device, m_rev, last_modified_date, m_size` (no content). Paginate with the walker. Result: `RemoteState = { rel -> Present{object_id, etag?, sha, modified} | Tombstone{...} | Absent }`. If the same `m_path` appears twice, pick the earliest `created_date` as the object and schedule duplicate cleanup. Measured in M0 (spike S9): `last_modified_date` is absent on objects never modified after create, and filtering on it only matches with day precision, so compare it client-side, never filter on it at second precision.
 3. **Decide per path** with the pure function `decide(base, local, remote) -> Action` (table below). Unit-test it exhaustively.
 4. **Apply** actions in a fixed order: pulls and local deletes first, then pushes, bounded per cycle (default 50 remote writes) so a first sync of a large tree is incremental.
 5. **Update manifest** after each acknowledged action, not at the end, so a crash resumes.
 
-For a remote path whose cheap fields suggest a change (`hb_sha` differs from the manifest, or `last_modified_date` is newer than `remote_modified`), fetch the full object (content) before deciding. A newer `last_modified_date` with an unchanged `hb_sha` means a person edited in the app: recompute the sha from the fetched content, because the advisory fields are stale (design finding A12).
+For a remote path whose cheap fields suggest a change (`m_sha` differs from the manifest, or `last_modified_date` is newer than `remote_modified`), fetch the full object (content) before deciding. A newer `last_modified_date` with an unchanged `m_sha` means a person edited in the app: recompute the sha from the fetched content, because the advisory fields are stale (design finding A12).
 
 ### 5.4 The decision table
 
@@ -198,17 +198,17 @@ For a remote path whose cheap fields suggest a change (`hb_sha` differs from the
 | b | None | b | local deleted | **Push tombstone** |
 | b | b | tombstone | remote deleted | **Delete local** (move a copy to history first) |
 | b | None | tombstone | both deleted | drop manifest entry |
-| b | L≠b | tombstone | local edited, remote deleted | **Edit wins**: push update with `hb_deleted=false` |
+| b | L≠b | tombstone | local edited, remote deleted | **Edit wins**: push update with `m_deleted=false` |
 | b | None | R≠b | local deleted, remote edited | **Edit wins**: pull create |
 
 Edit-wins on delete versus edit is deliberate: the safe error is a file coming back, never a file lost.
 
 ### 5.5 Applying actions
 
-- **Push create.** Search `hb_path` first (a crash between create and ack must not duplicate), else `POST objects` with `Idempotency-Key`. Store `object_id`, `etag`, `base_sha`.
+- **Push create.** Search `m_path` first (a crash between create and ack must not duplicate), else `POST objects` with `Idempotency-Key`. Store `object_id`, `etag`, `base_sha`.
 - **Push update.** `PATCH` with `If-Match: <etag>` and the new properties. On `409 etag_mismatch`: re-read the object, recompute its sha, and re-enter `decide` (remote equals base: retry; remote equals ours: done; otherwise conflict). At most 3 attempts per cycle.
 - **Pull.** Write through `write_atomic` after re-hashing the local file immediately before the rename. If it changed since the scan, abort this path (it becomes a conflict candidate next cycle). Preserve the executable bit only if the file had it locally. Create parent directories.
-- **Binary and large.** Upload via the files API (M0 fixes the exact call), then set `hb_blob`. On pull, download and verify the sha before replacing.
+- **Binary and large.** Upload via the files API (M0 fixes the exact call), then set `m_blob`. On pull, download and verify the sha before replacing.
 - **Delete local.** Copy to history, then `remove_file`. Never `remove_dir_all` from the engine.
 - **Every overwrite or delete of local content first stores the old bytes in the history ring.**
 
@@ -217,13 +217,13 @@ Edit-wins on delete versus edit is deliberate: the safe error is a file coming b
 On a true conflict:
 
 1. Keep the **local file as is** on disk (the harness may be using it).
-2. Create or update an `hb_conflict` object (state `open`) with `hb_path`, both shas and both versions as files (`hb_copy_a` local, `hb_copy_b` remote).
+2. Create or update an `m_conflict` object (state `open`) with `m_path`, both shas and both versions as files (`m_copy_a` local, `m_copy_b` remote).
 3. Write the remote version beside the local one as `<name>.conflict-<device8>-<utc>.<ext>` in the same folder so the person can diff with their normal tools. The path policy denies `*.conflict-*`, so these never sync.
 4. Record it in `conflicts.json` and in the status API. Stop syncing that path until resolved.
 
-Resolution (`POST /api/sync/conflicts/{id}/resolve` with `keep: "local" | "remote" | "both"`): `local` pushes the local content over the remote and sets the base; `remote` pulls the remote content over the local file (old local to history); `both` keeps the local file, renames the remote copy to a permanent sibling and treats it as a normal new file. Then mark the `hb_conflict` object `resolved`, delete the `.conflict-*` file.
+Resolution (`POST /api/sync/conflicts/{id}/resolve` with `keep: "local" | "remote" | "both"`): `local` pushes the local content over the remote and sets the base; `remote` pulls the remote content over the local file (old local to history); `both` keeps the local file, renames the remote copy to a permanent sibling and treats it as a normal new file. Then mark the `m_conflict` object `resolved`, delete the `.conflict-*` file.
 
-Resolving in the Anytype app (setting `hb_conflict_state` to `resolved` or `dismissed`) is detected by the next remote listing and clears the local entry.
+Resolving in the Anytype app (setting `m_conflict_state` to `resolved` or `dismissed`) is detected by the next remote listing and clears the local entry.
 
 ### 5.7 First sync (the moment Anytype is switched on)
 
@@ -274,7 +274,7 @@ Questions to answer, and write the answers into `docs/anytype-spike.md` (S2 onwa
 
 1. **Request shapes.** Fetch `GET /v2/docs/openapi.json` from the running app and record the exact bodies for: create type, create property, create object (with properties and `body`), patch object, search (filters, `fields`, pagination, sort), delete or archive, restore. Do not trust the shapes quoted in this plan.
 2. **Property limits.** Largest text property that round-trips byte exact (design says 1 MiB). Confirm 256 KiB is safe and fast.
-3. **Files.** Exact upload (multipart?) and download calls, size limit, what the stored name and mime become, how `hb_blob` references it, ranged download.
+3. **Files.** Exact upload (multipart?) and download calls, size limit, what the stored name and mime become, how `m_blob` references it, ranged download.
 4. **Etags.** Confirm `If-Match` semantics and that the response returns the new etag on create and patch.
 5. **`Idempotency-Key`.** Replay on create and on patch, including after a gateway restart.
 6. **Rate limiting.** Real 429 numbers and `Retry-After` header on a burst of 100 creates.
@@ -292,18 +292,18 @@ Exit: a short result table in `docs/anytype-spike.md`; the "Unknown" paragraph o
 - Add `AnytypeClient::new(host, key, space_id)` holding one shared `reqwest::Client` (connection reuse), `limiter`, and the error enum.
 - Implement `objects.rs`, `search.rs` (with the pagination walker), `schema.rs`, `files.rs` per the M0 results. Every mutation takes an explicit `idem_key`.
 - Add `reqwest`'s `stream` feature only in M6.
-- Build the **mock Anytype server** under `adapters/anytype/tests/mock/`: in-memory types, properties, objects, files, search with filters and `fields`, etags, `Idempotency-Key` replay, and switches to force: 409 etag mismatch, 429 with `Retry-After`, 404/410, archived, malformed body, slow response. Include a **peer writer** API that mutates an object as if from another machine, with per-property last-writer-wins and an option to tear a write (new `hb_content`, old `hb_sha`).
+- Build the **mock Anytype server** under `adapters/anytype/tests/mock/`: in-memory types, properties, objects, files, search with filters and `fields`, etags, `Idempotency-Key` replay, and switches to force: 409 etag mismatch, 429 with `Retry-After`, 404/410, archived, malformed body, slow response. Include a **peer writer** API that mutates an object as if from another machine, with per-property last-writer-wins and an option to tear a write (new `m_content`, old `m_sha`).
 - Tests: every error maps to the right `AnytypeError`; limiter shrinks on 429; replay with the same idempotency key does not duplicate.
 - Exit: `cargo test` green; no behavior change in the app.
 
 ### M2. Schema bootstrap (about 3 days)
 
 - `schema/table.rs`: the declarative table of section 4. One place defines keys, names, formats, layout.
-- `schema/bootstrap.rs`: list existing types and properties, create what is missing, **never rename or delete**, read the actual keys back, write them to the single `hb_meta` object along with `hb_schema_version=1` and `hb_min_gateway=<CARGO_PKG_VERSION>`. Re-running is a no-op.
+- `schema/bootstrap.rs`: list existing types and properties, create what is missing, **never rename or delete**, read the actual keys back, write them to the single `m_meta` object along with `m_schema_version=1` and `m_min_gateway=<CARGO_PKG_VERSION>`. Re-running is a no-op.
 - Readers tolerate unknown properties. Writers never send an option a select property does not hold.
 - Route `POST /api/storage/anytype/setup` (local-only like the other Anytype routes, uses `ensure_local`): runs bootstrap with `dryRun` support and returns what it would create.
-- Settings: a "Prepare space" button shown when the space is found but `hb_meta` is absent, and the existing check shows "Ready" once the schema is present. Strings in `app/strings/en.json` and `fr.json`.
-- Tests: bootstrap against the mock twice (idempotent); a space missing one property gets only that property; a drifted key is honored via `hb_keys_json`.
+- Settings: a "Prepare space" button shown when the space is found but `m_meta` is absent, and the existing check shows "Ready" once the schema is present. Strings in `app/strings/en.json` and `fr.json`.
+- Tests: bootstrap against the mock twice (idempotent); a space missing one property gets only that property; a drifted key is honored via `m_keys_json`.
 - Exit: against a scratch space, setup creates the four types once and Anytype shows them.
 
 ### M3. Sync core, local half (about 5 days)
@@ -322,7 +322,7 @@ Build everything that does not touch the network, with fakes.
 
 - `remote.rs` (listing), `apply.rs` (5.5), `conflict.rs` (5.6), `engine.rs` (5.3, 5.9), `status.rs`.
 - First-sync state machine (5.7) with dry run.
-- Engine tests against the mock, one file per topic under `sync/tests/`: push create, push update, pull create, pull update, delete both ways, edit-wins on delete, both edited (clean and conflict), first sync with overlapping paths, binary and large file, duplicate `hb_path`, tombstone resurrect, archived restore, etag retry, 429 backoff, offline then reconnect, outbox replay.
+- Engine tests against the mock, one file per topic under `sync/tests/`: push create, push update, pull create, pull update, delete both ways, edit-wins on delete, both edited (clean and conflict), first sync with overlapping paths, binary and large file, duplicate `m_path`, tombstone resurrect, archived restore, etag retry, 429 backoff, offline then reconnect, outbox replay.
 - **Fault injection** via a hook trait the engine calls between steps (`BeforeRemoteCall`, `AfterRemoteCall`, `BeforeManifestWrite`): kill the engine at each point, restart, assert no loss and no duplicate objects.
 - **Concurrency test**: two engines with two temp folders and two device ids against one mock, running random edits for a few hundred cycles. Assert the invariant: **no write that was acknowledged locally is ever lost**; after both quiesce, either both folders hold identical content or an open conflict exists for the path.
 - Exit: the invariant test passes with 1,000 random operations over 50 paths.
@@ -333,25 +333,25 @@ Build everything that does not touch the network, with fakes.
 - `view.rs`: `effective.backend` becomes `"anytype"` when the engine is running and `"filesystem"` otherwise, with `effective.reason` explaining a fallback. `available` lists both. Replace the `anytype_status()` stub with the real snapshot (`state`, `lastSync`, `outbox`, `conflicts`, `peers`).
 - Routes (all behind the normal session, refused through remote access like the other storage routes): `GET /api/sync/status`, `POST /api/sync/run`, `POST /api/sync/import`, `GET /api/sync/conflicts`, `POST /api/sync/conflicts/{id}/resolve`. Add to `api/router/mod.rs`. Keep each handler file under 500 lines.
 - `SyncedWorkspace` (`adapters/anytype/workspace.rs`): wraps `LocalDisk`, delegates everything, calls `engine.nudge(rel)` after `write` and `remove`. Swap it into `main.rs:136` only when the engine is running.
-- Device registration: create or update this machine's `hb_device` object (`hb_slug` = device id, hostname, version, `hb_last_seen` every 60 s). Read the others to show peers and lag.
+- Device registration: create or update this machine's `m_device` object (`m_slug` = device id, hostname, version, `m_last_seen` every 60 s). Read the others to show peers and lag.
 - Restart semantics: switching the backend still says "restart required" (the existing banner). Do not hot-swap the engine.
 - Settings UI (`app/app.contract`, strings in `en.json` and `fr.json`, tests in `app/app.test.contract`): a **Sync** card shown when Anytype is the active backend: state chip, last sync time, pending count, devices, a "Sync now" button, the import dry-run and confirm, and the conflict list with Keep mine, Keep Anytype and Keep both. Follow the card, label and button styles in the existing storage section (`FieldLabel`, `ActionMain`, `ActionQuiet`, `GroupCard`). Add a plain note: "Bots, prompts and settings do not sync yet. Memory, skills and library files do."
 - `bots/library`: nothing changes except it now holds `SyncedWorkspace`.
-- Exit: against a real scratch space, switching to Anytype and restarting pushes a Bot's `memory/` and `skills/`; editing a file on disk shows in Anytype within about 10 s; editing the `hb_content` property in Anytype changes the file; Settings shows the state.
+- Exit: against a real scratch space, switching to Anytype and restarting pushes a Bot's `memory/` and `skills/`; editing a file on disk shows in Anytype within about 10 s; editing the `m_content` property in Anytype changes the file; Settings shows the state.
 
 ### M6. Live change feed (about 3 days)
 
-- Enable `reqwest`'s `stream` feature. Implement `client/stream.rs`: open the search stream for `hb_file`, parse SSE (`object_added`, `object_updated`, `object_removed`, `snapshot_complete`), heartbeat, reconnect with backoff (a reconnect is a fresh snapshot, so diff it against the manifest; an object missing from the snapshot may only have left the set, so confirm with one read before acting).
+- Enable `reqwest`'s `stream` feature. Implement `client/stream.rs`: open the search stream for `m_file`, parse SSE (`object_added`, `object_updated`, `object_removed`, `snapshot_complete`), heartbeat, reconnect with backoff (a reconnect is a fresh snapshot, so diff it against the manifest; an object missing from the snapshot may only have left the set, so confirm with one read before acting).
 - The engine treats a stream event as a hint to list and fetch that path now. Keep the 10 s poll as the fallback when the stream is refused (cap hit, 429) or down.
 - Only the cheap fields are requested over the stream, never content.
-- Echo guard: ignore an event whose `hb_device` equals this device and whose `hb_sha` equals the one just pushed.
+- Echo guard: ignore an event whose `m_device` equals this device and whose `m_sha` equals the one just pushed.
 - Exit: a remote edit is applied within a couple of seconds; killing the stream falls back to polling without a gap; a mock test drops the stream mid-run.
 
 ### M7. Hardening and cleanup (about 4 days)
 
 - Tombstone garbage collection: archive tombstones older than 30 days (whichever device sees it first), tolerate `409 object_archived` races.
-- Duplicate `hb_file` cleanup from 4.
-- `hb_conflict` resolution detected from the Anytype side.
+- Duplicate `m_file` cleanup from 4.
+- `m_conflict` resolution detected from the Anytype side.
 - Outbox cap, history ring pruning, manifest compaction.
 - Logging: one debug line per decision (`path`, `decision`, shas), never content or keys. A small `sync.log` ring under `~/.hbots/sync/`.
 - **Soak**: 10 Bots, 2,000 files, a day of simulated edits and random kills on the mock. Compare final trees.
@@ -404,13 +404,13 @@ Rough total: about 7 to 8 weeks of focused work for M0 to M7. M3 and M4 carry mo
 3. The design's file paths (`gateway/src/anytype/...`, `gateway/src/workspace.rs`) are stale. The code now uses `gateway/src/storage/adapters/anytype/` and `gateway/src/storage/workspace.rs`.
 4. The design's P1 (trait hardening, `JsonDoc`, typed store traits) is **not** a prerequisite here. It stays valuable for later typed stores.
 5. The design's P2 settings work (pairing, key, space name, check) is already shipped. What remains of P2 is the object and schema client (M1, M2).
-6. `bot.json` is not synced in v1 (section 5.2). The design syncs it as `hb_bot` in P4.
+6. `bot.json` is not synced in v1 (section 5.2). The design syncs it as `m_bot` in P4.
 
 ## 11. Definition of done for v1
 
 1. With Anytype chosen and the schema prepared, after a restart the engine runs and Settings shows its state.
-2. A new file under a Bot's `memory/`, `skills/` or `library/` appears in Anytype as an `hb_file` object within about 10 s, with the exact bytes.
-3. Editing that object's `hb_content` in Anytype updates the file on disk, unless the file changed locally in the meantime, in which case a conflict is raised and both versions are kept.
+2. A new file under a Bot's `memory/`, `skills/` or `library/` appears in Anytype as an `m_file` object within about 10 s, with the exact bytes.
+3. Editing that object's `m_content` in Anytype updates the file on disk, unless the file changed locally in the meantime, in which case a conflict is raised and both versions are kept.
 4. Deleting a file in either place deletes it in the other, with the old copy kept in the history ring.
 5. Killing the gateway at any point, or stopping Anytype, loses nothing and duplicates nothing after recovery.
 6. A conflict is visible in Settings and in Anytype, and resolving it in either place clears it.

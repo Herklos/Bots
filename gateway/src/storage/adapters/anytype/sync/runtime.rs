@@ -47,7 +47,7 @@ pub(crate) struct PreviewJson {
     pub estimate_secs: u64,
 }
 
-/// One `hb_device` row, this machine or another gateway.
+/// One `m_device` row, this machine or another gateway.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Device {
     pub slug: String,
