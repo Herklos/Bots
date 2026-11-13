@@ -48,7 +48,7 @@ async fn newer_minimum_gateway_prevents_sync_and_prepare() {
         .await
         .unwrap();
     let id = rows[0]["id"].as_str().unwrap();
-    for minimum in ["0.4.5", "999.0.0", "unrecognized"] {
+    for minimum in ["0.4.6", "999.0.0", "unrecognized"] {
         let object = api.get_object(id).await.unwrap();
         api.patch_object(
             id,
@@ -141,8 +141,8 @@ async fn bootstrap_twice_is_a_no_op() {
         .await
         .unwrap();
     let meta = read_meta(&fetched, &BTreeMap::new());
-    assert_eq!(meta.version, Some(2));
-    assert_eq!(meta.min_gateway.as_deref(), Some("0.4.4"));
+    assert_eq!(meta.version, Some(3));
+    assert_eq!(meta.min_gateway.as_deref(), Some("0.4.5"));
     assert!(meta.keys.is_empty());
     assert!(schema_ready(&api).await.unwrap());
     let state = api.list_properties().await.unwrap();

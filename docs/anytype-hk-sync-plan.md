@@ -1,6 +1,6 @@
 # HK agents space → Bots space sync plan
 
-Status: proposal (2026-12). Inputs: the schema audit table in the request, [anytype-schema.md](anytype-schema.md), [anytype-tier-bc-plan.md](anytype-tier-bc-plan.md), and the HK org type definitions (`anytype-agents` skill, `references/object-types.md`).
+Status: phases 0–3 shipped (schema v3, `hk-survey`, two-pass `hk-import`); phase 4 (PM wiring) next. Inputs: the schema audit table in the request, [anytype-schema.md](anytype-schema.md), [anytype-tier-bc-plan.md](anytype-tier-bc-plan.md), and the HK org type definitions (`anytype-agents` skill, `references/object-types.md`).
 
 ## Premise
 

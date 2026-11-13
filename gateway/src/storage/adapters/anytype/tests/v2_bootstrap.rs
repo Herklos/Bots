@@ -31,12 +31,12 @@ async fn v1_space_upgrades_without_changing_existing_file_objects() {
     let before = api.get_object(file_id).await.unwrap();
     let preview = bootstrap(&api, true).await.unwrap();
     assert!(!preview.schema_ready);
-    assert_eq!(preview.types.len(), 16);
+    assert_eq!(preview.types.len(), 26);
     assert!(preview.types.iter().any(|kind| kind == "m_bot"));
     assert!(preview.meta);
     let report = bootstrap(&api, false).await.unwrap();
     assert!(report.schema_ready);
-    assert_eq!(report.types.len(), 16);
+    assert_eq!(report.types.len(), 26);
     let bot_type = api.get_type("m_bot").await.unwrap();
     let properties = bot_type["blocks"][0]["properties"].as_array().unwrap();
     for key in [
@@ -62,8 +62,8 @@ async fn v1_space_upgrades_without_changing_existing_file_objects() {
         .await
         .unwrap();
     let meta = read_meta(&object, &BTreeMap::new());
-    assert_eq!(meta.version, Some(2));
-    assert_eq!(meta.min_gateway.as_deref(), Some("0.4.4"));
+    assert_eq!(meta.version, Some(3));
+    assert_eq!(meta.min_gateway.as_deref(), Some("0.4.5"));
     let second = bootstrap(&api, false).await.unwrap();
     assert!(second.types.is_empty() && second.properties.is_empty() && !second.meta);
     assert!(bootstrap(&api, true).await.unwrap().schema_ready);
@@ -93,6 +93,6 @@ async fn v2_metadata_requires_the_distinct_minimum_release() {
     let object = api.get_object(id).await.unwrap();
     assert_eq!(
         read_meta(&object, &BTreeMap::new()).min_gateway.as_deref(),
-        Some("0.4.4")
+        Some("0.4.5")
     );
 }

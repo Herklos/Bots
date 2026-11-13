@@ -5,11 +5,15 @@
 
 pub(crate) mod bots;
 pub(crate) mod hk;
+pub(crate) mod hk_import;
+pub(crate) mod hk_map;
 pub(crate) mod mapper;
 pub(crate) mod outbox;
 pub(crate) mod settings;
 pub(crate) mod worker;
 
+#[cfg(test)]
+mod hk_import_tests;
 #[cfg(test)]
 mod tests;
 

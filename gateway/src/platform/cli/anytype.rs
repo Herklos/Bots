@@ -13,6 +13,7 @@ pub(crate) async fn run(flags: &Flags, rest: &[String]) -> anyhow::Result<()> {
     match sub {
         "prepare" => prepare(flags, !flags.has("dry-run")).await,
         "hk-survey" => hk_survey(flags, flags.has("json")).await,
+        "hk-import" => hk_import(flags, flags.has("apply")).await,
         other => {
             if other.is_empty() {
                 println!("Usage: hbots anytype <prepare|hk-survey> [options]");
@@ -41,7 +42,7 @@ fn error_note(error: &crate::storage::adapters::anytype::AnytypeError) -> String
     crate::storage::adapters::anytype::typed::error_note(error)
 }
 
-async fn prepare(flags: &Flags, write: bool) -> anyhow::Result<()> {
+async fn prepare(_flags: &Flags, write: bool) -> anyhow::Result<()> {
     let cfg = Config::from_env()?;
     let client = open_bots_client(&cfg).await?;
     let report = crate::storage::adapters::anytype::bootstrap(&client, !write)
@@ -93,6 +94,35 @@ async fn survey_clients(
         .await
         .map_err(|error| anyhow::anyhow!("HK space: {}", error.message))?;
     Ok((bots, hk))
+}
+
+async fn hk_import(flags: &Flags, apply: bool) -> anyhow::Result<()> {
+    let hk_space = flags
+        .value("hk-space")
+        .filter(|space| !space.is_empty() && *space != "true")
+        .ok_or_else(|| anyhow::anyhow!("hk-import needs --hk-space <name-or-id>"))?
+        .to_string();
+    let cfg = Config::from_env()?;
+    let (bots, hk) = survey_clients(&cfg, &hk_space).await?;
+    let report = crate::storage::adapters::anytype::typed::hk_import::run(&bots, &hk, apply).await;
+    let mode = if apply { "applied" } else { "dry run" };
+    println!(
+        "{}: {} would-create, {} created, {} updated, {} unresolved links, {} raw fields, {} errors",
+        mode,
+        report["staged"].as_i64().unwrap_or(0),
+        report["created"].as_array().map(Vec::len).unwrap_or(0),
+        report["updated"].as_array().map(Vec::len).unwrap_or(0),
+        report["unresolved"].as_array().map(Vec::len).unwrap_or(0),
+        report["raw_fields"].as_i64().unwrap_or(0),
+        report["errors"].as_array().map(Vec::len).unwrap_or(0),
+    );
+    for item in report["errors"].as_array().into_iter().flatten() {
+        println!("error: {}", item.as_str().unwrap_or(""));
+    }
+    if !apply && report["staged"].as_i64().unwrap_or(0) > 0 {
+        println!("re-run with --apply to write");
+    }
+    Ok(())
 }
 
 fn print_survey(report: &Value) {

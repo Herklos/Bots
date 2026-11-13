@@ -49,6 +49,8 @@ Usage: hbots <command> [options]
                      Create or update the space's hbots schema (v3), or show what it would create.
   anytype hk-survey --hk-space <name-or-id> [--json]
                      Read-only inventory of an HK org space against the Bots schema.
+  anytype hk-import --hk-space <name-or-id> [--apply]
+                     Two-pass import of that space into Bots (dry run by default).
   version            Print the version.
   help               Print this help.
 

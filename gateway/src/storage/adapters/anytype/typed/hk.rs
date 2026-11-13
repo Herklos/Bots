@@ -22,8 +22,10 @@ pub(crate) const HK_TYPES: &[HkType] = &[
     HkType { hk_key: "harness", bots_key: "m_harness" },
     HkType { hk_key: "runtime", bots_key: "m_harness" },
     HkType { hk_key: "harness_profile", bots_key: "m_model_profile" },
-    HkType { hk_key: "computer", bots_key: "m_computer" },
-    HkType { hk_key: "tool_profile", bots_key: "m_tool_profile" },
+    // No m_computer or m_tool_profile type exists in the schema; their
+    // objects are kept through `m_source_json` only (never materialized).
+    HkType { hk_key: "computer", bots_key: "" },
+    HkType { hk_key: "tool_profile", bots_key: "" },
     HkType { hk_key: "prompt", bots_key: "m_prompt" },
     HkType { hk_key: "memory", bots_key: "m_memory" },
     HkType { hk_key: "skill", bots_key: "m_skill" },
@@ -69,7 +71,7 @@ pub(crate) const AGENT_FIELDS: &[HkField] = &[
     HkField { hk: "lifecycle", dest: Dest::Property("m_lifecycle"), note: "select, same vocabulary" },
     HkField { hk: "autonomy", dest: Dest::Property("m_autonomy"), note: "dashes become underscores" },
     HkField { hk: "hermes_profile", dest: Dest::Property("m_slug"), note: "the adoption key" },
-    HkField { hk: "short_description", dest: Dest::Property("x"), note: "mission line" },
+    HkField { hk: "short_description", dest: Dest::Property("m_short_description"), note: "mission line" },
     HkField { hk: "harness_profile", dest: Dest::Property("m_model_profile"), note: "link to m_model_profile" },
     HkField { hk: "subagents", dest: Dest::Property("m_subagents"), note: "link to m_subagent objects" },
     HkField { hk: "delegation_enabled", dest: Dest::Property("m_delegation_enabled"), note: "" },
