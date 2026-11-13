@@ -124,11 +124,11 @@ component ChatScreen
           text nameOf(chatBag.bots, chatBag.slug) role="heading" aria-level=1 class=PageTitle overflow-wrap="anywhere" testId="chat-title" min-width=0 overflow="hidden" text-overflow="ellipsis" white-space="nowrap"
         column flex=1
         if sideOffer and newestSide != ""
-          button class=TextControl appearance="none" press=reopenSide aria-label=t("chat.side") title=t("chat.side") testId="side-reopen" min-height=36 padding="0 space.sm"
-            text t("chat.side") font="-exact-footnote"
+          button class=IconControl appearance="none" press=reopenSide aria-label=t("chat.side") title=t("chat.side") testId="side-reopen" width=36 height=36
+            Glyph(name="chat", size=18)
         else if sideOffer
-          button class=TextControl appearance="none" press=openSideChat("") aria-label=t("chat.side") title=t("chat.side") testId="side-open" min-height=36 padding="0 space.sm"
-            text t("chat.side") font="-exact-footnote"
+          button class=IconControl appearance="none" press=openSideChat("") aria-label=t("chat.side") title=t("chat.side") testId="side-open" width=36 height=36
+            Glyph(name="chat", size=18)
         button class=IconControl appearance="none" press=toggleChatSearch aria-label=t("chat.search") title=t("chat.search") testId="chat-search-open" width=36 height=36
           Glyph(name=(chatBag.chatSearching ? "close" : "search"), size=18)
       if chatBag.childThread != ""
