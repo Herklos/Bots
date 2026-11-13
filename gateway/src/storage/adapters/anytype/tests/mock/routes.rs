@@ -156,6 +156,13 @@ async fn search_space(
         });
     }
     let mock = state.lock().expect("mock");
+    if let Some(error) = mock.reject_unknown(&query) {
+        return respond(Reply {
+            status: 400,
+            body: error,
+            etag: None,
+        });
+    }
     let objects: Vec<_> = mock.objects.values().collect();
     let rows = search(&objects, &query);
     let (offset, limit) = page_bounds(&page_query);

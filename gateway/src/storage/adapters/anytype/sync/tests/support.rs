@@ -29,6 +29,7 @@ pub(super) struct World {
 impl World {
     pub(super) async fn start(device: &str) -> Self {
         let mock = Mock::start().await;
+        prepare(&mock).await;
         let rig = Rig::open(&mock.url, device);
         Self { mock, rig }
     }
@@ -44,6 +45,14 @@ impl World {
     pub(super) fn read(&self, rel: &str) -> Option<Vec<u8>> {
         read_rel(self.rig.root.path(), rel)
     }
+}
+
+/// A space is prepared (Settings, Prepare space) before sync ever runs.
+pub(super) async fn prepare(mock: &Mock) {
+    let client = AnytypeClient::new(&mock.url, "k", "space-1").unwrap();
+    crate::storage::adapters::anytype::bootstrap(&client, false)
+        .await
+        .unwrap();
 }
 
 impl Rig {

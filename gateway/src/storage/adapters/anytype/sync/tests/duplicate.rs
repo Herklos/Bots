@@ -7,7 +7,7 @@ async fn duplicate_hb_path_keeps_the_earliest_object() {
     let path = "ada/memory/dup.md";
     seed(&world.mock.url, path, b"earliest\n", "dup-a").await;
     seed(&world.mock.url, path, b"later\n", "dup-b").await;
-    assert_eq!(world.mock.object_count(), 2);
+    assert_eq!(world.mock.object_count(), 3);
     world.rig.until_quiet().await;
     assert_eq!(world.read(path).unwrap(), b"earliest\n");
     let rows = files_with_path(&world.mock.url, path).await;

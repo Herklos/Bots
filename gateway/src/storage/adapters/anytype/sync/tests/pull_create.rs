@@ -8,5 +8,5 @@ async fn pull_create_writes_a_remote_file() {
     seed(&world.mock.url, "ada/memory/remote.md", bytes, "seed-pull").await;
     world.rig.until_quiet().await;
     assert_eq!(world.read("ada/memory/remote.md").unwrap(), bytes);
-    assert_eq!(world.mock.object_count(), 1);
+    assert_eq!(world.mock.object_count(), 2);
 }

@@ -76,13 +76,6 @@ pub(crate) async fn bootstrap(
         });
     }
 
-    for key in &create_types {
-        let table = table::table(key).expect("declared type");
-        let created = client
-            .create_type(&type_body(table), &format!("hbots-type-{key}"))
-            .await?;
-        keys.insert(type_label(table), read_back(&created, key));
-    }
     for key in &create_properties {
         let column = table::column(key).expect("declared property");
         let created = client
@@ -90,8 +83,15 @@ pub(crate) async fn bootstrap(
             .await?;
         keys.insert((*key).to_string(), read_back(&created, key));
     }
+    for key in &create_types {
+        let table = table::table(key).expect("declared type");
+        let created = client
+            .create_type(&type_body(table, &keys), &format!("hbots-type-{key}"))
+            .await?;
+        keys.insert(type_label(table), read_back(&created, key));
+    }
     for (table, type_key) in &attach {
-        let body = json!({ "property_definitions": property_definitions(table) });
+        let body = json!({ "property_definitions": property_definitions(table, &keys) });
         client
             .patch_type(type_key, &body, &format!("hbots-type-defs-{}", table.key))
             .await?;
@@ -132,34 +132,21 @@ fn type_label(table: &Table) -> String {
     table::type_map_key(table.key)
 }
 
-fn type_body(table: &Table) -> Value {
+fn type_body(table: &Table, keys: &BTreeMap<String, String>) -> Value {
     json!({
         "name": table.name,
         "api_key": table.key,
         "layout": table.layout,
-        "property_definitions": property_definitions(table),
+        "property_definitions": property_definitions(table, keys),
     })
 }
 
-fn property_definitions(table: &Table) -> Vec<Value> {
+/// Link properties that already exist, by the key the space gave them.
+fn property_definitions(table: &Table, keys: &BTreeMap<String, String>) -> Vec<Value> {
     table
         .properties
         .iter()
-        .map(|key| {
-            let column = table::column(key).expect("declared property");
-            match column.options.is_empty() {
-                true => json!({ "name": column.name, "format": column.format }),
-                false => json!({
-                    "name": column.name,
-                    "format": column.format,
-                    "options": column
-                        .options
-                        .iter()
-                        .map(|option| json!({ "name": option }))
-                        .collect::<Vec<_>>(),
-                }),
-            }
-        })
+        .map(|key| json!({ "property": actual(keys, key) }))
         .collect()
 }
 
@@ -194,7 +181,15 @@ fn property_body(column: &Column) -> Value {
         "{}",
         column.key
     );
-    json!({ "name": column.name, "key": column.key, "format": column.format })
+    let mut body = json!({ "name": column.name, "key": column.key, "format": column.format });
+    if !column.options.is_empty() {
+        body["options"] = column
+            .options
+            .iter()
+            .map(|option| json!({ "name": option }))
+            .collect();
+    }
+    body
 }
 
 fn remember(
@@ -271,16 +266,9 @@ async fn meta_object(
         keys.get(&table::type_map_key("hb_meta"))
             .map(String::as_str),
     );
-    let mut body = json!({
-        "query": "hb_meta",
-        "fields": [
-            "name",
-            "hb_schema_version",
-            "hb_min_gateway",
-            "hb_keys_json",
-            "created_date",
-        ],
-    });
+    // No `fields` projection: the hb_* property keys do not exist yet in a
+    // fresh space and Anytype answers 400 for an unknown key.
+    let mut body = json!({ "query": "hb_meta" });
     if let Some(key) = type_key {
         body["type"] = json!(key);
     }

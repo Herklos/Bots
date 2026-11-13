@@ -7,6 +7,9 @@ use serde_json::{json, Value};
 
 impl MockState {
     pub(super) fn add_type(&mut self, body: &Value) -> Reply {
+        if let Some(error) = reject_type_body(body) {
+            return error;
+        }
         let key = self.finish_key(body["api_key"].as_str().unwrap_or(""));
         let id = self.alloc("type");
         let etag = self.next_etag();
@@ -14,14 +17,23 @@ impl MockState {
         let mut attached = Vec::new();
         if let Some(defs) = body["property_definitions"].as_array() {
             for def in defs {
-                let name = def["name"].as_str().unwrap_or("");
-                let format = def["format"].as_str().unwrap_or("text");
-                let row = self.insert_property(name, None, format);
-                created.push(json!({
-                    "key": row["key"],
-                    "name": row["name"],
-                    "format": row["format"],
-                }));
+                let row = match def["property"].as_str() {
+                    Some(key) => match self.properties.iter().find(|row| row["key"] == key) {
+                        Some(row) => row.clone(),
+                        None => return unknown_property(key),
+                    },
+                    None => {
+                        let name = def["name"].as_str().unwrap_or("");
+                        let format = def["format"].as_str().unwrap_or("text");
+                        let row = self.insert_property(name, None, format);
+                        created.push(json!({
+                            "key": row["key"],
+                            "name": row["name"],
+                            "format": row["format"],
+                        }));
+                        row
+                    }
+                };
                 attached.push(json!({
                     "property": row["name"],
                     "format": row["format"],
@@ -47,6 +59,43 @@ impl MockState {
         }
     }
 
+    /// True when a search by this type key would be refused by the app.
+    pub(super) fn knows_type(&self, key: &str) -> bool {
+        self.types.iter().any(|row| row["key"] == key)
+            || self.objects.values().any(|object| object.type_key == key)
+    }
+
+    /// The live app 400s on a `type` or a `fields` entry it has never heard of.
+    pub(super) fn reject_unknown(&self, body: &Value) -> Option<Value> {
+        if let Some(key) = body["type"].as_str().filter(|key| !key.is_empty()) {
+            if !self.knows_type(key) {
+                return Some(json!({
+                    "code": "validation_failed",
+                    "message": format!("type \"{key}\" not found"),
+                }));
+            }
+        }
+        let unknown = body["fields"]
+            .as_array()?
+            .iter()
+            .filter_map(Value::as_str)
+            .find(|key| !self.knows_property(key))?;
+        Some(json!({
+            "code": "validation_failed",
+            "message": format!("unknown property key \"{unknown}\""),
+        }))
+    }
+
+    pub(super) fn knows_property(&self, key: &str) -> bool {
+        const TOP: [&str; 5] = ["id", "name", "type", "created_date", "last_modified_date"];
+        TOP.contains(&key)
+            || self.properties.iter().any(|row| row["key"] == key)
+            || self
+                .objects
+                .values()
+                .any(|object| object.properties.get(key).is_some())
+    }
+
     /// The type row, shaped like the app's `blocks` dataview response.
     pub(super) fn get_type(&self, key: &str) -> Reply {
         match self.types.iter().find(|row| row["key"] == key) {
@@ -68,10 +117,18 @@ impl MockState {
         let mut attached = Vec::new();
         if let Some(defs) = body["property_definitions"].as_array() {
             for def in defs {
-                let name = def["name"].as_str().unwrap_or("");
-                let format = def["format"].as_str().unwrap_or("text");
-                self.insert_property(name, None, format);
-                attached.push(json!({ "property": name, "format": format }));
+                let row = match def["property"].as_str() {
+                    Some(key) => match self.properties.iter().find(|row| row["key"] == key) {
+                        Some(row) => row.clone(),
+                        None => return unknown_property(key),
+                    },
+                    None => {
+                        let name = def["name"].as_str().unwrap_or("");
+                        let format = def["format"].as_str().unwrap_or("text");
+                        self.insert_property(name, None, format)
+                    }
+                };
+                attached.push(json!({ "property": row["name"], "format": row["format"] }));
             }
         }
         let Some(row) = self.types.iter_mut().find(|row| row["key"] == key) else {
@@ -90,6 +147,9 @@ impl MockState {
     }
 
     pub(super) fn add_property(&mut self, body: &Value) -> Reply {
+        if body["name"].as_str().is_none_or(str::is_empty) || body["format"].as_str().is_none() {
+            return invalid("name and format are required");
+        }
         let row = self.insert_property(
             body["name"].as_str().unwrap_or(""),
             body["key"].as_str().filter(|key| !key.is_empty()),
@@ -130,6 +190,44 @@ impl MockState {
             body: json!({"id": id, "name": name, "mime_type": mime, "size": size}),
             etag: None,
         }
+    }
+}
+
+fn invalid(message: &str) -> Reply {
+    Reply {
+        status: 400,
+        body: json!({ "code": "validation_failed", "message": message }),
+        etag: None,
+    }
+}
+
+/// The live API refuses `key` (the field is `api_key`) and any other member.
+fn reject_type_body(body: &Value) -> Option<Reply> {
+    const ALLOWED: [&str; 5] = [
+        "name",
+        "api_key",
+        "layout",
+        "plural_name",
+        "property_definitions",
+    ];
+    if body["name"].as_str().is_none_or(str::is_empty) {
+        return Some(invalid("name is required"));
+    }
+    let extra = body
+        .as_object()?
+        .keys()
+        .find(|key| !ALLOWED.contains(&key.as_str()))?;
+    Some(invalid(&format!("unknown field \"{extra}\"")))
+}
+
+fn unknown_property(key: &str) -> Reply {
+    Reply {
+        status: 400,
+        body: json!({
+            "code": "validation_failed",
+            "message": format!("unknown property key \"{key}\""),
+        }),
+        etag: None,
     }
 }
 
