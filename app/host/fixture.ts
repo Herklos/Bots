@@ -246,6 +246,13 @@ export function fixtureChat(child: string) {
 
 export const FIXTURE_HOOK_URL = 'https://hooks.example/hooks/scheduled-task%3Ahook/tok-fixture';
 export const FIXTURE_HOOK_ROTATED = 'https://hooks.example/hooks/scheduled-task%3Ahook/tok-fixture-2';
+export const FIXTURE_SCHEDULE_ID = 'morning-2';
+
+// The add-sheet's canned webhook create: the URL card a contract test reads. The
+// schedule create always starts off, so its made row carries no address.
+export function fixtureAddedHook(): Result<'saveWebhookRoutine'> {
+  return { ok: true, error: '', id: 'hook', url: FIXTURE_HOOK_URL, source: 'publicBase', stable: true };
+}
 
 export function fixtureRoutineTasks() {
   return [

@@ -1,0 +1,128 @@
+use RoutineAddBag, RoutineAddMade, RoutineTest from "./routine-add.contract"
+
+members Bots
+  state addType = "schedule"
+  state addKind = "hour"
+  state addTitle = ""
+  state addPrompt = ""
+  state addPreset = "token"
+  state addSecret = ""
+  state addF1Path = ""
+  state addF1Op = "equals"
+  state addF1Value = ""
+  state addF2Path = ""
+  state addF2Op = "equals"
+  state addF2Value = ""
+  state addReplay = ""
+  state addAge = ""
+  state addEnable = false
+  state addTestId = ""
+  state addUrl = ""
+  state addSource = ""
+  state addStable = false
+  state addError = ""
+  state addTestBody = ""
+  state addTestOutcome = ""
+  state addTestError = ""
+  mutation routineMade as shape RoutineAddMade refreshes routines then afterRoutineAdd
+  mutation routineTested as shape RoutineTest then afterRoutineTest
+  derive addBusy = pending(routineMade)
+  derive addTestBusy = pending(routineTested)
+  derive addBag = RoutineAddBag(type=addType, kind=addKind, title=addTitle, prompt=addPrompt, preset=addPreset, secret=addSecret, f1Path=addF1Path, f1Op=addF1Op, f1Value=addF1Value, f2Path=addF2Path, f2Op=addF2Op, f2Value=addF2Value, replay=addReplay, age=addAge, enable=addEnable, savedId=addTestId, url=addUrl, source=addSource, stable=addStable, error=addError, busy=addBusy, testBody=addTestBody, testOutcome=addTestOutcome, testError=addTestError, testBusy=addTestBusy)
+  action clearRoutineAdd
+    addType = "schedule"
+    addKind = "hour"
+    addTitle = ""
+    addPrompt = ""
+    addPreset = "token"
+    addSecret = ""
+    addF1Path = ""
+    addF1Op = "equals"
+    addF1Value = ""
+    addF2Path = ""
+    addF2Op = "equals"
+    addF2Value = ""
+    addReplay = ""
+    addAge = ""
+    addEnable = false
+    addTestId = ""
+    addUrl = ""
+    addSource = ""
+    addStable = false
+    addError = ""
+    addTestBody = ""
+    addTestOutcome = ""
+    addTestError = ""
+  action openRoutineAdd
+    clearRoutineAdd()
+  // One action per field, as the app's other edit sheets do.
+  action editAddTitle(v: string)
+    addTitle = v
+  action editAddPrompt(v: string)
+    addPrompt = v
+  action editAddSecret(v: string)
+    addSecret = v
+  action editAddF1Path(v: string)
+    addF1Path = v
+  action editAddF1Value(v: string)
+    addF1Value = v
+  action editAddReplay(v: string)
+    addReplay = v
+  // Pickers and chips, named by what they set: type, kind, preset, a filter op,
+  // a prompt chip, the max age, a sample body for the test, or "enable".
+  action pickAdd(v: string)
+    if v == "enable"
+      addEnable = not addEnable
+    else if v.startsWith("type:")
+      addType = v.slice(5)
+      addError = ""
+    else if v.startsWith("kind:")
+      addKind = v.slice(5)
+    else if v.startsWith("preset:")
+      addPreset = v.slice(7)
+    else if v == "op1"
+      addF1Op = addF1Op == "equals" ? "notEquals" : addF1Op == "notEquals" ? "startsWith" : addF1Op == "startsWith" ? "in" : addF1Op == "in" ? "exists" : "equals"
+    else if v == "op2"
+      addF2Op = addF2Op == "equals" ? "notEquals" : addF2Op == "notEquals" ? "startsWith" : addF2Op == "startsWith" ? "in" : addF2Op == "in" ? "exists" : "equals"
+    else if v.startsWith("chip:")
+      addPrompt = addPrompt + v.slice(5)
+    else if v.startsWith("age:")
+      addAge = v.slice(4)
+    else if v.startsWith("test:")
+      addTestBody = v.slice(5)
+  action doAddRoutine
+    if addTitle.trim() != "" and not addBusy
+      addError = ""
+      if addType == "webhook"
+        send routineMade = saveWebhookRoutine(slug, addTitle.trim(), addPrompt.trim(), addPreset, addSecret, addF1Path.trim(), addF1Op, (addF1Op == "exists" ? "" : addF1Value.trim()), addF2Path.trim(), addF2Op, (addF2Op == "exists" ? "" : addF2Value.trim()), addReplay.trim(), addAge, addEnable)
+      else
+        send routineMade = saveRoutine(slug, addKind, addTitle.trim())
+  action afterRoutineAdd
+    match routineMade
+      case some(r)
+        if r.ok
+          addTestId = r.id
+          addUrl = r.url
+          addSource = r.source
+          addStable = r.stable
+          addSecret = ""
+          addError = ""
+          if r.url == ""
+            toast = t("routine.saved")
+        else
+          addError = r.error
+      case none
+  action doTestRoutine
+    if addTestId != "" and not addTestBusy and addTestBody != ""
+      addTestError = ""
+      addTestOutcome = ""
+      send routineTested = testWebhookRoutine(slug, addTestId, addTestBody, addSecret)
+      addSecret = ""
+  action afterRoutineTest
+    match routineTested
+      case some(r)
+        if r.ok
+          addTestOutcome = r.outcome
+        else
+          addTestError = r.error
+      case none

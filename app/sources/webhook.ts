@@ -1,9 +1,10 @@
 import type { Sources, Result } from '../app.contract.d.ts';
-import { FIXTURE_HOOK_ROTATED, FIXTURE_HOOK_URL, explain, fixtureDeliveries, fixtureDelivery } from '../host/fixture.ts';
+import { FIXTURE_HOOK_ROTATED, FIXTURE_HOOK_URL, FIXTURE_SCHEDULE_ID, fixtureAddedHook, explain, fixtureDeliveries, fixtureDelivery } from '../host/fixture.ts';
 import { noteLocale, say, call } from '../host/gateway.ts';
 import { hostNow, when } from '../host/time.ts';
 
 const blankHook = (id: string) => ({ ok: false, error: '', id, url: '', source: '', stable: false });
+const blankMade = (error = '') => ({ ok: false, error, id: '', url: '', source: '', stable: false });
 const blankList = { ok: true, error: '', rows: [] as Result<'loadDeliveries'>['rows'] };
 const blankDetail = { ok: true, error: '', id: '', at: '', outcome: '', prompt: '', body: '', truncated: false, headers: [] as Result<'loadDelivery'>['headers'] };
 
@@ -91,5 +92,62 @@ export const webhookSources: Pick<Sources, 'readHook' | 'rotateHook' | 'loadDeli
     const r = await call(store, path);
     if (!r.ok) return { ...blankDetail, ok: false, error: explain(r.error, 'deliveries') };
     return detailOf(r.body.delivery ?? r.body);
+  },
+  saveRoutine: async ([slug, kind, title], store): Promise<Result<'saveRoutine'>> => {
+    if (slug === 'fixture') return { ok: true, error: '', id: FIXTURE_SCHEDULE_ID, url: '', source: '', stable: false };
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/routines`, {
+      method: 'POST',
+      body: JSON.stringify({ kind, title }),
+    });
+    if (!r.ok) return blankMade(explain(r.error, 'routines'));
+    return {
+      ok: true,
+      error: '',
+      id: String(r.body.task?.id ?? ''),
+      url: '',
+      source: '',
+      stable: false,
+    };
+  },
+  saveWebhookRoutine: async ([slug, title, prompt, preset, secret, f1Path, f1Op, f1Value, f2Path, f2Op, f2Value, replay, age, enable], store): Promise<Result<'saveWebhookRoutine'>> => {
+    if (slug === 'fixture') return fixtureAddedHook();
+    const filters = [] as Record<string, unknown>[];
+    if (f1Path !== '') filters.push({ path: f1Path, op: f1Op, ...(f1Op === 'exists' ? {} : { value: f1Value }) });
+    if (f2Path !== '') filters.push({ path: f2Path, op: f2Op, ...(f2Op === 'exists' ? {} : { value: f2Value }) });
+    const body: Record<string, unknown> = {
+      kind: 'webhook',
+      title,
+      prompt,
+      preset,
+      ...(secret !== '' ? { secret } : {}),
+      ...(filters.length > 0 ? { filters } : {}),
+      ...(replay !== '' ? { dedupe: { replayKey: replay } } : {}),
+      ...(age !== '' ? { maxAgeMinutes: Number(age) } : {}),
+      enable,
+    };
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/routines`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) return blankMade(explain(r.error, 'routines'));
+    // The address is returned only once, here. The polling list never has it.
+    return {
+      ok: true,
+      error: '',
+      id: String(r.body.task?.id ?? ''),
+      url: String(r.body.hook?.url ?? ''),
+      source: String(r.body.hook?.source ?? ''),
+      stable: r.body.hook?.stable === true,
+    };
+  },
+  testWebhookRoutine: async ([slug, id, body, secret], store): Promise<Result<'testWebhookRoutine'>> => {
+    if (slug === 'fixture') return { ok: true, error: '', outcome: 'accepted' };
+    const r = await call(store, `/api/bots/${encodeURIComponent(slug)}/routines/${encodeURIComponent(id)}/test`, {
+      method: 'POST',
+      // The secret is signed into this one request and dropped. It is not stored.
+      body: JSON.stringify({ body, ...(secret !== '' ? { secret } : {}) }),
+    });
+    if (!r.ok) return { ok: false, error: explain(r.error, 'routines'), outcome: '' };
+    return { ok: r.body.ok === true, error: '', outcome: String(r.body.outcome ?? '') };
   },
 };

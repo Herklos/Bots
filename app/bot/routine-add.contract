@@ -1,0 +1,153 @@
+use hookNote from "../ui/fns.contract"
+use Chip, Field, SectionLabel, TextControl from "../ui/controls.contract"
+use OutcomeChip from "./deliveries.contract"
+
+shape RoutineAddMade
+  ok: bool
+  error: string
+  id: string
+  url: string
+  source: string
+  stable: bool
+
+shape RoutineTest
+  ok: bool
+  error: string
+  outcome: string
+
+shape RoutineAddBag
+  type: string
+  kind: string
+  title: string
+  prompt: string
+  preset: string
+  secret: string
+  f1Path: string
+  f1Op: string
+  f1Value: string
+  f2Path: string
+  f2Op: string
+  f2Value: string
+  replay: string
+  age: string
+  enable: bool
+  savedId: string
+  url: string
+  source: string
+  stable: bool
+  error: string
+  busy: bool
+  testBody: string
+  testOutcome: string
+  testError: string
+  testBusy: bool
+
+// The new-routine sheet. Fields are root state, so opening starts them over and
+// the signing secret never stays anywhere: it is cleared after the save and
+// after the test. The address is shown once, here, when the routine is created.
+component RoutineAddSheet
+  inject
+    addBag: RoutineAddBag
+    pickAdd: action
+    doAddRoutine: action
+    doTestRoutine: action
+    editAddTitle: action
+    editAddPrompt: action
+    editAddSecret: action
+    editAddF1Path: action
+    editAddF1Value: action
+    editAddReplay: action
+  view
+    dialog id="routine-add" role="dialog" aria-label=t("routine.addTitle") testId="routine-add"
+      column gap="space.md" width="100%" max-width="36rem" box-sizing="border-box" padding="space.lg"
+        row justify-content="space-between" align-items="center"
+          text t("routine.addTitle") font-weight=600 role="heading" aria-level=2 testId="add-title"
+          button commandfor="routine-add" command="close" class=TextControl appearance="none" aria-label=t("common.close") testId="add-close"
+            text t("common.close")
+        row gap="space.xs" testId="add-type"
+          button class=Chip appearance="none" press=pickAdd("type:schedule") aria-pressed=(addBag.type == "schedule") testId="add-type-schedule"
+            text t("routine.typeSchedule")
+          button class=Chip appearance="none" press=pickAdd("type:webhook") aria-pressed=(addBag.type == "webhook") testId="add-type-webhook"
+            text t("routine.typeWebhook")
+        if addBag.url == ""
+          column gap="space.sm" testId="add-form"
+            text t("common.name") class=SectionLabel
+            input appearance="none" class=Field value=addBag.title input=editAddTitle placeholder=t("routine.namePlaceholder") aria-label=t("common.name") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="add-name"
+            if addBag.type == "schedule"
+              row gap="space.xs" flex-wrap="wrap" testId="add-kinds"
+                button class=Chip appearance="none" press=pickAdd("kind:hour") aria-pressed=(addBag.kind == "hour") testId="add-kind-hour"
+                  text t("routine.hour")
+                button class=Chip appearance="none" press=pickAdd("kind:day") aria-pressed=(addBag.kind == "day") testId="add-kind-day"
+                  text t("routine.day")
+                button class=Chip appearance="none" press=pickAdd("kind:once") aria-pressed=(addBag.kind == "once") testId="add-kind-once"
+                  text t("routine.once")
+            else
+              column gap="space.sm"
+                text t("routine.prompt") class=SectionLabel
+                textarea appearance="none" class=Field value=addBag.prompt input=editAddPrompt placeholder=t("routine.promptPlaceholder") aria-label=t("routine.prompt") rows=4 padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="add-prompt"
+                row gap="space.xs" flex-wrap="wrap" testId="add-chips"
+                  button class=Chip appearance="none" press=pickAdd("chip:{{body}}") testId="add-chip-body"
+                    text "{{body}}"
+                  button class=Chip appearance="none" press=pickAdd("chip:{{body.id}}") testId="add-chip-id"
+                    text "{{body.id}}"
+                  button class=Chip appearance="none" press=pickAdd("chip:{{body.action}}") testId="add-chip-action"
+                    text "{{body.action}}"
+                  button class=Chip appearance="none" press=pickAdd("chip:{{headers.x-github-event}}") testId="add-chip-event"
+                    text "{{headers.x-github-event}}"
+                text t("routine.preset") class=SectionLabel
+                row gap="space.xs" flex-wrap="wrap" testId="add-presets"
+                  button class=Chip appearance="none" press=pickAdd("preset:token") aria-pressed=(addBag.preset == "token") testId="add-preset-token"
+                    text t("routine.presetToken")
+                  button class=Chip appearance="none" press=pickAdd("preset:github") aria-pressed=(addBag.preset == "github") testId="add-preset-github"
+                    text t("routine.presetGithub")
+                  button class=Chip appearance="none" press=pickAdd("preset:linear") aria-pressed=(addBag.preset == "linear") testId="add-preset-linear"
+                    text t("routine.presetLinear")
+                  button class=Chip appearance="none" press=pickAdd("preset:sentry") aria-pressed=(addBag.preset == "sentry") testId="add-preset-sentry"
+                    text t("routine.presetSentry")
+                  button class=Chip appearance="none" press=pickAdd("preset:shopify") aria-pressed=(addBag.preset == "shopify") testId="add-preset-shopify"
+                    text t("routine.presetShopify")
+                if addBag.preset != "token"
+                  column gap="space.sm"
+                    text t("routine.secret") class=SectionLabel
+                    input appearance="none" class=Field value=addBag.secret input=editAddSecret placeholder=t("routine.secretPlaceholder") aria-label=t("routine.secret") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="add-secret"
+                    text t("routine.secretNote") color="ink.muted" font="-exact-footnote" testId="add-secret-note"
+                text t("routine.filters") class=SectionLabel
+                row gap="space.xs" testId="add-filters"
+                  input appearance="none" class=Field value=addBag.f1Path input=editAddF1Path placeholder=t("routine.filterPath") aria-label=t("routine.filter1") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" flex=1 testId="add-f1-path"
+                  button class=Chip appearance="none" press=pickAdd("op1") aria-label=t("routine.filter1") testId="add-f1-op"
+                    text addBag.f1Op
+                  input appearance="none" class=Field value=addBag.f1Value input=editAddF1Value placeholder=t("routine.filterValue") aria-label=t("routine.filter1") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" flex=1 disabled=(addBag.f1Op == "exists") testId="add-f1-value"
+                text t("routine.dedupe") class=SectionLabel
+                input appearance="none" class=Field value=addBag.replay input=editAddReplay placeholder=t("routine.dedupePlaceholder") aria-label=t("routine.dedupe") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="add-replay"
+                text t("routine.age") class=SectionLabel
+                row gap="space.xs" testId="add-ages"
+                  button class=Chip appearance="none" press=pickAdd("age:60") aria-pressed=(addBag.age == "60") testId="add-age-60"
+                    text t("routine.ageHour")
+                  button class=Chip appearance="none" press=pickAdd("age:1440") aria-pressed=(addBag.age == "1440") testId="add-age-day"
+                    text t("routine.ageDay")
+                button class=Chip appearance="none" press=pickAdd("enable") aria-pressed=addBag.enable testId="add-enable"
+                  text t("routine.turnOn")
+            if addBag.error != ""
+              text addBag.error color="-exact-system-red" font="-exact-footnote" testId="add-error"
+            button class=Field appearance="none" press=doAddRoutine disabled=(addBag.title.trim() == "" or addBag.busy) width="100%" testId="add-save"
+              text (addBag.busy ? t("routine.saving") : t("common.save"))
+        else
+          column gap="space.sm" testId="add-url-card"
+            text t("routine.urlTitle") class=SectionLabel
+            text addBag.url overflow-wrap="anywhere" testId="add-url"
+            text hookNote(addBag.source, addBag.stable, t("hook.local"), t("hook.tunnel"), t("hook.stable")) color="ink.muted" font="-exact-footnote" testId="add-url-note"
+            text t("routine.testBody") class=SectionLabel
+            row gap="space.xs" flex-wrap="wrap" testId="add-tests"
+              button class=Chip appearance="none" press=pickAdd("test:{\"hello\": true}") aria-pressed=(addBag.testBody == "{\"hello\": true}") testId="add-test-json"
+                text "{\"hello\": true}"
+              button class=Chip appearance="none" press=pickAdd("test:hello") aria-pressed=(addBag.testBody == "hello") testId="add-test-text"
+                text "hello"
+            if addBag.preset != "token"
+              input appearance="none" class=Field value=addBag.secret input=editAddSecret placeholder=t("routine.secretAgain") aria-label=t("routine.secret") padding="space.md space.lg" border="1px solid surface.line" border-radius="radius.md" background-color="surface.card" testId="add-secret-again"
+            if addBag.testOutcome != ""
+              OutcomeChip(id=addBag.testOutcome, mark="add-test-outcome")
+            if addBag.testError != ""
+              text addBag.testError color="-exact-system-red" font="-exact-footnote" testId="add-test-error"
+            row gap="space.sm" flex-wrap="wrap"
+              button class=Chip appearance="none" press=doTestRoutine disabled=(addBag.testBusy or addBag.testBody == "") testId="add-test"
+                text (addBag.testBusy ? t("routine.testing") : t("routine.test"))

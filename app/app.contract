@@ -28,6 +28,7 @@ component Bots
   members "./bot/model.contract"
   members "./bot/memory-model.contract"
   members "./bot/hook-model.contract"
+  members "./bot/routine-add-model.contract"
   members "./bot/helpers-model.contract"
   members "./mentions/model.contract"
   members "./chat/model.contract"
@@ -175,6 +176,17 @@ component Bots
     closeDelivery
     leaveDeliveries
     hookBag
+    addBag
+    editAddTitle
+    editAddPrompt
+    editAddSecret
+    editAddF1Path
+    editAddF1Value
+    editAddReplay
+    pickAdd
+    openRoutineAdd
+    doAddRoutine
+    doTestRoutine
     helperBag
     editHelpWhen
     editHelpCap

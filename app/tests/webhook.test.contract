@@ -45,3 +45,56 @@ test "a webhook routine shows its URL and the last deliveries"
   tap "panel-back"
   expect tree missing "delivery-prompt"
   expect tree has "delivery-del-new"
+
+test "a webhook routine is created from the sheet and tested"
+  size 340x740
+  at "/bot/fixture"
+  tap "panel-toggle"
+  clock data
+  tap "routine-add-open"
+  clock data
+  expect tree has "add-form"
+  tap "add-kind-day"
+  tap "add-kind-hour"
+  tap "add-type-webhook"
+  expect tree missing "add-kinds"
+  type "add-name" "Build pings"
+  tap "add-chip-body"
+  expect text "add-prompt" == "{{body}}"
+  tap "add-preset-github"
+  expect tree has "add-secret"
+  type "add-secret" "s3cret-write-only"
+  type "add-f1-path" "headers.x-github-event"
+  tap "add-f1-op"
+  expect text "add-f1-op" == "notEquals"
+  tap "add-f1-op"
+  tap "add-f1-op"
+  tap "add-f1-op"
+  expect text "add-f1-op" == "exists"
+  expect tree has "add-f1-value"
+  tap "add-age-day"
+  tap "add-enable"
+  tap "add-save"
+  clock data
+  expect text "add-url" == "https://hooks.example/hooks/scheduled-task%3Ahook/tok-fixture"
+  expect text "add-url-note" == "This address stays until you rotate it."
+  tap "add-test-json"
+  type "add-secret-again" "s3cret-used-once"
+  tap "add-test"
+  clock data
+  expect text "add-test-outcome" == "Accepted"
+  tap "add-close"
+
+test "a schedule routine is created from the sheet"
+  size 340x740
+  at "/bot/fixture"
+  tap "panel-toggle"
+  clock data
+  tap "routine-add-open"
+  clock data
+  type "add-name" "Evening sweep"
+  tap "add-kind-day"
+  tap "add-save"
+  clock data
+  expect tree has "add-form"
+  expect tree missing "add-url"
