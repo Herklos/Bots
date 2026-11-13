@@ -9,6 +9,7 @@ mod stores;
 pub(crate) mod sync;
 #[cfg(test)]
 mod tests;
+pub(crate) mod typed;
 mod workspace;
 
 pub(crate) use client::{confirm_pairing, open_client, start_pairing, status, AnytypeError};

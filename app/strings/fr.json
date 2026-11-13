@@ -556,7 +556,7 @@
   "settings.sync.pendingOne": "modification en attente",
   "settings.sync.pendingMany": "modifications en attente",
   "settings.sync.now": "Synchroniser",
-  "settings.sync.note": "Les Bots, invites et réglages ne se synchronisent pas encore. La mémoire, les compétences et la bibliothèque le font.",
+  "settings.sync.note": "Les Bots et les réglages se synchronisent dorénavant. Les consignes, les identifiants des connecteurs, les plannings et les groupes restent locaux pour l'instant. La mémoire, les compétences et la bibliothèque se synchronisent en fichiers.",
   "settings.sync.seenNow": "Vu à l'instant",
   "settings.sync.seenMinutes": "Vu il y a {minutes} min",
   "settings.sync.seenHours": "Vu il y a {hours} h",

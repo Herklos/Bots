@@ -556,7 +556,7 @@
   "settings.sync.pendingOne": "change waiting",
   "settings.sync.pendingMany": "changes waiting",
   "settings.sync.now": "Sync now",
-  "settings.sync.note": "Bots, prompts and settings do not sync yet. Memory, skills and library files do.",
+  "settings.sync.note": "Bots and settings sync now, too. Prompts, connector credentials, schedules and groups stay local for now. Memory, skills and library files sync as files.",
   "settings.sync.seenNow": "Seen just now",
   "settings.sync.seenMinutes": "Seen {minutes} min ago",
   "settings.sync.seenHours": "Seen {hours} h ago",

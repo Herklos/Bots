@@ -118,9 +118,24 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(disk)
     };
     let workspace: Arc<dyn storage::workspace::Workspace> = workspace;
-    let settings_store: Arc<dyn storage::stores::SettingsStore> = Arc::new(
-        storage::adapters::filesystem::FilesystemSettingsStore::new(app_dir.join("settings.json")),
-    );
+    // Typed stores push settings and Bot profiles through the space. When the
+    // saved backend is Anytype but the space check fails, fall back to the
+    // filesystem stores and keep using the file-sync engine only.
+    let typed = if use_anytype {
+        storage::adapters::anytype::typed::try_open(&cfg).await
+    } else {
+        None
+    };
+    let typed_worker: Option<Arc<storage::adapters::anytype::typed::TypedCtx>> =
+        typed.as_ref().map(|stores| Arc::clone(&stores.ctx));
+    let settings_store: Arc<dyn storage::stores::SettingsStore> = match &typed {
+        Some(stores) => Arc::clone(&stores.settings),
+        None => Arc::new(
+            storage::adapters::filesystem::FilesystemSettingsStore::new(
+                app_dir.join("settings.json"),
+            ),
+        ),
+    };
     let connector_store: Arc<dyn storage::stores::ConnectorStore> = Arc::new(
         storage::adapters::filesystem::FilesystemConnectorStore::new(Arc::clone(&workspace)),
     );
@@ -132,10 +147,12 @@ async fn main() -> anyhow::Result<()> {
     )
     .with_settings_store(Arc::clone(&settings_store))
     .with_connector_store(Arc::clone(&connector_store));
-    let bots = if use_anytype {
-        bots.with_local_overlay()
-    } else {
-        bots
+    let bots = match &typed {
+        Some(stores) => bots
+            .with_settings_store(Arc::clone(&stores.settings))
+            .with_bot_store(Arc::clone(&stores.bots)),
+        None if use_anytype => bots.with_local_overlay(),
+        None => bots,
     };
     let state = Arc::new(AppState {
         settings_store,
@@ -214,6 +231,11 @@ async fn main() -> anyhow::Result<()> {
     state
         .sync
         .set(storage::sync::start(state.as_ref(), sync_nudges).await);
+    // The typed outbox retries pending settings and Bot-profile writes for as
+    // long as the gateway runs. Its store calls already flush inline.
+    if let Some(ctx) = typed_worker {
+        storage::adapters::anytype::typed::worker::start(ctx);
+    }
     crate::bots::provisioner::start(state.clone());
     crate::bots::agent_context::start(state.clone());
     crate::bots::watch::poller::start(state.clone());
