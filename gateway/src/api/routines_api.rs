@@ -114,8 +114,7 @@ pub(crate) async fn bot_routine_save(
     // The address is returned only here, on create, and on the hook routes.
     if is_hook {
         let settings = s.settings().await;
-        out["hook"] =
-            crate::chat::routines::inspect::hook_view(&task, &settings, &s.remote);
+        out["hook"] = crate::chat::routines::inspect::hook_view(&task, &settings, &s.remote);
     }
     Ok(Json(out))
 }
@@ -162,7 +161,7 @@ pub(crate) async fn bot_routine_test(
         .body(payload.as_bytes().to_vec())
         .send()
         .await
-        .map_err(|_| ApiError::new(502, "T3 did not take the delivery."))?;
+        .map_err(|_send| ApiError::new(502, "T3 did not take the delivery."))?;
     let ok = outcome.status().is_success();
     let made = outcome
         .headers()
@@ -185,14 +184,16 @@ fn secret_of(input: &Value) -> Option<String> {
 
 /// Plain HMAC-SHA256 over the raw body, encoded the way the task's signature says.
 fn sign(task: &Value, payload: &[u8], secret: &[u8]) -> ApiResult<(String, String)> {
-    use hmac::Mac;
     use base64::Engine;
+    use hmac::Mac;
     let sig = &task["schedule"]["signature"];
     let Some(header) = sig["header"].as_str().filter(|h| !h.is_empty()) else {
-        return Err(ApiError::bad_request("This webhook has no signature check."));
+        return Err(ApiError::bad_request(
+            "This webhook has no signature check.",
+        ));
     };
     let mut mac = <hmac::Hmac<sha2::Sha256>>::new_from_slice(secret)
-        .map_err(|_| ApiError::bad_request("A signing secret is text."))?;
+        .map_err(|_key| ApiError::bad_request("A signing secret is text."))?;
     mac.update(payload);
     let digest = mac.finalize().into_bytes();
     let raw = match sig["encoding"].as_str().unwrap_or("hex") {
@@ -200,10 +201,7 @@ fn sign(task: &Value, payload: &[u8], secret: &[u8]) -> ApiResult<(String, Strin
         _ => hex::encode(digest),
     };
     let prefix = sig["prefix"].as_str().unwrap_or("");
-    Ok((
-        header.to_ascii_lowercase(),
-        format!("{prefix}{raw}"),
-    ))
+    Ok((header.to_ascii_lowercase(), format!("{prefix}{raw}")))
 }
 
 pub(crate) async fn owned_task(s: &AppState, slug: &str, id: &str) -> ApiResult<Value> {

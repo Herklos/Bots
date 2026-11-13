@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Status | Phase 0 spikes run and recorded in section 12 (2026-11-12). Phases 1 to 5 are not implemented |
+| Status | Phase 0 spikes run and recorded in section 12 (2026-11-12). Phases 1, 2, 3a and 3b are implemented |
 | Date | 2026-11-12 |
 | Related | `docs/redesign.md` (B10), `docs/architecture.md`, `docs/memory-maintenance.md`, `docs/reply-images-plan.md` |
 | Source of the T3 facts | `scheduledTask` contract and `ScheduledTaskService` read from the bundled server in `T3 Code (Nightly).app/.../app.asar` |

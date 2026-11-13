@@ -4,7 +4,6 @@ use super::tests::settings_state_with;
 use super::*;
 use crate::harness::adapters::mock::MockHarness;
 use axum::body::Body;
-use std::net::SocketAddr;
 
 async fn ready() -> (tempfile::TempDir, Arc<AppState>, Arc<MockHarness>) {
     let dir = tempfile::tempdir().unwrap();
@@ -41,11 +40,7 @@ fn json_headers() -> HeaderMap {
     headers
 }
 
-async fn create(
-    state: &Arc<AppState>,
-    slug: &str,
-    body: Value,
-) -> Result<Json<Value>, ApiError> {
+async fn create(state: &Arc<AppState>, slug: &str, body: Value) -> Result<Json<Value>, ApiError> {
     bot_routine_save(
         State(Arc::clone(state)),
         Path(slug.to_string()),
@@ -86,7 +81,6 @@ async fn fake_t3() -> (String, Arc<std::sync::Mutex<Vec<Hit>>>) {
     tokio::spawn(async move {
         axum::serve(listener, router).await.unwrap();
     });
-    let _ = SocketAddr::from(addr);
     (format!("http://{addr}"), hits)
 }
 
@@ -138,26 +132,18 @@ async fn a_webhook_create_returns_the_row_and_the_address_once() {
 async fn the_schedule_kinds_still_create_without_an_address() {
     let (_dir, state, _mock) = ready().await;
     for (kind, label) in [("hour", "Every hour"), ("day", "Every day at 9:00 AM")] {
-        let saved = create(
-            &state,
-            "ada",
-            json!({ "kind": kind, "title": "Morning" }),
-        )
-        .await
-        .unwrap()
-        .0;
+        let saved = create(&state, "ada", json!({ "kind": kind, "title": "Morning" }))
+            .await
+            .unwrap()
+            .0;
         assert_eq!(saved["task"]["kind"], "schedule");
         assert_eq!(saved["task"]["schedule"], label);
         assert!(saved.get("hook").is_none());
     }
-    let plain = create(
-        &state,
-        "ada",
-        json!({ "kind": "once", "title": "Later" }),
-    )
-    .await
-    .unwrap()
-    .0;
+    let plain = create(&state, "ada", json!({ "kind": "once", "title": "Later" }))
+        .await
+        .unwrap()
+        .0;
     assert_eq!(plain["task"]["paused"], true);
     let refused = create(
         &state,
@@ -207,26 +193,19 @@ async fn the_test_delivery_signs_only_a_reentered_secret() {
     Arc::get_mut(&mut state).unwrap().cfg.t3_url = t3;
 
     // Unsigned first: no signature header reaches T3.
-    let cleared = test_call(
-        &state,
-        "ada",
-        &id,
-        json!({ "body": "{\"hello\":1}" }),
-    )
-    .await
-    .unwrap()
-    .0;
+    let cleared = test_call(&state, "ada", &id, json!({ "body": "{\"hello\":1}" }))
+        .await
+        .unwrap()
+        .0;
     assert_eq!(cleared["ok"], true);
     assert_eq!(cleared["outcome"], "accepted");
-    let hits_now = hits.lock().unwrap();
-    assert_eq!(hits_now.len(), 1);
-    assert_eq!(hits_now[0].body, b"{\"hello\":1}".to_vec());
-    assert!(hits_now[0].headers.get("x-hub-signature-256").is_none());
-    assert!(hits_now[0]
-        .headers
-        .get("authorization")
-        .is_none());
-    drop(hits_now);
+    {
+        let hits_now = hits.lock().unwrap();
+        assert_eq!(hits_now.len(), 1);
+        assert_eq!(hits_now[0].body, b"{\"hello\":1}".to_vec());
+        assert!(hits_now[0].headers.get("x-hub-signature-256").is_none());
+        assert!(hits_now[0].headers.get("authorization").is_none());
+    }
 
     // Re-entered secret: the signature is computed over the raw bytes, and the
     // secret itself never appears in the request.
@@ -276,11 +255,7 @@ async fn the_test_delivery_stays_on_this_bot_and_needs_a_signature_check() {
     .unwrap()
     .0;
     let id = saved["task"]["id"].as_str().unwrap().to_string();
-    state
-        .bots
-        .create(&json!({ "name": "Bea" }))
-        .await
-        .unwrap();
+    state.bots.create(&json!({ "name": "Bea" })).await.unwrap();
     state
         .bots
         .save("bea", &json!({ "mainThreadId": "bea-thread" }), false)
@@ -305,8 +280,13 @@ async fn the_test_delivery_stays_on_this_bot_and_needs_a_signature_check() {
         .await
         .unwrap_err();
     assert_eq!(missing.status, StatusCode::BAD_REQUEST);
-    let gone = test_call(&state, "ada", "scheduled-task:missing", json!({ "body": "x" }))
-        .await
-        .unwrap_err();
+    let gone = test_call(
+        &state,
+        "ada",
+        "scheduled-task:missing",
+        json!({ "body": "x" }),
+    )
+    .await
+    .unwrap_err();
     assert_eq!(gone.status, StatusCode::NOT_FOUND);
 }

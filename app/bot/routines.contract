@@ -1,3 +1,4 @@
+use RoutineAddSheet from "./routine-add.contract"
 use Glyph from "../glyph.contract"
 use hookNote from "../ui/fns.contract"
 use RoutineList from "../ui/shapes.contract"
@@ -13,25 +14,46 @@ component RoutineSection
     hookBag: HookBag
     copyHook: action
     confirmRotate: action
+    openRoutineAdd: action
     openDeliveries: action
   view
     column gap="2px" width="100%"
-      text t("panel.routines") class=SectionLabel
+      row justify-content="space-between" align-items="center"
+        text t("panel.routines") class=SectionLabel
+        button class=TextControl
+          appearance="none"
+          press=openRoutineAdd
+          commandfor="routine-add"
+          command="show-modal"
+          font="-exact-footnote"
+          color="AccentColor"
+          testId="routine-add-open"
+          text t("routine.add")
       if down
-        text t("error.routines") color="-exact-system-red" padding="0 space.md" testId="routine-error"
+        text t("error.routines") color="-exact-system-red"
+          padding="0 space.md"
+          testId="routine-error"
       else if routines.tasks.length == 0
-        text t("panel.routineEmpty", name=name) color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="routine-empty"
+        text t("panel.routineEmpty", name=name) color="ink.muted"
+          font="-exact-footnote"
+          padding="0 space.md"
+          testId="routine-empty"
       else
         column gap="space.sm"
-          for r in routines.tasks key=r.id
+          for r in routines.tasks key = r.id
             column gap="2px" testId=`routine-${r.id}`
               row gap="space.md" align-items="center" padding="space.sm space.md"
                 column color=(r.paused ? "ink.faint" : "AccentColor")
-                  Glyph(name=(r.paused ? "pause" : r.kind == "webhook" ? "globe" : "clock"), size=18)
+                  Glyph(
+                    name=(r.paused ? "pause" : r.kind == "webhook" ? "globe" : "clock"),
+                    size=18
+                  )
                 column flex=1 gap="2px" min-width=0
                   text r.title font-weight=500 overflow-wrap="anywhere"
                   row gap="space.xs" align-items="center" flex-wrap="wrap"
-                    text r.schedule color="ink.muted" font="-exact-footnote" testId=`schedule-${r.id}`
+                    text r.schedule color="ink.muted"
+                      font="-exact-footnote"
+                      testId=`schedule-${r.id}`
                     if r.kind == "webhook" and r.outcome != ""
                       OutcomeChip(id=r.outcome, mark=`outcome-${r.id}`)
                   if r.next != "" and not r.paused
@@ -43,22 +65,59 @@ component RoutineSection
               if r.kind == "webhook"
                 if hookBag.routineId == r.id and hookBag.url != ""
                   text hookBag.url overflow-wrap="anywhere" font="-exact-footnote" testId="hook-url"
-                  text hookNote(hookBag.source, hookBag.stable, t("hook.local"), t("hook.tunnel"), t("hook.stable")) color="ink.muted" font="-exact-footnote" testId="hook-note"
+                  text hookNote(hookBag.source, hookBag.stable, t("hook.local"), t("hook.tunnel"), t("hook.stable")) color="ink.muted"
+                    font="-exact-footnote"
+                    testId="hook-note"
                 if hookBag.routineId == r.id and hookBag.error != ""
-                  text hookBag.error color="-exact-system-red" font="-exact-footnote" testId="hook-error"
+                  text hookBag.error color="-exact-system-red"
+                    font="-exact-footnote"
+                    testId="hook-error"
                 row gap="space.sm" flex-wrap="wrap" padding="0 space.md space.sm"
-                  button class=TextControl appearance="none" press=copyHook(r.id) disabled=hookBag.busy min-height=44 padding="0 space.xs" font="-exact-footnote" color="AccentColor" testId=`copy-${r.id}`
+                  button class=TextControl
+                    appearance="none"
+                    press=copyHook(r.id)
+                    disabled=hookBag.busy
+                    min-height=44
+                    padding="0 space.xs"
+                    font="-exact-footnote"
+                    color="AccentColor"
+                    testId=`copy-${r.id}`
                     text t("hook.copy")
-                  button class=TextControl appearance="none" commandfor=`rotate-${r.id}` command="show-modal" disabled=hookBag.busy min-height=44 padding="0 space.xs" font="-exact-footnote" color="AccentColor" testId=`rotate-${r.id}`
+                  button class=TextControl
+                    appearance="none"
+                    commandfor=`rotate-${r.id}`
+                    command="show-modal"
+                    disabled=hookBag.busy
+                    min-height=44
+                    padding="0 space.xs"
+                    font="-exact-footnote"
+                    color="AccentColor"
+                    testId=`rotate-${r.id}`
                     text t("hook.rotate")
-                  button class=TextControl appearance="none" press=openDeliveries(r.id) disabled=hookBag.busy min-height=44 padding="0 space.xs" font="-exact-footnote" color="AccentColor" testId=`deliveries-${r.id}`
+                  button class=TextControl
+                    appearance="none"
+                    press=openDeliveries(r.id)
+                    disabled=hookBag.busy
+                    min-height=44
+                    padding="0 space.xs"
+                    font="-exact-footnote"
+                    color="AccentColor"
+                    testId=`deliveries-${r.id}`
                     text t("hook.deliveries")
                 dialog id=`rotate-${r.id}` role="alertdialog" aria-label=t("hook.rotateTitle")
                   text t("hook.rotateTitle") font-weight=600
                   text t("hook.rotateBody")
-                  button press=confirmRotate(r.id) destructive=true commandfor=`rotate-${r.id}` command="close" testId=`rotate-confirm-${r.id}`
+                  button press=confirmRotate(r.id)
+                    destructive=true
+                    commandfor=`rotate-${r.id}`
+                    command="close"
+                    testId=`rotate-confirm-${r.id}`
                     text t("hook.rotateConfirm")
                   button commandfor=`rotate-${r.id}` command="close" testId=`rotate-cancel-${r.id}`
                     text t("common.cancel")
       if routines.error != "" and routines.tasks.length == 0
-        text routines.error color="ink.muted" font="-exact-footnote" padding="0 space.md" testId="routine-setup"
+        text routines.error color="ink.muted"
+          font="-exact-footnote"
+          padding="0 space.md"
+          testId="routine-setup"
+      RoutineAddSheet()

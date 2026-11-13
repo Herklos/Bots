@@ -8,6 +8,7 @@ This release hardens Anytype sync and rounds out the webhook surface.
 
 - Follow Anytype file changes on the search stream.
 - Show a webhook routine's URL and its last deliveries.
+- Create webhook routines from the app, with filters, presets, a write-only signing secret, and a local test delivery.
 
 ### Improvements
 
