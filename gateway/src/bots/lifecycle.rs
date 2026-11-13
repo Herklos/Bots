@@ -6,6 +6,8 @@ impl Bots {
         self.dir(slug)?;
         let saved = {
             let _g = self.lock.lock().await;
+            let _disk_guard = self.bot_store.acquire()
+            .await?;
             let bots = self.reconcile().await?;
             let current = bots.iter().find(|b| b["slug"] == slug).cloned();
             if current.is_none() && !create {
@@ -146,7 +148,7 @@ impl Bots {
             }
             self.persist(&Value::Object(next)).await?;
             if wants_main {
-                write_json(&self.selection_file(), &json!({ "slug": slug })).await?;
+                self.bot_store.write_selection(Some(slug)).await?;
             }
             let mut saved = self
                 .reconcile()
@@ -165,6 +167,8 @@ impl Bots {
     pub async fn remove(&self, slug: &str) -> ApiResult<Vec<Value>> {
         let dir = self.dir(slug)?;
         let _g = self.lock.lock().await;
+        let _disk_guard = self.bot_store.acquire()
+        .await?;
         let bots = self.reconcile().await?;
         let current = bots
             .iter()
@@ -201,10 +205,13 @@ impl Bots {
             .unwrap_or_default()
             .as_millis();
         tokio::fs::rename(&dir, trash.join(format!("{slug}-{stamp}"))).await?;
+        let remaining = Self::show_all(self.reconcile().await?);
+        drop(_disk_guard);
+        drop(_g);
         if let Some(parent) = parent {
             self.write_instructions(&parent).await?;
         }
-        Ok(Self::show_all(self.reconcile().await?))
+        Ok(remaining)
     }
 
     /// A new Bot folder: memory, library, skills and `bot.json`. A `parentSlug` makes a
@@ -268,7 +275,12 @@ impl Bots {
             Some(_) => return Err(ApiError::bad_request("pendingRoutines must be a list")),
         };
         let child_plan = if let Some(parent) = &parent {
-            let existing = self.load().await?;
+            let existing = {
+                let _g = self.lock.lock().await;
+                let _disk_guard = self.bot_store.acquire()
+                .await?;
+                self.load().await?
+            };
             Some(super::helpers_policy::plan_child(input, parent, &existing)?)
         } else {
             None

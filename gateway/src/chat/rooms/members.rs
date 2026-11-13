@@ -172,7 +172,9 @@ impl Rooms {
         effective_default: AnswerPolicy,
     ) -> ApiResult<(Value, Vec<Dispatch>)> {
         let _g = self.lock.lock().await;
-        let mut doc = read_doc(&self.path).await?;
+        let _disk_guard = self.store.acquire()
+        .await?;
+        let mut doc = self.read_doc().await?;
         let room = room_mut(&mut doc, room_id)?;
         let members = resolve(member_slugs(room), directory);
         let policy = resolve_policy(room, effective_default);
@@ -252,7 +254,7 @@ impl Rooms {
         }
         let stored = room.clone();
         if changed {
-            write_doc(&self.path, &doc).await?;
+            self.write_doc(&doc).await?;
         }
         Ok((stored, wake))
     }

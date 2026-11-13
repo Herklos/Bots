@@ -10,3 +10,4 @@ mod peer;
 mod schema;
 mod search;
 mod stream;
+mod v2_bootstrap;

@@ -22,6 +22,7 @@ base64 = "0.22"
 diffy = "0.4.2" # Line three-way merge. 0.5 needs rustc 1.85.
 dotenvy = "0.15"
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
+fs2 = "0.4"
 hex = "0.4"
 hmac = "0.12"
 hostname = "0.4" # The hb_device heartbeat names this machine.
@@ -30,6 +31,7 @@ rand = "0.8"
 regex = "1" # Preview cleaning and the emoji check use Unicode-property regexes.
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 scrypt = { version = "0.11", default-features = false }
+semver = "1"
 rsa = { version = "0.9", default-features = false, features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -47,4 +49,5 @@ url = "2"
 uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
+proptest = "1"
 tempfile = "3"

@@ -1,25 +1,86 @@
 use super::mock::Mock;
 use crate::storage::adapters::anytype::client::{AnytypeClient, AnytypeError};
 use crate::storage::adapters::anytype::schema::setup_failure;
-use crate::storage::adapters::anytype::schema::table::{self, COLUMNS, TABLES};
+use crate::storage::adapters::anytype::schema::table::{self};
 use crate::storage::adapters::anytype::schema::{bootstrap, read_meta, schema_ready};
 use serde_json::json;
 use std::collections::BTreeMap;
 
 fn client(mock: &Mock) -> AnytypeClient {
-    AnytypeClient::new(&mock.url, "k", "space-1").unwrap()
+    AnytypeClient::with_rate(&mock.url, "k", "space-1", 10_000.0, 10_000.0).unwrap()
+}
+
+#[tokio::test]
+async fn prepare_does_not_downgrade_a_newer_schema() {
+    let mock = Mock::start().await;
+    let api = client(&mock);
+    bootstrap(&api, false).await.unwrap();
+    let rows = api
+        .search(&json!({ "type": "m_meta", "query": "m_meta" }))
+        .await
+        .unwrap();
+    let id = rows[0]["id"].as_str().unwrap();
+    let object = api.get_object(id).await.unwrap();
+    api.patch_object(
+        id,
+        &json!({ "ops": [{ "op": "set_properties", "set": { "m_schema_version": 999 } }] }),
+        object["etag"].as_str(),
+        "future-schema",
+    )
+    .await
+    .unwrap();
+    assert!(!bootstrap(&api, true).await.unwrap().schema_ready);
+    assert!(matches!(
+        bootstrap(&api, false).await,
+        Err(AnytypeError::Bad { status: 409, .. })
+    ));
+    let object = api.get_object(id).await.unwrap();
+    assert_eq!(read_meta(&object, &BTreeMap::new()).version, Some(999));
+}
+
+#[tokio::test]
+async fn newer_minimum_gateway_prevents_sync_and_prepare() {
+    let mock = Mock::start().await;
+    let api = client(&mock);
+    bootstrap(&api, false).await.unwrap();
+    let rows = api
+        .search(&json!({ "type": "m_meta", "query": "m_meta" }))
+        .await
+        .unwrap();
+    let id = rows[0]["id"].as_str().unwrap();
+    for minimum in ["0.4.5", "999.0.0", "unrecognized"] {
+        let object = api.get_object(id).await.unwrap();
+        api.patch_object(
+            id,
+            &json!({ "ops": [{ "op": "set_properties", "set": { "m_min_gateway": minimum } }] }),
+            object["etag"].as_str(),
+            minimum,
+        )
+        .await
+        .unwrap();
+        assert!(!schema_ready(&api).await.unwrap());
+        assert!(matches!(
+            bootstrap(&api, false).await,
+            Err(AnytypeError::Bad { status: 409, .. })
+        ));
+        let object = api.get_object(id).await.unwrap();
+        assert_eq!(
+            read_meta(&object, &BTreeMap::new()).min_gateway.as_deref(),
+            Some(minimum)
+        );
+    }
 }
 
 #[test]
 fn declared_keys_have_no_digits() {
-    for column in COLUMNS {
+    for column in table::columns() {
         assert!(
             column.key.chars().all(|c| !c.is_ascii_digit()),
             "{}",
             column.key
         );
     }
-    for table in TABLES {
+    for table in table::tables() {
         assert!(table.key.chars().all(|c| !c.is_ascii_digit()));
     }
     assert!(table::option_allowed("m_conflict_state", "open"));
@@ -33,14 +94,14 @@ async fn bootstrap_twice_is_a_no_op() {
     let api = client(&mock);
     let preview = bootstrap(&api, true).await.unwrap();
     assert!(preview.dry_run);
-    assert_eq!(preview.types.len(), TABLES.len());
-    assert_eq!(preview.properties.len(), COLUMNS.len());
+    assert_eq!(preview.types.len(), table::tables().count());
+    assert_eq!(preview.properties.len(), table::columns().count());
     assert!(preview.meta);
     assert_eq!(mock.type_count(), 0);
     assert_eq!(mock.object_count(), 0);
 
     let first = bootstrap(&api, false).await.unwrap();
-    assert_eq!(first.types.len(), TABLES.len());
+    assert_eq!(first.types.len(), table::tables().count());
     assert!(first.meta);
     assert!(first.schema_ready);
     let types = mock.type_count();
@@ -80,8 +141,8 @@ async fn bootstrap_twice_is_a_no_op() {
         .await
         .unwrap();
     let meta = read_meta(&fetched, &BTreeMap::new());
-    assert_eq!(meta.version, Some(1));
-    assert_eq!(meta.min_gateway.as_deref(), Some(env!("CARGO_PKG_VERSION")));
+    assert_eq!(meta.version, Some(2));
+    assert_eq!(meta.min_gateway.as_deref(), Some("0.4.4"));
     assert!(meta.keys.is_empty());
     assert!(schema_ready(&api).await.unwrap());
     let state = api.list_properties().await.unwrap();
@@ -97,7 +158,7 @@ async fn bootstrap_twice_is_a_no_op() {
 async fn a_missing_property_is_the_only_create() {
     let mock = Mock::start().await;
     let api = client(&mock);
-    for table in TABLES {
+    for table in table::tables() {
         api.create_type(
             &json!({ "name": table.name, "api_key": table.key, "layout": table.layout }),
             &format!("seed-type-{}", table.key),
@@ -105,7 +166,7 @@ async fn a_missing_property_is_the_only_create() {
         .await
         .unwrap();
     }
-    for column in COLUMNS {
+    for column in table::columns() {
         if column.key == "m_mime" {
             continue;
         }
@@ -129,7 +190,7 @@ async fn a_type_without_its_property_definitions_is_repaired() {
     // properties exist, but a `fields` search needs the type to name them.
     let mock = Mock::start().await;
     let api = client(&mock);
-    for table in TABLES {
+    for table in table::tables() {
         api.create_type(
             &json!({ "name": table.name, "api_key": table.key, "layout": table.layout }),
             &format!("seed-type-{}", table.key),
@@ -137,7 +198,7 @@ async fn a_type_without_its_property_definitions_is_repaired() {
         .await
         .unwrap();
     }
-    for column in COLUMNS {
+    for column in table::columns() {
         api.create_property(
             &json!({ "name": column.name, "key": column.key, "format": column.format }),
             &format!("seed-property-{}", column.key),
@@ -149,7 +210,9 @@ async fn a_type_without_its_property_definitions_is_repaired() {
     assert!(preview.types.is_empty());
     assert!(!preview.schema_ready);
     // Every table column shows up as a property to attach, shared columns once per table.
-    let expected: usize = TABLES.iter().map(|table| table.properties.len()).sum();
+    let expected: usize = table::tables()
+        .map(|table| table::properties(table).count())
+        .sum();
     assert_eq!(preview.properties.len(), expected);
 
     let report = bootstrap(&api, false).await.unwrap();
@@ -166,6 +229,35 @@ async fn a_type_without_its_property_definitions_is_repaired() {
         .collect();
     assert!(names.contains(&"m_path"));
     assert!(names.contains(&"m_sha"));
+}
+
+#[tokio::test]
+async fn repair_preserves_person_added_type_properties() {
+    let mock = Mock::start().await;
+    let api = client(&mock);
+    bootstrap(&api, false).await.unwrap();
+    api.create_property(
+        &json!({"name":"My custom field", "key":"custom_field", "format":"text"}),
+        "custom-field",
+    )
+    .await
+    .unwrap();
+    api.patch_type(
+        "m_file",
+        &json!({"property_definitions":[{"property":"custom_field"}]}),
+        "seed-custom",
+    )
+    .await
+    .unwrap();
+    let preview = bootstrap(&api, true).await.unwrap();
+    assert!(!preview.schema_ready);
+    assert!(preview.properties.iter().any(|p| p == "m_path"));
+    bootstrap(&api, false).await.unwrap();
+    let kind = api.get_type("m_file").await.unwrap();
+    let props = kind["blocks"][0]["properties"].as_array().unwrap();
+    assert!(props.iter().any(|p| p["property"] == "My custom field"));
+    assert!(props.iter().any(|p| p["property"] == "m_path"));
+    assert!(schema_ready(&api).await.unwrap());
 }
 
 #[tokio::test]
@@ -246,7 +338,10 @@ async fn properties_exist_before_the_types_that_link_them() {
     let api = client(&mock);
     bootstrap(&api, false).await.unwrap();
     // Linked, not minted twice: one property row per declared column.
-    assert_eq!(api.list_properties().await.unwrap().len(), COLUMNS.len());
+    assert_eq!(
+        api.list_properties().await.unwrap().len(),
+        table::columns().count()
+    );
 }
 
 #[test]

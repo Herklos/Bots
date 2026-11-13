@@ -28,7 +28,7 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
             ));
         }
     }
-    let current = s.settings().await;
+    let current = s.try_settings().await?;
     let mut patch = patch;
     // The default model is checked like a Bot's, and stored as T3 stores a selection.
     if patch.get("defaultModel").is_some_and(|v| v.is_object()) {
@@ -156,7 +156,7 @@ pub(crate) async fn put_settings(State(s): S, h: HeaderMap, body: Bytes) -> ApiR
     }
     // The default for a new Bot is stored at or below the cap.
     crate::bots::runtime_mode::apply_default_cap(&mut next);
-    storage::write_json(&s.settings_path(), &next).await?;
+    s.settings_store.write(&next).await?;
     Ok(Json(next))
 }
 

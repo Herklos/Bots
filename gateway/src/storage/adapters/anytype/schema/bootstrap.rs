@@ -2,13 +2,16 @@
 //! Nothing is renamed or deleted. Keys come back from the create response and
 //! any key that differs from the one we asked for is stored in `m_keys_json`.
 
-use super::table::{self, Column, Table, COLUMNS, TABLES};
+use super::table::{self, Column, Table};
 use crate::storage::adapters::anytype::client::{AnytypeClient, AnytypeError};
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
+/// First release to include v2. The 0.4.3 checkout is an unreleased v2
+/// development build and must be versioned at least 0.4.4 before publishing.
+const V2_MIN_GATEWAY: &str = "0.4.4";
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Report {
@@ -33,38 +36,50 @@ pub(crate) async fn bootstrap(
     let mut create_properties = Vec::new();
     let mut attach = Vec::new();
 
-    for table in TABLES {
+    for table in table::tables() {
         match remember(&types, table.key, &type_label(table), &mut keys) {
-            Some(ref type_key) if missing_definitions(client, type_key, table).await? => {
-                attach.push((*table, type_key.clone()));
+            Some(ref type_key) => {
+                let missing = missing_definitions(client, type_key, table, &keys).await?;
+                if !missing.is_empty() {
+                    attach.push((*table, type_key.clone(), missing));
+                }
             }
-            Some(_) => {}
             None => create_types.push(table.key.to_string()),
         }
     }
-    for column in COLUMNS {
+    for column in table::columns() {
         if remember(&properties, column.key, column.key, &mut keys).is_none() {
             create_properties.push(column.key.to_string());
         }
     }
 
     let current = existing.as_ref().map(|object| read_meta(object, &keys));
+    // An older gateway must never downgrade a space prepared by a newer one.
+    // Check before creating or attaching anything, not just before writing meta.
+    let incompatible = current.as_ref().is_some_and(meta_incompatible);
+    if !dry_run && incompatible {
+        return Err(AnytypeError::Bad {
+            status: 409,
+            message: "Anytype space requires a newer or unrecognized gateway version; upgrade hbots before preparing it".into(),
+        });
+    }
     let drift = drifts(&keys);
     let ready_now = create_types.is_empty()
+        && !incompatible
         && create_properties.is_empty()
         && attach.is_empty()
         && current.as_ref().and_then(|meta| meta.version) == Some(SCHEMA_VERSION)
         && current
             .as_ref()
             .and_then(|meta| meta.min_gateway.as_deref())
-            .is_some()
+            .is_some_and(minimum_is_v2)
         && current.as_ref().map(|meta| &meta.keys) == Some(&drift);
     if dry_run {
         let mut properties = create_properties;
         properties.extend(
             attach
                 .iter()
-                .flat_map(|(table, _)| table.properties.iter().map(|key| key.to_string())),
+                .flat_map(|(_, _, missing)| missing.iter().map(|key| key.to_string())),
         );
         return Ok(Report {
             dry_run: true,
@@ -90,10 +105,20 @@ pub(crate) async fn bootstrap(
             .await?;
         keys.insert(type_label(table), read_back(&created, key));
     }
-    for (table, type_key) in &attach {
-        let body = json!({ "property_definitions": property_definitions(table, &keys) });
+    for (_table, type_key, missing) in &attach {
+        // property_definitions replaces the whole list, including fields added
+        // by a person. Individual add_property ops keep those fields intact.
+        let ops: Vec<Value> = missing
+            .iter()
+            .map(|key| json!({ "op": "add_property", "property": actual(&keys, key) }))
+            .collect();
+        let body = json!({ "ops": ops });
         client
-            .patch_type(type_key, &body, &format!("hbots-type-defs-{}", table.key))
+            .patch_type(
+                type_key,
+                &body,
+                &format!("hbots-type-add-{}", uuid::Uuid::new_v4()),
+            )
             .await?;
     }
 
@@ -107,6 +132,30 @@ pub(crate) async fn bootstrap(
         schema_ready: true,
         keys: drifts,
     })
+}
+
+// Unknown versions fail closed: Prepare must not lower a requirement it cannot parse.
+fn supports_gateway(min: &str, version: Option<i64>) -> bool {
+    match (
+        semver::Version::parse(min),
+        semver::Version::parse(env!("CARGO_PKG_VERSION")),
+    ) {
+        (Ok(required), Ok(running)) => {
+            running >= required
+                || (version == Some(SCHEMA_VERSION)
+                    && env!("CARGO_PKG_VERSION") == "0.4.3"
+                    && min == V2_MIN_GATEWAY)
+        }
+        _ => false,
+    }
+}
+
+fn meta_incompatible(meta: &Meta) -> bool {
+    meta.version.is_some_and(|v| v > SCHEMA_VERSION)
+        || meta
+            .min_gateway
+            .as_deref()
+            .is_some_and(|min| !supports_gateway(min, meta.version))
 }
 
 pub(crate) async fn schema_ready(client: &AnytypeClient) -> Result<bool, AnytypeError> {
@@ -132,7 +181,7 @@ fn type_label(table: &Table) -> String {
     table::type_map_key(table.key)
 }
 
-fn type_body(table: &Table, keys: &BTreeMap<String, String>) -> Value {
+fn type_body(table: &'static Table, keys: &BTreeMap<String, String>) -> Value {
     json!({
         "name": table.name,
         "api_key": table.key,
@@ -142,10 +191,8 @@ fn type_body(table: &Table, keys: &BTreeMap<String, String>) -> Value {
 }
 
 /// Link properties that already exist, by the key the space gave them.
-fn property_definitions(table: &Table, keys: &BTreeMap<String, String>) -> Vec<Value> {
-    table
-        .properties
-        .iter()
+fn property_definitions(table: &'static Table, keys: &BTreeMap<String, String>) -> Vec<Value> {
+    table::properties(table)
         .map(|key| json!({ "property": actual(keys, key) }))
         .collect()
 }
@@ -155,8 +202,9 @@ fn property_definitions(table: &Table, keys: &BTreeMap<String, String>) -> Vec<V
 async fn missing_definitions(
     client: &AnytypeClient,
     type_key: &str,
-    table: &Table,
-) -> Result<bool, AnytypeError> {
+    table: &'static Table,
+    keys: &BTreeMap<String, String>,
+) -> Result<Vec<&'static str>, AnytypeError> {
     let value = client.get_type(type_key).await?;
     let names: Vec<&str> = value["blocks"]
         .as_array()
@@ -165,10 +213,12 @@ async fn missing_definitions(
         .flat_map(|block| block["properties"].as_array().into_iter().flatten())
         .filter_map(|property| property["property"].as_str())
         .collect();
-    Ok(table.properties.iter().any(|key| {
-        let name = table::column(key).map(|column| column.name).unwrap_or(key);
-        !names.contains(&name)
-    }))
+    Ok(table::properties(table)
+        .filter(|key| {
+            let name = table::column(key).map(|column| column.name).unwrap_or(key);
+            !names.contains(&name) && !names.contains(&actual(keys, key))
+        })
+        .collect())
 }
 
 fn property_body(column: &Column) -> Value {
@@ -241,7 +291,7 @@ fn drifts(keys: &BTreeMap<String, String>) -> BTreeMap<String, String> {
 }
 
 fn assert_tables() {
-    for table in TABLES {
+    for table in table::tables() {
         for key in table.properties {
             assert!(table::column(key).is_some(), "{key} is not a column");
         }
@@ -298,35 +348,67 @@ async fn write_meta(
     drifts: &BTreeMap<String, String>,
     existing: Option<&Value>,
 ) -> Result<bool, AnytypeError> {
-    let properties = json!({
-        actual(keys, "m_schema_version"): SCHEMA_VERSION,
-        actual(keys, "m_min_gateway"): env!("CARGO_PKG_VERSION"),
-        actual(keys, "m_keys_json"): serde_json::to_string(drifts).unwrap_or_else(|_| "{}".into()),
-    });
     let Some(object) = existing else {
         let body = json!({
             "type": meta_type(keys),
             "name": "m_meta",
-            "properties": properties,
+            "properties": meta_properties(keys, drifts, None),
         });
         client.create_object(&body, &idem(&body)).await?;
         return Ok(true);
     };
     let current = read_meta(object, keys);
     if current.version == Some(SCHEMA_VERSION)
-        && current.min_gateway.is_some()
+        && current.min_gateway.as_deref().is_some_and(minimum_is_v2)
         && current.keys == *drifts
     {
         return Ok(false);
     }
     let id = object["id"].as_str().unwrap_or("");
     let fetched = client.get_object(id).await?;
+    if meta_incompatible(&read_meta(&fetched, keys)) {
+        return Err(AnytypeError::Bad {
+            status: 409,
+            message: "Anytype space requires a newer or unrecognized gateway version; upgrade hbots before preparing it".into(),
+        });
+    }
     let etag = fetched["etag"].as_str().unwrap_or("");
+    let properties = meta_properties(keys, drifts, Some(&fetched));
     let body = json!({ "ops": [{ "op": "set_properties", "set": properties }] });
     client
         .patch_object(id, &body, Some(etag), &idem(&body))
         .await?;
     Ok(true)
+}
+
+fn meta_properties(
+    keys: &BTreeMap<String, String>,
+    drifts: &BTreeMap<String, String>,
+    existing: Option<&Value>,
+) -> Value {
+    json!({
+        actual(keys, "m_schema_version"): SCHEMA_VERSION,
+        actual(keys, "m_min_gateway"): minimum_for_write(existing, keys),
+        actual(keys, "m_keys_json"): serde_json::to_string(drifts).unwrap_or_else(|_| "{}".into()),
+    })
+}
+
+fn minimum_is_v2(min: &str) -> bool {
+    match (
+        semver::Version::parse(min),
+        semver::Version::parse(V2_MIN_GATEWAY),
+    ) {
+        (Ok(current), Ok(required)) => current >= required,
+        _ => false,
+    }
+}
+
+fn minimum_for_write(existing: Option<&Value>, keys: &BTreeMap<String, String>) -> String {
+    existing
+        .map(|object| read_meta(object, keys))
+        .and_then(|meta| meta.min_gateway)
+        .filter(|min| minimum_is_v2(min))
+        .unwrap_or_else(|| V2_MIN_GATEWAY.to_string())
 }
 
 fn meta_type(keys: &BTreeMap<String, String>) -> &str {

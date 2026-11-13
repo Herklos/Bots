@@ -46,7 +46,7 @@ impl AnytypeClient {
         .await
     }
 
-    /// Replaces the type's property list. Keeps every property that is named.
+    /// Patch a type: add-property operations preserve fields not named in the patch.
     pub(crate) async fn patch_type(
         &self,
         key: &str,

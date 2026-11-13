@@ -3,7 +3,9 @@
 //! space check, and schema setup are what Settings uses.
 
 mod client;
+mod codec;
 mod schema;
+mod stores;
 pub(crate) mod sync;
 #[cfg(test)]
 mod tests;

@@ -108,8 +108,8 @@ async fn main() -> anyhow::Result<()> {
     // as it starts. A nudge with no running engine is only a queued entry.
     let sync_nudges = std::sync::Arc::new(storage::sync::Nudges::default());
     let disk = storage::LocalDisk::new(cfg.bots_root.clone());
-    let workspace: Arc<dyn storage::workspace::Workspace> = if storage::sync::chooses_anytype(&cfg)
-    {
+    let use_anytype = storage::sync::chooses_anytype(&cfg);
+    let workspace: Arc<dyn storage::workspace::Workspace> = if use_anytype {
         Arc::new(storage::adapters::anytype::SyncedWorkspace::new(
             disk,
             sync_nudges.clone(),
@@ -118,7 +118,27 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(disk)
     };
     let workspace: Arc<dyn storage::workspace::Workspace> = workspace;
+    let settings_store: Arc<dyn storage::stores::SettingsStore> = Arc::new(
+        storage::adapters::filesystem::FilesystemSettingsStore::new(app_dir.join("settings.json")),
+    );
+    let connector_store: Arc<dyn storage::stores::ConnectorStore> = Arc::new(
+        storage::adapters::filesystem::FilesystemConnectorStore::new(Arc::clone(&workspace)),
+    );
+    let bots = bots::Bots::with_workspace(
+        cfg.bots_root.clone(),
+        cfg.bot_mcp_url.clone(),
+        mcp_token.clone(),
+        Arc::clone(&workspace),
+    )
+    .with_settings_store(Arc::clone(&settings_store))
+    .with_connector_store(Arc::clone(&connector_store));
+    let bots = if use_anytype {
+        bots.with_local_overlay()
+    } else {
+        bots
+    };
     let state = Arc::new(AppState {
+        settings_store,
         access,
         exposure: exposure_cfg,
         tailnet: tailnet.clone(),
@@ -129,12 +149,7 @@ async fn main() -> anyhow::Result<()> {
             cfg.allowed_origins.clone(),
         )?,
         harness: crate::harness::connect(cfg.t3_url.clone(), cfg.t3_token.clone()),
-        bots: bots::Bots::with_workspace(
-            cfg.bots_root.clone(),
-            cfg.bot_mcp_url.clone(),
-            mcp_token.clone(),
-            Arc::clone(&workspace),
-        ),
+        bots,
         vault: vault::Vault::new(cfg.vault_file.clone(), cfg.vault_key_file.clone()),
         projects: projects::Projects::new(app_dir.join("projects.json")),
         threads: crate::chat::thread_meta::ThreadMeta::new(app_dir.join("thread-meta.json")),
@@ -142,7 +157,14 @@ async fn main() -> anyhow::Result<()> {
         providers: crate::harness::providers::Providers::open(
             cfg.bots_root.join(".botapp").join("limit-notices.json"),
         ),
-        rooms: crate::chat::rooms::Rooms::new(app_dir.join("groups.json")),
+        rooms: {
+            let rooms = crate::chat::rooms::Rooms::new(app_dir.join("groups.json"));
+            if use_anytype {
+                rooms.with_local_overlay()
+            } else {
+                rooms
+            }
+        },
         room_working: Mutex::new(crate::chat::rooms::WorkingBook::default()),
         routine_history: crate::chat::routines::RoutineHistory::new(
             app_dir.join("routine-history.json"),
@@ -156,7 +178,8 @@ async fn main() -> anyhow::Result<()> {
             workspace,
             cfg.bot_mcp_url.clone(),
             mcp_token.clone(),
-        ),
+        )
+        .with_connector_store(connector_store),
         images: chat::images::Resolver::new(),
         code_signals: chat::code::SignalCache::default(),
         code_reads: chat::code::ReadCache::default(),
@@ -168,12 +191,12 @@ async fn main() -> anyhow::Result<()> {
         cfg,
     });
     // Write the defaults once; an existing file, even an unreadable one, is left alone.
-    if !state.settings_path().exists() {
-        if let Err(e) =
-            storage::write_json(&state.settings_path(), &AppState::settings_defaults()).await
-        {
-            tracing::warn!("writing settings.json: {e}");
-        }
+    if let Err(e) = state
+        .settings_store
+        .initialize(&AppState::settings_defaults())
+        .await
+    {
+        tracing::warn!("initializing settings: {e}");
     }
     // Instructions may have changed with this version.
     for bot in state

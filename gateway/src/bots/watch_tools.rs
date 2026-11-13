@@ -13,7 +13,7 @@ const NAMES: [&str; 3] = ["watch_create", "watch_list", "watch_delete"];
 pub(crate) fn tool_defs() -> Vec<Value> {
     let thread = json!({
         "type": "string",
-        "description": "Your main conversation's T3 thread id (in AGENTS.md, or mainThreadId in .bot/bot.json)."
+        "description": "Your main conversation's T3 thread id (in AGENTS.md, or mainThreadId in .bot/local.json or .bot/bot.json)."
     });
     vec![
         json!({

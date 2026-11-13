@@ -34,34 +34,38 @@ pub(crate) fn corrupt() -> ApiError {
     ApiError::new(500, "thread-meta.json has an invalid entry")
 }
 
-/// The state file, read once. A missing file starts empty; an unreadable one is an error, as in hbots.
-pub(crate) async fn read_state(file: &Path) -> ApiResult<Map<String, Value>> {
-    match tokio::fs::read_to_string(file).await {
-        Ok(text) => match serde_json::from_str::<Value>(&text) {
-            Ok(Value::Object(map)) => Ok(map),
-            _ => Err(ApiError::new(500, "thread-meta.json is not valid")),
-        },
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Map::new()),
+/// The state document, read once through the machine-local store. A missing
+/// document starts empty; an unreadable one is an error, as in hbots.
+pub(crate) async fn read_state(
+    store: &dyn LocalStateStore,
+    doc: &str,
+) -> ApiResult<Map<String, Value>> {
+    match store.read(doc).await {
+        Ok(None) => Ok(Map::new()),
+        Ok(Some(Value::Object(map))) => Ok(map),
+        Ok(Some(_)) => Err(ApiError::new(500, "thread-meta.json is not valid")),
         Err(e) => Err(e.into()),
     }
 }
 
 pub(crate) async fn loaded<'a>(
-    file: &Path,
+    store: &dyn LocalStateStore,
+    doc: &str,
     slot: &'a mut Option<Map<String, Value>>,
 ) -> ApiResult<&'a mut Map<String, Value>> {
     if slot.is_none() {
-        *slot = Some(read_state(file).await?);
+        *slot = Some(read_state(store, doc).await?);
     }
     slot.as_mut()
         .ok_or_else(|| ApiError::new(500, "thread-meta.json is not loaded"))
 }
 
-pub(crate) async fn save(file: &Path, state: &Map<String, Value>) -> ApiResult<()> {
-    let text =
-        serde_json::to_string_pretty(state).map_err(|e| ApiError::new(500, e.to_string()))?;
-    storage::write_atomic(file, (text + "\n").as_bytes(), None).await?;
-    Ok(())
+pub(crate) async fn save(
+    store: &dyn LocalStateStore,
+    doc: &str,
+    state: &Map<String, Value>,
+) -> ApiResult<()> {
+    store.write(doc, &Value::Object(state.clone())).await
 }
 
 /// What the client sees for one thread: its reactions and its voice calls of at least ten seconds.

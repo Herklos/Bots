@@ -139,19 +139,9 @@ impl Library {
     }
 
     pub(crate) async fn read_connectors(&self, slug: &str) -> ApiResult<Vec<Value>> {
-        match self.ws.read(&Self::connectors_path(slug)).await {
-            Ok(bytes) => {
-                #[allow(
-                    clippy::map_err_ignore,
-                    reason = "serde quotes connectors.json, which can hold a connector secret"
-                )]
-                let doc: Value = serde_json::from_slice(&bytes)
-                    .map_err(|_| ApiError::new(500, "connectors.json is not valid JSON"))?;
-                Ok(doc["connectors"].as_array().cloned().unwrap_or_default())
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-            Err(e) => Err(e.into()),
-        }
+        self.connectors
+            .list(slug, crate::storage::stores::EmptyDocument::Reject)
+            .await
     }
 
     pub async fn save_connector(&self, slug: &str, input: &Value) -> ApiResult<Value> {
@@ -162,20 +152,16 @@ impl Library {
         validate_connector_url(url)?;
         let enabled = input["enabled"] != false;
         let secret = input["secret"].as_str().unwrap_or("").trim().to_string();
-        let mut all = self.read_connectors(slug).await?;
-        if let Some(found) = all.iter_mut().find(|c| c["name"] == name) {
-            let kept = found["secret"].as_str().unwrap_or("").to_string();
-            found["url"] = json!(url);
-            found["enabled"] = json!(enabled);
-            if !secret.is_empty() {
-                found["secret"] = json!(secret);
-            } else if !kept.is_empty() {
-                found["secret"] = json!(kept);
-            }
-        } else {
-            all.push(json!({ "name": name, "url": url, "enabled": enabled, "secret": secret }));
-        }
-        self.write_connectors(slug, &all).await?;
+        let all = self
+            .connectors
+            .put(
+                slug,
+                name,
+                url,
+                enabled,
+                (!secret.is_empty()).then_some(secret.as_str()),
+            )
+            .await?;
         self.rewrite_harness(slug, &all).await?;
         Ok(json!({ "ok": true }))
     }
@@ -185,28 +171,13 @@ impl Library {
         if name == "bot" {
             return Err(ApiError::bad_request("The vault connector stays on."));
         }
-        let mut all = self.read_connectors(slug).await?;
-        let before = all.len();
-        all.retain(|c| c["name"] != name);
-        if all.len() == before {
-            return Err(ApiError::not_found("no such connector"));
-        }
-        self.write_connectors(slug, &all).await?;
+        let all = self.connectors.delete(slug, name).await?;
         // The deleted name is not in the saved list. Pass it as off so the
         // harness files drop it, and so a later session cannot keep it alive.
         let mut for_harness = all.clone();
         for_harness.push(json!({ "name": name, "enabled": false }));
         self.rewrite_harness(slug, &for_harness).await?;
         Ok(json!({ "ok": true }))
-    }
-
-    pub(crate) async fn write_connectors(&self, slug: &str, connectors: &[Value]) -> ApiResult<()> {
-        let text =
-            serde_json::to_string_pretty(&json!({ "connectors": connectors })).unwrap() + "\n";
-        self.ws
-            .write(&Self::connectors_path(slug), text.as_bytes(), Some(0o600))
-            .await?;
-        Ok(())
     }
 
     pub(crate) async fn rewrite_harness(&self, slug: &str, connectors: &[Value]) -> ApiResult<()> {

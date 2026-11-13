@@ -1,5 +1,7 @@
 # Anytype schema for Michel
 
+P4/P5 implementation sequence: [Tier B/C plan](anytype-tier-bc-plan.md).
+
 Companion to [the Anytype backend plan](anytype-backend.md). Status: design only (2026-11-11, second revision after an audit against the Anytype API spec and live probes).
 
 All types live in one dedicated, private Anytype space. Every type and property key starts with `m_`, so nothing collides with the `aa_*` prototype schema or the person's `anytype-agents` org types. The shape is adapted from those org types (agent, team, subteam, subagent, harness profile, computer, tool profile, vault grant, prompt, memory, skill, log, suggestion, schedule, group, project, task) and mapped onto what Michel does.

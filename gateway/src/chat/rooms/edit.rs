@@ -48,7 +48,9 @@ impl Rooms {
             }
         }
         let _g = self.lock.lock().await;
-        let mut doc = read_doc(&self.path).await?;
+        let _disk_guard = self.store.acquire()
+        .await?;
+        let mut doc = self.read_doc().await?;
         let mut room = json!({
             "id": uuid::Uuid::new_v4().to_string(),
             "title": title,
@@ -69,7 +71,7 @@ impl Rooms {
             room["chief"] = json!(slug);
         }
         push_room(&mut doc, room.clone())?;
-        write_doc(&self.path, &doc).await?;
+        self.write_doc(&doc).await?;
         Ok(room)
     }
 
@@ -77,7 +79,9 @@ impl Rooms {
     /// `bots` is the list `Bots::list` already loaded, used when `members` is replaced.
     pub async fn update(&self, room_id: &str, patch: &Value, bots: &[Value]) -> ApiResult<Value> {
         let _g = self.lock.lock().await;
-        let mut doc = read_doc(&self.path).await?;
+        let _disk_guard = self.store.acquire()
+        .await?;
+        let mut doc = self.read_doc().await?;
         let room = room_mut(&mut doc, room_id)?;
         let replacement = if let Some(members) = patch.get("members") {
             let list: Vec<String> = members
@@ -151,20 +155,22 @@ impl Rooms {
             room["notifications"] = json!(on);
         }
         let stored = room.clone();
-        write_doc(&self.path, &doc).await?;
+        self.write_doc(&doc).await?;
         Ok(stored)
     }
 
     /// Remembers the thread made for one member of the group.
     pub async fn set_thread(&self, room_id: &str, slug: &str, thread: &str) -> ApiResult<()> {
         let _g = self.lock.lock().await;
-        let mut doc = read_doc(&self.path).await?;
+        let _disk_guard = self.store.acquire()
+        .await?;
+        let mut doc = self.read_doc().await?;
         let room = room_mut(&mut doc, room_id)?;
         if !room["threads"].is_object() {
             room["threads"] = json!({});
         }
         room["threads"][slug] = json!(thread);
-        write_doc(&self.path, &doc).await
+        self.write_doc(&doc).await
     }
 
     /// Nothing stored, or the Bot's one-to-one thread, is not a thread for this group.
@@ -175,17 +181,21 @@ impl Rooms {
     /// Marks the room seen now. A later Bot message is unread again.
     pub async fn seen(&self, room_id: &str) -> ApiResult<Value> {
         let _g = self.lock.lock().await;
-        let mut doc = read_doc(&self.path).await?;
+        let _disk_guard = self.store.acquire()
+        .await?;
+        let mut doc = self.read_doc().await?;
         let room = room_mut(&mut doc, room_id)?;
         room["lastSeenAt"] = json!(crate::vault::now_iso());
         let stored = room.clone();
-        write_doc(&self.path, &doc).await?;
+        self.write_doc(&doc).await?;
         Ok(stored)
     }
 
     pub async fn delete(&self, room_id: &str) -> ApiResult<()> {
         let _g = self.lock.lock().await;
-        let mut doc = read_doc(&self.path).await?;
+        let _disk_guard = self.store.acquire()
+        .await?;
+        let mut doc = self.read_doc().await?;
         let list = doc
             .get_mut("rooms")
             .and_then(Value::as_array_mut)
@@ -195,6 +205,6 @@ impl Rooms {
         if list.len() == before {
             return Err(ApiError::not_found("No such group"));
         }
-        write_doc(&self.path, &doc).await
+        self.write_doc(&doc).await
     }
 }

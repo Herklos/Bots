@@ -115,7 +115,7 @@ fn denied(parts: &[&str]) -> bool {
     }) {
         return true;
     }
-    if is_bot_runtime(parts) {
+    if is_bot_runtime(parts) || parts == [".botapp", "groups.local.json"] {
         return true;
     }
     parts.contains(&".botapp")

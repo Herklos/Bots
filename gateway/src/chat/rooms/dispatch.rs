@@ -278,7 +278,9 @@ impl Rooms {
             return Err(ApiError::bad_request("Write a message first."));
         }
         let _g = self.lock.lock().await;
-        let mut doc = read_doc(&self.path).await?;
+        let _disk_guard = self.store.acquire()
+        .await?;
+        let mut doc = self.read_doc().await?;
         let room = room_mut(&mut doc, room_id)?;
         let members = resolve(member_slugs(room), directory);
         let last = last_responder(room);
@@ -302,7 +304,7 @@ impl Rooms {
         room["hops"] = json!(0);
         anchor_all(room, &dispatches);
         let stored = room.clone();
-        write_doc(&self.path, &doc).await?;
+        self.write_doc(&doc).await?;
         Ok((stored, dispatches))
     }
 
@@ -321,13 +323,15 @@ impl Rooms {
             return Err(ApiError::bad_request("A reply needs a Bot and some text."));
         }
         let _g = self.lock.lock().await;
-        let mut doc = read_doc(&self.path).await?;
+        let _disk_guard = self.store.acquire()
+        .await?;
+        let mut doc = self.read_doc().await?;
         let room = room_mut(&mut doc, room_id)?;
         if !has_message(room, id) {
             push_message(room, &message(id, at, slug, name, text))?;
         }
         let stored = room.clone();
-        write_doc(&self.path, &doc).await?;
+        self.write_doc(&doc).await?;
         Ok(stored)
     }
 }

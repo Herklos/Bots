@@ -1,10 +1,11 @@
 //! Reactions, the voice-call log, and roster previews kept beside the harness conversation.
 //! T3 Code is the harness wired today; its wire projection doesn't carry these. Other backends
-//! may be added. Stored as `thread-meta.json` in the app directory.
+//! may be added. Thread state is machine-local, so it goes through the
+//! [`crate::storage::stores::LocalStateStore`], stored as `thread-meta.json` in the app directory.
 
 use crate::{
     platform::error::{ApiError, ApiResult},
-    storage,
+    storage::stores::LocalStateStore,
 };
 use futures_util::future::join_all;
 use regex::Regex;
@@ -13,7 +14,7 @@ use std::{
     collections::HashMap,
     future::Future,
     path::{Path, PathBuf},
-    sync::LazyLock,
+    sync::{Arc, LazyLock},
 };
 use tokio::sync::Mutex;
 
@@ -29,7 +30,8 @@ pub(crate) use state::*;
 
 #[derive(Debug)]
 pub struct ThreadMeta {
-    file: PathBuf,
+    store: Arc<dyn LocalStateStore>,
+    doc: String,
     state: Mutex<Option<Map<String, Value>>>,
     /// Per thread: the stamp its preview was computed at, and the preview (None when it had none).
     previews: Mutex<HashMap<String, (String, Option<Value>)>>,
@@ -37,8 +39,26 @@ pub struct ThreadMeta {
 
 impl ThreadMeta {
     pub fn new(file: PathBuf) -> Self {
+        let doc = file
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "thread-meta.json".into());
+        let dir = file
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| PathBuf::from("."));
+        Self::with_store(
+            Arc::new(crate::storage::adapters::filesystem::FilesystemLocalStateStore::new(dir)),
+            doc,
+        )
+    }
+
+    /// A store that holds the state on another machine-local backend. The name
+    /// still picks the document inside the store.
+    pub(crate) fn with_store(store: Arc<dyn LocalStateStore>, doc: String) -> Self {
         Self {
-            file,
+            store,
+            doc,
             state: Mutex::new(None),
             previews: Mutex::new(HashMap::new()),
         }
@@ -47,7 +67,7 @@ impl ThreadMeta {
     pub async fn get(&self, thread: Option<&str>) -> ApiResult<Value> {
         let thread = checked(thread, &THREAD_ID, "thread")?;
         let mut slot = self.state.lock().await;
-        let state = loaded(&self.file, &mut slot).await?;
+        let state = loaded(&*self.store, &self.doc, &mut slot).await?;
         Ok(view(state, thread))
     }
 
@@ -64,7 +84,7 @@ impl ThreadMeta {
             .filter(|e| valid_emoji(e))
             .ok_or_else(|| bad("invalid reaction"))?;
         let mut slot = self.state.lock().await;
-        let state = loaded(&self.file, &mut slot).await?;
+        let state = loaded(&*self.store, &self.doc, &mut slot).await?;
         let entry = thread_entry(state, thread)?;
         let reactions = entry
             .entry("reactions")
@@ -90,7 +110,7 @@ impl ThreadMeta {
         } else {
             reactions.insert(item.to_string(), json!(next));
         }
-        save(&self.file, state).await?;
+        save(&*self.store, &self.doc, state).await?;
         Ok(view(state, thread))
     }
 
@@ -107,7 +127,7 @@ impl ThreadMeta {
             .filter(|s| s.is_finite() && (0.0..=86_400.0).contains(s))
             .ok_or_else(|| bad("invalid duration"))?;
         let mut slot = self.state.lock().await;
-        let state = loaded(&self.file, &mut slot).await?;
+        let state = loaded(&*self.store, &self.doc, &mut slot).await?;
         let entry = thread_entry(state, thread)?;
         entry
             .entry("voiceCalls")
@@ -115,7 +135,7 @@ impl ThreadMeta {
             .as_array_mut()
             .ok_or_else(corrupt)?
             .push(json!({ "at": at, "seconds": rounded_seconds(seconds) }));
-        save(&self.file, state).await?;
+        save(&*self.store, &self.doc, state).await?;
         Ok(view(state, thread))
     }
 
@@ -124,7 +144,7 @@ impl ThreadMeta {
         let thread = checked(thread, &THREAD_ID, "thread")?;
         let item = checked(item, &ITEM_ID, "message")?;
         let mut slot = self.state.lock().await;
-        let state = loaded(&self.file, &mut slot).await?;
+        let state = loaded(&*self.store, &self.doc, &mut slot).await?;
         let entry = thread_entry(state, thread)?;
         let mut pins: Vec<String> = entry
             .get("pins")
@@ -143,7 +163,7 @@ impl ThreadMeta {
             pins.push(item.to_string());
         }
         entry.insert("pins".into(), json!(pins));
-        save(&self.file, state).await?;
+        save(&*self.store, &self.doc, state).await?;
         Ok(view(state, thread))
     }
 
@@ -160,7 +180,7 @@ impl ThreadMeta {
         let reply_to = checked(reply_to, &ITEM_ID, "message")?;
         let quote: String = quote.unwrap_or("").chars().take(500).collect();
         let mut slot = self.state.lock().await;
-        let state = loaded(&self.file, &mut slot).await?;
+        let state = loaded(&*self.store, &self.doc, &mut slot).await?;
         let entry = thread_entry(state, thread)?;
         let replies = entry
             .entry("replyTo")
@@ -171,7 +191,7 @@ impl ThreadMeta {
             message_id.to_string(),
             json!({ "id": reply_to, "text": quote }),
         );
-        save(&self.file, state).await?;
+        save(&*self.store, &self.doc, state).await?;
         Ok(view(state, thread))
     }
 
@@ -189,7 +209,7 @@ impl ThreadMeta {
             _ => "",
         };
         let mut slot = self.state.lock().await;
-        let state = loaded(&self.file, &mut slot).await?;
+        let state = loaded(&*self.store, &self.doc, &mut slot).await?;
         let entry = thread_entry(state, thread)?;
         let stored = entry
             .get("lastRead")
@@ -210,7 +230,7 @@ impl ThreadMeta {
         }
         let next = next_last_read(&stored, &known, open, hidden);
         entry.insert("lastRead".into(), json!(next));
-        save(&self.file, state).await?;
+        save(&*self.store, &self.doc, state).await?;
         let mut seen = view(state, thread);
         seen["unread"] = json!(is_unread(&stored, &known, open, hidden));
         Ok(seen)

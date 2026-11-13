@@ -83,6 +83,7 @@ fn denies_bot_json() {
 #[test]
 fn denies_local_json() {
     deny("ada/.bot/local.json");
+    deny(".botapp/groups.local.json");
 }
 
 #[test]

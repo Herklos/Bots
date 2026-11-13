@@ -25,14 +25,33 @@ pub(crate) use kinds::*;
 #[derive(Debug)]
 pub struct Library {
     ws: Arc<dyn Workspace>,
+    records: Arc<dyn crate::storage::stores::RecordStore>,
+    connectors: Arc<dyn crate::storage::stores::ConnectorStore>,
     mcp_url: String,
     mcp_token: String,
 }
 
 impl Library {
     pub fn new(ws: Arc<dyn Workspace>, mcp_url: String, mcp_token: String) -> Self {
+        let records = Arc::new(
+            crate::storage::adapters::filesystem::FilesystemRecordStore::new(Arc::clone(&ws)),
+        );
+        Self::with_record_store(ws, mcp_url, mcp_token, records)
+    }
+
+    pub(crate) fn with_record_store(
+        ws: Arc<dyn Workspace>,
+        mcp_url: String,
+        mcp_token: String,
+        records: Arc<dyn crate::storage::stores::RecordStore>,
+    ) -> Self {
+        let connectors = Arc::new(
+            crate::storage::adapters::filesystem::FilesystemConnectorStore::new(Arc::clone(&ws)),
+        );
         Self {
             ws,
+            records,
+            connectors,
             mcp_url,
             mcp_token,
         }
@@ -50,12 +69,12 @@ impl Library {
         }
     }
 
-    fn records_path(slug: &str) -> String {
-        format!("{slug}/.bot/library.json")
-    }
-
-    fn connectors_path(slug: &str) -> String {
-        format!("{slug}/.bot/connectors.json")
+    pub(crate) fn with_connector_store(
+        mut self,
+        connectors: Arc<dyn crate::storage::stores::ConnectorStore>,
+    ) -> Self {
+        self.connectors = connectors;
+        self
     }
 
     pub async fn view(&self, slug: &str, messages: &[Value], now: u64) -> ApiResult<Value> {
@@ -149,35 +168,9 @@ impl Library {
         Ok(out)
     }
 
-    async fn read_records(&self, slug: &str) -> ApiResult<Vec<Value>> {
-        match self.ws.read(&Self::records_path(slug)).await {
-            Ok(bytes) => {
-                #[allow(
-                    clippy::map_err_ignore,
-                    reason = "serde quotes library.json, which holds the user's records"
-                )]
-                let doc: Value = serde_json::from_slice(&bytes)
-                    .map_err(|_| ApiError::new(500, "library.json is not valid JSON"))?;
-                Ok(doc["items"].as_array().cloned().unwrap_or_default())
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    async fn write_records(&self, slug: &str, items: &[Value]) -> ApiResult<()> {
-        let text = serde_json::to_string_pretty(&json!({ "version": 1, "items": items }))
-            .unwrap_or_else(|_| "{}".into())
-            + "\n";
-        self.ws
-            .write(&Self::records_path(slug), text.as_bytes(), Some(0o600))
-            .await?;
-        Ok(())
-    }
-
     async fn records(&self, slug: &str, today: &str, week: &str) -> ApiResult<Vec<Value>> {
         let mut out = Vec::new();
-        for item in self.read_records(slug).await? {
+        for item in self.records.list(slug).await? {
             let at = item["at"].as_str().unwrap_or("");
             let day = if at.len() >= 10 { &at[..10] } else { "" };
             out.push(json!({
@@ -221,44 +214,19 @@ impl Library {
             status.clear();
         }
         let body = input["body"].as_str().unwrap_or("").to_string();
-        let mut items = self.read_records(slug).await?;
-        let id = input["id"]
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .map(str::to_string);
-        let at = crate::vault::now_iso();
+        let id = input["id"].as_str().filter(|s| !s.is_empty());
+        let create = id.is_none();
+        let id = id.map(str::to_string).unwrap_or_else(new_id);
+        let item = json!({ "id": id, "kind": kind, "title": title, "status": status,
+            "body": body, "at": crate::vault::now_iso() });
         let _ = now;
-        if let Some(id) = id {
-            let Some(found) = items.iter_mut().find(|i| i["id"] == id) else {
-                return Err(ApiError::not_found("no such library item"));
-            };
-            found["kind"] = json!(kind);
-            found["title"] = json!(title);
-            found["status"] = json!(status);
-            found["body"] = json!(body);
-        } else {
-            items.push(json!({
-                "id": new_id(),
-                "kind": kind,
-                "title": title,
-                "status": status,
-                "body": body,
-                "at": at,
-            }));
-        }
-        self.write_records(slug, &items).await?;
+        self.records.put(slug, &item, create).await?;
         Ok(json!({ "ok": true }))
     }
 
     pub async fn delete_item(&self, slug: &str, id: &str) -> ApiResult<Value> {
         Self::require_slug(slug)?;
-        let mut items = self.read_records(slug).await?;
-        let before = items.len();
-        items.retain(|i| i["id"] != id);
-        if items.len() == before {
-            return Err(ApiError::not_found("no such library item"));
-        }
-        self.write_records(slug, &items).await?;
+        self.records.delete(slug, id).await?;
         Ok(json!({ "ok": true }))
     }
 

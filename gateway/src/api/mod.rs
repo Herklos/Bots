@@ -44,6 +44,8 @@ mod hooks_tests;
 mod library_api;
 #[cfg(test)]
 mod library_file_tests;
+#[cfg(test)]
+mod library_mime_tests;
 mod machines_api;
 pub(crate) mod management;
 mod memory_api;
@@ -65,6 +67,8 @@ mod routines_inspect_tests;
 mod runtime_mode_tests;
 mod server;
 mod settings;
+#[cfg(test)]
+mod settings_store_tests;
 #[cfg(test)]
 mod settings_webhook_tests;
 mod side_api;

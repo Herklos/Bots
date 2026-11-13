@@ -10,6 +10,7 @@ use crate::harness::{HarnessError, Routines};
 use crate::platform::error::{ApiError, ApiResult};
 use serde_json::{json, Value};
 use std::path::PathBuf;
+use std::sync::Arc;
 
 pub(crate) mod inspect;
 pub(crate) mod review;
@@ -29,19 +30,20 @@ const HISTORY_LIMIT: usize = 50;
 
 #[derive(Debug)]
 pub struct RoutineHistory {
-    file: PathBuf,
+    store: Arc<dyn crate::storage::stores::ScheduleStore>,
 }
 
 impl RoutineHistory {
     pub fn new(file: PathBuf) -> Self {
-        Self { file }
+        Self {
+            store: Arc::new(crate::storage::adapters::filesystem::FilesystemScheduleStore::new(
+                file,
+            )),
+        }
     }
 
     pub async fn recent(&self) -> Value {
-        match tokio::fs::read_to_string(&self.file).await {
-            Ok(text) => serde_json::from_str(&text).unwrap_or_else(|_| json!([])),
-            Err(_) => json!([]),
-        }
+        Value::Array(self.store.read_history().await)
     }
 
     pub async fn record(&self, action: &str, task: &Value) {
@@ -56,7 +58,9 @@ impl RoutineHistory {
             }),
         );
         items.truncate(HISTORY_LIMIT);
-        let _ = crate::storage::write_json(&self.file, &Value::Array(items)).await;
+        if let Err(err) = self.store.write_history(&items).await {
+            tracing::warn!("routine history: {}", err.message);
+        }
     }
 }
 

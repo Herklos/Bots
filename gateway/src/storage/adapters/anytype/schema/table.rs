@@ -131,11 +131,43 @@ const fn plain(key: &'static str, format: &'static str) -> Column {
 }
 
 pub(crate) fn column(key: &str) -> Option<&'static Column> {
-    COLUMNS.iter().find(|column| column.key == key)
+    columns().find(|column| column.key == key)
 }
 
 pub(crate) fn table(key: &str) -> Option<&'static Table> {
-    TABLES.iter().find(|table| table.key == key)
+    tables().find(|table| table.key == key)
+}
+
+pub(crate) fn columns() -> impl Iterator<Item = &'static Column> {
+    COLUMNS.iter().chain(super::p4::P4_COLUMNS)
+}
+
+pub(crate) fn tables() -> impl Iterator<Item = &'static Table> {
+    TABLES.iter().chain(super::p4::P4_TABLES)
+}
+
+/// Anytype's built-in properties must be attached explicitly to be queryable.
+pub(crate) const BUILTINS: &[&str] = &[
+    "backlinks",
+    "links",
+    "tag",
+    "created_date",
+    "creator",
+    "last_modified_date",
+    "last_modified_by",
+];
+
+pub(crate) fn properties(table: &'static Table) -> impl Iterator<Item = &'static str> {
+    let bundled = if super::p4::P4_TABLES.iter().any(|p4| p4.key == table.key) {
+        BUILTINS
+    } else {
+        &[]
+    };
+    table
+        .properties
+        .iter()
+        .copied()
+        .chain(bundled.iter().copied())
 }
 
 /// A select value this gateway is allowed to send. Unknown options are refused.

@@ -20,7 +20,10 @@ impl MockState {
                 let row = match def["property"].as_str() {
                     Some(key) => match self.properties.iter().find(|row| row["key"] == key) {
                         Some(row) => row.clone(),
-                        None => return unknown_property(key),
+                        None => match builtin_property(key) {
+                            Some(row) => row,
+                            None => return unknown_property(key),
+                        },
                     },
                     None => {
                         let name = def["name"].as_str().unwrap_or("");
@@ -114,13 +117,58 @@ impl MockState {
 
     /// Replaces the type's property list like the app does on PATCH.
     pub(super) fn patch_type(&mut self, key: &str, body: &Value) -> Reply {
+        if let Some(ops) = body["ops"].as_array() {
+            let mut additions = Vec::new();
+            for op in ops {
+                if op["op"] != "add_property" {
+                    return invalid("unsupported type operation");
+                }
+                let property = op["property"].as_str().unwrap_or("");
+                let row = self
+                    .properties
+                    .iter()
+                    .find(|row| row["key"] == property || row["name"] == property)
+                    .cloned()
+                    .or_else(|| builtin_property(property));
+                let Some(row) = row else {
+                    return unknown_property(property);
+                };
+                additions.push(json!({"property": row["name"], "format": row["format"]}));
+            }
+            let Some(row) = self.types.iter_mut().find(|row| row["key"] == key) else {
+                return Reply {
+                    status: 404,
+                    body: json!({"error":"type not found"}),
+                    etag: None,
+                };
+            };
+            let Some(existing) = row["blocks"][0]["properties"].as_array_mut() else {
+                return invalid("invalid properties");
+            };
+            for addition in additions {
+                if !existing
+                    .iter()
+                    .any(|p| p["property"] == addition["property"])
+                {
+                    existing.push(addition);
+                }
+            }
+            return Reply {
+                status: 200,
+                body: json!({"key":key}),
+                etag: None,
+            };
+        }
         let mut attached = Vec::new();
         if let Some(defs) = body["property_definitions"].as_array() {
             for def in defs {
                 let row = match def["property"].as_str() {
                     Some(key) => match self.properties.iter().find(|row| row["key"] == key) {
                         Some(row) => row.clone(),
-                        None => return unknown_property(key),
+                        None => match builtin_property(key) {
+                            Some(row) => row,
+                            None => return unknown_property(key),
+                        },
                     },
                     None => {
                         let name = def["name"].as_str().unwrap_or("");
@@ -190,6 +238,14 @@ impl MockState {
             body: json!({"id": id, "name": name, "mime_type": mime, "size": size}),
             etag: None,
         }
+    }
+}
+
+fn builtin_property(key: &str) -> Option<Value> {
+    if crate::storage::adapters::anytype::schema::table::BUILTINS.contains(&key) {
+        Some(json!({"key":key,"name":key,"format":"builtin"}))
+    } else {
+        None
     }
 }
 

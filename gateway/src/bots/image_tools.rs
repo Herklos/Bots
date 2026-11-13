@@ -29,7 +29,7 @@ pub(crate) struct Deps<'a> {
 pub(crate) fn tool_defs() -> Vec<Value> {
     let thread = json!({
         "type": "string",
-        "description": "Your main conversation's T3 thread id (in AGENTS.md, or mainThreadId in .bot/bot.json)."
+        "description": "Your main conversation's T3 thread id (in AGENTS.md, or mainThreadId in .bot/local.json or .bot/bot.json)."
     });
     vec![json!({
         "name": "image_show",
@@ -78,7 +78,7 @@ fn caller<'a>(roster: &'a [Value], args: &Value) -> Result<&'a Value, String> {
         .filter(|thread| !thread.is_empty())
         .ok_or("threadId is required: pass your main thread id from AGENTS.md.")?;
     roster.iter().find(|bot| bot["mainThreadId"] == thread).ok_or_else(|| {
-        "That threadId isn't a Bot's main conversation. Pass your main thread id from AGENTS.md (or mainThreadId in .bot/bot.json).".to_string()
+        "That threadId isn't a Bot's main conversation. Pass your main thread id from AGENTS.md (or mainThreadId in .bot/local.json or .bot/bot.json).".to_string()
     })
 }
 

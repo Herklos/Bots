@@ -22,7 +22,7 @@ pub(crate) struct Deps<'a> {
 pub(crate) fn tool_defs() -> Vec<Value> {
     let thread = json!({
         "type": "string",
-        "description": "Your main conversation's T3 thread id (in AGENTS.md, or mainThreadId in .bot/bot.json)."
+        "description": "Your main conversation's T3 thread id (in AGENTS.md, or mainThreadId in .bot/local.json or .bot/bot.json)."
     });
     vec![
         json!({
@@ -89,7 +89,7 @@ fn caller<'a>(roster: &'a [Value], args: &Value) -> Result<&'a Value, String> {
     roster
         .iter()
         .find(|b| b["mainThreadId"] == thread)
-        .ok_or_else(|| "That threadId isn't a Bot's main conversation. Pass your main thread id from AGENTS.md (or mainThreadId in .bot/bot.json).".to_string())
+        .ok_or_else(|| "That threadId isn't a Bot's main conversation. Pass your main thread id from AGENTS.md (or mainThreadId in .bot/local.json or .bot/bot.json).".to_string())
 }
 
 fn is_subagent(bot: &Value) -> bool {
@@ -184,7 +184,7 @@ async fn create(d: &Deps<'_>, args: &Value) -> Result<Value, String> {
     let parent_slug = parent["slug"]
         .as_str()
         .filter(|s| !s.is_empty())
-        .ok_or("That threadId isn't a Bot's main conversation. Pass your main thread id from AGENTS.md (or mainThreadId in .bot/bot.json).")?;
+        .ok_or("That threadId isn't a Bot's main conversation. Pass your main thread id from AGENTS.md (or mainThreadId in .bot/local.json or .bot/bot.json).")?;
     let mut subagent = json!({ "prompt": prompt });
     if let Some(inherit) = inherit {
         subagent["inheritParentPrompt"] = json!(inherit);

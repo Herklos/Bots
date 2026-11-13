@@ -12,14 +12,7 @@ pub(crate) fn shape_name(raw: &str) -> Option<String> {
 /// Bots pinned as tiles above the inbox, besides the main Bot.
 pub(crate) const MAX_PINNED: usize = 2;
 
-pub(crate) fn valid_slug(slug: &str) -> bool {
-    let b = slug.as_bytes();
-    !b.is_empty()
-        && b.len() <= 63
-        && (b[0].is_ascii_lowercase() || b[0].is_ascii_digit())
-        && b.iter()
-            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || *c == b'-')
-}
+pub(crate) use crate::storage::stores::valid_slug;
 
 /// "Ada Lovelace" → "ada-lovelace".
 pub(crate) fn slugify(name: &str) -> String {

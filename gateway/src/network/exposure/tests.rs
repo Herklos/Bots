@@ -119,6 +119,11 @@ fn state(dir: &Path, exposure: Exposure) -> Arc<AppState> {
     let workspace: Arc<dyn crate::storage::workspace::Workspace> =
         Arc::new(crate::storage::LocalDisk::new(cfg.bots_root.clone()));
     Arc::new(AppState {
+        settings_store: Arc::new(
+            crate::storage::adapters::filesystem::FilesystemSettingsStore::new(
+                app_dir.join("settings.json"),
+            ),
+        ),
         auth: Auth::load(&app_dir, String::new(), vec![]).unwrap(),
         harness: crate::harness::connect(cfg.t3_url.clone(), cfg.t3_token.clone()),
         bots: Bots::with_workspace(

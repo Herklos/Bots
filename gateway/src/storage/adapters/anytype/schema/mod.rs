@@ -2,6 +2,9 @@
 
 mod bootstrap;
 mod failure;
+mod p4;
+#[cfg(test)]
+mod p4_tests;
 pub(crate) mod table;
 
 #[cfg(test)]

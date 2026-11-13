@@ -6,7 +6,6 @@ use crate::storage::LocalDisk;
 use crate::{
     bots::agent_context::MemorySnapshot,
     platform::error::{ApiError, ApiResult},
-    storage::{read_json, write_json},
     vault::now_iso,
 };
 use serde_json::{json, Map, Value};
@@ -36,6 +35,9 @@ pub struct Bots {
     pub mcp_token: String,
     /// Same workspace as [`crate::api::state::AppState::workspace`] in the running gateway.
     ws: Arc<dyn Workspace>,
+    settings_store: Arc<dyn crate::storage::stores::SettingsStore>,
+    connector_store: Arc<dyn crate::storage::stores::ConnectorStore>,
+    bot_store: Arc<dyn crate::storage::stores::BotStore>,
     lock: Mutex<()>,
     /// Slugs already warned because `CLAUDE.md` is a real file, not a symlink.
     claude_file_warned: std::sync::Mutex<HashSet<String>>,
@@ -54,44 +56,78 @@ impl Bots {
         mcp_token: String,
         ws: Arc<dyn Workspace>,
     ) -> Self {
+        let settings_store = Arc::new(
+            crate::storage::adapters::filesystem::FilesystemSettingsStore::new(
+                root.join(".botapp/settings.json"),
+            ),
+        );
+        let connector_store = Arc::new(
+            crate::storage::adapters::filesystem::FilesystemConnectorStore::new(Arc::clone(&ws)),
+        );
+        let bot_store = Arc::new(crate::storage::adapters::filesystem::FilesystemBotStore::new(
+            root.clone(),
+            false,
+        ));
         Self {
             root,
             mcp_url,
             mcp_token,
             ws,
+            settings_store,
+            connector_store,
+            bot_store,
             lock: Mutex::new(()),
             claude_file_warned: std::sync::Mutex::new(HashSet::new()),
         }
     }
 
+    pub(crate) fn with_connector_store(
+        mut self,
+        store: Arc<dyn crate::storage::stores::ConnectorStore>,
+    ) -> Self {
+        self.connector_store = store;
+        self
+    }
+
+    pub(crate) fn with_settings_store(
+        mut self,
+        store: Arc<dyn crate::storage::stores::SettingsStore>,
+    ) -> Self {
+        self.settings_store = store;
+        self
+    }
+
+    pub(crate) fn with_local_overlay(self) -> Self {
+        let store = Arc::new(
+            crate::storage::adapters::filesystem::FilesystemBotStore::new(
+                self.root.clone(),
+                true,
+            ),
+        );
+        self.with_bot_store(store)
+    }
+
+    pub(crate) fn with_bot_store(
+        mut self,
+        store: Arc<dyn crate::storage::stores::BotStore>,
+    ) -> Self {
+        self.bot_store = store;
+        self
+    }
+
     pub fn dir(&self, slug: &str) -> ApiResult<PathBuf> {
-        if !valid_slug(slug) {
+        if !crate::storage::stores::valid_slug(slug) {
             return Err(ApiError::bad_request("bad slug"));
         }
         Ok(self.root.join(slug))
     }
 
-    fn meta_file(&self, slug: &str) -> ApiResult<PathBuf> {
-        Ok(self.dir(slug)?.join(".bot").join("bot.json"))
-    }
-
-    fn selection_file(&self) -> PathBuf {
-        self.root.join(".botapp").join("main-bot.json")
-    }
-
     async fn load(&self) -> ApiResult<Vec<Value>> {
         let mut bots = Vec::new();
-        let mut entries = match tokio::fs::read_dir(&self.root).await {
-            Ok(e) => e,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(bots),
-            Err(e) => return Err(e.into()),
-        };
-        while let Some(entry) = entries.next_entry().await? {
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if !entry.file_type().await?.is_dir() || !valid_slug(&name) {
-                continue;
-            }
-            let Some(meta) = read_json(&self.meta_file(&name)?).await else {
+        let mut slugs = self.bot_store.list_slugs().await?;
+        slugs.sort();
+        for name in slugs {
+            let Some(meta) = self.bot_store.read_meta(&name).await? else {
                 continue;
             };
             let mut bot = json!({
@@ -111,7 +147,7 @@ impl Bots {
             let display = meta["name"]
                 .as_str()
                 .filter(|n| !n.trim().is_empty())
-                .unwrap_or(&name)
+                .unwrap_or(name.as_str())
                 .to_string();
             bot.insert("name".into(), json!(display));
             if !bot.get("createdAt").is_some_and(Value::is_string) {
@@ -121,8 +157,7 @@ impl Bots {
             bot.insert(
                 "workspaceRoot".into(),
                 json!(self.root.join(&name).to_string_lossy()),
-            );
-            bots.push(Value::Object(bot));
+            );            bots.push(Value::Object(bot));
         }
         bots.sort_by(|a, b| {
             a["createdAt"]
@@ -140,26 +175,14 @@ impl Bots {
             .and_then(|s| s.as_str().map(String::from))
             .unwrap_or_default();
         m.remove("workspaceRoot");
-        write_json(&self.meta_file(&slug)?, &Value::Object(m)).await?;
+        self.bot_store.write_meta(&slug, &Value::Object(m)).await?;
         Ok(())
     }
 
     /// Exactly one main Bot: the saved choice, else a legacy `primary`, else the first visible.
     async fn reconcile(&self) -> ApiResult<Vec<Value>> {
         let mut bots = self.load().await?;
-        // A missing file is no choice yet; an unreadable one is an error, so this can't overwrite it.
-        let selection = match tokio::fs::read_to_string(self.selection_file()).await {
-            Ok(text) => Some(
-                #[allow(
-                    clippy::map_err_ignore,
-                    reason = "serde quotes the choice file, which names the main Bot"
-                )]
-                serde_json::from_str::<Value>(&text)
-                    .map_err(|_| ApiError::new(500, "The main Bot choice file can't be read."))?,
-            ),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-            Err(e) => return Err(e.into()),
-        };
+        let selection = self.bot_store.read_selection().await?;
         let chosen = selection
             .as_ref()
             .and_then(|s| s["slug"].as_str().map(String::from));
@@ -186,7 +209,9 @@ impl Bots {
                     .and_then(|b| b["slug"].as_str().map(String::from))
             });
         if chosen != main {
-            write_json(&self.selection_file(), &json!({ "slug": main })).await?;
+            self.bot_store
+                .write_selection(main.as_deref())
+                .await?;
         }
         for bot in bots.iter_mut() {
             let primary = main.as_deref() == bot["slug"].as_str();
@@ -203,12 +228,14 @@ impl Bots {
 
     pub async fn list(&self) -> ApiResult<Vec<Value>> {
         let _g = self.lock.lock().await;
+        let _disk_guard = self.bot_store.acquire().await?;
         Ok(Self::show_all(self.reconcile().await?))
     }
 
     pub async fn get(&self, slug: &str) -> ApiResult<Option<Value>> {
         self.dir(slug)?;
         let _g = self.lock.lock().await;
+        let _disk_guard = self.bot_store.acquire().await?;
         Ok(self
             .reconcile()
             .await?
@@ -220,6 +247,8 @@ impl Bots {
     pub async fn select(&self, slug: &str) -> ApiResult<Vec<Value>> {
         self.dir(slug)?;
         let _g = self.lock.lock().await;
+        let _disk_guard = self.bot_store.acquire()
+        .await?;
         let bots = self.reconcile().await?;
         let mut target = bots
             .into_iter()
@@ -228,7 +257,7 @@ impl Bots {
         if is_subagent(&target) {
             return Err(ApiError::new(409, "A subagent can't be the main Bot."));
         }
-        write_json(&self.selection_file(), &json!({ "slug": slug })).await?;
+        self.bot_store.write_selection(Some(slug)).await?;
         if target["hidden"] == true {
             target["hidden"] = json!(false);
             self.persist(&target).await?;

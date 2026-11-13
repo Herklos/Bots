@@ -67,6 +67,8 @@ impl Bots {
     ) -> ApiResult<Value> {
         self.dir(slug)?;
         let _guard = self.lock.lock().await;
+        let _disk_guard = self.bot_store.acquire()
+        .await?;
         let bots = self.reconcile().await?;
         let current = bots
             .iter()

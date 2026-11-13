@@ -114,18 +114,6 @@ async fn html_library_file_is_sandboxed_and_a_png_is_not() {
     assert!(png.headers().get(header::CONTENT_SECURITY_POLICY).is_none());
 }
 
-#[test]
-fn library_mime_ignores_extension_case() {
-    assert_eq!(library_mime("page.HTML"), "text/html; charset=utf-8");
-    assert_eq!(library_mime("page.HTM"), "text/html; charset=utf-8");
-    assert_eq!(library_mime("shot.PNG"), "image/png");
-    assert_eq!(library_mime("shot.JPEG"), "image/jpeg");
-    assert_eq!(library_mime("shot.JPG"), "image/jpeg");
-    assert_eq!(library_mime("shot.GIF"), "image/gif");
-    assert_eq!(library_mime("shot.WEBP"), "image/webp");
-    assert_eq!(library_mime("notes.TXT"), "application/octet-stream");
-}
-
 pub(crate) fn settings_state(dir: &std::path::Path) -> Arc<AppState> {
     settings_state_with(dir, None)
 }
@@ -158,6 +146,11 @@ pub(crate) fn settings_state_with(
     let workspace: Arc<dyn storage::workspace::Workspace> =
         Arc::new(storage::LocalDisk::new(cfg.bots_root.clone()));
     Arc::new(AppState {
+        settings_store: Arc::new(
+            crate::storage::adapters::filesystem::FilesystemSettingsStore::new(
+                app_dir.join("settings.json"),
+            ),
+        ),
         auth: crate::network::auth::Auth::load(&app_dir, String::new(), vec![]).unwrap(),
         harness: harness
             .unwrap_or_else(|| crate::harness::connect(cfg.t3_url.clone(), cfg.t3_token.clone())),

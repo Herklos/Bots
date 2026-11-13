@@ -26,6 +26,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 
@@ -53,21 +54,43 @@ pub(crate) use working::*;
 pub struct Rooms {
     path: PathBuf,
     lock: Mutex<()>,
+    store: Arc<dyn crate::storage::stores::RoomStore>,
 }
 
 impl Rooms {
     pub fn new(path: PathBuf) -> Self {
         Self {
+            store: Arc::new(crate::storage::adapters::filesystem::FilesystemRoomStore::new(
+                path.clone(),
+                false,
+            )),
             path,
             lock: Mutex::new(()),
         }
+    }
+
+    pub(crate) fn with_local_overlay(mut self) -> Self {
+        self.store = Arc::new(crate::storage::adapters::filesystem::FilesystemRoomStore::new(
+            self.path.clone(),
+            true,
+        ));
+        self
+    }
+
+    async fn read_doc(&self) -> ApiResult<Value> {
+        self.store.read().await
+    }
+
+    async fn write_doc(&self, doc: &Value) -> ApiResult<()> {
+        self.store.write(doc).await
     }
 
     /// Rooms on disk. A room that predates `lastSeenAt` is marked seen now, once, so an old
     /// transcript does not start out unread.
     pub async fn list(&self) -> ApiResult<Vec<Value>> {
         let _g = self.lock.lock().await;
-        let mut doc = read_doc(&self.path).await?;
+        let _disk_guard = self.store.acquire().await?;
+        let mut doc = self.read_doc().await?;
         let mut stamped = false;
         let now = crate::vault::now_iso();
         if let Some(rooms) = doc.get_mut("rooms").and_then(Value::as_array_mut) {
@@ -79,14 +102,15 @@ impl Rooms {
             }
         }
         if stamped {
-            write_doc(&self.path, &doc).await?;
+            self.write_doc(&doc).await?;
         }
         Ok(rooms_of(&doc))
     }
 
     pub async fn get(&self, room_id: &str) -> ApiResult<Value> {
         let _g = self.lock.lock().await;
-        let doc = read_doc(&self.path).await?;
+        let _disk_guard = self.store.acquire().await?;
+        let doc = self.read_doc().await?;
         rooms_of(&doc)
             .into_iter()
             .find(|room| room["id"].as_str() == Some(room_id))
@@ -140,28 +164,3 @@ fn room_mut<'a>(doc: &'a mut Value, room_id: &str) -> ApiResult<&'a mut Value> {
         .ok_or_else(|| ApiError::not_found("No such room"))
 }
 
-async fn read_doc(path: &std::path::Path) -> ApiResult<Value> {
-    match tokio::fs::read_to_string(path).await {
-        Ok(text) => {
-            #[allow(
-                clippy::map_err_ignore,
-                reason = "serde quotes groups.json, which holds room messages"
-            )]
-            let doc: Value = serde_json::from_str(&text)
-                .map_err(|_| ApiError::new(500, "groups.json is not valid"))?;
-            if !doc["rooms"].is_array() {
-                return Err(ApiError::new(500, "groups.json is not valid"));
-            }
-            Ok(doc)
-        }
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            Ok(json!({ "version": 1, "rooms": [] }))
-        }
-        Err(err) => Err(err.into()),
-    }
-}
-
-async fn write_doc(path: &std::path::Path, doc: &Value) -> ApiResult<()> {
-    crate::storage::write_json(path, doc).await?;
-    Ok(())
-}

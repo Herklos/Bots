@@ -3,6 +3,7 @@ use super::*;
 #[derive(Debug)]
 pub struct AppState {
     pub cfg: crate::platform::config::Config,
+    pub(crate) settings_store: Arc<dyn crate::storage::stores::SettingsStore>,
     pub auth: crate::network::auth::Auth,
     pub harness: std::sync::Arc<dyn crate::harness::Harness>,
     pub bots: bots::Bots,
@@ -46,6 +47,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    #[cfg(test)]
     pub(crate) fn settings_path(&self) -> std::path::PathBuf {
         self.cfg.app_dir().join("settings.json")
     }
@@ -109,8 +111,22 @@ impl AppState {
 
     /// `settings.json` with hbots defaults filled in.
     pub async fn settings(&self) -> Value {
-        let saved = storage::read_json(&self.settings_path())
-            .await
+        self.try_settings().await.unwrap_or_else(|error| {
+            tracing::warn!("reading settings: {}", error.message);
+            let mut fallback = Self::settings_defaults();
+            // A future remote store may be temporarily unavailable. Do not
+            // grant the full-access default when its saved cap is unknown.
+            fallback["maxRuntimeMode"] = json!("approval-required");
+            fallback["defaultRuntimeMode"] = json!("approval-required");
+            fallback
+        })
+    }
+
+    pub(crate) async fn try_settings(&self) -> ApiResult<Value> {
+        let saved = self
+            .settings_store
+            .read()
+            .await?
             .unwrap_or_else(|| json!({}));
         let mut out = storage::merge(&Self::settings_defaults(), &saved);
         out["beta"] = json!({
@@ -128,7 +144,7 @@ impl AppState {
         crate::bots::runtime_mode::apply_default_cap(&mut out);
         // Missing stays []. Invalid becomes [] so one bad value cannot blank Settings.
         out["sections"] = super::settings::sections_view(&saved);
-        out
+        Ok(out)
     }
 }
 

@@ -1,27 +1,9 @@
 use super::*;
+use crate::storage::{read_json, write_json};
 
 pub(crate) const MANAGED_START: &str = "<!-- bot:managed:start -->";
 
 pub(crate) const MANAGED_END: &str = "<!-- bot:managed:end -->";
-
-/// Missing is an empty list. A file that is not JSON is an error, so the caller
-/// does not rewrite `.mcp.json` and drop the connectors it could not read.
-pub(crate) async fn read_connector_list(path: &Path) -> ApiResult<Vec<Value>> {
-    match tokio::fs::read_to_string(path).await {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(e) => Err(e.into()),
-        Ok(text) if text.trim().is_empty() => Ok(Vec::new()),
-        Ok(text) => {
-            #[allow(
-                clippy::map_err_ignore,
-                reason = "serde quotes connectors.json, which can hold a connector secret"
-            )]
-            let doc: Value = serde_json::from_str(&text)
-                .map_err(|_| ApiError::new(500, "connectors.json is not valid JSON"))?;
-            Ok(doc["connectors"].as_array().cloned().unwrap_or_default())
-        }
-    }
-}
 
 /// The brief names T3 Code because that is the harness wired today. Other backends may be added.
 /// `parent` is the parent Bot record when this Bot is a subagent. `children` are that parent's
@@ -125,8 +107,10 @@ impl Bots {
     /// Enabled connectors in `.bot/connectors.json` are kept. A broken file is left unread
     /// and these harness files are not rewritten, so a save cannot drop them.
     pub async fn write_instructions(&self, bot: &Value) -> ApiResult<()> {
-        let settings = read_json(&self.root.join(".botapp").join("settings.json"))
-            .await
+        let settings = self
+            .settings_store
+            .read()
+            .await?
             .unwrap_or_else(|| json!({}));
         self.write_instructions_with(bot, &settings).await
     }
@@ -135,7 +119,10 @@ impl Bots {
     async fn write_instructions_with(&self, bot: &Value, settings: &Value) -> ApiResult<()> {
         let slug = bot["slug"].as_str().unwrap_or_default();
         let dir = self.dir(slug)?;
-        let connectors = read_connector_list(&dir.join(".bot").join("connectors.json")).await?;
+        let connectors = self
+            .connector_store
+            .list(slug, crate::storage::stores::EmptyDocument::Allow)
+            .await?;
         let mcp_path = dir.join(".mcp.json");
         let existing = read_json(&mcp_path).await.unwrap_or_else(|| json!({}));
         let mcp = crate::bots::library::merge_mcp(
@@ -172,7 +159,12 @@ impl Bots {
 
         let agents = dir.join("AGENTS.md");
         let existing_agents = tokio::fs::read_to_string(&agents).await.unwrap_or_default();
-        let family = self.load().await?;
+        let family = {
+            let _guard = self.lock.lock().await;
+            let _disk_guard = self.bot_store.acquire()
+            .await?;
+            self.load().await?
+        };
         let parent = parent_slug_of(bot).and_then(|slug| {
             family
                 .iter()
@@ -208,8 +200,10 @@ impl Bots {
     /// Load this Bot and rewrite its managed block, then the parent's list or the children.
     /// `write_instructions` skips the file when the merged text is unchanged.
     pub async fn refresh_agents(&self, slug: &str) -> ApiResult<()> {
-        let settings = read_json(&self.root.join(".botapp").join("settings.json"))
-            .await
+        let settings = self
+            .settings_store
+            .read()
+            .await?
             .unwrap_or_else(|| json!({}));
         let Some(bot) = self.get(slug).await? else {
             return Ok(());
@@ -222,7 +216,13 @@ impl Bots {
                 }
             }
         } else {
-            let family = self.load().await?;
+            // load may migrate local bindings, so it needs the same guards as list/get.
+            let family = {
+                let _guard = self.lock.lock().await;
+                let _disk_guard = self.bot_store.acquire()
+                .await?;
+                self.load().await?
+            };
             let children: Vec<Value> = family
                 .into_iter()
                 .filter(|other| parent_slug_of(other).as_deref() == Some(slug))

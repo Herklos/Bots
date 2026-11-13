@@ -4,7 +4,9 @@
 
 pub(crate) mod adapters;
 mod json;
+pub(crate) mod local_lock;
 pub(crate) mod settings;
+pub(crate) mod stores;
 pub(crate) mod sync;
 pub(crate) mod workspace;
 
