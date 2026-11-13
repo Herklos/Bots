@@ -66,7 +66,10 @@ async fn two_engines_keep_every_acknowledged_write() {
         }
     }
     let conflicts = api(&mock.url)
-        .search(&serde_json::json!({"type": "hb_conflict"}))
+        .search(&serde_json::json!({
+            "type": "hb_conflict",
+            "fields": ["hb_path", "hb_conflict_state", "hb_copy_a", "hb_copy_b"],
+        }))
         .await
         .unwrap();
     for path in &paths {
@@ -120,7 +123,10 @@ async fn harvest(mock: &Mock, rigs: &[Rig; 2]) -> BTreeSet<String> {
         bag.insert(sha256_hex(&remote_body(&mock.url, &row).await));
     }
     let conflicts = api(&mock.url)
-        .search(&serde_json::json!({"type": "hb_conflict"}))
+        .search(&serde_json::json!({
+            "type": "hb_conflict",
+            "fields": ["hb_path", "hb_conflict_state", "hb_copy_a", "hb_copy_b"],
+        }))
         .await
         .unwrap();
     for row in conflicts {

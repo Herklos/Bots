@@ -21,7 +21,10 @@ async fn a_conflict_resolved_in_anytype_clears_the_local_entry() {
 
     peer_text(&world.mock, &id, b"alpha\nLOCAL\nomega\n");
     let conflicts = api(&world.mock.url)
-        .search(&json!({"type": "hb_conflict"}))
+        .search(&json!({
+            "type": "hb_conflict",
+            "fields": ["hb_path", "hb_conflict_state"],
+        }))
         .await
         .unwrap();
     let conflict_id = conflicts
@@ -59,7 +62,10 @@ async fn a_conflict_dismissed_in_anytype_clears_the_local_entry() {
     assert!(world.rig.engine.conflict_for(path).is_some());
     peer_text(&world.mock, &id, b"local\n");
     let conflicts = api(&world.mock.url)
-        .search(&json!({"type": "hb_conflict"}))
+        .search(&json!({
+            "type": "hb_conflict",
+            "fields": ["hb_path", "hb_conflict_state"],
+        }))
         .await
         .unwrap();
     let conflict_id = conflicts[0]["id"].as_str().unwrap();

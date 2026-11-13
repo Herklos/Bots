@@ -75,7 +75,8 @@ async fn bootstrap_twice_is_a_no_op() {
         .search(&json!({ "type": "hb_meta", "query": "hb_meta" }))
         .await
         .unwrap();
-    let meta = read_meta(&rows[0], &BTreeMap::new());
+    let fetched = api.get_object(rows[0]["id"].as_str().unwrap()).await.unwrap();
+    let meta = read_meta(&fetched, &BTreeMap::new());
     assert_eq!(meta.version, Some(1));
     assert_eq!(meta.min_gateway.as_deref(), Some(env!("CARGO_PKG_VERSION")));
     assert!(meta.keys.is_empty());
@@ -181,8 +182,9 @@ async fn a_drifted_key_is_kept_in_hb_keys_json() {
         .search(&json!({ "type": "hb_meta", "query": "hb_meta" }))
         .await
         .unwrap();
+    let fetched = api.get_object(rows[0]["id"].as_str().unwrap()).await.unwrap();
     let stored: BTreeMap<String, String> =
-        serde_json::from_str(rows[0]["properties"]["hb_keys_json"].as_str().unwrap()).unwrap();
+        serde_json::from_str(fetched["properties"]["hb_keys_json"].as_str().unwrap()).unwrap();
     assert_eq!(
         stored.get("hb_sha").map(String::as_str),
         Some("hb_sha_kept")

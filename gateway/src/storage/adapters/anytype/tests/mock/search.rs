@@ -141,12 +141,13 @@ fn sort_key(object: &Object, property: &str) -> String {
 
 fn project(object: &Object, body: &Value) -> Value {
     let full = document(object);
+    // Live Anytype omits `properties` unless `fields` names them. Match that
+    // so schema_ready cannot lean on a search hit that production never sends.
     let Some(fields) = body["fields"].as_array() else {
         return json!({
             "id": full["id"],
             "name": full["name"],
             "type": full["type"],
-            "properties": full["properties"],
         });
     };
     let mut picked = serde_json::Map::new();

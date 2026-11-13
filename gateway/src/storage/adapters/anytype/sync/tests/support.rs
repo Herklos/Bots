@@ -135,7 +135,17 @@ pub(super) fn api(url: &str) -> AnytypeClient {
 }
 
 pub(super) async fn hb_files(url: &str) -> Vec<Value> {
-    api(url).search(&json!({"type": "hb_file"})).await.unwrap()
+    // Live search omits properties unless `fields` names them.
+    api(url)
+        .search(&json!({
+            "type": "hb_file",
+            "fields": [
+                "hb_path", "hb_sha", "hb_deleted", "hb_device", "hb_rev", "hb_size",
+                "hb_content", "hb_blob", "created_date", "last_modified_date",
+            ],
+        }))
+        .await
+        .unwrap()
 }
 
 pub(super) async fn files_with_path(url: &str, rel: &str) -> Vec<Value> {

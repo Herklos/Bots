@@ -280,7 +280,17 @@ async fn meta_object(
             .unwrap_or("")
             .cmp(right["created_date"].as_str().unwrap_or(""))
     });
-    Ok(rows.into_iter().next())
+    let Some(row) = rows.into_iter().next() else {
+        return Ok(None);
+    };
+    // Live Anytype search omits `properties` unless `fields` is set. A fresh
+    // space cannot name hb_* fields yet, so we never project them here. Load
+    // the object so schema_ready can read hb_schema_version and friends.
+    let id = row["id"].as_str().unwrap_or("");
+    if id.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(client.get_object(id).await?))
 }
 
 async fn write_meta(
