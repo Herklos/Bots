@@ -37,14 +37,15 @@ For a terminal-only setup, run `hbots up --no-service`, then `hbots serve` using
 
 ## Features
 
-- **Personal Bots:** use the guided setup to choose a name, appearance, optional template and first message. Each Bot has its own instructions and workspace; choose its model and approval mode. Claude Haiku is the default model. Settings can cap how much approval a Bot is given. Existing Bots keep the mode already saved; the next message uses the cap, and the list shows Above the limit. Michel applies that cap itself and does not write T3's `limits.maxRuntimeMode`.
-- **Conversations:** chat with individual Bots or groups, mention Bots, attach files and voice clips, reply, react, and pin messages. In a group, an `@mention`, `@all`, or a single name chooses who answers; otherwise the last speaker does, unless the group or Settings says everyone or a chief should. Stop a run or answer an approval request from the app.
-- **Notifications:** receive unread conversation notices and mute individual Bots or groups without losing unread indicators.
-- **Bot details:** see routines, usage, child threads, and a library of files, pages and links. Manage per-Bot MCP connectors and watch or interact with a Bot's browser through T3 Code.
-- **Memory and routines:** Bot instructions include a bounded snapshot of memory and shared notes, refreshed when those files change. Schedule work through the harness and review or run a Bot's routines.
-- **Vault:** keep logins encrypted, import or export CSV, and let Bot tools use saved credentials without exposing the password to the Bot.
-- **Remote access:** set a password, then choose this device, the local network, or Tailscale in Settings.
-- **Storage:** configure the Bot folder in Settings. Pair with Anytype and check a space; the running gateway still uses the file system while the Anytype storage adapter is under development.
+- **Personal Bots:** a guided setup helps you pick a name, look, starting instructions and first message. Every Bot gets its own instructions and workspace, and you choose its model and how much it may do on its own. You can later set a cap per Bot, and Michel enforces it.
+- **Conversations:** talk with Bots one on one or in groups. Attach files and voice clips, reply, react and pin messages. In a group, `@mention` a Bot, `@all`, or name one to choose who answers; with no mention, the last speaker usually does. Stop a running answer or approve a request right from the chat.
+- **Watches:** have a Bot keep an eye on a web page or a file in its workspace. Michel checks it on a schedule and follows your rules, then runs a webhook or routine when something changes.
+- **Helpers:** let other Bots step in and help when a conversation needs an extra pair of hands, with limits you control in Bot details.
+- **Bot details:** see each Bot's routines, memory, usage, code files and library, and watch or take over its browser through T3 Code.
+- **Memory and routines:** Bot instructions include a summary of its memory and shared notes, kept up to date as they change. Schedule recurring or one-off work, and attach files to a question so the answer keeps them together.
+- **Vault:** store logins encrypted, import or export a CSV, and let Bots use saved credentials without ever seeing the passwords.
+- **Remote access:** set a password, then choose this device, your local network, or Tailscale in Settings. Check how full the model providers you use are, right from Settings.
+- **Storage:** Bots live in a folder on your machine today. You can also pair Michel with your Anytype space and follow the sync from Settings.
 - **Installation and updates:** install checksummed releases, run a background service, update and restart from Settings, or roll back from the CLI.
 
 See [the project plan](docs/PLAN.md) for ongoing work and limitations.
