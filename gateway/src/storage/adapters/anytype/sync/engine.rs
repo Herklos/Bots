@@ -146,6 +146,7 @@ impl Engine {
         let mut status = self.status.clone();
         status.phase = self.phase;
         status.outbox = self.outbox.items().len();
+        status.outbox_warn = status.outbox >= super::outbox::WARN_AT;
         status.conflicts = self.conflicts.open_count();
         status.duplicates = self.duplicates;
         if status.state != SyncState::Offline

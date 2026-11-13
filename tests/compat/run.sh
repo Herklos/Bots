@@ -6,6 +6,10 @@
 # .vault-key. Each process logs in, and the other's bot_session cookie must still be accepted
 # because both read the same session-secret.
 #
+# ~/.hbots/sync/ is machine-local Anytype sync state (manifest.json, device-id, outbox.jsonl,
+# conflicts.json, history/, sync.log). It sits outside the Bots folder. Filesystem mode does
+# not read it. An older gateway ignores the directory. This harness does not require it.
+#
 # An earlier server checkout is not on this machine, so both sides of the cookie check are
 # hbots processes. The script says so. It does not invent a result for that checkout.
 #

@@ -80,6 +80,14 @@ pub(super) async fn one(
         &remote_state,
         merge,
     );
+    super::log::decision(
+        ctx.sync_dir,
+        rel,
+        action.name(),
+        entry.as_ref().and_then(|row| row.base_sha.as_deref()),
+        local_sha.as_deref(),
+        remote_sha.as_deref(),
+    );
     let local_bytes = if wants_local_bytes(action) {
         match std::fs::read(ctx.root.join(rel)) {
             Ok(bytes) => {
@@ -204,6 +212,14 @@ async fn hidden(
     local_sha: Option<&str>,
     entry: &Option<Entry>,
 ) -> Result<RemoteView, SyncError> {
+    if loaded.deleted {
+        return Ok(RemoteView::Ready(View {
+            state: Remote::Tombstone,
+            deleted: true,
+            object_id: Some(object_id.to_string()),
+            ..loaded
+        }));
+    }
     let same = match (local_sha, loaded.sha.as_deref()) {
         (Some(local), Some(remote)) => local == remote,
         (None, Some(remote)) => {

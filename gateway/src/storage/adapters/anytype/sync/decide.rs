@@ -39,6 +39,25 @@ pub(super) enum Action {
 }
 
 impl Action {
+    /// The word written on the decision line. Stable for the log ring.
+    pub(super) fn name(self) -> &'static str {
+        match self {
+            Self::Noop => "noop",
+            Self::PushCreate => "push-create",
+            Self::PullCreate => "pull-create",
+            Self::Adopt => "adopt",
+            Self::Conflict => "conflict",
+            Self::PushUpdate => "push-update",
+            Self::PullUpdate => "pull-update",
+            Self::Merge => "merge",
+            Self::PushTombstone => "push-tombstone",
+            Self::DeleteLocal => "delete-local",
+            Self::Drop => "drop",
+            Self::EditWinsPush => "edit-wins-push",
+            Self::EditWinsPull => "edit-wins-pull",
+        }
+    }
+
     /// Deletes a local file or tombstones the remote object.
     pub(super) fn destroys_content(self) -> bool {
         match self {

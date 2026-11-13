@@ -18,7 +18,7 @@ pub(super) struct Rig {
     pub engine: Engine,
     pub device: String,
     pub url: String,
-    config: Config,
+    pub config: Config,
 }
 
 pub(super) struct World {

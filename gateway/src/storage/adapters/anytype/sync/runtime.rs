@@ -64,6 +64,7 @@ pub(crate) struct Snapshot {
     pub last_sync: i64,
     pub retry_in: u64,
     pub outbox: usize,
+    pub outbox_warn: bool,
     pub duplicates: usize,
     pub device_id: String,
     pub conflicts: Vec<(String, String)>,
@@ -80,6 +81,7 @@ impl Snapshot {
             last_sync: 0,
             retry_in: 0,
             outbox: 0,
+            outbox_warn: false,
             duplicates: 0,
             device_id: String::new(),
             conflicts: Vec::new(),
@@ -98,6 +100,7 @@ impl Snapshot {
             "lastSync": self.last_sync,
             "retryIn": self.retry_in,
             "outbox": self.outbox,
+            "outboxWarn": self.outbox_warn,
             "duplicates": self.duplicates,
             "deviceId": self.device_id,
             "conflicts": self
@@ -425,6 +428,7 @@ fn write_snapshot(snapshot: &mut Snapshot, engine: &Engine) {
     snapshot.state = status.state.as_str();
     snapshot.retry_in = status.retry_in.as_secs();
     snapshot.outbox = status.outbox;
+    snapshot.outbox_warn = status.outbox_warn;
     snapshot.duplicates = status.duplicates;
     snapshot.last_error = status.last_error.clone();
     snapshot.conflicts = engine
