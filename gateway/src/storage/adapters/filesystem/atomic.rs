@@ -12,6 +12,12 @@ pub(crate) async fn write_json(path: &Path, value: &Value) -> std::io::Result<()
     write_atomic(path, text.as_bytes(), None).await
 }
 
+/// Same as [`write_json`], but the file is created with mode 600: owner-only.
+pub(crate) async fn write_json_private(path: &Path, value: &Value) -> std::io::Result<()> {
+    let text = serde_json::to_string_pretty(value).expect("JSON values serialize") + "\n";
+    write_atomic(path, text.as_bytes(), Some(0o600)).await
+}
+
 pub(crate) async fn write_atomic(
     path: &Path,
     bytes: &[u8],
