@@ -4,9 +4,8 @@ test "Settings lists linked computers and does not pair"
   size 390x844
   tap "Settings"
   clock data
-  tap "settings-domain-computers"
+  tap "settings-domain-access"
   clock data
-  expect text "settings-domain-computers" == "Computers"
   expect text "machines-title" == "Linked computers"
   expect text "machine-local-label" == "This computer"
   expect text "machine-local-status" == "Online"
@@ -26,9 +25,8 @@ test "Settings lists linked computers in French"
   size 1200x800
   tap "Settings"
   clock data
-  tap "settings-domain-computers"
+  tap "settings-domain-access"
   clock data
-  expect text "settings-domain-computers" == "Ordinateurs"
   expect text "machines-title" == "Ordinateurs liés"
   expect text "machine-local-label" == "Cet ordinateur"
   expect text "machine-local-status" == "En ligne"

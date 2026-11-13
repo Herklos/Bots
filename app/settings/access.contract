@@ -1,4 +1,5 @@
 use McpSettings from "./mcp.contract"
+use LinkedMachines, MachineList from "./machines.contract"
 use Glyph from "../glyph.contract"
 use SectionLabel, IconTile, Field from "../ui/controls.contract"
 use Session, Network, Storage, AnytypeCheck, networkModeLabel, nText from "../ui/root-types.contract"
@@ -78,6 +79,9 @@ component AccessSettings
     syncPreviewPush: number
     syncPreviewed: bool
     syncResolvedPending: bool
+    machines: MachineList
+    machinesFailed: bool
+    machinesPending: bool
   view
     column
       text t("settings.private") class=SectionLabel
@@ -277,3 +281,4 @@ component AccessSettings
       if storageRestartError != "" and not storageRestartedPending
         text storageRestartError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-restart-error"
     McpSettings()
+    LinkedMachines(list=machines, down=machinesFailed, loading=machinesPending)

@@ -186,12 +186,12 @@
 //   McpCredential = { id: string; label: string; permissions: string }
 //   McpStatus = { loaded: boolean; enabled: boolean; endpoint: string; credentials: McpCredential[] }
 //   McpResult = { ok: boolean; error: string; token: string }
+//   Machine = { id: string; label: string; local: boolean; status: string; laptop: boolean; lastSeenAt: string; t3Version: string; lastError: string; access: string }
+//   MachineList = { ok: boolean; machines: Machine[]; error: string }
 //   SyncDevice = { name: string; lastSeen: string }
 //   SyncConflict = { id: string; path: string }
 //   SyncStatus = { ok: boolean; state: string; lastSync: string; pending: number; devices: SyncDevice[]; conflicts: SyncConflict[]; needsImport: boolean; error: string }
 //   SyncImport = { ok: boolean; started: boolean; push: number; pull: number; conflict: number; minutes: number; error: string }
-//   Machine = { id: string; label: string; local: boolean; status: string; laptop: boolean; lastSeenAt: string; t3Version: string; lastError: string; access: string }
-//   MachineList = { ok: boolean; machines: Machine[]; error: string }
 //   ActivityDetail = { id: string; input: string; output: string; truncated: boolean; missing: boolean }
 //   HelpSide = { enabled: boolean; cap: string; when: string; mode: string; effort: string; inherit: boolean; modelInstance: string; modelSlug: string; anyModel: boolean; modelList: string; modes: string; efforts: string }
 //   HelpPolicy = { ok: boolean; error: string; lasting: HelpSide; once: HelpSide }
@@ -546,21 +546,21 @@ type T105 = { "id": T0; "label": T0; "permissions": T0; };
 type T106 = T105[];
 type T107 = { "loaded": T2; "enabled": T2; "endpoint": T0; "credentials": T106; };
 type T108 = { "ok": T2; "error": T0; "token": T0; };
-type T109 = { "name": T0; "lastSeen": T0; };
-type T110 = { "id": T0; "path": T0; };
-type T111 = T109[];
-type T112 = T110[];
-type T113 = { "ok": T2; "state": T0; "lastSync": T0; "pending": T4; "devices": T111; "conflicts": T112; "needsImport": T2; "error": T0; };
-type T114 = { "ok": T2; "started": T2; "push": T4; "pull": T4; "conflict": T4; "minutes": T4; "error": T0; };
-type T115 = { "id": T0; "label": T0; "local": T2; "status": T0; "laptop": T2; "lastSeenAt": T0; "t3Version": T0; "lastError": T0; "access": T0; };
-type T116 = T115[];
-type T117 = { "ok": T2; "machines": T116; "error": T0; };
+type T109 = { "id": T0; "label": T0; "local": T2; "status": T0; "laptop": T2; "lastSeenAt": T0; "t3Version": T0; "lastError": T0; "access": T0; };
+type T110 = T109[];
+type T111 = { "ok": T2; "machines": T110; "error": T0; };
+type T112 = { "name": T0; "lastSeen": T0; };
+type T113 = { "id": T0; "path": T0; };
+type T114 = T112[];
+type T115 = T113[];
+type T116 = { "ok": T2; "state": T0; "lastSync": T0; "pending": T4; "devices": T114; "conflicts": T115; "needsImport": T2; "error": T0; };
+type T117 = { "ok": T2; "started": T2; "push": T4; "pull": T4; "conflict": T4; "minutes": T4; "error": T0; };
 type T118 = T61 | null;
 type T119 = T26[];
 type T120 = T98 | null;
 type T121 = T60 | null;
 type T122 = T65 | null;
-type T123 = { "mcpStatus": T107; "mcpToken": T0; "mcpError": T0; "mcpPending": T2; "about": T63; "anytypeChecked": T118; "anytypePrepareError": T0; "anytypePreparedPending": T2; "anytypeError": T0; "anytypeFound": T2; "anytypeOn": T2; "anytypeShared": T2; "anytypeSpace": T0; "bots": T85; "canUpdate": T2; "convos": T119; "nameDraft": T0; "nameEditing": T2; "network": T58; "networkError": T0; "networkRestartError": T0; "networkRestarted": T87; "networkSet": T87; "newPassword": T0; "notice": T73; "noticeAsked": T120; "pairCode": T0; "pairConfirmError": T0; "pairConfirmed": T87; "pairError": T0; "pairStarted": T121; "pairStep": T0; "passwordError": T0; "passwordSet": T87; "prefs": T70; "prefsError": T0; "providers": T33; "limits": T103; "limitCooling": T2; "limitError": T0; "report": T47; "reportFailed": T2; "session": T57; "settingsDomain": T0; "shownBackend": T0; "spaceEditing": T2; "spaceName": T0; "spaceSaveError": T0; "spaceSaved": T87; "storage": T59; "sync": T113; "syncImportError": T0; "syncPreviewed": T2; "syncPreviewPush": T4; "syncPreviewPull": T4; "syncPreviewConflict": T4; "syncPreviewMinutes": T4; "storageCopied": T87; "storageCopyError": T0; "storageHint": T0; "storagePath": T0; "storageRestartError": T0; "storageRestarted": T87; "storageSaveError": T0; "storageSaved": T87; "storageTestError": T0; "storageTested": T87; "system": T64; "updateError": T0; "updateFrom": T0; "updateNeedsService": T2; "updateStarted": T122; "updateStuck": T2; "updateTo": T0; "usagePeriod": T0; "usageView": T0; "anytypeCheckedPending": T2; "networkRestartedPending": T2; "networkSetPending": T2; "noticeAskedPending": T2; "pairConfirmedPending": T2; "pairStartedPending": T2; "passwordSetPending": T2; "spaceSavedPending": T2; "storageCopiedPending": T2; "storageRestartedPending": T2; "storageSavedPending": T2; "storageTestedPending": T2; "syncNowPending": T2; "syncImportPending": T2; "syncResolvedPending": T2; "systemPending": T2; "updateStartedPending": T2; "machines": T117; "machinesFailed": T2; "machinesPending": T2; "diagnostics": T71; "diagAskError": T0; "diagAskPending": T2; };
+type T123 = { "mcpStatus": T107; "mcpToken": T0; "mcpError": T0; "mcpPending": T2; "about": T63; "anytypeChecked": T118; "anytypePrepareError": T0; "anytypePreparedPending": T2; "anytypeError": T0; "anytypeFound": T2; "anytypeOn": T2; "anytypeShared": T2; "anytypeSpace": T0; "bots": T85; "canUpdate": T2; "convos": T119; "nameDraft": T0; "nameEditing": T2; "network": T58; "networkError": T0; "networkRestartError": T0; "networkRestarted": T87; "networkSet": T87; "newPassword": T0; "notice": T73; "noticeAsked": T120; "pairCode": T0; "pairConfirmError": T0; "pairConfirmed": T87; "pairError": T0; "pairStarted": T121; "pairStep": T0; "passwordError": T0; "passwordSet": T87; "prefs": T70; "prefsError": T0; "providers": T33; "limits": T103; "limitCooling": T2; "limitError": T0; "report": T47; "reportFailed": T2; "session": T57; "settingsDomain": T0; "shownBackend": T0; "spaceEditing": T2; "spaceName": T0; "spaceSaveError": T0; "spaceSaved": T87; "storage": T59; "sync": T116; "syncImportError": T0; "syncPreviewed": T2; "syncPreviewPush": T4; "syncPreviewPull": T4; "syncPreviewConflict": T4; "syncPreviewMinutes": T4; "storageCopied": T87; "storageCopyError": T0; "storageHint": T0; "storagePath": T0; "storageRestartError": T0; "storageRestarted": T87; "storageSaveError": T0; "storageSaved": T87; "storageTestError": T0; "storageTested": T87; "system": T64; "updateError": T0; "updateFrom": T0; "updateNeedsService": T2; "updateStarted": T122; "updateStuck": T2; "updateTo": T0; "usagePeriod": T0; "usageView": T0; "anytypeCheckedPending": T2; "networkRestartedPending": T2; "networkSetPending": T2; "noticeAskedPending": T2; "pairConfirmedPending": T2; "pairStartedPending": T2; "passwordSetPending": T2; "spaceSavedPending": T2; "storageCopiedPending": T2; "storageRestartedPending": T2; "storageSavedPending": T2; "storageTestedPending": T2; "syncNowPending": T2; "syncImportPending": T2; "syncResolvedPending": T2; "systemPending": T2; "updateStartedPending": T2; "machines": T111; "machinesFailed": T2; "machinesPending": T2; "diagnostics": T71; "diagAskError": T0; "diagAskPending": T2; };
 type T124 = T67 | null;
 type T125 = { "bots": T85; "canMakeGroup": T2; "groupAbout": T0; "groupChief": T0; "groupError": T0; "groupMade": T124; "groupMembers": T7; "groupName": T0; "groupPolicy": T0; "groupStep": T0; "pickableBots": T85; "groupMadePending": T2; };
 type T126 = T62[];
@@ -729,7 +729,7 @@ type T288 = T104 | null;
 type T289 = T56 | null;
 type T290 = T76 | null;
 type T291 = T66 | null;
-type T292 = T114 | null;
+type T292 = T117 | null;
 type T293 = T108 | null;
 type T294 = T144 | null;
 type T295 = T163 | null;
@@ -772,7 +772,7 @@ export interface SourceMap {
   "dropVoice": { args: [T0, T0]; result: T54 };
   "enableNotifications": { args: []; result: T54 };
   "hideBot": { args: [T0, T2]; result: T54 };
-  "importSync": { args: [T2]; result: T114 };
+  "importSync": { args: [T2]; result: T117 };
   "loadAbout": { args: []; result: T63 };
   "loadActivity": { args: [T0, T0, T0, T0]; result: T135 };
   "loadBots": { args: [T0]; result: T85 };
@@ -788,7 +788,7 @@ export interface SourceMap {
   "loadHelperPolicy": { args: [T0, T0, T0]; result: T141 };
   "loadLimits": { args: [T0, T0]; result: T103 };
   "loadLineage": { args: [T0, T0, T0]; result: T40 };
-  "loadMachines": { args: [T0, T0]; result: T117 };
+  "loadMachines": { args: [T0, T0]; result: T111 };
   "loadManagementMcp": { args: [T0]; result: T107 };
   "loadMemory": { args: [T0, T0]; result: T143 };
   "loadModels": { args: [T0, T0, T0]; result: T34 };
@@ -804,7 +804,7 @@ export interface SourceMap {
   "loadSideChats": { args: [T0]; result: T83 };
   "loadStorage": { args: [T0]; result: T59 };
   "loadSuggestions": { args: []; result: T126 };
-  "loadSync": { args: [T0, T0]; result: T113 };
+  "loadSync": { args: [T0, T0]; result: T116 };
   "loadSystem": { args: [T0]; result: T64 };
   "loadUsage": { args: [T0, T0]; result: T77 };
   "loadUsageReport": { args: [T0, T0, T0, T0]; result: T47 };
