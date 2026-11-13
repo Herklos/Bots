@@ -263,8 +263,7 @@ async fn meta_object(
     let type_key = find_row(
         types,
         "m_meta",
-        keys.get(&table::type_map_key("m_meta"))
-            .map(String::as_str),
+        keys.get(&table::type_map_key("m_meta")).map(String::as_str),
     );
     // No `fields` projection: the m_* property keys do not exist yet in a
     // fresh space and Anytype answers 400 for an unknown key.

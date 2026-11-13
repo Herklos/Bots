@@ -33,11 +33,9 @@ async fn a_conflict_resolved_in_anytype_clears_the_local_entry() {
         .and_then(|row| row["id"].as_str())
         .unwrap()
         .to_string();
-    assert!(world.mock.peer_write(
-        &conflict_id,
-        json!({"m_conflict_state": "resolved"}),
-        false,
-    ));
+    assert!(world
+        .mock
+        .peer_write(&conflict_id, json!({"m_conflict_state": "resolved"}), false,));
     world.rig.until_quiet().await;
     assert!(world.rig.engine.conflict_for(path).is_none());
     assert!(sidecars(world.rig.root.path()).is_empty());
@@ -69,11 +67,9 @@ async fn a_conflict_dismissed_in_anytype_clears_the_local_entry() {
         .await
         .unwrap();
     let conflict_id = conflicts[0]["id"].as_str().unwrap();
-    assert!(world.mock.peer_write(
-        conflict_id,
-        json!({"m_conflict_state": "dismissed"}),
-        false,
-    ));
+    assert!(world
+        .mock
+        .peer_write(conflict_id, json!({"m_conflict_state": "dismissed"}), false,));
     world.rig.until_quiet().await;
     assert!(world.rig.engine.conflict_for(path).is_none());
     assert!(sidecars(world.rig.root.path()).is_empty());
