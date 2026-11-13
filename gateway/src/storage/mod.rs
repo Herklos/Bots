@@ -8,5 +8,7 @@ pub(crate) mod settings;
 pub(crate) mod sync;
 pub(crate) mod workspace;
 
-pub(crate) use adapters::filesystem::{read_json, write_atomic, write_json, LocalDisk};
+pub(crate) use adapters::filesystem::{
+    read_json, write_atomic, write_json, write_json_private, LocalDisk,
+};
 pub(crate) use json::merge;

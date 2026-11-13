@@ -93,7 +93,7 @@ members Bots
 
   derive networkGate = (top(nav).name == "settings" and settingsDomain == "access") ? "1" : "0"
 
-  derive machinesGate = (top(nav).name == "settings" and settingsDomain == "computers") ? "1" : "0"
+  derive machinesGate = (top(nav).name == "settings" and settingsDomain == "access") ? "1" : "0"
 
   derive pickedModel = providers.filter(p => p.instanceId == prefs.defaultInstance).length > 0
 

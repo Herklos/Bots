@@ -277,3 +277,5 @@ pub(crate) mod runtime_mode; // Approval modes, least access first, and the pure
 pub(crate) mod subagent_tools;
 pub(crate) mod suggestions; // New Bot starting points.
 pub(crate) mod usage; // Local usage counts. Nothing leaves the machine. // The Bot's browser, watch first.
+pub(crate) mod watch; // Phase 4: page and file watches, the poller, and the SSRF guard.
+pub(crate) mod watch_tools; // The Bots' own watch_create, watch_list, watch_delete.

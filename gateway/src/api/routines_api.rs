@@ -76,6 +76,15 @@ pub(crate) async fn bot_routines(State(s): S, Path(slug): Path<String>) -> ApiRe
         .iter()
         .map(crate::chat::routines::task_row)
         .collect();
+    // A watch row sits in the same list, kind "watch": the hidden routine keeps its
+    // own row with the address, and this one shows the watch itself.
+    let watches = crate::bots::watch::WatchFile::new(&s.cfg.bots_root, &slug);
+    tasks.extend(
+        watches
+            .watches(&watches.load().await)
+            .iter()
+            .map(crate::bots::watch::row),
+    );
     // The chip reads the newest delivery. A failed read leaves it blank.
     crate::chat::routines::inspect::attach_outcomes(routines, &mut tasks).await;
     Ok(Json(json!({ "ok": true, "tasks": tasks, "error": "" })))

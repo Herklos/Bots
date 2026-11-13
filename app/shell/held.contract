@@ -87,10 +87,9 @@ members Bots
         refresh providerLimits
       if settingsDomain == "access"
         refresh sync
+        refresh machines
       if settingsDomain == "updates"
         refresh system
-      if settingsDomain == "computers"
-        refresh machines
     if onLibrary
       refresh shelf
     if onMemory

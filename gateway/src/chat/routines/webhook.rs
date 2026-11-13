@@ -112,7 +112,7 @@ pub(super) fn hook_summary(task: &Value) -> Option<Value> {
     }))
 }
 
-fn wrap_prompt(prompt: &str) -> String {
+pub(crate) fn wrap_prompt(prompt: &str) -> String {
     if prompt.contains("do not call the Vault") {
         return prompt.to_string();
     }

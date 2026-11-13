@@ -193,6 +193,7 @@ async fn main() -> anyhow::Result<()> {
         .set(storage::sync::start(state.as_ref(), sync_nudges).await);
     crate::bots::provisioner::start(state.clone());
     crate::bots::agent_context::start(state.clone());
+    crate::bots::watch::poller::start(state.clone());
     crate::harness::providers::notices::start(state.clone());
     crate::chat::routines::review::watch::start(state.clone());
     crate::platform::release::start(state.clone()).await;

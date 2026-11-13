@@ -1,4 +1,5 @@
 use McpSettings from "./mcp.contract"
+use LinkedMachines, MachineList from "./machines.contract"
 use Glyph from "../glyph.contract"
 use SectionLabel, IconTile, Field from "../ui/controls.contract"
 use Session, Network, Storage, AnytypeCheck, networkModeLabel, nText from "../ui/root-types.contract"
@@ -78,6 +79,9 @@ component AccessSettings
     syncPreviewPush: number
     syncPreviewed: bool
     syncResolvedPending: bool
+    machines: MachineList
+    machinesFailed: bool
+    machinesPending: bool
   view
     column
       text t("settings.private") class=SectionLabel
@@ -185,6 +189,14 @@ component AccessSettings
                 text (anytypeShared ? t("settings.anytype.shared") : t("settings.anytype.private")) color="ink.muted" font="-exact-footnote" testId="anytype-shared"
                 if match anytypeChecked { case some(r) => r.schemaReady, case none => false }
                   text t("settings.anytype.ready") color="-exact-label" font="-exact-footnote" font-weight=600 testId="anytype-ready"
+                  if sync.ok
+                    if sync.needsImport
+                      text t("settings.anytype.importHint") color="ink.muted" font="-exact-footnote" testId="anytype-import-hint"
+                    else
+                      button appearance="none" class=ActionMain press=doSyncNow disabled=syncNowPending min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="anytype-sync-now"
+                        text t("settings.sync.now")
+                  else
+                    text t("settings.anytype.restartHint") color="ink.muted" font="-exact-footnote" testId="anytype-restart-hint"
                 else
                   button appearance="none" class=ActionMain press=doPrepareAnytype disabled=anytypePreparedPending min-height=36 padding="0 space.md" border-radius="radius.full" font="-exact-subheadline" font-weight=500 testId="anytype-prepare"
                     text t("settings.anytype.prepare")
@@ -277,3 +289,4 @@ component AccessSettings
       if storageRestartError != "" and not storageRestartedPending
         text storageRestartError color="-exact-system-red" font="-exact-footnote" padding="space.xs space.md 0" testId="storage-restart-error"
     McpSettings()
+    LinkedMachines(list=machines, down=machinesFailed, loading=machinesPending)
