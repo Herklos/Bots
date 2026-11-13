@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "hbots gateway application API",
-    "version": "0.4.2",
+    "version": "0.4.3",
     "description": "Generated from the application operation registry. Infrastructure endpoints are excluded. MCP uses the same operations through /mcp with dedicated bearer credentials."
   },
   "paths": {

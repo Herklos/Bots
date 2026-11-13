@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.3
+
+This release adds Phase 4 watches and reorganizes the Access settings around the Anytype space.
+
+### New features
+
+- Add watches: a 15-second poller checks a public page (GET or HEAD) or a Bot-folder file through the Workspace, with no model call per poll. Checks cover hash, status, JSON pointers, `contains`, and size-limited regex; fire modes are `on_change`, `on_true`, and `every`, with a 60-second interval floor and cooldown. A webhook watch delivers its fires itself, guarded against SSRF; configuration lives in `bots/<slug>/.bot/watches.json`, written mode 600.
+- Show Sync now on the Access tab once the Anytype space is prepared, pointing to a restart or the import review when needed.
+- Move linked computers from their own settings tab to the end of the Access tab.
+
+### Improvements
+
+- Fix Anytype Prepare space on a fresh space.
+- Type the three routine-save sources so the app type check passes.
+
 ## 0.4.2
 
 This release hardens Anytype sync and rounds out the webhook surface.
