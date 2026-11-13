@@ -1,4 +1,4 @@
-# hbots work plan
+# Michel work plan
 
 This plan records what is implemented and what remains. “Built” means the code is present; it is not a claim that every platform or integration has been recently verified. For setup and testing, see [DEV.md](../DEV.md). For product context, see [vision](vision.md) and [architecture](architecture.md).
 
@@ -27,9 +27,9 @@ This plan records what is implemented and what remains. “Built” means the co
 ### Delivery and development
 
 - `hbots up`, foreground serving, service management, status, update and rollback. Release archives include the gateway and web app; the installer verifies checksums.
-- CI checks formatting, clippy and tests on Linux and macOS. The tag-triggered release workflow builds the web app and packages Linux and macOS archives. The [v0.1.5 release](https://github.com/Herklos/HBots/releases/tag/v0.1.5) published four platform archives and checksums.
+- CI checks formatting, clippy and tests on Linux and macOS. The tag-triggered release workflow builds the web app and packages Linux and macOS archives. The [v0.1.5 release](https://github.com/Herklos/Michel/releases/tag/v0.1.5) published four platform archives and checksums.
 - The development watch loop rebuilds the gateway and Exact web client; `--lan` enables access from a trusted local network. See [DEV.md](../DEV.md).
-- A shared-home compatibility harness exists under `tests/compat/`. Its documented 2026-11-10 run passed between two Rust hbots processes; compatibility with the earlier Node gateway was not tested in that run.
+- A shared-home compatibility harness exists under `tests/compat/`. Its documented 2026-11-10 run passed between two Rust Michel processes; compatibility with the earlier Node gateway was not tested in that run.
 
 ## Remaining work
 
@@ -56,4 +56,4 @@ The web app is packaged with releases. A macOS native client has been built loca
 
 ## Original task history
 
-The initial T1–T10 task briefs and their original completion criteria are available in the [Git history of this file](https://github.com/Herklos/HBots/commits/main/docs/PLAN.md). They describe the initial port and should not be treated as a current work assignment or as proof that every original acceptance criterion was met.
+The initial T1–T10 task briefs and their original completion criteria are available in the [Git history of this file](https://github.com/Herklos/Michel/commits/main/docs/PLAN.md). They describe the initial port and should not be treated as a current work assignment or as proof that every original acceptance criterion was met.

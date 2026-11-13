@@ -6,7 +6,7 @@ Status: plan. Nothing here is built. Facts are tagged **[verified]** (read in th
 
 ## 1. Facts
 
-### 1.1 What hbots shows today **[verified]**
+### 1.1 What Michel shows today **[verified]**
 
 - `gateway/src/harness/adapters/t3/transcript/project.rs` (`project_turns`) keeps only `user_message` and `assistant_message` as messages, plus requests (`approval_request`, `user_input_request`, `secret_request`) and a few events from `event_for`. Every other turn item is dropped: the comment says "Anything else in a turn is not for the person".
 - `event_for` turns only these into chips: `dynamic_tool` named `t3_thread_send`, `schedule_task`, `update_scheduled_task`, `delete_scheduled_task`; a `user_message` with `senderThreadId` or `scheduledTaskId`; `subagent`; a terminal provider `error`.

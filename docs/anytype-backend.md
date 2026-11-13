@@ -94,7 +94,7 @@ Property level detail is in [anytype-schema.md](anytype-schema.md). All keys sta
 | Documents | `hb_prompt`, `hb_memory`, `hb_skill`, `hb_log` | C | P5 |
 | Catalog | `hb_team`, `hb_subagent`, `hb_harness`, `hb_computer`, `hb_tool_profile`, `hb_vault_grant`, `hb_suggestion`, `hb_approval`, `hb_usage_day` | B | P7 |
 
-Each type ships with a default template, a default view, an icon and a generated query. Statuses and kinds that hbots owns are select properties, everything that follows an outside system is text.
+Each type ships with a default template, a default view, an icon and a generated query. Statuses and kinds that Michel owns are select properties, everything that follows an outside system is text.
 
 ## API or MCP
 
@@ -110,7 +110,7 @@ Each type ships with a default template, a default view, an icon and a generated
 
 The person's `anytype-agents` skill already moved the fleet from MCP to HTTP.
 
-**Pre-release risk (accepted).** v2 "can change without a new API version being minted". Mitigation: one module (`gateway/src/anytype/client.rs`), a small endpoint subset, a contract test, and a startup check that diffs the served `GET /v2/docs/openapi.json` against a checked-in snapshot of the paths and schemas hbots uses. A mismatch gives a readable `api_changed` state and a read-only degraded mode.
+**Pre-release risk (accepted).** v2 "can change without a new API version being minted". Mitigation: one module (`gateway/src/anytype/client.rs`), a small endpoint subset, a contract test, and a startup check that diffs the served `GET /v2/docs/openapi.json` against a checked-in snapshot of the paths and schemas Michel uses. A mismatch gives a readable `api_changed` state and a read-only degraded mode.
 
 ## What the probes and the spec established
 
@@ -210,7 +210,7 @@ Changing the backend, host, folder or key is refused for requests that arrive th
 ### Applying a change
 
 1. Save writes `storage.json` (and the key file). Nothing changes in the running process.
-2. Settings shows "Restart required". **Restart now** uses the service restart when the process is the installed service, otherwise it says to restart hbots.
+2. Settings shows "Restart required". **Restart now** uses the service restart when the process is the installed service, otherwise it says to restart Michel.
 3. On start the gateway resolves the effective configuration. A bad value (missing folder, unreachable Anytype) never prevents start: it falls back to the file system working copy, shows the reason in Settings, and keeps Bots running.
 4. First start on Anytype: state `needs_import`. The local tree stays the truth until the person runs the import (dry run first). Nothing is deleted.
 5. Switching back to File system only changes the setting. The working copy is intact. **Export** brings it up to date if it is stale.
@@ -277,7 +277,7 @@ Edited in Anytype (decision 5), so the canonical content is the object body.
 
 ### Change detection
 
-One search stream per gateway on the hbots types, requesting only cheap fields (`hb_path`, `hb_sha`, `hb_deleted`, `hb_device`, `hb_rev`, `last_modified_date`, `hb_slug`), never content. On `object_added` or `object_updated`, fetch the object only if content could have changed: `hb_sha` differs from the manifest, or `last_modified_date` is newer than recorded (a human edit in the app). Our own echo is recognized by `hb_device` equal to this device and `hb_sha` equal to what we pushed.
+One search stream per gateway on the Michel types, requesting only cheap fields (`hb_path`, `hb_sha`, `hb_deleted`, `hb_device`, `hb_rev`, `last_modified_date`, `hb_slug`), never content. On `object_added` or `object_updated`, fetch the object only if content could have changed: `hb_sha` differs from the manifest, or `last_modified_date` is newer than recorded (a human edit in the app). Our own echo is recognized by `hb_device` equal to this device and `hb_sha` equal to what we pushed.
 
 On reconnect the stream restarts with a fresh snapshot. Diff it against the manifest. An object in the manifest but absent from the snapshot has left the set, possibly archived, so confirm with one read before acting.
 
@@ -451,7 +451,7 @@ Each phase is roughly one focused PR and ends with the criteria shown. Day count
 
 **P3. Tier A, devices, conflicts, 10 to 12 days.** `AnytypeWorkspace`, `SyncedWorkspace`, manifest, outbox, change detection (stream and poll), tombstones, history ring, `hb_device`, canary, `hb_conflict`. The Anytype backend becomes selectable. Order: library and connectors, then `memory/`, `skills/`, attachments. Exit: conformance passes against the mock and a live scratch space; killing Anytype or the gateway at any step loses nothing; the concurrent writer mock never loses an unsynced local edit; `hbots anytype pull` rebuilds a Bot on an empty home.
 
-**P4. Typed stores, 9 to 11 days.** `hb_bot`, `hb_settings`, `hb_model_profile`, `hb_connector`, `hb_schedule` reconciliation, `hb_group` with message segments and the home machine rule, `hb_attachment`, the eight record types, the local overlay, home machine and handover, slug collision rule, Bin based "undo delete". Retire the `library.json` blob and the `groups.json` messages array in Anytype mode (with migration). Exit: a record edited in Anytype shows in hbots within seconds on a stream; `bots.list()` stays within a small constant of today's cost with a warm cache; handover is covered by tests with two simulated machines.
+**P4. Typed stores, 9 to 11 days.** `hb_bot`, `hb_settings`, `hb_model_profile`, `hb_connector`, `hb_schedule` reconciliation, `hb_group` with message segments and the home machine rule, `hb_attachment`, the eight record types, the local overlay, home machine and handover, slug collision rule, Bin based "undo delete". Retire the `library.json` blob and the `groups.json` messages array in Anytype mode (with migration). Exit: a record edited in Anytype shows in Michel within seconds on a stream; `bots.list()` stays within a small constant of today's cost with a warm cache; handover is covered by tests with two simulated machines.
 
 **P5. Page-backed documents, 9 to 11 days.** `codec.rs`, `hb_prompt`, `hb_memory`, `hb_skill`, `hb_log`, links and dates, three-way merge on rendered markdown, unknown block sidecar. Exit: codec suites green on real files; edit a memory note in Anytype and see the file change under an idle Bot; edit the file and see the page change; a simultaneous edit yields a conflict object and both copies, never a loss.
 
@@ -459,7 +459,7 @@ Each phase is roughly one focused PR and ends with the criteria shown. Day count
 
 **P7. Remaining catalog types, 5 days.** `hb_team`, `hb_subagent`, `hb_harness`, `hb_computer`, `hb_tool_profile`, `hb_vault_grant`, `hb_suggestion`, `hb_approval`, `hb_usage_day`, wired only where the gateway has a feature behind them.
 
-**P8. Native Anytype experience, 4 days.** Collections, widgets, the Bot overview page with embedded views (S7 permitting), graph view of memory links, polished templates. Exit: opening the space on a phone shows Bots, boards and conflicts without any hbots UI.
+**P8. Native Anytype experience, 4 days.** Collections, widgets, the Bot overview page with embedded views (S7 permitting), graph view of memory links, polished templates. Exit: opening the space on a phone shows Bots, boards and conflicts without any Michel UI.
 
 **P9. Multi-instance validation, after the implementation, 3 to 4 days plus fixes.** Needs from the person: an invite link so a headless `anytype` bot account (already installed) can join the space.
 - M1: the headless build serves `/v2`; scoped key; joining by invite.

@@ -1,12 +1,12 @@
 # Plan: `@` mention menu improvements
 
-Bring the composer and bubble polish from threebot [PR #52](https://github.com/RokaSwK/threebot/pull/52) into hbots, without changing how mentions wake group members.
+Bring the composer and bubble polish from threebot [PR #52](https://github.com/RokaSwK/threebot/pull/52) into Michel, without changing how mentions wake group members.
 
 Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to verify]**.
 
 ## 1. Facts
 
-### 1.1 hbots today **[verified]**
+### 1.1 Michel today **[verified]**
 
 - Composer menu: `app/mentions/model.contract` (`syncMention`, `completeMention`, `clearMention`), `app/chat/mention.contract` (`MentionMenu`), wired from `app/chat/screen.contract` and `app/group/screen.contract`.
 - Query detection: split on `@`, take the last segment; clear when the query contains space, newline or tab, or when the character before `@` is a `wordChar` (letters and digits only, `app/ui/root-types.contract`).

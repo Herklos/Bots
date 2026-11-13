@@ -1,6 +1,6 @@
 # Plan: pull-request and source-control features, shown only for code work
 
-T3 has a large set of source-control RPCs (`vcs.*`, `git.*`, `pullRequests.*`, `sourceControl.*`, `review.*`). hbots uses none of them because most Bots do not write code. This plan adds a Code tab and PR tools that appear only for a Bot that is working on a repository, so the rest of the app stays simple.
+T3 has a large set of source-control RPCs (`vcs.*`, `git.*`, `pullRequests.*`, `sourceControl.*`, `review.*`). Michel uses none of them because most Bots do not write code. This plan adds a Code tab and PR tools that appear only for a Bot that is working on a repository, so the rest of the app stays simple.
 
 Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to verify]**.
 
@@ -16,7 +16,7 @@ Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to ve
 - `review.getDiffPreview`, `review.getDiffFileContents`, `review.getBranchCommits`.
 - These are user actions through RPC, not agent turns, so T3 does not ask for approval; the client must.
 
-### 1.2 hbots **[verified]**
+### 1.2 Michel **[verified]**
 
 - No code in `gateway/src` or `app/` calls them. Bots live in `~/.hbots/bots/<slug>` folders; the provisioner creates one T3 project per Bot workspace (`project.create` with `workspaceRoot`) and per subagent child. A Bot folder is not a repository by default.
 - The Bot panel has three fixed tabs (`details`, `library`, `computer`) with arrow-key navigation hard-coded in `app/bot/panel.contract` (281 lines of the 300 allowed), so a conditional fourth tab needs a new component file and a small refactor of `tabKey`.
@@ -25,7 +25,7 @@ Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to ve
 
 ### 1.3 Unknowns **[to verify]**
 
-1. Which token scopes cover `vcs.*`, `git.*`, `pullRequests.*`, `sourceControl.*`, and whether the scope hbots mints today (`preview:operate`) is enough.
+1. Which token scopes cover `vcs.*`, `git.*`, `pullRequests.*`, `sourceControl.*`, and whether the scope Michel mints today (`preview:operate`) is enough.
 2. `vcs.status` on a Bot folder that contains a cloned repository one level down returns `isRepo: false`. How do we find nested repos?
 3. Whether `command_execution` and `file_change` items carry a `cwd` or repository path (for activity-based detection).
 4. Method names for the status stream and PR refresh stream.
@@ -41,7 +41,7 @@ Goals
 
 Non-goals
 - A diff reviewer or an editor. Open the provider page for deep review.
-- Cloning or publishing from hbots in the first releases.
+- Cloning or publishing from Michel in the first releases.
 - Any Git operation done by the gateway itself; always through T3.
 
 ## 3. Design
@@ -101,7 +101,7 @@ Every action is appended to `.botapp/code-actions.json` (who, when, what). With 
 
 ### Phase 0: spikes (S)
 
-- C0.1 Token scopes: call `vcs.status`, `pullRequests.list`, `git.runStackedAction` (a dry action) with the hbots token. Record errors.
+- C0.1 Token scopes: call `vcs.status`, `pullRequests.list`, `git.runStackedAction` (a dry action) with the Michel token. Record errors.
 - C0.2 `vcs.status` on a Bot folder, on a folder containing a nested clone, and on a real repo.
 - C0.3 Dump `command_execution` and `file_change` items for a coding Bot; look for a path or `cwd`.
 - C0.4 Status and refresh stream method names.
@@ -151,11 +151,11 @@ Exit: gate inputs decided; D1 to D3 answered.
 
 | Risk | Mitigation |
 |---|---|
-| The hbots token lacks scope for these RPCs | C0.1; if so, `hbots up` mints a wider scope only when `beta.code` is turned on |
+| The Michel token lacks scope for these RPCs | C0.1; if so, `hbots up` mints a wider scope only when `beta.code` is turned on |
 | Nested repos are not detected | Attach-a-repository flow; no disk scanning |
 | A destructive action slips through | Confirm sheets, typed merge, audit log, no force operations exposed |
 | UI complexity creeps into every Bot | Three-layer gate; hidden tab; zero requests when off |
-| Provider sign-in only works in T3's app | Guidance screen; do not build OAuth in hbots |
+| Provider sign-in only works in T3's app | Guidance screen; do not build OAuth in Michel |
 | PR data is large | Bounded lists and text; cache; single in-flight request |
 
 ## 7. Decisions for the owner

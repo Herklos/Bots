@@ -14,7 +14,7 @@ Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to ve
 - Thread tags exist (`StoredThreadTags`, event `thread.tags-updated`, tag at most 64 chars, one line). Not needed here.
 - Upcomputer's tool takes `{ query, index? }` and returns a bounded page around the selected match, for the bot's own permanent conversation only.
 
-### 1.2 hbots **[verified]**
+### 1.2 Michel **[verified]**
 
 - `getThreadProjection` returns the turn items; `transcript()` turns them into messages; `projection_partial` reports `truncated`, `hasMore` or `partial`.
 - `without_group_turns` hides framed prompts (`[Group "...`, `[Computer]`) and the Bot's answers to them from a one-to-one chat. Raw T3 search sees those messages.
@@ -26,7 +26,7 @@ Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to ve
 
 ### 1.3 Unknowns **[to verify]**
 
-1. Does the T3 build in use have `orchestration.searchThreads`, and does the hbots token's scope allow it?
+1. Does the T3 build in use have `orchestration.searchThreads`, and does the Michel token's scope allow it?
 2. Result ordering and how many non-Bot threads crowd the 50-match limit.
 3. Whether `messageId` in a match equals the `id` of the turn item in the projection.
 4. How the app pages older history (is `partial` resolvable with a "load older" call?).
@@ -98,7 +98,7 @@ The AGENTS.md managed block (`bots/agent_context`) lists the tool next to `memor
 
 ### Phase 0: spikes (S)
 
-- S0.1 Call `orchestration.searchThreads` with the hbots token. Record the response, ordering, and error shape when absent.
+- S0.1 Call `orchestration.searchThreads` with the Michel token. Record the response, ordering, and error shape when absent.
 - S0.2 Measure crowding: with several Bots and a common word, how many of the 50 matches belong to one Bot.
 - S0.3 Compare `messageId` with projection item ids.
 - S0.4 Check transcript paging and `partial` handling in the chat API.

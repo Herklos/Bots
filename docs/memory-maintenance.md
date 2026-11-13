@@ -1,4 +1,4 @@
-# hbots memory store + maintenance
+# Michel memory store + maintenance
 
 ## Context injection
 
@@ -16,7 +16,7 @@ Claude reads `CLAUDE.md` when a session starts (a symlink to `AGENTS.md` on Unix
 
 ## Overview
 
-hbots today creates `memory/MEMORY.md`, `memory/log.md`, and `.botapp/shared-memory.md` on Bot create (`gateway/src/bots.rs`) and exposes read-only `memory_read` / `skills_read` MCP tools that talk to disk with `tokio::fs` (`gateway/src/memory_tools.rs`). There is no write path, no notes tree, no reflection bookmark, no defrag, no Memory UI, and no `/api/memory` routes.
+Michel today creates `memory/MEMORY.md`, `memory/log.md`, and `.botapp/shared-memory.md` on Bot create (`gateway/src/bots.rs`) and exposes read-only `memory_read` / `skills_read` MCP tools that talk to disk with `tokio::fs` (`gateway/src/memory_tools.rs`). There is no write path, no notes tree, no reflection bookmark, no defrag, no Memory UI, and no `/api/memory` routes.
 
 This design ports the full memory maintenance surface from threebot PR #40 into Rust, **except** auto-enrolling every Bot at gateway startup or during provision. Maintenance stays opt-in per Bot. Every memory read and write goes through the existing `Workspace` trait (`gateway/src/workspace.rs`), never through direct filesystem calls from memory modules, so a future non-file Workspace can host the same logical keys.
 
@@ -42,7 +42,7 @@ This design ports the full memory maintenance surface from threebot PR #40 into 
 
 ### Why port PR #40 (minus auto-enroll)
 
-PR #40 already ships reflection, defrag policy, note split/merge, a dedicated-thread maintenance routine, Settings `memoryReflectionModel`, CLI, HTTP API, and UI. Review on that PR correctly required opt-in enrollment and fixed five bugs (merge target preservation, `targetDir` traversal, shared retire path, bookmark validation, concurrent `ensureMemoryRoutine`). hbots adopts that fixed shape: tools + opt-in routine, no gateway-wide enroll.
+PR #40 already ships reflection, defrag policy, note split/merge, a dedicated-thread maintenance routine, Settings `memoryReflectionModel`, CLI, HTTP API, and UI. Review on that PR correctly required opt-in enrollment and fixed five bugs (merge target preservation, `targetDir` traversal, shared retire path, bookmark validation, concurrent `ensureMemoryRoutine`). Michel adopts that fixed shape: tools + opt-in routine, no gateway-wide enroll.
 
 ## Goals & Non-Goals
 
@@ -117,7 +117,7 @@ flowchart TB
 |---|---|
 | `gateway/src/memory.rs` | Domain: parse/format facts, evidence, mutate, state, snapshot, search, split/merge, dedupe, retire. Public API uses logical relative keys and `MemoryStore`, never `PathBuf` for Bot content. |
 | `gateway/src/memory_defrag.rs` | Audit plan writer; orchestrates safe-dedupe and retire-closed over bot + shared scopes. |
-| `gateway/src/memory_tools.rs` | MCP tool defs + dispatch. Thin adapter: resolve caller from `threadId` + roster (existing hbots identity), call domain. Migrate memory reads/writes off `tokio::fs` via MemoryStore. Keep `skills_read` here for mcp.rs churn; skills I/O uses Workspace directly (or a tiny `skills_paths` helper), **not** MemoryStore fact/note APIs. |
+| `gateway/src/memory_tools.rs` | MCP tool defs + dispatch. Thin adapter: resolve caller from `threadId` + roster (existing Michel identity), call domain. Migrate memory reads/writes off `tokio::fs` via MemoryStore. Keep `skills_read` here for mcp.rs churn; skills I/O uses Workspace directly (or a tiny `skills_paths` helper), **not** MemoryStore fact/note APIs. |
 | `gateway/src/memory_routine.rs` | `MEMORY_ROUTINE_TITLE`, prompt, `ensure_memory_routine`, status/disable/runNow, in-flight dedupe map. Uses existing `routines::{list, change}` / T3 RPC and `tasks_for_bot`. |
 | `gateway/src/memory_api.rs` (or handlers in `main.rs` that call domain) | `GET/POST /api/memory*` behind normal auth. |
 | `gateway/src/cli.rs` | `hbots memory …` subcommand (loads Config + Workspace + T3; extends `parse_args` value flags). |
@@ -350,7 +350,7 @@ sequenceDiagram
 
 ### Reflection invariants
 
-1. Bookmark is `{ lastPosition, lastMessageId, at }` in bot `.state.json`. **`lastPosition` is the index in the filtered owner stream** defined below (0-based, dense, stable for a given projection ordering). Do not store T3-native `ordinal` or other harness fields unless a later fixture audit proves they are stable owner-only positions; hbots fixtures often omit `createdBy` / `creationSource` on read-back.
+1. Bookmark is `{ lastPosition, lastMessageId, at }` in bot `.state.json`. **`lastPosition` is the index in the filtered owner stream** defined below (0-based, dense, stable for a given projection ordering). Do not store T3-native `ordinal` or other harness fields unless a later fixture audit proves they are stable owner-only positions; Michel fixtures often omit `createdBy` / `creationSource` on read-back.
 2. **Owner filter** (do **not** reuse `chat::transcript` messages unfiltered). Build the stream from the main-thread projection's turn items:
    - Include: `type == "user_message"`, no `scheduledTaskId`, no `senderThreadId` (peer/group frames), and not agent/server routine authorship when those fields are present (`createdBy == "user"` / `creationSource` in `{web,…}` when set on outbound sends).
    - Exclude: assistant messages; items that only exist as routine prompts; framed computer/group prompts already stripped by `without_group_turns` where applicable.
@@ -438,9 +438,9 @@ pub fn is_memory_routine_title(title: &str) -> bool {
 3. After successful mutate / forget / defrag / split / merge, tools/API call `bots.refresh_agents(slug)` → `read_snapshot` via MemoryStore → `merge_managed` into AGENTS.md. Also refresh inside `write_instructions` so provision/reconcile picks up memory.
 4. Land template bullets (reflect / defrag / split-merge from threebot `bot-template.mts`) in the **same** PR as the snapshot wiring so AGENTS never advertises tools that are not shipped.
 
-### Caller identity (hbots vs threebot)
+### Caller identity (Michel vs threebot)
 
-threebot uses per-Bot MCP bearer. hbots `memory_tools` resolves the Bot from `threadId` → roster `mainThreadId` and ignores forged slugs. **Keep that hbots pattern** for all new tools: identity from the calling thread, not from model-supplied slug.
+threebot uses per-Bot MCP bearer. Michel `memory_tools` resolves the Bot from `threadId` → roster `mainThreadId` and ignores forged slugs. **Keep that Michel pattern** for all new tools: identity from the calling thread, not from model-supplied slug.
 
 **Subagent write rule (decided):** Callers with `role == "subagent"` or `hideFromSidebar` may mutate **only their own** `{slug}/memory/` store. `scope: "shared"`, parent-folder paths, and any write that would touch `.botapp/shared-memory.md` or the parent's MEMORY/notes are **refused**. `memory_read` of the parent (and shared, read-only) stays as today. Top-level Bots may write bot + shared with evidence as usual.
 
@@ -527,9 +527,9 @@ No SQL. Additive files under existing Bot folders. Migration for existing Bots:
 
 Faster to port line-by-line from Node, but violates the backends Workspace seam, blocks `MemoryWorkspace` unit tests for mutations, and duplicates path-escape logic already in `safe_rel`. **Rejected** by hard constraint.
 
-### 2. Auto-enroll every Bot when Memory model is set (reject for hbots)
+### 2. Auto-enroll every Bot when Memory model is set (reject for Michel)
 
-threebot originally enrolled at startup; review required opt-in. A full-access overnight job on every Bot is surprising. hbots ships tools + explicit CLI/UI enable only. **Out of scope.**
+threebot originally enrolled at startup; review required opt-in. A full-access overnight job on every Bot is surprising. Michel ships tools + explicit CLI/UI enable only. **Out of scope.**
 
 ### 3. Bind maintenance to the main chat thread
 
@@ -552,9 +552,9 @@ Better queryability, worse human readability and home-dir compatibility (`tests/
 | Symlink escape | `require_bot_dir` → `Workspace::require_dir` (LocalDisk: Dir + canonicalize-under-root inside LocalDisk); create uses `ensure_bot_dir` → `ensure_dir`; leaf `symlink_kind` refuse; no raw fs in MemoryStore |
 | Routine full-access | Opt-in only; uses memory model; prompt forbids free rewrite |
 
-### Port map (threebot → hbots)
+### Port map (threebot → Michel)
 
-| threebot (`server/memory.mts` unless noted) | hbots module | Enforced on |
+| threebot (`server/memory.mts` unless noted) | Michel module | Enforced on |
 |---|---|---|
 | `checkFact`, `secretReason` / Luhn / opaque run | `memory.rs` | MCP edit/forget/reflect_apply; HTTP note writes; not on trusted HTTP forget body beyond fact-line presence |
 | `checkOwnerEvidence`, `typedRuns` | `memory.rs` | MCP edit/forget/reflect_apply only (HTTP forget uses `trustedUser`) |
@@ -633,7 +633,7 @@ PR #40 head `91ff27f` remains the behaviour source for the port.
 5. **Mechanical tidy only (audit / exact dedupe / dated retire / lossless split-merge).** Model never free-rewrites MEMORY.md.
 6. **Strict reflection bookmark validation** using a **filtered owner-stream position**, not raw `chat::transcript` / T3 ordinal. Excludes `scheduledTaskId` user_messages explicitly.
 7. **Shared retired facts under `.botapp/shared-history/`, not pruned preimage history.** Fixes threebot bug #3.
-8. **hbots tool identity stays threadId→roster.** Do not require threebot's per-Bot bearer for this port.
+8. **Michel tool identity stays threadId→roster.** Do not require threebot's per-Bot bearer for this port.
 9. **Promote `AppState.workspace` shared by Library and Memory.** One LocalDisk root; no second filesystem view.
 10. **Serialize writes per store.** Stale `expectedRevision` always conflicts.
 11. **Symlink safety via Workspace `require_dir` / `ensure_dir`** (canonicalize only inside LocalDisk); MemoryStore `require_bot_dir` for tools, `ensure_bot_dir` for create; then leaf refuse—without changing Library follow behaviour.
@@ -647,7 +647,7 @@ PR #40 head `91ff27f` remains the behaviour source for the port.
 
 - threebot PR #40: https://github.com/RokaSwK/threebot/pull/40 (head `91ff27f`)
 - threebot modules: `server/memory.mts`, `memory-mcp.mts`, `memory-defrag.mts`, `memory-routine.mts`
-- hbots: `gateway/src/workspace.rs` (trait method `write`; atomic on LocalDisk), `memory_tools.rs`, `bots.rs`, `routines.rs`, `library.rs`, `store.rs`, `cli.rs` (`parse_args`), `chat.rs` (transcript + scheduledTaskId), `main.rs` (`owned_routine`, `put_settings`)
+- Michel: `gateway/src/workspace.rs` (trait method `write`; atomic on LocalDisk), `memory_tools.rs`, `bots.rs`, `routines.rs`, `library.rs`, `store.rs`, `cli.rs` (`parse_args`), `chat.rs` (transcript + scheduledTaskId), `main.rs` (`owned_routine`, `put_settings`)
 - `docs/backends.md` phase 6 (Workspace for bots/attachments); method name `write_atomic` there is aspirational—trust `workspace.rs`
 - Chrome strings: `app/strings/en.json`, `app/strings/fr.json`
 

@@ -6,7 +6,7 @@ Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to ve
 
 ## 1. Facts
 
-### 1.1 hbots today **[verified]**
+### 1.1 Michel today **[verified]**
 
 - Files: `<bots>/<slug>/memory/MEMORY.md`, `memory/log.md`, `.botapp/shared-memory.md`. Bootstrap via `write_if_missing` in lifecycle.
 - Snapshot: `bots/agent_context` reads files, injects bounded tags into AGENTS.md, 20s poller refreshes managed block.
@@ -117,7 +117,7 @@ Do not add MCP write tools in this plan. Do not remove `memory_read`.
 
 ### 3.5 Inspiration we deliberately change
 
-| threebot | hbots |
+| threebot | Michel |
 |---|---|
 | Delete write-gate memory MCP | Keep read tools; leave store plan intact |
 | Single Memory.tsx app surface | Exact Bot panel tab + optional Settings shared |

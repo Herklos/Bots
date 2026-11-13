@@ -267,7 +267,7 @@ Manual / live acceptance (run by the implementer, record results in the PR)
 ## 9. Documented limit: threads that are not Bot-owned (decision 2)
 
 State in `docs/architecture.md` and `docs/memory-maintenance.md`:
-- hbots injects only into threads whose cwd is a Bot folder (main, group, routine, lasting subagent).
+- Michel injects only into threads whose cwd is a Bot folder (main, group, routine, lasting subagent).
 - Threads started in T3 for other work (including coding threads in other projects) are not touched.
 - Ephemeral children created by a Bot inherit nothing unless V6 shows they start in the Bot folder; the Bot is told to paste context (4.4).
 - Future options, not built: a T3-level setting for global instructions, a user-level `~/.claude/CLAUDE.md` managed block, or a T3 per-thread instructions field if V5 finds one.

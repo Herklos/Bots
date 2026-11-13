@@ -17,7 +17,7 @@ Status: the approval cap, provider-switch confirmation, prompt links, and the di
 - **[verified]** Answers to approvals and questions go through `chat/approvals.rs` (`outbound`, `command`), carrying a decision, answers or feedback. Secrets use a separate path.
 - **[verified]** Attachments are handled by `chat/attachments.rs` (405 lines, close to the 500 cap) and turned into the dispatch command parts by `command_part`.
 - **[verified]** The CLI has `up`, `serve`, `status`, `update`, `rollback`, `service` (`platform/cli/mod.rs`). README documents them.
-- **[verified]** `thread.model-selection.set` is a command hbots already dispatches (`harness/adapters/t3`).
+- **[verified]** `thread.model-selection.set` is a command Michel already dispatches (`harness/adapters/t3`).
 - **[verified in upcomputer docs]** Providers can switch mid-thread: "Up.computer transfers conversation context when you switch providers" as a budgeted text selection, not a summary and not provider state. Prompt links (`/new?prompt=&repo=&provider=&model=&pr=`) open a draft and never send. Managed policy sets a maximum permission mode, enforced by the T3 server for every client.
 
 ## 1. Switch provider mid-chat
@@ -56,7 +56,7 @@ Handoff is lossy and budgeted. D1: allow it freely or only with confirm. Recomme
   3. Subagent creation (`subagent_tools`).
   4. Default for new Bots (`defaultRuntimeMode` cannot exceed the cap).
 - Existing Bots above the cap are not silently rewritten at startup: the Bot list shows "Above the limit" and the next turn dispatch uses the clamped mode (T3 takes the mode per command, **[to verify]** that `message.dispatch` or the thread config carries `runtimeMode`).
-- Optional T3 enforcement: T3 has a managed policy file with `limits.maxRuntimeMode` (`up policy check`, enforced by the server for all clients, **[verified in upcomputer docs]**). hbots documents it; it does not write it.
+- Optional T3 enforcement: T3 has a managed policy file with `limits.maxRuntimeMode` (`up policy check`, enforced by the server for all clients, **[verified in upcomputer docs]**). Michel documents it; it does not write it.
 
 ### Phases
 
@@ -98,7 +98,7 @@ Risks: a link as a phishing vector ("send this to your Bot"). It only fills a dr
 When a Bot asks a question (a `user_input_request`) the answer field accepts files. The answer `command` in `chat/approvals.rs` gains an `attachments` list of the same records `chat/attachments.rs` produces, uploaded first through the existing attachment path. Upcomputer says the agent receives paths to the saved files together with the answer.
 
 - **[to verify]** the T3 command shape for answering a question with attachments (`orchestration.dispatchCommand` response type and where attachments go), and whether T3 saves them on the environment's machine. Upcomputer allows up to 100 files per set of answers and the usual limits.
-- Use the existing caps (hbots' limits in `chat/attachments.rs`) and the same MIME checks.
+- Use the existing caps (Michel' limits in `chat/attachments.rs`) and the same MIME checks.
 - Because `attachments.rs` is 405 lines, put question-answer glue in a new `chat/answer_files.rs`.
 - App: a paperclip in the question card (`request` row in `app/chat/log.contract`), per-question attachment chips, upload progress, remove, retry. Questions with only fixed choices do not show it.
 
@@ -112,7 +112,7 @@ When a Bot asks a question (a `user_input_request`) the answer field accepts fil
 
 ### Design
 
-Upcomputer's triage starts an agent that reads logs and state, checks source and known issues, and asks before posting. hbots needs a smaller thing first: a redacted diagnostics bundle, then an optional "ask a Bot to look at it".
+Upcomputer's triage starts an agent that reads logs and state, checks source and known issues, and asks before posting. Michel needs a smaller thing first: a redacted diagnostics bundle, then an optional "ask a Bot to look at it".
 
 - `hbots doctor [--json]` (new CLI command next to `status`): reports version, install path, service state, gateway port and network mode, T3 URL reachability, T3 token validity and scopes (without printing the token), provider list health from `server.getConfig`, storage path and free space, the last 200 log lines.
 - Redaction pass: tokens (`Bearer`, `T3_TOKEN`), the password, session ids, vault paths' contents, emails, and home-directory names replaced by `~`. Tests with a fixture of leaky lines.

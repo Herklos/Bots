@@ -1,6 +1,6 @@
 # Plan: HTML visual replies and MCP Apps
 
-Let a Bot answer with a page (chart, table, diagram, mockup) shown inline in the chat, and later let MCP servers a Bot uses return interactive apps. Both come from T3 and work with every provider that runs under it. hbots must project them, serve them safely and draw them.
+Let a Bot answer with a page (chart, table, diagram, mockup) shown inline in the chat, and later let MCP servers a Bot uses return interactive apps. Both come from T3 and work with every provider that runs under it. Michel must project them, serve them safely and draw them.
 
 Status: plan. Nothing here is built. Facts are tagged **[verified]** (read in upcomputer's source, a T3 fork, or in this repo) or **[to verify]** (Phase 0 spike).
 
@@ -20,7 +20,7 @@ Related: `docs/reply-images-plan.md` (images from markdown) shares the serving h
 - MCP Apps (`packages/shared/src/mcpApp.ts`, `apps/server/src/mcpApps/*`): a tool result carries the output key `t3McpApp` with `{ attachmentId, server, tool, resourceUri, csp?, permissions?, prefersBorder? }`. The `ui://` resource is snapshotted as an HTML attachment (5 MiB cap) with a CSP taken from `_meta.ui.csp`. App requests use RPC `mcpApps.callTool`, `readResource`, `toolInfo`, `updateModelContext`, each keyed by `{ threadId, itemId }`. Errors: `not-an-app`, `provider-unsupported`, `session-stopped`, `tool-not-callable`, `unsupported-content`, `request-failed`. Only Codex and Claude support it (Claude Code 2.1.301 or newer). The app needs its thread's session running.
 - Approvals in upcomputer: an app may call tools on its own server, asking first unless the tool is read-only, and it asks before every message post.
 
-### 1.2 The hbots side **[verified]**
+### 1.2 The Michel side **[verified]**
 
 - No code in `gateway/src` or `app/` reads `htmlRender`, `t3McpApp` or `mcpApps`. The transcript drops tool items (`project.rs`).
 - The Library already classifies `.html` as kind `page` (`bots/library/kinds.rs`).
@@ -30,10 +30,10 @@ Related: `docs/reply-images-plan.md` (images from markdown) shares the serving h
 
 ### 1.3 Unknowns **[to verify]**
 
-1. Are `html_render` and `html_preview` offered to hbots Bot threads under the token scopes hbots uses?
+1. Are `html_render` and `html_preview` offered to Michel Bot threads under the token scopes Michel uses?
 2. Which field of the `dynamic_tool` item holds the tool result (`output`, `result`, nested `structuredContent`)?
 3. Does Exact have an iframe or webview element on the web build and on native, and can the host receive `postMessage`?
-4. Does `assets.createUrl` work for the hbots token, and is the returned `relativeUrl` fetchable by the gateway with that token?
+4. Does `assets.createUrl` work for the Michel token, and is the returned `relativeUrl` fetchable by the gateway with that token?
 5. Is `html_render` in the stable T3 channel?
 6. The exact CSS variable names promised to the model by `HTML_RENDER_THEME_GUIDE` (read `packages/shared/src/htmlRender.ts` past line 140).
 7. Whether the session auth is cookie or bearer (decides how an iframe `src` authenticates).
@@ -126,7 +126,7 @@ The frame speaks the MCP Apps JSON-RPC over `postMessage` (`ui/initialize` hands
 ### Phase 0: spikes (S)
 
 - H0.1 Ask a Bot to use `html_render` and `html_preview`. Record whether the tools exist, the item JSON, and where the result lives. Commit redacted fixtures.
-- H0.2 Call `assets.createUrl` from a scratch client using the hbots token; fetch the result; record headers and the content type.
+- H0.2 Call `assets.createUrl` from a scratch client using the Michel token; fetch the result; record headers and the content type.
 - H0.3 Read `HTML_RENDER_THEME_GUIDE` and `HTML_RENDER_LAYOUT_GUIDE`; list the CSS variables.
 - H0.4 Exact: iframe or webview support on web and native; `message` events; sandbox attributes; fullscreen overlay pattern.
 - H0.5 Session auth type, for the signed URL decision.

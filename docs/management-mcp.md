@@ -1,6 +1,6 @@
 # Management MCP
 
-hbots exposes its application API as MCP tools at `http://127.0.0.1:3780/mcp`.
+Michel exposes its application API as MCP tools at `http://127.0.0.1:3780/mcp`.
 Use the gateway's configured local port if it differs from 3780. The endpoint is
 local-only, including when the application is available over LAN or a tunnel.
 
@@ -209,7 +209,7 @@ Credential read/modify/write operations use OS locks and atomic mode-0600 files.
 
 ## Settings design
 
-The MCP section in Access settings extends hbots' existing narrow, left-aligned settings
+The MCP section in Access settings extends Michel' existing narrow, left-aligned settings
 form and semantic theme roles. It uses the existing type scale, switch geometry,
 44-point targets and grouped controls. The endpoint and one-time credential are
 the functional focal points. Token creation is disclosed on demand, permissions

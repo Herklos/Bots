@@ -11,7 +11,7 @@ Facts below are marked **[verified]** (read in this repo or in the T3 bundle) or
 
 ## 1. Summary
 
-The first draft of this idea assumed hbots had to build a webhook receiver. It does not. T3 Code already ships one. A scheduled task with `schedule.type = "webhook"` gets its own URL, optional HMAC signature check, replay and coalesce dedupe, header and body filters, an age cutoff, rate limits, and a delivery log. hbots already labels such a task ("When a webhook arrives", `gateway/src/chat/routines/mod.rs`) but cannot create, show, rotate or reach one.
+The first draft of this idea assumed Michel had to build a webhook receiver. It does not. T3 Code already ships one. A scheduled task with `schedule.type = "webhook"` gets its own URL, optional HMAC signature check, replay and coalesce dedupe, header and body filters, an age cutoff, rate limits, and a delivery log. Michel already labels such a task ("When a webhook arrives", `gateway/src/chat/routines/mod.rs`) but cannot create, show, rotate or reach one.
 
 So the work is four things:
 
@@ -28,13 +28,13 @@ So the work is four things:
 - Filter: `{ path, op: "equals"|"notEquals"|"startsWith", value }`, `{ path, op: "in", value: string[] }` or `{ path, op: "exists" }`. `path` must start with `body`, `headers` or `query`. `[]` matches any array item.
 - Prompt templating: `{{body.path}}`, `{{headers.name}}`, `{{query.name}}`, `{{body}}`, `{{request}}`. A filled prompt that is too long fails the delivery.
 - Task row gains `webhook: { path, url|null, hasSecret }`. `path` is `/api/hooks/{taskId}/{token}` on T3's own HTTP server. `url` is non-null only when T3 Connect gives a relay base (`{relay}/v1/hooks/{endpointKey}/{taskId}/{token}`). The token is compared in constant time.
-- RPCs beside the ones hbots wraps: `scheduledTasks.rotateWebhookToken {id}`, `scheduledTasks.listWebhookDeliveries {id, acceptAnyOutcome?}`, `scheduledTasks.getWebhookDelivery {id, deliveryId, acceptAnyOutcome?}`.
+- RPCs beside the ones Michel wraps: `scheduledTasks.rotateWebhookToken {id}`, `scheduledTasks.listWebhookDeliveries {id, acceptAnyOutcome?}`, `scheduledTasks.getWebhookDelivery {id, deliveryId, acceptAnyOutcome?}`.
 - Delivery outcomes: `accepted`, `dispatch_failed`, `duplicate`, `coalesced`, `rejected_signature`, `disabled`, `rate_limited`, `expired`, `filtered`, plus `queue_full`. A summary has `receivedAt, method, contentType, bodyBytes, outcome, signatureVerified, missingFields, error`. The detail adds `query, headers, body (64 KiB log cap), bodyTruncated, renderedPrompt`.
 - Limits: 60 requests per minute per task, 20 queued per task, 50 deliveries kept, 20 each for deduped and filtered rows.
 - `blockedByPolicy` can disable webhooks regardless of `enabled`.
 - T3 has its own MCP tool, `schedule_task`, whose result includes `webhookUrl` and `webhookSignature: "none"|"set"`. A Bot can already create a webhook routine by itself, and `request_secret` handles the signing secret.
 
-### In hbots **[verified]**
+### In Michel **[verified]**
 
 - `Routines` trait (`gateway/src/harness/mod.rs`) has `list, upsert, set_enabled, delete, run_now`. The T3 adapter is `harness/adapters/t3/routines.rs`. There is no rotate or deliveries call. The mock is `harness/adapters/mock.rs`.
 - `task_row` (`chat/routines/mod.rs`) returns `id, title, enabled, paused, schedule, nextRunAt, lastRunAt, lastStatus, lastError, blocked`. No webhook fields.
@@ -70,7 +70,7 @@ Use a throwaway Bot. Record results in this file (section 12) and save fixtures 
 
 | # | Question | How | Decides |
 |---|---|---|---|
-| W0.1 | Does the T3 build hbots targets (not only Nightly) accept `schedule.type = "webhook"`? | `scheduledTasks.upsert` over the gateway's RPC against the version `hbots up` installs | Gate. If no, stop and write a fallback receiver plan |
+| W0.1 | Does the T3 build Michel targets (not only Nightly) accept `schedule.type = "webhook"`? | `scheduledTasks.upsert` over the gateway's RPC against the version `hbots up` installs | Gate. If no, stop and write a fallback receiver plan |
 | W0.2 | Does `POST {T3_URL}/api/hooks/{id}/{token}` need T3 auth, or only the token? Status codes for bad token, disabled, filtered, duplicate. Body size limit. Accepted methods and content types | `curl` against the local T3 | Whether the gateway proxy sends the T3 bearer, and the 1 MiB body cap |
 | W0.3 | What lands on the Bot's main thread for a bound webhook task (`threadMode: "continue"`)? | Fire one delivery, capture the projection | Event line wording, and whether the raw payload shows as a user bubble |
 | W0.4 | What happens when the thread is busy? Queue (max 20), steer, or drop | Fire three quickly during a run | UI copy and the `queue_full` message |
@@ -138,7 +138,7 @@ Rules:
 - Filters: at most 16. Path must match `^(body|headers|query)(\.|$)`. Header names lowercased. `in` values non-empty, no commas, no outer whitespace. These mirror T3's own checks so the gateway returns a clear message before T3 does.
 - Dedupe template syntax is T3's (`isWebhookDedupeTemplate`). The gateway does not re-implement it. It passes the string through and shows T3's error text.
 - `maxDeliveryAgeMinutes` defaults to 60. A webhook that sat offline for a day should not wake a Bot.
-- The signing secret is passed once in the upsert (`signature.secret`) and never stored or echoed by hbots. After save only `hasSecret` is visible. Editing without a secret keeps the stored one (T3: "Default: stored secret").
+- The signing secret is passed once in the upsert (`signature.secret`) and never stored or echoed by Michel. After save only `hasSecret` is visible. Editing without a secret keeps the stored one (T3: "Default: stored secret").
 
 ### 5.3 Signature presets
 
@@ -387,7 +387,7 @@ Exit: a watch on a local test server fires exactly one turn when its value chang
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| Stable T3 lacks webhook schedules | Low (Nightly has it, hbots already labels it) | W0.1 gate; fallback receiver plan only if needed |
+| Stable T3 lacks webhook schedules | Low (Nightly has it, Michel already labels it) | W0.1 gate; fallback receiver plan only if needed |
 | Quick tunnel URL changes and silently breaks senders | High | `stable` flag, warning in the UI, `publicBase` setting, T3 Connect URL preferred |
 | Prompt injection through a payload | Medium | Approval mode, data wrapper, no memory writes from deliveries, rendered-prompt preview |
 | Token leaks through logs, screenshots, browser history | Medium | Token-free list, URL on demand, no route logging, rotate action |

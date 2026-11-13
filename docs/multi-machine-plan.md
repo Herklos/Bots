@@ -1,18 +1,18 @@
 # Plan: multi-machine product layer (threebot-inspired)
 
-hbots already has a placement design in [bot-execution-environment.md](bot-execution-environment.md): bind a Bot to a linked T3 computer, refuse local RPCs on a remote id, then place behind `beta.environments` once forwarding works. This plan is the **product layer** inspired by threebot commit [1e6da7a](https://github.com/RokaSwK/threebot/commit/1e6da7abb553af08441df33a5aa3a6af6598bfd7): a Machines overview, badges, a way to open remote threads, and outage alerts into Bot chats.
+Michel already has a placement design in [bot-execution-environment.md](bot-execution-environment.md): bind a Bot to a linked T3 computer, refuse local RPCs on a remote id, then place behind `beta.environments` once forwarding works. This plan is the **product layer** inspired by threebot commit [1e6da7a](https://github.com/RokaSwK/threebot/commit/1e6da7abb553af08441df33a5aa3a6af6598bfd7): a Machines overview, badges, a way to open remote threads, and outage alerts into Bot chats.
 
 Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to verify]**. Placement PRs stay owned by `bot-execution-environment.md`; this doc does not replace them.
 
 ## 1. Facts
 
-### 1.1 hbots today **[verified]**
+### 1.1 Michel today **[verified]**
 
 - Design doc with PR 1 to 7 for store, list, picker, isolate, place, stay/move, subagent sheet (`docs/bot-execution-environment.md`).
 - Lineage already stores `remoteChild: { threadId, environmentId }` and refuses open with "That thread stays on the other machine."
 - Projects board links accept `environmentId` on thread and t3project links; overview can list machines as board items.
 - Local T3 well-known: `environmentId`, `label`, `platform.machine`, `capabilities.peerLinks`.
-- `peerLinks.list` is the link source; hbots session can list (empty on the verification machine). Pairing stays in T3.
+- `peerLinks.list` is the link source; Michel session can list (empty on the verification machine). Pairing stays in T3.
 - Agents.md: do not send `environmentId` on an RPC this T3 build does not accept; local T3 remains the broker.
 
 ### 1.2 threebot 1e6da7a **[verified from commit]**
@@ -36,15 +36,15 @@ Goals
 
 - A Machines page (or Settings section + inbox strip) listing this computer and each linked peer with status, label, T3 version when known.
 - Bot details and chat header show which computer the conversation is on (`boundEnvironmentId` / local).
-- When lineage shows a remote child, the person can open a **read-only** remote transcript in hbots once forwarding allows reads; until then, deep-link into T3 if a URL exists, else keep today's sentence.
+- When lineage shows a remote child, the person can open a **read-only** remote transcript in Michel once forwarding allows reads; until then, deep-link into T3 if a URL exists, else keep today's sentence.
 - Outage watcher: when a linked machine drops while a Bot has active remote children there, message that Bot's main thread once, and once when it returns.
 - All of the above stay behind sensible defaults: listing works whenever `peerLinks.list` works; placement and remote read stay gated by `bot-execution-environment.md` R1 / `beta.environments`.
 
 Non-goals
 
-- Replacing T3 pairing UI (no `peerLinks.link` from hbots unless a later plan says so).
+- Replacing T3 pairing UI (no `peerLinks.link` from Michel unless a later plan says so).
 - Copying Bot folders across machines.
-- Running a second hbots gateway as the remote runtime (threebot's peer health probe is optional inspiration only).
+- Running a second Michel gateway as the remote runtime (threebot's peer health probe is optional inspiration only).
 - Rewriting the placement PR sequence in the environments doc.
 
 ## 3. Relationship to `bot-execution-environment.md`
@@ -94,9 +94,9 @@ Module `gateway/src/harness/adapters/t3/machine_alerts.rs` (or `gateway/src/bots
 - Threshold: 2 misses (align with threebot). Persist `.botapp/machine-outages.json` with `{ label, since, misses, notified: [{ slug, mainThreadId }], done? }`.
 - Notify: `message.dispatch` into the Bot main thread as a framed system-style user message the transcript already shows, copy:
 
-  > From hbots: {label} went to sleep with these threads running: … They are paused until it is back.
+  > From Michel: {label} went to sleep with these threads running: … They are paused until it is back.
 
-  Use `asleep` vs `went offline` from status. Thread links: prefer `t3-thread://` or hbots deep links **[to verify]** what the client opens today.
+  Use `asleep` vs `went offline` from status. Thread links: prefer `t3-thread://` or Michel deep links **[to verify]** what the client opens today.
 - Recovery: delete outage, post "… is back online."
 - Cap: at most one notify and one recovery per outage per Bot. Failures to post are retried next tick; successes are never repeated.
 
@@ -104,7 +104,7 @@ Do not notify for local machine. Do not notify Bots with zero remote threads on 
 
 ### 4.4 App surfaces
 
-1. **Machines page** (Exact): list from `/api/environments`, status chip, label, version. Empty: "Link a computer in T3 Code → Settings → Environments." No pairing from hbots in v1.
+1. **Machines page** (Exact): list from `/api/environments`, status chip, label, version. Empty: "Link a computer in T3 Code → Settings → Environments." No pairing from Michel in v1.
 2. **MachineBadge**: small chip on Bot details header and optional chat subtitle when `boundEnvironmentId` is set or placement is remote. Local: hide badge or show "This computer" only when beta is on.
 3. **Lineage row**: if `remote`, button "Open on that computer" → remote transcript route when reads work; else copy that explains the thread stays there, with a link to Machines.
 4. **Remote transcript view**: read-only message list, no composer (or composer disabled with note). Reuse chat log components with `inRoom=false` and no send.
@@ -113,12 +113,12 @@ Strings: all through `en.json` / `fr.json` (`machines.*`, `chat.environmentDown`
 
 ### 4.5 Inspiration we deliberately change
 
-| threebot | hbots |
+| threebot | Michel |
 |---|---|
-| Probe peer threebot `:3780/api/health` | Optional later; default off (we do not assume another hbots on the peer) |
+| Probe peer threebot `:3780/api/health` | Optional later; default off (we do not assume another Michel on the peer) |
 | `RemoteThread` full chat chrome | Read-only until product asks for remote send |
 | Machines as primary nav | Page under Settings or a top-level item next to Projects; decision D1 |
-| Alert copy "From Threebot:" | "From hbots:" |
+| Alert copy "From Threebot:" | "From Michel:" |
 
 ## 5. Phase 0 spikes
 
@@ -163,7 +163,7 @@ Depends on environments R1 / PR 5 style forwarding for `getThreadProjection` wit
 
 ### P5. Polish (S)
 
-- Optional peer hbots health probe behind a setting.
+- Optional peer Michel health probe behind a setting.
 - French copy pass.
 - Docs: link from environments doc "Product layer" section to this file.
 
@@ -173,7 +173,7 @@ Depends on environments R1 / PR 5 style forwarding for `getThreadProjection` wit
 |---|---|---|
 | D1 | Machines as top-level nav vs Settings subsection | Settings → Computers page first; promote if used |
 | D2 | Alert as user_message vs events row | user_message into main thread (Bot sees it); keep out of one-to-one filter if needed **[to verify]** transcript filters |
-| D3 | Remote send from hbots | Not in this plan |
+| D3 | Remote send from Michel | Not in this plan |
 
 Risks
 

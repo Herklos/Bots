@@ -35,7 +35,7 @@ Patch loop on one text property with multibyte bytes:
 - 8 MiB: 413 `request_too_large`, message `request body exceeds the 10 MiB limit` (the JSON escapes inflate the payload).
 - A 16 MiB body reset the connection mid-upload (server never answered).
 
-Measured fact: 256 KiB is safe and fast, the design's 1 MiB string limit is smaller than the real one, and any write is capped by the 10 MiB request body. hbots can rely on 1 MiB with room to spare.
+Measured fact: 256 KiB is safe and fast, the design's 1 MiB string limit is smaller than the real one, and any write is capped by the 10 MiB request body. Michel can rely on 1 MiB with room to spare.
 
 ## S4. Files
 
@@ -88,7 +88,7 @@ Everything is single-digit to tens of milliseconds. The 10 s remote poll at 100 
 
 - Type: created with `api_key: "hb_spike_file"`, read back `key: "hb_spike_file"` unchanged.
 - Property: created with `key: "hb_explicit_key"`, read back unchanged.
-- Property created with `key: "hb_probe2"`: stored and returned as `hb_probe_2`, exactly the design's `hbprobe2` -> `hbprobe_2` rule. Digits split the snake key, so hbots keys already avoid digits, which stays mandatory.
+- Property created with `key: "hb_probe2"`: stored and returned as `hb_probe_2`, exactly the design's `hbprobe2` -> `hbprobe_2` rule. Digits split the snake key, so Michel keys already avoid digits, which stays mandatory.
 - Unkeyed properties mint lowercase snake keys from display names (`Spike Path` -> `spike_path`).
 
 ## S11. Archive and tombstone (audit A3 confirmed once)
@@ -107,10 +107,10 @@ Live run against the desktop app (`127.0.0.1:31009`, API `2025-11-08`). One appr
 - `GET /v2/auth/whoami?ids=full`: `scope: jsonApi`, `key_status: scoped`, `grant.restricted: true`, `grant.spaces[]` with `id`, `name`, `permission`, `key.name: hbots`.
 - `GET /v2/spaces?ids=full` lists only granted spaces and sets `has_not_granted_spaces: true` when others exist.
 - `GET /v2/spaces/{id}/members` gives the member count, so a shared space can be detected (the plan refuses one by default). `Test-AnyBot` had two members.
-- The key can reach several spaces if several are ticked in the dialog. Tick only the hbots space.
+- The key can reach several spaces if several are ticked in the dialog. Tick only the Michel space.
 
 Gateway routes built on this: `POST /api/storage/anytype/pair`, `.../pair/confirm`, `.../check`. S2 to S11 above are the M0 spike (run 2026-11-12 in the scratch space).
 
 Settings connect flow (2026-11-12): run through the gateway routes against Anytype Desktop. `pair` opened the approval dialog, `pair/confirm` with the 4 digit code returned `keySet: true` and wrote `~/.hbots/anytype-key` (mode 600, never returned), and `check` returned `reachable: true`, `scoped: true`, `permission: readwrite`. The key reached one space, `Test-AnyBot`, not the default `hbots`, so `spaceFound` was false. Settings shows that as a missing space.
 
-M0 addendum (2026-11-12): the scratch space `Test-AnyBot` was renamed to `Bots`; confirmed with the person before the S2 to S11 writes. It now has 1 member and only built-in types before the spike, but it is still the throwaway space, not the real hbots space.
+M0 addendum (2026-11-12): the scratch space `Test-AnyBot` was renamed to `Bots`; confirmed with the person before the S2 to S11 writes. It now has 1 member and only built-in types before the spike, but it is still the throwaway space, not the real Michel space.

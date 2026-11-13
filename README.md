@@ -1,6 +1,6 @@
 <div align="center">
 
-# hbots
+# Michel
 
 **Your personal AI Bots, together in one messaging app.**
 
@@ -10,13 +10,13 @@ Run Bots on your own machine, give each one a workspace, and talk to them from t
 
 <br />
 
-<img src="docs/assets/readme-atlas.png" alt="hbots chat with Atlas, a research companion Bot" width="960" />
+<img src="docs/assets/readme-atlas.png" alt="Michel chat with Atlas, a research companion Bot" width="960" />
 
 </div>
 
-## What is hbots?
+## What is Michel?
 
-hbots connects a messaging interface to [T3 Code](https://github.com/pingdotgg/t3code), the agent harness that runs your Bots. Each Bot has its own name, instructions, workspace and conversation. The gateway runs on your machine, keeps the T3 token away from clients, and serves the web app.
+Michel connects a messaging interface to [T3 Code](https://github.com/pingdotgg/t3code), the agent harness that runs your Bots. Each Bot has its own name, instructions, workspace and conversation. The gateway runs on your machine, keeps the T3 token away from clients, and serves the web app.
 
 The client is built with [Exact](https://github.com/expo/exact). Release archives currently include the gateway and web app for macOS and Linux; native clients are still in development.
 
@@ -25,7 +25,7 @@ The client is built with [Exact](https://github.com/expo/exact). Release archive
 Start the T3 Code desktop app, then install the latest release on your Mac or Linux machine:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Herklos/Bots/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Herklos/Michel/main/install.sh | sh
 ~/.hbots/runtime/current/hbots up
 ```
 
@@ -37,7 +37,7 @@ For a terminal-only setup, run `hbots up --no-service`, then `hbots serve` using
 
 ## Features
 
-- **Personal Bots:** use the guided setup to choose a name, appearance, optional template and first message. Each Bot has its own instructions and workspace; choose its model and approval mode. Claude Haiku is the default model. Settings can cap how much approval a Bot is given. Existing Bots keep the mode already saved; the next message uses the cap, and the list shows Above the limit. hbots applies that cap itself and does not write T3's `limits.maxRuntimeMode`.
+- **Personal Bots:** use the guided setup to choose a name, appearance, optional template and first message. Each Bot has its own instructions and workspace; choose its model and approval mode. Claude Haiku is the default model. Settings can cap how much approval a Bot is given. Existing Bots keep the mode already saved; the next message uses the cap, and the list shows Above the limit. Michel applies that cap itself and does not write T3's `limits.maxRuntimeMode`.
 - **Conversations:** chat with individual Bots or groups, mention Bots, attach files and voice clips, reply, react, and pin messages. In a group, an `@mention`, `@all`, or a single name chooses who answers; otherwise the last speaker does, unless the group or Settings says everyone or a chief should. Stop a run or answer an approval request from the app.
 - **Notifications:** receive unread conversation notices and mute individual Bots or groups without losing unread indicators.
 - **Bot details:** see routines, usage, child threads, and a library of files, pages and links. Manage per-Bot MCP connectors and watch or interact with a Bot's browser through T3 Code.
@@ -74,7 +74,7 @@ The **workspace** is a separate storage concern. The `Workspace` interface backs
 
 A Bot's thread is created on that local T3. Choosing a linked computer from Settings or from a Bot's config, and listing that computer's models, is specified in [the execution environment design](docs/bot-execution-environment.md). It is not a setting in the app today.
 
-By default, Bot folders live under `~/.hbots/bots/`. The gateway holds the T3 token; clients use an hbots session instead. For access beyond localhost, set a password, then choose local network or Tailscale in Settings → Access → Network. Restart hbots to apply a listener change.
+By default, Bot folders live under `~/.hbots/bots/`. The gateway holds the T3 token; clients use a Michel session instead. For access beyond localhost, set a password, then choose local network or Tailscale in Settings → Access → Network. Restart Michel to apply a listener change.
 
 ## Commands
 

@@ -14,7 +14,7 @@ Status: plan. This is a delta on `docs/memory-store-plan.md` and `docs/memory-ma
 - Tools: `bot_memory` (paged read, `inContext` flag per entry, `nextOffset`), `bot_remember` (stable `id` per fact), `bot_forget`. The tool descriptions say a user-owned entry cannot be changed or removed: "ask the user to change them in the bot's Memory settings, and never save a memory that contradicts one." The tools are unavailable in background task runs: "put what is worth remembering in the run's result instead."
 - Suggestions: a background run proposes a memory; accepting writes `targetId` as an ordinary memory.
 
-### 1.2 hbots today **[verified]**
+### 1.2 Michel today **[verified]**
 
 - Memory is Markdown: `<bot>/memory/MEMORY.md`, `memory/log.md`, and shared `.botapp/shared-memory.md`, injected as a bounded snapshot by `bots/agent_context/mod.rs` (`read_snapshot`, `render_snapshot`, tags `memory`, `memory-log`, `shared-memory`, `parent-memory`, byte caps 4, 2, 2, 2 KiB, a 20-second poller). The tag list is `TAG_PREFIXES`; the strip logic uses it.
 - Read tools only: `memory_read` and `skills_read` (`bots/memory_tools/mod.rs`, `FILE_CAP` 16 KiB, truncation flag).

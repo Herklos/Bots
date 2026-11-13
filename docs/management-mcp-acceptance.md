@@ -21,7 +21,7 @@ Integrations tab.
 
 The legacy compatibility script still has four unrelated failures for its removed
 Projects REST route; its remaining 26 checks passed. The dedicated SDK test also
-passed with a pre-MCP **hbots 0.3.0** binary (`target/release/hbots`, SHA-256
+passed with a pre-MCP **Michel 0.3.0** binary (`target/release/hbots`, SHA-256
 `1e0b4568e3576622191f3917208d605c310872c8c762490b3c0222d9b4808cc5`),
 verifying shared sessions and that older settings writers preserve the MCP flag.
 All SDK processes use temporary homes. Live-account T3/Anytype testing was not

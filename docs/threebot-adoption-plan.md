@@ -1,6 +1,6 @@
 # Adopting ideas from threebot: index and sequencing
 
-threebot (`github.com/RokaSwK/threebot`) is a sibling Bot app on T3 Code. These plans take specific commits and [PR #52](https://github.com/RokaSwK/threebot/pull/52) and map them onto hbots without copying their stack (Exact + Rust gateway stay).
+threebot (`github.com/RokaSwK/threebot`) is a sibling Bot app on T3 Code. These plans take specific commits and [PR #52](https://github.com/RokaSwK/threebot/pull/52) and map them onto Michel without copying their stack (Exact + Rust gateway stay).
 
 | Plan | Doc | Size | Depends on |
 |---|---|---|---|

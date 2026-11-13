@@ -1,4 +1,4 @@
-# hbots redesign plan
+# Michel redesign plan
 
 Status: built on branch `redesign` (steps 0 to 10). Not done: reactions, scroll-to-end and New messages pill, drag and drop and paste, Vault favicons, removing the Projects HTTP routes (B16), and the sign-in polish. Grouping of message runs stayed in `app.ts`. Values stay in `design/tokens.json`; every new value goes there first, then `cargo run -p hbots-design -- sync`.
 
@@ -181,8 +181,8 @@ On wide windows Settings replaces the chat and panel, with the sidebar still vis
 | Models | Default provider, model and effort for new Bots (the same `ModelPicker` as the panel), then a list of every Bot with its model; tap a Bot to open its Model page |
 | Usage | The same `UsageView` as the panel with a Bot filter (All Bots or one), period chips, Summary or Detail, and a per-Bot breakdown. Footer: "Counted on this machine. Nothing is sent anywhere." |
 | Vault | The logins list (search, favicon rows, add) as a section page, replacing the lock tile; edit and add stay as sheets |
-| Access | The password, then where hbots listens: this device, the local network, or Tailscale Serve. A password is required off this device. A listener change applies on restart. The Cloudflare tunnel stays in the CLI. |
-| About | hbots version, the gateway address, the harness (T3 Code) and whether it is connected, Sign out |
+| Access | The password, then where Michel listens: this device, the local network, or Tailscale Serve. A password is required off this device. A listener change applies on restart. The Cloudflare tunnel stays in the CLI. |
+| About | Michel version, the gateway address, the harness (T3 Code) and whether it is connected, Sign out |
 
 The Models section lists this computer's providers, which is what this redesign ships. Choosing which computer a Bot runs on, and listing that computer's models, is a later design. See [the execution environment design](bot-execution-environment.md). Settings sets the default computer. The Bot details page and a durable child's sheet show the current computer and can change the setting. `server.getConfig` on the current T3 build cannot name a link, so a Bot set to a link does not reuse this computer's list.
 

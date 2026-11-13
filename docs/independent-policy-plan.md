@@ -6,7 +6,7 @@ Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to ve
 
 ## 1. Facts
 
-### 1.1 hbots today **[verified]**
+### 1.1 Michel today **[verified]**
 
 - Modes: `approval-required`, `auto`, `full-access` on Bot `runtimeMode` and settings `defaultRuntimeMode` (`lifecycle.rs`, `provisioner::launch_runtime_mode`, Settings radios in `app/settings/settings.contract`).
 - Launch mapping: explicit Bot mode wins; else settings default; else `autoReview == false` → `full-access`, else `auto`.
@@ -29,7 +29,7 @@ Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to ve
 
 ### 1.3 Constraints
 
-- T3 runtime modes remain three values. hbots cannot invent a fourth wire value for `orchestration.launchThread` / dispatch. Independent must **store** as `independent` on the Bot/settings document and **send** `full-access` to T3.
+- T3 runtime modes remain three values. Michel cannot invent a fourth wire value for `orchestration.launchThread` / dispatch. Independent must **store** as `independent` on the Bot/settings document and **send** `full-access` to T3.
 - Cap plan (`maxRuntimeMode`): Independent ranks at or above `full-access` (same harness power, freer prompt). Treat as equal to `full-access` for the cap, or extend the cap enum. Decision D2.
 
 ## 2. Goals and non-goals

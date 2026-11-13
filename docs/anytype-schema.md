@@ -1,8 +1,8 @@
-# Anytype schema for hbots
+# Anytype schema for Michel
 
 Companion to [the Anytype backend plan](anytype-backend.md). Status: design only (2026-11-11, second revision after an audit against the Anytype API spec and live probes).
 
-All types live in one dedicated, private Anytype space. Every type and property key starts with `hb_`, so nothing collides with the `aa_*` prototype schema or the person's `anytype-agents` org types. The shape is adapted from those org types (agent, team, subteam, subagent, harness profile, computer, tool profile, vault grant, prompt, memory, skill, log, suggestion, schedule, group, project, task) and mapped onto what hbots does.
+All types live in one dedicated, private Anytype space. Every type and property key starts with `hb_`, so nothing collides with the `aa_*` prototype schema or the person's `anytype-agents` org types. The shape is adapted from those org types (agent, team, subteam, subagent, harness profile, computer, tool profile, vault grant, prompt, memory, skill, log, suggestion, schedule, group, project, task) and mapped onto what Michel does.
 
 ## Design rules
 
@@ -155,6 +155,6 @@ Widgets (space scope, written by an owner or admin key; personal scope otherwise
 - **Group messages.** One segment object per (room, device, sequence), so two machines never write the same object. Readers merge by timestamp and message id.
 - **Group runtime state** (`threads`, `anchors`, `hops`, `lastSeenAt`) is per device and stays in `.botapp/groups.local.json`.
 - **Secrets.** `hb_connector.hb_auth_ref` and similar fields name a secret kept on the device. The secret is never written to Anytype.
-- **Chats and discussions are not used.** hbots creates none and ignores any a person adds. A person may still comment on an object in the app. Such an object can then only be archived, never purged, which the tombstone and Bin design already tolerates.
+- **Chats and discussions are not used.** Michel creates none and ignores any a person adds. A person may still comment on an object in the app. Such an object can then only be archived, never purged, which the tombstone and Bin design already tolerates.
 - **One Anytype identity for everything.** Bots are data objects, not Anytype participants. One account and one API key per machine serve every Bot and group.
 - **Dates.** `date` properties link to Anytype date objects (backlinks per day). They read back as `YYYY-MM-DDT00:00:00Z`.

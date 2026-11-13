@@ -12,13 +12,13 @@ Related: `docs/webhook-triggers-plan.md` (webhook routines are approval-required
 
 ### 1.1 T3 scheduled tasks **[verified in upcomputer source, `packages/contracts/src/scheduledTask.ts`]**
 
-- RPCs: `scheduledTasks.subscribe` (stream), `upsert`, `setEnabled`, `delete`, `runNow`, plus webhook delivery methods. hbots uses all five non-webhook ones (`harness/adapters/t3/routines.rs`).
+- RPCs: `scheduledTasks.subscribe` (stream), `upsert`, `setEnabled`, `delete`, `runNow`, plus webhook delivery methods. Michel uses all five non-webhook ones (`harness/adapters/t3/routines.rs`).
 - A task has `enabled`, `schedule` (`interval` with `everyMs` at least 60,000, `fixed_time` with `timeOfDay` and `weekdays`, `once` with `runAt`, `webhook`), `projectId`, `threadId`, `threadMode` (`new_thread`, `continue`, `fresh_session`), `modelSelection`, `runtimeMode`, `interactionMode`, `createdBy` (`user`, `agent`, `system`), `creationSource` (`web`, `mobile`, `mcp`, `provider`, `server`), `nextRunAt`, `lastRunAt`, `lastRunStatus` (`never`, `running`, `succeeded`, `failed`), `lastRunError`, `runCount`, `blockedByPolicy?`.
 - Upsert accepts `requireExisting` and `commandId`. `setEnabled` takes `{ id, enabled }`.
-- There is no catch-up policy, skip-if-open flag, failure counter or draft state in T3's task. Upcomputer's are in its own task system, which hbots cannot use.
+- There is no catch-up policy, skip-if-open flag, failure counter or draft state in T3's task. Upcomputer's are in its own task system, which Michel cannot use.
 - Agents create tasks through the MCP tool `schedule_task` (and update and delete tools); the T3 docs list `schedule_task` among tools "that run without an active turn".
 
-### 1.2 hbots **[verified]**
+### 1.2 Michel **[verified]**
 
 - A Bot creates routines itself through T3's `schedule_task`. The transcript recognises it (`event_for`: `schedule_task` with a null `scheduledTaskId` is "Created routine") but does nothing else.
 - The gateway lists tasks with `read_until("scheduledTasks.subscribe", ..., |_| true)`, which takes the first chunk and interrupts. `T3Client` also supports a staying-open subscribe (`orchestration.subscribeShell` is used that way).
@@ -30,7 +30,7 @@ Related: `docs/webhook-triggers-plan.md` (webhook routines are approval-required
 ### 1.3 Unknowns **[to verify]**
 
 1. How soon does a freshly created agent task run? (`nextRunAt` for `interval`, `once`, `fixed_time`.) This is the race window for the gateway to disable it.
-2. What `createdBy` and `creationSource` does a task made by `schedule_task` carry, versus one made by the hbots UI through `new_routine`?
+2. What `createdBy` and `creationSource` does a task made by `schedule_task` carry, versus one made by the Michel UI through `new_routine`?
 3. Does `scheduledTasks.subscribe` push updates while open, and in what frame shape (full list or delta)?
 4. What does T3 do when a run is due while the previous one is still running, and after the machine slept? (Queue, skip, or fire once.)
 5. Can an agent-authored task have a `runtimeMode` broader than its parent? T3's MCP error codes include `runtime_mode_escalation_denied`, which suggests no.
@@ -104,14 +104,14 @@ Settings (`api/settings.rs`, validated): `routineReview` global default `ask|tru
 
 ### 3.6 What we cannot do
 
-T3 has no catch-up policy or skip-if-open. Phase 0 records T3's actual behaviour. If it queues overlapping runs, propose an upstream change; hbots cannot intercept a run start. The failure breaker and the cap are the available substitutes.
+T3 has no catch-up policy or skip-if-open. Phase 0 records T3's actual behaviour. If it queues overlapping runs, propose an upstream change; Michel cannot intercept a run start. The failure breaker and the cap are the available substitutes.
 
 ## 4. Phases
 
 ### Phase 0: spikes (S)
 
 - R0.1 Create agent tasks of each schedule type; record `nextRunAt` relative to creation.
-- R0.2 Record `createdBy` and `creationSource` for `schedule_task` versus the hbots UI.
+- R0.2 Record `createdBy` and `creationSource` for `schedule_task` versus the Michel UI.
 - R0.3 Open `scheduledTasks.subscribe` for a minute while editing tasks; record frames.
 - R0.4 Overlap and sleep behaviour (unknown 4).
 - R0.5 Runtime mode escalation (unknown 5).

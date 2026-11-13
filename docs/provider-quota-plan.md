@@ -1,6 +1,6 @@
 # Plan: provider and quota visibility
 
-Show how much of each provider's subscription window is used and when it resets, warn before a Bot runs into a limit, and let the person switch model from that warning. T3 already measures this; hbots reads the provider list but drops it.
+Show how much of each provider's subscription window is used and when it resets, warn before a Bot runs into a limit, and let the person switch model from that warning. T3 already measures this; Michel reads the provider list but drops it.
 
 Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to verify]**.
 
@@ -14,7 +14,7 @@ Status: plan. Nothing here is built. Facts are tagged **[verified]** or **[to ve
 - Other RPCs: `server.refreshProviders`, `server.getUsageSummary` (`{ sinceDay, untilDay, timeZone, resolution?, awaitRefresh?, modelFilter? }` returning day or hour buckets by provider and model with token totals and `costUsd`, `costSource`, plus `sources` status and `pricing` status), `server.refreshUsageRates`, `provider.consumeResetCredit`, and the provider management set `provider.auth.start|subscribe|respond|complete|cancel|logout`, `provider.install.start|subscribe|cancel|remove`, `server.updateProvider`.
 - Provider kinds in usage: claude, codex, grok, cursor, opencode, antigravity, pi, muse.
 
-### 1.2 hbots **[verified]**
+### 1.2 Michel **[verified]**
 
 - `harness/adapters/t3/provision.rs:149` calls `server.getConfig` and `harness/providers.rs` (`Providers::list`, 30-second cache) reduces it to what the app shows. Its header says only what the app shows leaves the module, "never an account's email or workspace". `usageLimits` is not used anywhere in `gateway/src` or `app/`.
 - The transcript already shows terminal provider failures as events (`provider_failure`: `usage_limit` becomes `rate_limit`, with `resetAt`; chip text "Limited"). That is reactive. This plan is proactive.
@@ -139,7 +139,7 @@ Exit: normaliser rules confirmed; thresholds D1 answered.
 
 | Risk | Mitigation |
 |---|---|
-| Provider probes get rate limited if hbots forces refresh | Read cached config; manual refresh capped at one per minute |
+| Provider probes get rate limited if Michel forces refresh | Read cached config; manual refresh capped at one per minute |
 | Percent semantics differ | Q0.3; show provider label text, not our own wording |
 | Notice noise | Hysteresis, one per threshold per window, Bot's current provider only |
 | `usageLimits` absent on stable T3 | No bars shown; no error |
@@ -151,4 +151,4 @@ Exit: normaliser rules confirmed; thresholds D1 answered.
 |---|---|---|
 | D1 | Warning thresholds | 80 and 95 percent |
 | D2 | Ship spend card | Yes, after the bars, labelled machine-wide |
-| D3 | Provider sign-in inside hbots | Not in the first release |
+| D3 | Provider sign-in inside Michel | Not in the first release |

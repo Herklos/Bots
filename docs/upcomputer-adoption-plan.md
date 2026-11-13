@@ -1,6 +1,6 @@
 # Adopting ideas from upcomputer: index and sequencing
 
-Upcomputer (`github.com/krl-gr/upcomputer`) is a fork of T3 Code, the same harness hbots runs on. It extends the T3 server in-process, while hbots is an external gateway that only reaches T3 over RPC and MCP. So only ideas that T3 exposes, or that the gateway can build on top of it, transfer. This index links the plans and orders them.
+Upcomputer (`github.com/krl-gr/upcomputer`) is a fork of T3 Code, the same harness Michel runs on. It extends the T3 server in-process, while Michel is an external gateway that only reaches T3 over RPC and MCP. So only ideas that T3 exposes, or that the gateway can build on top of it, transfer. This index links the plans and orders them.
 
 | Plan | Doc | Size | Depends on |
 |---|---|---|---|
@@ -30,7 +30,7 @@ Several plans need the same facts. Do them once, save redacted fixtures, and ref
 
 - A real thread projection with commands, edits, MCP tools, a routine run and a failed provider call (activity, history search, HTML replies, code).
 - A real `server.getConfig` (provider quota, approval cap).
-- The scope of the hbots T3 token against `orchestration.searchThreads`, `server.refreshProviders`, `server.getUsageSummary`, `assets.createUrl`, `vcs.*`, `pullRequests.*`.
+- The scope of the Michel T3 token against `orchestration.searchThreads`, `server.refreshProviders`, `server.getUsageSummary`, `assets.createUrl`, `vcs.*`, `pullRequests.*`.
 - Exact capabilities: iframe or webview, `message` events, per-device storage, link handling on load (activity, HTML replies, prompt links).
 - Whether the T3 build in use (stable versus nightly) has `html_render`, `orchestration.searchThreads`, `usageLimits` and the scheduled-task fields.
 
@@ -44,8 +44,8 @@ Several plans need the same facts. Do them once, save redacted fixtures, and ref
 
 ## What was left out on purpose
 
-- Upcomputer's task board, human tasks and task-status-triggered agents (in-process T3 extensions; hbots routines cover the need).
+- Upcomputer's task board, human tasks and task-status-triggered agents (in-process T3 extensions; Michel routines cover the need).
 - Computer use (native sidecar). If it ever matters, borrow its policy: app allowlist, sensitive-app denylist, observe-only mode.
 - Guest links (needs T3 Connect, and overlaps `docs/multi-user.md`).
-- Outside-agents MCP server for hbots (larger; revisit after the Bot tool server is stable).
+- Outside-agents MCP server for Michel (larger; revisit after the Bot tool server is stable).
 - Importing existing agent sessions with `agentSessions.*` (good onboarding idea, not yet explored).

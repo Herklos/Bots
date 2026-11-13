@@ -1,6 +1,6 @@
 # Vision
 
-hbots is a messaging app for personal Bots. One Exact client. One Rust gateway on the machine that holds the Bots, the Vault, and the Projects board.
+Michel is a messaging app for personal Bots. One Exact client. One Rust gateway on the machine that holds the Bots, the Vault, and the Projects board.
 
 The idea came from Threebot.
 
