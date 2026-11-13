@@ -11,8 +11,10 @@ async fn search_filters_fields_and_walks_pages() {
     mock.seed_objects(30);
     let api = AnytypeClient::new(&mock.url, "k", "space-1").unwrap();
 
+    // `name` comes back on every row on its own; as a `fields` entry the live
+    // app rejects it, so the query projects a real field instead.
     let pages = api
-        .search(&json!({"type": "page", "query": "alp", "fields": ["name"]}))
+        .search(&json!({"type": "page", "query": "alp", "fields": ["created_date"]}))
         .await
         .unwrap();
     let names: Vec<_> = pages

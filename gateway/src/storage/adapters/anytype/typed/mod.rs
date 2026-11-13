@@ -54,15 +54,17 @@ impl TypedCtx {
         self.client.get_object(object_id).await
     }
 
-    /// Search one type, projecting `id` plus the named property fields.
+    /// Search one type, projecting the named property fields. `id` and `name`
+    /// come back on every row on their own; the live app rejects them as
+    /// `fields` entries with 400 unknown property keys.
     pub(crate) async fn search_type(
         &self,
         type_key: &str,
         fields: &[&str],
     ) -> Result<Vec<Value>, AnytypeError> {
-        let mut body = json!({ "type": type_key, "fields": ["id", "name"] });
-        for field in fields {
-            body["fields"].as_array_mut().expect("fields array").push(json!(field));
+        let mut body = json!({ "type": type_key });
+        if !fields.is_empty() {
+            body["fields"] = json!(fields);
         }
         self.client.search_strict(&body).await
     }
@@ -195,7 +197,7 @@ impl TypedCtx {
             Some(None) => {
                 let rows = self
                     .client
-                    .search_strict(&json!({ "type": type_key, "fields": ["id"] }))
+                    .search_strict(&json!({ "type": type_key }))
                     .await?;
                 Ok(rows
                     .iter()
@@ -205,7 +207,7 @@ impl TypedCtx {
             Some(Some(field)) => {
                 let rows = self
                     .client
-                    .search_strict(&json!({ "type": type_key, "fields": ["id", field] }))
+                    .search_strict(&json!({ "type": type_key, "fields": [field] }))
                     .await?;
                 Ok(rows
                     .iter()

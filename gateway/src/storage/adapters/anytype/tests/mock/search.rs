@@ -152,6 +152,8 @@ fn project(object: &Object, body: &Value) -> Value {
     };
     let mut picked = serde_json::Map::new();
     picked.insert("id".into(), full["id"].clone());
+    picked.insert("name".into(), full["name"].clone());
+    picked.insert("type".into(), full["type"].clone());
     let mut properties = serde_json::Map::new();
     for field in fields {
         let Some(name) = field.as_str() else {

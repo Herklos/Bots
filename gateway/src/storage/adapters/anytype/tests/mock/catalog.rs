@@ -90,7 +90,9 @@ impl MockState {
     }
 
     pub(super) fn knows_property(&self, key: &str) -> bool {
-        const TOP: [&str; 5] = ["id", "name", "type", "created_date", "last_modified_date"];
+        // The live app names its own field keys; `id` and `name` are refused
+        // as `fields` entries, and always returned on rows regardless.
+        const TOP: [&str; 3] = ["type", "created_date", "last_modified_date"];
         TOP.contains(&key)
             || self.properties.iter().any(|row| row["key"] == key)
             || self

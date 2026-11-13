@@ -83,10 +83,11 @@ pub(super) async fn peers(
 }
 
 async fn own_id(client: &AnytypeClient, device_id: &str) -> Result<Option<String>, AnytypeError> {
+    // Only property keys go in `fields`; `id` and `name` ride on every row.
     let rows = client
         .search(&json!({
             "type": "m_device",
-            "fields": ["name", "m_slug"],
+            "fields": ["m_slug"],
         }))
         .await?;
     Ok(rows

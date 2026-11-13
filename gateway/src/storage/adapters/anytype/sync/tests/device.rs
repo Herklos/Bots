@@ -20,7 +20,7 @@ async fn registering_twice_publishes_one_device_and_lists_peers() {
     let rows = client
         .search(&serde_json::json!({
             "type": "m_device",
-            "fields": ["id", "m_slug", "m_hostname", "m_last_seen"],
+            "fields": ["m_slug", "m_hostname", "m_last_seen"],
         }))
         .await
         .unwrap();
