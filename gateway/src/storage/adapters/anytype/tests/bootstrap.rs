@@ -1,5 +1,6 @@
 use super::mock::Mock;
-use crate::storage::adapters::anytype::client::AnytypeClient;
+use crate::storage::adapters::anytype::client::{AnytypeClient, AnytypeError};
+use crate::storage::adapters::anytype::schema::setup_failure;
 use crate::storage::adapters::anytype::schema::table::{self, COLUMNS, TABLES};
 use crate::storage::adapters::anytype::schema::{bootstrap, read_meta, schema_ready};
 use serde_json::json;
@@ -191,4 +192,80 @@ async fn a_drifted_key_is_kept_in_hb_keys_json() {
     assert!(second.properties.is_empty());
     assert!(!second.meta);
     assert_eq!(api.list_properties().await.unwrap().len(), before);
+}
+
+#[tokio::test]
+async fn a_fresh_space_never_searches_by_unknown_keys() {
+    // The live app answers 400 for a `type` or `fields` key it has not heard of.
+    let mock = Mock::start().await;
+    let api = client(&mock);
+    let unknown_type = api
+        .search(&json!({ "type": "hb_meta", "query": "hb_meta" }))
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        unknown_type,
+        AnytypeError::Bad { status: 400, .. }
+    ));
+    let unknown_field = api
+        .search(&json!({ "query": "hb_meta", "fields": ["hb_schema_version"] }))
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        unknown_field,
+        AnytypeError::Bad { status: 400, .. }
+    ));
+    let report = bootstrap(&api, false).await.unwrap();
+    assert!(report.schema_ready);
+}
+
+#[tokio::test]
+async fn the_type_body_uses_api_key_and_the_live_field_set() {
+    let mock = Mock::start().await;
+    let api = client(&mock);
+    let bad = api
+        .create_type(&json!({ "name": "x", "key": "hb_x" }), "t-1")
+        .await
+        .unwrap_err();
+    assert!(matches!(bad, AnytypeError::Bad { status: 400, .. }));
+    let bad = api
+        .create_property(&json!({ "name": "x" }), "p-1")
+        .await
+        .unwrap_err();
+    assert!(matches!(bad, AnytypeError::Bad { status: 400, .. }));
+}
+
+#[tokio::test]
+async fn properties_exist_before_the_types_that_link_them() {
+    let mock = Mock::start().await;
+    let api = client(&mock);
+    bootstrap(&api, false).await.unwrap();
+    // Linked, not minted twice: one property row per declared column.
+    assert_eq!(api.list_properties().await.unwrap().len(), COLUMNS.len());
+}
+
+#[test]
+fn setup_failure_keeps_the_reason_and_drops_the_space_id() {
+    let id = "bafyreig54easpaerpi3ztgragrlxh2utaisv5cdboakfqhlmndt3tzk2va.39bilhfrc4c6s";
+    let bad = AnytypeError::Bad {
+        status: 400,
+        message: format!("type \"hb_meta\" not found in space {id}"),
+    };
+    let (status, text) = setup_failure(&bad);
+    assert_eq!(status, 502);
+    assert!(text.starts_with("Anytype could not prepare the space."));
+    assert!(text.contains("hb_meta"));
+    assert!(!text.contains("bafy"));
+    assert_eq!(
+        setup_failure(&AnytypeError::Unreachable).1,
+        "Anytype is not reachable. Open the Anytype app and check the host."
+    );
+    assert_eq!(setup_failure(&AnytypeError::NotGranted).0, 403);
+    let busy = AnytypeError::RateLimited {
+        retry_after: std::time::Duration::ZERO,
+    };
+    assert_eq!(
+        setup_failure(&busy),
+        (429, "Anytype is busy. Try again.".into())
+    );
 }

@@ -235,20 +235,8 @@ pub(crate) async fn anytype_setup(
 }
 
 fn setup_error(error: crate::storage::adapters::anytype::AnytypeError) -> ApiError {
-    use crate::storage::adapters::anytype::AnytypeError;
-    match error {
-        AnytypeError::Unreachable => ApiError::new(
-            502,
-            "Anytype is not reachable. Open the Anytype app and check the host.",
-        ),
-        AnytypeError::NotGranted => ApiError::new(403, "Anytype did not grant this space."),
-        AnytypeError::RateLimited { .. } => ApiError::new(429, "Anytype is busy. Try again."),
-        AnytypeError::EtagMismatch { .. }
-        | AnytypeError::ObjectArchived
-        | AnytypeError::Gone
-        | AnytypeError::ApiChanged
-        | AnytypeError::Bad { .. } => ApiError::new(502, "Anytype could not prepare the space."),
-    }
+    let (status, message) = crate::storage::adapters::anytype::setup_failure(&error);
+    ApiError::new(status, &message)
 }
 
 pub(crate) async fn delete_storage_key(

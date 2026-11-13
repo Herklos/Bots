@@ -17,7 +17,7 @@ async fn a_killed_create_replays_the_same_outbox_key() {
     }));
     let cycle = world.rig.engine.run_once().await.unwrap();
     assert!(cycle.stopped, "{cycle:?}");
-    assert_eq!(world.mock.object_count(), 0);
+    assert_eq!(world.mock.object_count(), 1);
     let key = outbox::idem_key(&world.rig.device, path, Op::Create, &sha256_hex(bytes));
     let text = std::fs::read_to_string(world.rig.sync_dir.path().join("outbox.jsonl")).unwrap();
     let line: Value = serde_json::from_str(text.lines().next().unwrap()).unwrap();

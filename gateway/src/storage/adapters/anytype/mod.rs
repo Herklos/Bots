@@ -10,5 +10,5 @@ mod tests;
 mod workspace;
 
 pub(crate) use client::{confirm_pairing, open_client, start_pairing, status, AnytypeError};
-pub(crate) use schema::{bootstrap, schema_ready};
+pub(crate) use schema::{bootstrap, schema_ready, setup_failure};
 pub(crate) use workspace::SyncedWorkspace;

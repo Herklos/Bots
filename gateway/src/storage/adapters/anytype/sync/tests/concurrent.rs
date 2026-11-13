@@ -21,6 +21,7 @@ enum Act {
 #[tokio::test]
 async fn two_engines_keep_every_acknowledged_write() {
     let mock = Mock::start().await;
+    super::support::prepare(&mock).await;
     let mut rigs = [
         Rig::open(&mock.url, "device-a"),
         Rig::open(&mock.url, "device-b"),

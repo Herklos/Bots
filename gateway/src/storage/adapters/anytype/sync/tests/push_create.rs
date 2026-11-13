@@ -8,5 +8,5 @@ async fn push_create_uploads_a_new_file() {
     world.write("ada/memory/note.md", bytes);
     world.rig.until_quiet().await;
     assert_roundtrip(&world, "ada/memory/note.md", bytes).await;
-    assert_eq!(world.mock.object_count(), 1);
+    assert_eq!(world.mock.object_count(), 2);
 }

@@ -34,6 +34,7 @@ async fn rebind(mock: &mut Mock) {
         match tokio::net::TcpListener::bind(addr).await {
             Ok(listener) => {
                 *mock = Mock::from_listener(listener);
+                super::support::prepare(mock).await;
                 return;
             }
             Err(error) => {
