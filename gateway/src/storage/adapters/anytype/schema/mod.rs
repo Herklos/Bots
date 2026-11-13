@@ -5,6 +5,9 @@ mod failure;
 mod p4;
 #[cfg(test)]
 mod p4_tests;
+#[cfg(test)]
+mod p5_tests;
+mod p5;
 pub(crate) mod table;
 
 #[cfg(test)]

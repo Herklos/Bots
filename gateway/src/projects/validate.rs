@@ -2,6 +2,7 @@ use super::*;
 
 pub(crate) const KINDS: &[&str] = &[
     "project", "task", "machine", "service", "repo", "note", "link",
+    "epic", "user_story",
 ];
 
 pub(crate) const LINK_TYPES: &[&str] = &["thread", "bot", "item", "url", "t3project"];
@@ -41,6 +42,7 @@ pub(crate) fn statuses(kind: &str) -> &'static [&'static str] {
         "machine" => &["online", "offline", "unknown"],
         "service" => &["running", "stopped", "failing", "unknown"],
         "repo" => &["active", "archived"],
+        "epic" | "user_story" => &["backlog", "ready", "doing", "done", "cancelled"],
         _ => &[],
     }
 }

@@ -2,6 +2,7 @@ use super::*;
 
 pub(crate) const RECORD_KINDS: &[&str] = &[
     "project", "note", "task", "plan", "link", "repo", "machine", "service",
+    "epic", "user_story",
 ];
 
 pub(crate) fn statuses(kind: &str) -> &'static [&'static str] {
@@ -12,6 +13,7 @@ pub(crate) fn statuses(kind: &str) -> &'static [&'static str] {
         "machine" => &["online", "offline", "unknown"],
         "service" => &["running", "stopped", "failing", "unknown"],
         "repo" => &["active", "archived"],
+        "epic" | "user_story" => &["backlog", "ready", "doing", "done", "cancelled"],
         _ => &[],
     }
 }
@@ -22,6 +24,7 @@ pub(crate) fn default_status(kind: &str) -> &'static str {
         "task" => "todo",
         "plan" => "draft",
         "machine" | "service" => "unknown",
+        "epic" | "user_story" => "backlog",
         _ => "",
     }
 }

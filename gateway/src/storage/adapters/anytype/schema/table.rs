@@ -138,12 +138,14 @@ pub(crate) fn table(key: &str) -> Option<&'static Table> {
     tables().find(|table| table.key == key)
 }
 
+pub(crate) use super::p5::extensions;
+
 pub(crate) fn columns() -> impl Iterator<Item = &'static Column> {
-    COLUMNS.iter().chain(super::p4::P4_COLUMNS)
+    COLUMNS.iter().chain(super::p4::P4_COLUMNS).chain(super::p5::P5_COLUMNS)
 }
 
 pub(crate) fn tables() -> impl Iterator<Item = &'static Table> {
-    TABLES.iter().chain(super::p4::P4_TABLES)
+    TABLES.iter().chain(super::p4::P4_TABLES).chain(super::p5::P5_TABLES)
 }
 
 /// Anytype's built-in properties must be attached explicitly to be queryable.
@@ -158,16 +160,20 @@ pub(crate) const BUILTINS: &[&str] = &[
 ];
 
 pub(crate) fn properties(table: &'static Table) -> impl Iterator<Item = &'static str> {
-    let bundled = if super::p4::P4_TABLES.iter().any(|p4| p4.key == table.key) {
-        BUILTINS
-    } else {
-        &[]
-    };
+    let bundled = if is_generated(table.key) { BUILTINS } else { &[] };
     table
         .properties
         .iter()
         .copied()
+        .chain(super::p5::extensions(table.key).iter().copied())
         .chain(bundled.iter().copied())
+}
+
+/// Any type Prepare creates or maintains (everything past the Tier A four)
+/// carries the bundled queryable properties.
+fn is_generated(key: &str) -> bool {
+    super::p4::P4_TABLES.iter().any(|p4| p4.key == key)
+        || super::p5::P5_TABLES.iter().any(|p5| p5.key == key)
 }
 
 /// A select value this gateway is allowed to send. Unknown options are refused.

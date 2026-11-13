@@ -8,10 +8,12 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 
-const SCHEMA_VERSION: i64 = 2;
-/// First release to include v2. The 0.4.3 checkout is an unreleased v2
-/// development build and must be versioned at least 0.4.4 before publishing.
-const V2_MIN_GATEWAY: &str = "0.4.4";
+const SCHEMA_VERSION: i64 = 3;
+/// First release to include v3. v2 shipped at the intended-in-catalog 0.4.4.
+const MIN_GATEWAY: &str = "0.4.5";
+/// (schema version, minimum) pairs this unreleased 0.4.3 development build is
+/// allowed to recognize. Shipped binaries get the normal semver path only.
+const DEV_MINIMUMS: &[(i64, &str)] = &[(2, "0.4.4"), (3, "0.4.5")];
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) struct Report {
@@ -72,7 +74,7 @@ pub(crate) async fn bootstrap(
         && current
             .as_ref()
             .and_then(|meta| meta.min_gateway.as_deref())
-            .is_some_and(minimum_is_v2)
+            .is_some_and(minimum_is_current)
         && current.as_ref().map(|meta| &meta.keys) == Some(&drift);
     if dry_run {
         let mut properties = create_properties;
@@ -142,9 +144,10 @@ fn supports_gateway(min: &str, version: Option<i64>) -> bool {
     ) {
         (Ok(required), Ok(running)) => {
             running >= required
-                || (version == Some(SCHEMA_VERSION)
-                    && env!("CARGO_PKG_VERSION") == "0.4.3"
-                    && min == V2_MIN_GATEWAY)
+                || (env!("CARGO_PKG_VERSION") == "0.4.3"
+                    && DEV_MINIMUMS
+                        .iter()
+                        .any(|(schema, minimum)| version == Some(*schema) && *minimum == min))
         }
         _ => false,
     }
@@ -292,7 +295,12 @@ fn drifts(keys: &BTreeMap<String, String>) -> BTreeMap<String, String> {
 
 fn assert_tables() {
     for table in table::tables() {
-        for key in table.properties {
+        for key in table
+            .properties
+            .iter()
+            .copied()
+            .chain(table::extensions(table.key).iter().copied())
+        {
             assert!(table::column(key).is_some(), "{key} is not a column");
         }
     }
@@ -359,7 +367,7 @@ async fn write_meta(
     };
     let current = read_meta(object, keys);
     if current.version == Some(SCHEMA_VERSION)
-        && current.min_gateway.as_deref().is_some_and(minimum_is_v2)
+        && current.min_gateway.as_deref().is_some_and(minimum_is_current)
         && current.keys == *drifts
     {
         return Ok(false);
@@ -393,10 +401,10 @@ fn meta_properties(
     })
 }
 
-fn minimum_is_v2(min: &str) -> bool {
+fn minimum_is_current(min: &str) -> bool {
     match (
         semver::Version::parse(min),
-        semver::Version::parse(V2_MIN_GATEWAY),
+        semver::Version::parse(MIN_GATEWAY),
     ) {
         (Ok(current), Ok(required)) => current >= required,
         _ => false,
@@ -407,8 +415,8 @@ fn minimum_for_write(existing: Option<&Value>, keys: &BTreeMap<String, String>) 
     existing
         .map(|object| read_meta(object, keys))
         .and_then(|meta| meta.min_gateway)
-        .filter(|min| minimum_is_v2(min))
-        .unwrap_or_else(|| V2_MIN_GATEWAY.to_string())
+        .filter(|min| minimum_is_current(min))
+        .unwrap_or_else(|| MIN_GATEWAY.to_string())
 }
 
 fn meta_type(keys: &BTreeMap<String, String>) -> &str {

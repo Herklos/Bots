@@ -4,6 +4,7 @@
 //! schedules and connector credentials still sync later (P4/P5 remainders).
 
 pub(crate) mod bots;
+pub(crate) mod hk;
 pub(crate) mod mapper;
 pub(crate) mod outbox;
 pub(crate) mod settings;

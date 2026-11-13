@@ -11,6 +11,7 @@ use std::{
     time::Duration,
 };
 
+mod anytype;
 mod doctor;
 mod env;
 #[cfg(test)]
@@ -44,6 +45,10 @@ Usage: hbots <command> [options]
                        --allow-downgrade  Allow an older version
   rollback           Go back to the version before the last update.
   service <install|uninstall|restart|status>
+  anytype prepare [--dry-run]
+                     Create or update the space's hbots schema (v3), or show what it would create.
+  anytype hk-survey --hk-space <name-or-id> [--json]
+                     Read-only inventory of an HK org space against the Bots schema.
   version            Print the version.
   help               Print this help.
 
@@ -78,6 +83,7 @@ pub(crate) async fn run(args: &[String]) -> Option<i32> {
         "update" => update(&flags, &rest).await,
         "rollback" => rollback(),
         "service" => service_command(&rest),
+        "anytype" => anytype::run(&flags, &rest).await,
         other => {
             eprintln!("hbots: Unknown command: {other}. Run `hbots help`.");
             return Some(2);
